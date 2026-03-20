@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅遊管家 - 智能行程管理</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM (移除 crossorigin 以支援本地 file:// 直接點擊開啟，並更換為穩定的 cdnjs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel for JSX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+
+  <style>
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up {
+      animation: fadeInUp 0.3s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800">
+  <div id="root"></div>
+
+  <!-- 加上 data-presets 確保 JSX 被正確編譯 -->
+  <script type="text/babel" data-presets="react,env">
+    const { useState, useEffect } = React;
+
+    // --- 圖示元件 (取代 lucide-react 以適應純 HTML 環境) ---
+    const IconWrapper = ({ children, className = "w-6 h-6" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        {children}
+      </svg>
+    );
+    const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
+    const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
+    const MapPin = ({ className }) => <IconWrapper className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
+    const DollarSign = ({ className }) => <IconWrapper className={className}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></IconWrapper>;
+    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></IconWrapper>;
+    const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
+    const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
+    const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
+    const Send = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
+    const Sparkles = ({ className }) => <IconWrapper className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconWrapper>;
+    const CheckCircle = ({ className }) => <IconWrapper className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
+    const AlertCircle = ({ className }) => <IconWrapper className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
+    const X = ({ className }) => <IconWrapper className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
+
+    // 請替換為您部署的 Cloudflare Worker 網址
+    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+    // --- 預設行程資料 ---
+    const INITIAL_ITINERARIES = [
+      { id: 1, title: '花東縱谷原民部落四日遊', region: '國旅', price: 12500, days: 4, image: 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=600&q=80', description: '深入台灣後花園，體驗太魯閣壯麗峽谷與道地原住民風味餐。' },
+      { id: 2, title: '京都奈良賞櫻五日行', region: '亞洲', price: 35000, days: 5, image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=600&q=80', description: '穿梭在古都的歷史街道，與梅花鹿近距離接觸，享受浪漫櫻花季。' },
+      { id: 3, title: '巴黎雙宮浪漫塞納河七日遊', region: '歐洲', price: 85000, days: 7, image: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=600&q=80', description: '參觀羅浮宮與凡爾賽宮，搭乘塞納河遊船品嚐法式浪漫晚餐。' },
+      { id: 4, title: '美西國家公園大峽谷十日遊', region: '美洲', price: 110000, days: 10, image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80', description: '馳騁在美國公路，見證大峽谷的鬼斧神工，並造訪繁華的拉斯維加斯。' },
+      { id: 5, title: '肯亞動物大遷徙野性八日遊', region: '非洲', price: 135000, days: 8, image: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=600&q=80', description: '搭乘獵遊吉普車，近距離觀賞獅子、大象與角馬跨越馬拉河的震撼畫面。' },
+      { id: 6, title: '雪梨歌劇院與大堡礁七日遊', region: '大洋洲', price: 72000, days: 7, image: 'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=600&q=80', description: '漫步雪梨港灣，潛入世界最大珊瑚礁群，體驗南半球的陽光與海灘。' },
+    ];
+
+    const HOT_SPOTS = ['國旅', '亞洲', '歐洲', '美洲', '大洋洲', '非洲'];
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('home');
+      const [itineraries, setItineraries] = useState(INITIAL_ITINERARIES);
+      const [toast, setToast] = useState(null);
+
+      // Search State
+      const [searchRegion, setSearchRegion] = useState('');
+      const [searchPrice, setSearchPrice] = useState('');
+      const [filteredResults, setFilteredResults] = useState(INITIAL_ITINERARIES);
+      const [isLoading, setIsLoading] = useState(false);
+
+      // Admin State
+      const [uploadMode, setUploadMode] = useState('dm');
+      const [ocrStatus, setOcrStatus] = useState('idle');
+      const [draftData, setDraftData] = useState({ title: '', region: '', price: '', days: '', description: '' });
+
+      // --- 初始化：從 Server 取得資料 ---
+      useEffect(() => {
+        fetchItineraries();
+      }, []);
+
+      const fetchItineraries = async () => {
+        setIsLoading(true);
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`);
+          if (!res.ok) throw new Error('Network response was not ok');
+          const data = await res.json();
+          
+          // 如果後端有資料，才覆蓋預設資料
+          if (data && data.length > 0) {
+            setItineraries(data);
+            setFilteredResults(data);
+          }
+        } catch (error) {
+          showToast('後端尚未連線，目前顯示預設示範行程', 'error');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      // --- Helpers ---
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+      };
+
+      // --- Handlers: Home ---
+      const handleSearch = () => {
+        let results = itineraries;
+        if (searchRegion) {
+          results = results.filter(item => item.region.includes(searchRegion));
+        }
+        if (searchPrice) {
+          const maxPrice = parseInt(searchPrice, 10);
+          results = results.filter(item => item.price <= maxPrice);
+        }
+        setFilteredResults(results);
+        showToast(`為您找到 ${results.length} 筆符合的行程`);
+      };
+
+      // --- Handlers: Admin ---
+      const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setOcrStatus('processing');
+        
+        try {
+          // 將圖片轉為 Base64
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onloadend = async () => {
+            const base64data = reader.result;
+            
+            // 呼叫 Worker 進行 AI 解析
+            const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: base64data })
+            });
+            
+            const aiResult = await res.json();
+            
+            if (aiResult.success) {
+              setDraftData(aiResult.data);
+              setOcrStatus('done');
+              showToast('AI OCR 解析完成，並已透過網路補漏資料！');
+            } else {
+              throw new Error(aiResult.error || '解析失敗');
+            }
+          };
+        } catch (error) {
+          setOcrStatus('idle');
+          showToast(error.message || '檔案上傳與解析失敗', 'error');
+        }
+      };
+
+      const handleUpdateContent = async () => {
+        if (!draftData.title) return showToast('請先填寫或解析行程內容', 'error');
+        
+        const newItinerary = {
+          ...draftData,
+          price: parseInt(draftData.price, 10) || 0,
+          image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?auto=format&fit=crop&w=600&q=80'
+        };
+        
+        // Optimistic UI update (先更新前端畫面)
+        const tempIdItinerary = { id: Date.now(), ...newItinerary };
+        setItineraries([tempIdItinerary, ...itineraries]);
+        setFilteredResults([tempIdItinerary, ...itineraries]);
+
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newItinerary)
+          });
+          
+          const result = await res.json();
+          if (result.success) {
+            showToast('一鍵更新成功！行程已上架至網站。');
+            setDraftData({ title: '', region: '', price: '', days: '', description: '' });
+            setOcrStatus('idle');
+            fetchItineraries(); // 重新拉取最新資料
+          } else {
+            throw new Error('更新失敗');
+          }
+        } catch (error) {
+          showToast('寫入資料庫失敗，但已暫存於目前畫面', 'error');
+        }
+      };
+
+      const handleSyncLine = async () => {
+        try {
+          const res = await fetch(`${WORKER_URL}/api/sync-line`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draftData)
+          });
+          
+          const result = await res.json();
+          if (result.success) {
+            showToast('已同步至 LINE@！關注者將立即看到最新行程推播。');
+          } else {
+            throw new Error('同步失敗');
+          }
+        } catch (error) {
+          showToast('LINE 推播觸發失敗，請確認 Worker 設定', 'error');
+        }
+      };
+
+      return (
+        <div className="min-h-screen">
+          {/* Navbar */}
+          <nav className="bg-white shadow-sm sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16">
+                <div className="flex items-center cursor-pointer" onClick={() => setActiveTab('home')}>
+                  <Navigation className="h-8 w-8 text-blue-600 mr-2" />
+                  <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <button 
+                    onClick={() => setActiveTab('home')}
+                    className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === 'home' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'}`}
+                  >
+                    找行程
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('admin')}
+                    className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === 'admin' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'}`}
+                  >
+                    後台上稿系統
+                  </button>
+                </div>
+              </div>
+            </div>
+          </nav>
+
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            {/* --- 模式：前台找行程 (房屋網風格) --- */}
+            {activeTab === 'home' && (
+              <div className="space-y-8">
+                <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                    <Search className="h-6 w-6 mr-2 text-blue-500" /> 尋找您的完美旅程
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">地區查詢</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <select 
+                          value={searchRegion} 
+                          onChange={(e) => setSearchRegion(e.target.value)}
+                          className="pl-10 w-full rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 outline-none"
+                        >
+                          <option value="">所有地區</option>
+                          <option value="國旅">國旅 (台灣)</option>
+                          <option value="亞洲">亞洲</option>
+                          <option value="歐洲">歐洲</option>
+                          <option value="美洲">美洲</option>
+                          <option value="大洋洲">大洋洲</option>
+                          <option value="非洲">非洲</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">價位查詢</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <select 
+                          value={searchPrice} 
+                          onChange={(e) => setSearchPrice(e.target.value)}
+                          className="pl-10 w-full rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 outline-none"
+                        >
+                          <option value="">不限預算</option>
+                          <option value="20000">20,000 以下</option>
+                          <option value="50000">50,000 以下</option>
+                          <option value="100000">100,000 以下</option>
+                          <option value="150000">150,000 以下</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-end">
+                      <button 
+                        onClick={handleSearch}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200"
+                      >
+                        開始搜尋
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <span className="text-sm text-gray-500 mr-3">熱門景點推薦：</span>
+                    <div className="flex flex-wrap gap-2">
+                      {HOT_SPOTS.map(spot => (
+                        <button 
+                          key={spot}
+                          onClick={() => { setSearchRegion(spot); handleSearch(); }}
+                          className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm hover:bg-blue-100 transition"
+                        >
+                          {spot}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-4">為您推薦的精選行程</h3>
+                  {isLoading ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
+                      載入資料中...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredResults.map(item => (
+                        <div key={item.id} className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-shadow overflow-hidden group border border-gray-100 flex flex-col h-full">
+                          <div className="h-56 overflow-hidden relative flex-shrink-0">
+                            <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <div className="absolute top-3 left-3 bg-black/60 text-white px-3 py-1 rounded-md text-xs font-bold tracking-wider">
+                              {item.region}
+                            </div>
+                          </div>
+                          <div className="p-5 flex flex-col flex-grow">
+                            <h4 className="font-bold text-xl mb-3 text-gray-900 line-clamp-2">{item.title}</h4>
+                            <p className="text-gray-500 text-sm mb-4 line-clamp-3 flex-grow">{item.description}</p>
+                            <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-auto">
+                              <span className="text-sm font-medium text-gray-500">{item.days} 天行程</span>
+                              <span className="text-xl font-bold text-red-500">${Number(item.price).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {filteredResults.length === 0 && (
+                        <div className="col-span-full text-center py-16 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                          找不到符合條件的行程，請嘗試調整搜尋條件。
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- 模式：後台上稿與 LINE 串接 --- */}
+            {activeTab === 'admin' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
+                  <div className="flex justify-between items-center border-b pb-4 mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                      <UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統
+                    </h2>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={handleUpdateContent}
+                        className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" /> 一鍵更新網站內容
+                      </button>
+                      <button 
+                        onClick={handleSyncLine}
+                        className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition"
+                      >
+                        <Send className="w-4 h-4 mr-2" /> LINE@同步更新推播
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4 mb-6">
+                    <button
+                      onClick={() => setUploadMode('dm')}
+                      className={`flex-1 py-3 rounded-xl border-2 font-medium flex justify-center items-center ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      <ImageIcon className="mr-2 h-5 w-5" /> DM / 圖片智能解析 (OCR+AI)
+                    </button>
+                    <button
+                      onClick={() => setUploadMode('manual')}
+                      className={`flex-1 py-3 rounded-xl border-2 font-medium flex justify-center items-center ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      <FileText className="mr-2 h-5 w-5" /> 人工手動填寫
+                    </button>
+                  </div>
+
+                  {uploadMode === 'dm' && (
+                    <div className="mb-8">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">上傳旅遊 DM 或傳單圖片</label>
+                      <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition relative">
+                        <div className="space-y-1 text-center">
+                          <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
+                          <div className="flex text-sm text-gray-600 justify-center">
+                            <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-2">
+                              <span>選擇檔案</span>
+                              <input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} />
+                            </label>
+                            <p className="pl-1">或拖曳至此</p>
+                          </div>
+                          <p className="text-xs text-gray-500">PNG, JPG 限制 5MB</p>
+                        </div>
+                        
+                        {ocrStatus === 'processing' && (
+                          <div className="absolute inset-0 bg-white/80 rounded-xl flex flex-col items-center justify-center z-10">
+                            <RefreshCw className="h-8 w-8 text-blue-500 animate-spin mb-2" />
+                            <p className="text-blue-700 font-medium">ChatGPT 視覺模型解析中...</p>
+                            <p className="text-xs text-blue-500 mt-1">正在自動拆解文案與補漏資訊，請稍候</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {(uploadMode === 'manual' || ocrStatus === 'done' || (uploadMode === 'dm' && draftData.title)) && (
+                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                      <div className="flex items-center mb-4">
+                        <h3 className="text-lg font-bold text-gray-800">編輯行程內容</h3>
+                        {ocrStatus === 'done' && (
+                          <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <Sparkles className="w-3 h-3 mr-1" /> AI 解析完成
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">行程標題</label>
+                          <input 
+                            type="text" 
+                            value={draftData.title}
+                            onChange={(e) => setDraftData({...draftData, title: e.target.value})}
+                            className="w-full rounded-lg border-gray-300 border p-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            placeholder="例如：巴黎浪漫七日遊"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">所屬地區</label>
+                          <select 
+                            value={draftData.region}
+                            onChange={(e) => setDraftData({...draftData, region: e.target.value})}
+                            className="w-full rounded-lg border-gray-300 border p-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none"
+                          >
+                            <option value="">請選擇地區</option>
+                            <option value="國旅">國旅</option>
+                            <option value="亞洲">亞洲</option>
+                            <option value="歐洲">歐洲</option>
+                            <option value="美洲">美洲</option>
+                            <option value="大洋洲">大洋洲</option>
+                            <option value="非洲">非洲</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">價格 (TWD)</label>
+                          <input 
+                            type="number" 
+                            value={draftData.price}
+                            onChange={(e) => setDraftData({...draftData, price: e.target.value})}
+                            className="w-full rounded-lg border-gray-300 border p-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            placeholder="例如：85000"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">天數</label>
+                          <input 
+                            type="number" 
+                            value={draftData.days}
+                            onChange={(e) => setDraftData({...draftData, days: e.target.value})}
+                            className="w-full rounded-lg border-gray-300 border p-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            placeholder="例如：7"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">詳細行程文案 (支援網路補漏內容)</label>
+                        <textarea 
+                          rows={4}
+                          value={draftData.description}
+                          onChange={(e) => setDraftData({...draftData, description: e.target.value})}
+                          className="w-full rounded-lg border-gray-300 border p-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          placeholder="請輸入詳細行程..."
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start">
+                   <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+                   <div className="text-sm text-blue-800">
+                     <p className="font-bold mb-1">架構說明：</p>
+                     <p>目前已完全切換為 Serverless 架構，請求將發送至 Cloudflare Worker，並由其代理處理 ChatGPT Vision 圖片辨識，及轉發給 Google Apps Script 進行 Google Sheets 資料庫儲存與 LINE 官方帳號推播。</p>
+                   </div>
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* Toast Notification */}
+          {toast && (
+            <div className="fixed bottom-4 right-4 z-50 animate-fade-in-up">
+              <div className={`flex items-center p-4 rounded-lg shadow-lg ${toast.type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200'}`}>
+                {toast.type === 'error' ? <X className="w-5 h-5 mr-2" /> : <CheckCircle className="w-5 h-5 mr-2" />}
+                <span className="font-medium">{toast.message}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 將 React App 渲染到 HTML 元素中
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
