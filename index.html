@@ -23,16 +23,19 @@
     .animate-fade-in {
       animation: fadeIn 0.3s ease-out forwards;
     }
-    /* 自訂卷軸樣式讓左側儀表板更美觀 */
+    /* 自訂卷軸樣式讓左側儀表板與卡片區更美觀 */
     .custom-scrollbar::-webkit-scrollbar {
-      width: 4px;
+      width: 6px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
       background: transparent;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #e2e8f0;
-      border-radius: 4px;
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
     }
   </style>
 </head>
@@ -472,11 +475,11 @@
               </div>
             )}
 
-            {/* ====== 後台：上稿與管理系統 (擴大編輯寬度) ====== */}
+            {/* ====== 後台：上稿與管理系統 (改為滿版展開) ====== */}
             {activeTab === 'admin' && (
-              <div className="w-full max-w-6xl mx-auto space-y-6 animate-fade-in">
-                {/* 1. 表單區塊 */}
-                <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
+              <div className="w-full space-y-6 animate-fade-in">
+                {/* 1. 表單區塊 (滿版寬度) */}
+                <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
                   <div className="flex justify-between items-center border-b pb-4 mb-6">
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center">
                       <UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統
@@ -499,7 +502,7 @@
 
                   {/* 切換上傳模式 */}
                   {!draftData.id && (
-                    <div className="flex space-x-4 mb-6">
+                    <div className="flex space-x-4 mb-8 max-w-2xl">
                       <button
                         onClick={() => setUploadMode('dm')}
                         className={`flex-1 py-3 rounded-xl border-2 font-medium flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
@@ -517,35 +520,35 @@
 
                   {/* 上傳區塊 */}
                   {uploadMode === 'dm' && !draftData.id && (
-                    <div className="mb-8">
+                    <div className="mb-8 max-w-4xl">
                       <label className="block text-sm font-medium text-gray-700 mb-2">上傳旅遊 DM 圖片 (解析後將自動產生配圖並儲存至資料庫)</label>
-                      <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition relative">
+                      <div className="mt-1 flex justify-center px-6 pt-10 pb-12 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition relative">
                         <div className="space-y-1 text-center">
-                          <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                          <div className="flex text-sm text-gray-600 justify-center">
+                          <ImageIcon className="mx-auto h-16 w-16 text-gray-400 mb-3" />
+                          <div className="flex text-lg text-gray-600 justify-center">
                             <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-2">
                               <span>選擇檔案</span>
                               <input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} />
                             </label>
-                            <p className="pl-1">或拖曳至此</p>
+                            <p className="pl-1">或拖曳圖片至此範圍</p>
                           </div>
-                          <p className="text-xs text-gray-500">PNG, JPG 限制 5MB</p>
+                          <p className="text-sm text-gray-500 mt-2">支援 PNG, JPG (限制 5MB)</p>
                         </div>
                         
                         {ocrStatus === 'processing' && (
                           <div className="absolute inset-0 bg-white/90 rounded-xl flex flex-col items-center justify-center z-10">
-                            <RefreshCw className="h-8 w-8 text-blue-500 animate-spin mb-3" />
-                            <p className="text-blue-700 font-bold text-lg">ChatGPT 視覺模型解析中...</p>
-                            <p className="text-sm text-blue-600 mt-1">正在提取文案與自動產生高畫質配圖，請稍候</p>
+                            <RefreshCw className="h-10 w-10 text-blue-500 animate-spin mb-3" />
+                            <p className="text-blue-700 font-bold text-xl">ChatGPT 視覺模型解析中...</p>
+                            <p className="text-gray-600 mt-2">正在提取文案與自動搜尋真實授權配圖，請稍候</p>
                           </div>
                         )}
                       </div>
                     </div>
                   )}
 
-                  {/* 編輯表單 */}
+                  {/* 編輯表單 (依網格展開，避免欄位過長) */}
                   {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
-                    <div className="bg-gray-50 p-6 lg:p-8 rounded-xl border border-gray-200 shadow-inner relative">
+                    <div className="bg-gray-50/80 p-6 lg:p-8 rounded-xl border border-gray-200 shadow-inner relative">
                       {draftData.id && (
                         <button 
                           onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' }); setUploadMode('dm'); setOcrStatus('idle'); }}
@@ -566,22 +569,23 @@
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        {/* 第一排 */}
                         <div className="lg:col-span-2">
                           <label className="block text-sm font-medium text-gray-700 mb-1.5">行程標題</label>
                           <input 
                             type="text" 
                             value={draftData.title}
                             onChange={(e) => setDraftData({...draftData, title: e.target.value})}
-                            className="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                            className="w-full rounded-lg border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
                             placeholder="例如：巴黎浪漫七日遊"
                           />
                         </div>
-                        <div>
+                        <div className="lg:col-span-1">
                           <label className="block text-sm font-medium text-gray-700 mb-1.5">所屬地區</label>
                           <select 
                             value={draftData.region}
                             onChange={(e) => setDraftData({...draftData, region: e.target.value})}
-                            className="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none transition-shadow"
+                            className="w-full rounded-lg border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none transition-shadow"
                           >
                             <option value="">請選擇地區</option>
                             <option value="國旅">國旅</option>
@@ -592,23 +596,25 @@
                             <option value="非洲">非洲</option>
                           </select>
                         </div>
-                        <div>
+                        <div className="lg:col-span-1">
                           <label className="block text-sm font-medium text-gray-700 mb-1.5">價格 (TWD)</label>
                           <input 
                             type="number" 
                             value={draftData.price}
                             onChange={(e) => setDraftData({...draftData, price: e.target.value})}
-                            className="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                            className="w-full rounded-lg border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
                             placeholder="例如：85000"
                           />
                         </div>
+
+                        {/* 第二排 */}
                         <div className="lg:col-span-1">
                           <label className="block text-sm font-medium text-gray-700 mb-1.5">天數</label>
                           <input 
                             type="number" 
                             value={draftData.days}
                             onChange={(e) => setDraftData({...draftData, days: e.target.value})}
-                            className="w-full rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                            className="w-full rounded-lg border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
                             placeholder="例如：7"
                           />
                         </div>
@@ -619,22 +625,24 @@
                               type="text" 
                               value={draftData.image || ''}
                               onChange={(e) => setDraftData({...draftData, image: e.target.value})}
-                              className="flex-1 rounded-lg border-gray-300 border p-2.5 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm text-gray-500 transition-shadow"
+                              className="flex-1 rounded-lg border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm text-gray-500 transition-shadow"
                               placeholder="https://..."
                             />
                             {draftData.image && (
-                               <img src={draftData.image} alt="預覽" className="w-16 h-16 rounded-lg object-cover border shadow-sm" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=60&q=80'}} />
+                               <img src={draftData.image} alt="預覽" className="w-14 h-14 rounded-lg object-cover border shadow-sm flex-shrink-0" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=60&q=80'}} />
                             )}
                           </div>
                         </div>
                       </div>
+
+                      {/* 第三排 */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">詳細行程文案</label>
                         <textarea 
                           rows={6}
                           value={draftData.description}
                           onChange={(e) => setDraftData({...draftData, description: e.target.value})}
-                          className="w-full rounded-lg border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 outline-none leading-relaxed transition-shadow custom-scrollbar text-base"
+                          className="w-full rounded-lg border-gray-300 border p-4 focus:ring-blue-500 focus:border-blue-500 outline-none leading-relaxed transition-shadow custom-scrollbar text-base"
                           placeholder="請輸入詳細行程..."
                         />
                       </div>
@@ -642,47 +650,51 @@
                   )}
                 </div>
 
-                {/* 2. 現有行程管理列表 */}
-                <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
-                  <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-3 flex items-center">
+                {/* 2. 現有行程管理列表 (升級為多欄位卡片網格) */}
+                <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
+                  <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4 flex items-center">
                     <FileText className="w-5 h-5 mr-2 text-gray-500" /> 現有行程管理
                   </h3>
                   
                   {isLoading ? (
-                    <div className="text-center py-8 text-gray-500"><RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" /></div>
+                    <div className="text-center py-12 text-gray-500"><RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3" />載入資料中</div>
                   ) : itineraries.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">目前尚無已上架的行程</div>
+                    <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">目前尚無已上架的行程</div>
                   ) : (
-                    <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 max-h-[800px] overflow-y-auto custom-scrollbar pr-2 pb-2">
                       {itineraries.map(item => (
-                        <div key={item.id} className="flex flex-col sm:flex-row items-center justify-between p-4 bg-gray-50 hover:bg-blue-50/50 rounded-xl border border-gray-200 transition-colors">
-                          <div className="flex items-center gap-5 w-full sm:w-auto mb-3 sm:mb-0">
-                            <img src={item.image} className="w-20 h-20 rounded-lg object-cover flex-shrink-0 border border-gray-100 shadow-sm" alt="thumb" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=80&q=80'}} />
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-gray-200 text-gray-700 px-2.5 py-0.5 rounded text-xs font-bold">{item.region}</span>
-                                <h4 className="font-bold text-lg text-gray-900 line-clamp-1">{item.title}</h4>
+                        <div key={item.id} className="flex flex-col p-5 bg-white hover:bg-blue-50/30 rounded-xl border border-gray-200 transition-colors shadow-sm hover:shadow h-full">
+                          
+                          {/* 卡片上半部：圖片與資訊 */}
+                          <div className="flex gap-4 mb-4">
+                            <img src={item.image} className="w-24 h-24 rounded-lg object-cover flex-shrink-0 border border-gray-100 shadow-sm" alt="thumb" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80'}} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start gap-2 mb-1.5 flex-wrap">
+                                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs font-bold flex-shrink-0">{item.region}</span>
+                                <h4 className="font-bold text-lg text-gray-900 line-clamp-2 leading-tight" title={item.title}>{item.title}</h4>
                               </div>
-                              <div className="text-gray-500">
-                                <span className="font-semibold text-red-500 text-lg">${Number(item.price).toLocaleString()}</span> <span className="text-sm ml-1">• {item.days}天</span>
+                              <div className="text-gray-500 mt-2">
+                                <span className="font-bold text-red-500 text-lg">${Number(item.price).toLocaleString()}</span> <span className="text-sm ml-1">• {item.days}天</span>
                               </div>
                             </div>
                           </div>
                           
-                          <div className="flex space-x-3 w-full sm:w-auto justify-end">
+                          {/* 卡片下半部：操作按鈕 */}
+                          <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
                             <button 
                               onClick={() => handleEditClick(item)}
-                              className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition shadow-sm hover:shadow"
+                              className="flex flex-1 justify-center items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition shadow-sm hover:shadow"
                             >
                               <Edit2 className="w-4 h-4 mr-2" /> 編輯
                             </button>
                             <button 
                               onClick={() => setDeleteModalId(item.id)}
-                              className="flex items-center px-4 py-2 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition shadow-sm hover:shadow"
+                              className="flex flex-1 justify-center items-center px-4 py-2 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition shadow-sm hover:shadow"
                             >
                               <Trash2 className="w-4 h-4 mr-2" /> 下架
                             </button>
                           </div>
+
                         </div>
                       ))}
                     </div>
