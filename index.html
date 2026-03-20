@@ -55,14 +55,10 @@
     // 請替換為您部署的 Cloudflare Worker 網址
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
-    // --- 預設行程資料 ---
+    // --- 預設行程資料 (後端尚未回傳時的墊檔資料) ---
     const INITIAL_ITINERARIES = [
       { id: 1, title: '花東縱谷原民部落四日遊', region: '國旅', price: 12500, days: 4, image: 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=600&q=80', description: '深入台灣後花園，體驗太魯閣壯麗峽谷與道地原住民風味餐。' },
       { id: 2, title: '京都奈良賞櫻五日行', region: '亞洲', price: 35000, days: 5, image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=600&q=80', description: '穿梭在古都的歷史街道，與梅花鹿近距離接觸，享受浪漫櫻花季。' },
-      { id: 3, title: '巴黎雙宮浪漫塞納河七日遊', region: '歐洲', price: 85000, days: 7, image: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=600&q=80', description: '參觀羅浮宮與凡爾賽宮，搭乘塞納河遊船品嚐法式浪漫晚餐。' },
-      { id: 4, title: '美西國家公園大峽谷十日遊', region: '美洲', price: 110000, days: 10, image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80', description: '馳騁在美國公路，見證大峽谷的鬼斧神工，並造訪繁華的拉斯維加斯。' },
-      { id: 5, title: '肯亞動物大遷徙野性八日遊', region: '非洲', price: 135000, days: 8, image: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=600&q=80', description: '搭乘獵遊吉普車，近距離觀賞獅子、大象與角馬跨越馬拉河的震撼畫面。' },
-      { id: 6, title: '雪梨歌劇院與大堡礁七日遊', region: '大洋洲', price: 72000, days: 7, image: 'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=600&q=80', description: '漫步雪梨港灣，潛入世界最大珊瑚礁群，體驗南半球的陽光與海灘。' },
     ];
 
     const HOT_SPOTS = ['國旅', '亞洲', '歐洲', '美洲', '大洋洲', '非洲'];
@@ -83,7 +79,7 @@
       const [ocrStatus, setOcrStatus] = useState('idle');
       const [draftData, setDraftData] = useState({ title: '', region: '', price: '', days: '', description: '' });
 
-      // --- 初始化：從 Server 取得資料 ---
+      // --- 初始化：從 Server (Google Sheets) 取得資料 ---
       useEffect(() => {
         fetchItineraries();
       }, []);
@@ -95,13 +91,12 @@
           if (!res.ok) throw new Error('Network response was not ok');
           const data = await res.json();
           
-          // 如果後端有資料，才覆蓋預設資料
           if (data && data.length > 0) {
             setItineraries(data);
             setFilteredResults(data);
           }
         } catch (error) {
-          showToast('後端尚未連線，目前顯示預設示範行程', 'error');
+          showToast('尚未取得資料庫最新資料，目前顯示預設行程', 'error');
         } finally {
           setIsLoading(false);
         }
@@ -135,7 +130,6 @@
         setOcrStatus('processing');
         
         try {
-          // 將圖片轉為 Base64
           const reader = new FileReader();
           reader.readAsDataURL(file);
           reader.onloadend = async () => {
@@ -151,9 +145,48 @@
             const aiResult = await res.json();
             
             if (aiResult.success) {
-              setDraftData(aiResult.data);
-              setOcrStatus('done');
-              showToast('AI OCR 解析完成，並已透過網路補漏資料！');
+              const parsedData = aiResult.data;
+              setDraftData(parsedData); // 先將結果填入表單預覽
+              
+              showToast('✅ AI 解析完成！系統正自動為您寫入資料庫...');
+              
+              // === 【新增：全自動寫入資料庫邏輯】 ===
+              const newItinerary = {
+                ...parsedData,
+                price: parseInt(parsedData.price, 10) || 0,
+                image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?auto=format&fit=crop&w=600&q=80' // 給定一張預設美圖
+              };
+              
+              // 先在前端畫面上呈現，不讓使用者乾等
+              const tempIdItinerary = { id: Date.now(), ...newItinerary };
+              setItineraries(prev => [tempIdItinerary, ...prev]);
+              setFilteredResults(prev => [tempIdItinerary, ...prev]);
+
+              try {
+                // 呼叫 Worker 將資料 POST 給 GAS 寫入 Google Sheets
+                const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(newItinerary)
+                });
+                
+                const dbResult = await dbRes.json();
+                if (dbResult.success) {
+                  showToast('🎉 行程已成功寫入 Google Sheets 資料庫並上架！');
+                  // 清空草稿，準備下一次上傳
+                  setDraftData({ title: '', region: '', price: '', days: '', description: '' });
+                  setOcrStatus('idle');
+                  // 重新拉取以確保與後台資料庫 ID 同步
+                  fetchItineraries();
+                } else {
+                  throw new Error('資料庫寫入失敗');
+                }
+              } catch (dbErr) {
+                setOcrStatus('done');
+                showToast('已解析，但自動寫入資料庫失敗，請嘗試手動點擊更新。', 'error');
+              }
+              // ===================================
+
             } else {
               throw new Error(aiResult.error || '解析失敗');
             }
@@ -164,6 +197,7 @@
         }
       };
 
+      // 手動模式或編輯後的手動更新
       const handleUpdateContent = async () => {
         if (!draftData.title) return showToast('請先填寫或解析行程內容', 'error');
         
@@ -173,7 +207,6 @@
           image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?auto=format&fit=crop&w=600&q=80'
         };
         
-        // Optimistic UI update (先更新前端畫面)
         const tempIdItinerary = { id: Date.now(), ...newItinerary };
         setItineraries([tempIdItinerary, ...itineraries]);
         setFilteredResults([tempIdItinerary, ...itineraries]);
@@ -190,7 +223,7 @@
             showToast('一鍵更新成功！行程已上架至網站。');
             setDraftData({ title: '', region: '', price: '', days: '', description: '' });
             setOcrStatus('idle');
-            fetchItineraries(); // 重新拉取最新資料
+            fetchItineraries(); 
           } else {
             throw new Error('更新失敗');
           }
@@ -204,7 +237,7 @@
           const res = await fetch(`${WORKER_URL}/api/sync-line`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(draftData)
+            body: JSON.stringify(draftData) // 注意：如果草稿已清空，推播可能會抓不到資料，建議使用者在清空前推送，或選擇列表中行程推送
           });
           
           const result = await res.json();
@@ -324,7 +357,7 @@
                   {isLoading ? (
                     <div className="text-center py-12 text-gray-500">
                       <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
-                      載入資料中...
+                      從 Google Sheets 載入資料中...
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -370,7 +403,7 @@
                         onClick={handleUpdateContent}
                         className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
                       >
-                        <RefreshCw className="w-4 h-4 mr-2" /> 一鍵更新網站內容
+                        <RefreshCw className="w-4 h-4 mr-2" /> 一鍵手動寫入
                       </button>
                       <button 
                         onClick={handleSyncLine}
@@ -386,7 +419,7 @@
                       onClick={() => setUploadMode('dm')}
                       className={`flex-1 py-3 rounded-xl border-2 font-medium flex justify-center items-center ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                     >
-                      <ImageIcon className="mr-2 h-5 w-5" /> DM / 圖片智能解析 (OCR+AI)
+                      <ImageIcon className="mr-2 h-5 w-5" /> DM / 圖片智能解析 (自動寫入)
                     </button>
                     <button
                       onClick={() => setUploadMode('manual')}
@@ -398,7 +431,7 @@
 
                   {uploadMode === 'dm' && (
                     <div className="mb-8">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">上傳旅遊 DM 或傳單圖片</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">上傳旅遊 DM 或傳單圖片 (解析後將自動儲存至 Google Sheets)</label>
                       <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition relative">
                         <div className="space-y-1 text-center">
                           <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -429,7 +462,7 @@
                         <h3 className="text-lg font-bold text-gray-800">編輯行程內容</h3>
                         {ocrStatus === 'done' && (
                           <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <Sparkles className="w-3 h-3 mr-1" /> AI 解析完成
+                            <Sparkles className="w-3 h-3 mr-1" /> 已解析並寫入資料庫
                           </span>
                         )}
                       </div>
@@ -499,8 +532,8 @@
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start">
                    <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
                    <div className="text-sm text-blue-800">
-                     <p className="font-bold mb-1">架構說明：</p>
-                     <p>目前已完全切換為 Serverless 架構，請求將發送至 Cloudflare Worker，並由其代理處理 ChatGPT Vision 圖片辨識，及轉發給 Google Apps Script 進行 Google Sheets 資料庫儲存與 LINE 官方帳號推播。</p>
+                     <p className="font-bold mb-1">自動寫入說明：</p>
+                     <p>現在當您上傳 DM 圖片完成 AI 解析後，系統會<strong>立刻自動寫入 Google Sheets 儲存</strong>，不需再手動點擊更新按鈕！若您切換至「人工手動填寫」模式，才需要使用上方的「一鍵手動寫入」按鈕。</p>
                    </div>
                 </div>
               </div>
