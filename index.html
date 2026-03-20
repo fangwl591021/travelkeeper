@@ -137,19 +137,21 @@
             if (aiResult.success) {
               const parsedData = aiResult.data;
               
-              // 【自動配圖】：利用 GPT 給的關鍵字，動態生成一張免版權圖片
-              const keyword = parsedData.imageKeyword || parsedData.region || "travel scenery";
-              const autoImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(keyword + " beautiful travel photography landscape")}?width=800&height=600&nologo=true`;
+              // 【優化配圖】：不使用 AI 生成，改用 LoremFlickr 搜尋合法授權相片
+              // 確保關鍵字不包含空格，並轉為小寫，多個關鍵字用逗號分隔
+              let keyword = parsedData.imageKeyword || parsedData.region || "travel";
+              let searchTerms = encodeURIComponent(keyword.trim().replace(/\s+/g, ',') + ",landscape");
+              const autoImageUrl = `https://loremflickr.com/800/600/${searchTerms}`;
               
-              parsedData.image = autoImageUrl; // 將產生的網址存入
-              parsedData.id = Date.now(); // 產生新 ID
+              parsedData.image = autoImageUrl; 
+              parsedData.id = Date.now(); 
               
               setDraftData(parsedData);
-              showToast('✅ AI 解析與配圖完成！系統正自動為您寫入資料庫...');
+              showToast('✅ AI 解析完成並已搜尋相關圖片！系統正自動為您寫入資料庫...');
               
               const newItinerary = {
                 ...parsedData,
-                action: 'addItinerary', // 告訴 Worker 要執行新增
+                action: 'addItinerary', 
                 price: parseInt(parsedData.price, 10) || 0,
               };
               
@@ -381,6 +383,7 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-shadow overflow-hidden group border border-gray-100 flex flex-col h-full">
                           <div className="h-56 overflow-hidden relative flex-shrink-0 bg-gray-100">
+                            {/* 增加 onerror 保護，確保圖片加載失敗時有漂亮的預設圖 */}
                             <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => {e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'}}/>
                             <div className="absolute top-3 left-3 bg-black/60 text-white px-3 py-1 rounded-md text-xs font-bold tracking-wider">
                               {item.region}
@@ -548,7 +551,7 @@
                           />
                         </div>
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">圖片網址 (可保留AI自動配圖，或貼上您自己的圖片連結)</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">圖片網址 (已為您自動搜尋真實合法授權圖，您也可手動修改為其他網址)</label>
                           <div className="flex gap-3 items-center">
                             <input 
                               type="text" 
@@ -558,7 +561,7 @@
                               placeholder="https://..."
                             />
                             {draftData.image && (
-                               <img src={draftData.image} alt="預覽" className="w-12 h-12 rounded object-cover border" />
+                               <img src={draftData.image} alt="預覽" className="w-12 h-12 rounded object-cover border" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=60&q=80'}} />
                             )}
                           </div>
                         </div>
