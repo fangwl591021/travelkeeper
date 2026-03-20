@@ -1,753 +1,1374 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 智能行程管理</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
-  <style>
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in-up {
-      animation: fadeInUp 0.3s ease-out forwards;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    .animate-fade-in {
-      animation: fadeIn 0.3s ease-out forwards;
-    }
-    /* 自訂卷軸樣式 */
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 10px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-  </style>
-</head>
-<body class="bg-gray-50 font-sans text-gray-800">
-  <div id="root"></div>
+<div id="reservation-workspace" class="workspace-hidden flex-1 h-full w-full bg-[#f0f2f5] overflow-hidden">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+#reservation-workspace .res-nav-item { display:flex; align-items:center; gap:12px; padding:0 20px; height:48px; font-size:15px; font-weight:500; color:#64748b; border-left:4px solid transparent; cursor:pointer; background:none; border-right:none; border-top:none; border-bottom:none; width:100%; text-align:left; transition:all .18s; }
+#reservation-workspace .res-nav-item:hover { background:#f8fafc; color:#06C755; }
+#reservation-workspace .res-nav-item.active { background:#f0fbf5; color:#06C755; border-left-color:#06C755; font-weight:700; }
+#reservation-workspace .res-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; box-shadow:0 2px 6px rgba(0,0,0,.03); overflow:hidden; margin-bottom:20px; }
+#reservation-workspace .res-table { width:100%; border-collapse:collapse; }
+#reservation-workspace .res-table th { padding:12px 16px; background:#f9fafb; color:#6b7280; font-size:14px; font-weight:500; border-bottom:1px solid #e5e7eb; white-space:nowrap; text-align:left; }
+#reservation-workspace .res-table td { padding:12px 16px; font-size:15px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+#reservation-workspace .res-table tr:last-child td { border-bottom:none; }
+#reservation-workspace .res-table tr:hover td { background:#fafafa; }
+#reservation-workspace .badge { display:inline-block; padding:4px 12px; border-radius:999px; font-size:13px; font-weight:400; }
+#reservation-workspace .res-input { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:10px 14px; font-size:15px; outline:none; transition:border .18s; box-sizing:border-box; }
+#reservation-workspace .res-input:focus { border-color:#06C755; }
+#reservation-workspace .res-btn-g { background:#06C755; color:#fff; border:none; border-radius:8px; padding:9px 18px; font-weight:500; font-size:15px; cursor:pointer; transition:.18s; display:inline-flex; align-items:center; gap:6px; justify-content:center; }
+#reservation-workspace .res-btn-g:hover { background:#05b34c; }
+#reservation-workspace .res-btn-w { background:#fff; border:1px solid #d1d5db; color:#374151; border-radius:8px; padding:9px 18px; font-weight:500; font-size:15px; cursor:pointer; transition:.18s; }
+#reservation-workspace .res-btn-w:hover { border-color:#06C755; color:#06C755; }
+#reservation-workspace .stat-box { background:#fff; border:1px solid #f0f0f0; border-radius:12px; padding:20px; box-shadow:0 2px 4px rgba(0,0,0,.02); }
+#reservation-workspace .res-label { display:block; font-size:14px; font-weight:500; color:#6b7280; margin-bottom:5px; }
+#reservation-workspace .camp-batch-block { background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:12px; position:relative; }
+#reservation-workspace .camp-item-row { display:flex; gap:8px; align-items:flex-end; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #f3f4f6; }
+#reservation-workspace .camp-item-row:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
+</style>
 
-  <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect } = React;
+<div class="flex h-full w-full">
 
-    const IconWrapper = ({ children, className = "w-6 h-6" }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        {children}
-      </svg>
-    );
-    const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
-    const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
-    const MapPin = ({ className }) => <IconWrapper className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
-    const DollarSign = ({ className }) => <IconWrapper className={className}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></IconWrapper>;
-    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></IconWrapper>;
-    const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
-    const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
-    const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
-    const Send = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
-    const Sparkles = ({ className }) => <IconWrapper className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconWrapper>;
-    const CheckCircle = ({ className }) => <IconWrapper className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
-    const AlertCircle = ({ className }) => <IconWrapper className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
-    const X = ({ className }) => <IconWrapper className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
-    const Edit2 = ({ className }) => <IconWrapper className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></IconWrapper>;
-    const Trash2 = ({ className }) => <IconWrapper className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
-    const Camera = ({ className }) => <IconWrapper className={className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></IconWrapper>;
+  <!-- 左側選單 -->
+  <aside class="hidden md:flex w-[220px] bg-white border-r border-slate-200 flex-col shrink-0 shadow-sm">
+    <div class="px-6 py-5 border-b border-slate-100">
+      <div class="text-xl font-bold text-[#06C755] tracking-tight">活動報名系統</div>
+      <div class="text-sm text-slate-500 mt-1">Course Registration</div>
+    </div>
+    <div class="flex-1 py-3 overflow-y-auto">
+      <button class="res-nav-item" id="res-nav-dashboard" onclick="window.ReservationModule.setTab('dashboard')"><i class="fas fa-chart-pie w-4 text-center"></i> 營運統計</button>
+      <button class="res-nav-item" id="res-nav-orders"    onclick="window.ReservationModule.setTab('orders')">  <i class="fas fa-receipt w-4 text-center"></i>    訂單管理</button>
+      <button class="res-nav-item" id="res-nav-courses"   onclick="window.ReservationModule.setTab('courses')"><i class="fas fa-calendar-check w-4 text-center"></i> 活動管理</button>
+      <button class="res-nav-item" id="res-nav-members"   onclick="window.ReservationModule.setTab('members')"><i class="fas fa-users w-4 text-center"></i>        會員管理</button>
+      <button class="res-nav-item" id="res-nav-attend"    onclick="window.ReservationModule.setTab('attend')"> <i class="fas fa-user-check w-4 text-center"></i>   簽到管理</button>
+      <button class="res-nav-item mt-2 border-t pt-2" id="res-nav-settings" onclick="window.ReservationModule.setTab('settings')"><i class="fas fa-cog w-4 text-center"></i> 系統設定</button>
+    </div>
+    <div class="p-4 border-t border-slate-100">
+      <button onclick="window.ReservationModule.syncAll()" class="res-btn-w w-full text-sm py-2.5">
+        <i class="fas fa-sync-alt mr-1"></i> 同步資料
+      </button>
+    </div>
+  </aside>
 
-    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+  <!-- 主內容 -->
+  <main class="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
+      <h2 id="res-page-title" class="text-xl font-bold text-slate-800">營運統計</h2>
+      <div class="flex items-center gap-2">
+        <button id="res-export-btn" onclick="window.ReservationModule.exportCsv()" class="hidden res-btn-w text-sm">
+          <i class="fas fa-file-export mr-1"></i> 匯出 CSV
+        </button>
+        <button onclick="window.ReservationModule.syncAll()" class="res-btn-w text-sm">
+          <i class="fas fa-sync-alt mr-1"></i> 同步
+        </button>
+        <a id="res-front-link" href="#" target="_blank"
+            class="res-btn-g text-sm shadow-sm bg-blue-500 hover:bg-blue-600 ml-2">
+            <i class="fas fa-external-link-alt"></i> 前往專屬前台
+        </a>
+      </div>
+    </header>
 
-    const INITIAL_ITINERARIES = [
-      { id: 1, title: '花東縱谷原民部落四日遊', region: '國旅', price: 12500, days: 4, image: 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=800&q=80', description: '深入台灣後花園，體驗太魯閣壯麗峽谷與道地原住民風味餐。' },
+    <!-- 手機 tab -->
+    <div class="md:hidden bg-white border-b px-3 py-2 shrink-0 overflow-x-auto no-scrollbar">
+      <div class="flex gap-2 text-sm min-w-max">
+        <button id="res-tab-dashboard" onclick="window.ReservationModule.setTab('dashboard')" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium">統計</button>
+        <button id="res-tab-orders"    onclick="window.ReservationModule.setTab('orders')"    class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium">訂單</button>
+        <button id="res-tab-courses"   onclick="window.ReservationModule.setTab('courses')"   class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium">活動</button>
+        <button id="res-tab-members"   onclick="window.ReservationModule.setTab('members')"   class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium">會員</button>
+        <button id="res-tab-attend"    onclick="window.ReservationModule.setTab('attend')"    class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium">簽到</button>
+        <button id="res-tab-settings"  onclick="window.ReservationModule.setTab('settings')"  class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 font-medium">設定</button>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 md:p-6">
+
+      <!-- ===== 營運統計 ===== -->
+      <div id="res-panel-dashboard">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-sm">
+                <h3 class="text-sm font-bold text-blue-800 mb-2"><i class="fas fa-link mr-1"></i> 您的專屬前台網址 (LIFF)</h3>
+                <p class="text-xs text-blue-600 mb-3">請複製此網址綁定到您的 LINE 圖文選單，客戶點擊才會進入您的專屬活動頁。</p>
+                <div class="flex gap-2">
+                    <input id="dash-liff-link" class="res-input text-xs font-mono bg-white flex-1" readonly>
+                    <button onclick="window.ReservationModule.copyLiffLink()" class="res-btn-g text-xs px-4 shrink-0 bg-blue-500 hover:bg-blue-600 border-none shadow-none"><i class="far fa-copy mr-1"></i> 複製</button>
+                </div>
+            </div>
+            <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 shadow-sm">
+                <h3 class="text-sm font-bold text-indigo-800 mb-2"><i class="fas fa-headset mr-1"></i> 客服小幫手連結設定</h3>
+                <p class="text-xs text-indigo-600 mb-3">請填寫您的 LINE 官方帳號加入連結，客戶點擊客服時會導向此網址。</p>
+                <div class="flex gap-2">
+                    <input id="dash-service-link" class="res-input text-xs font-mono bg-white flex-1" placeholder="例如: https://lin.ee/xxxx">
+                    <button onclick="window.ReservationModule.saveSettings()" class="res-btn-g text-xs px-4 shrink-0 bg-indigo-500 hover:bg-indigo-600 border-none shadow-none"><i class="fas fa-save mr-1"></i> 儲存</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="res-stat-cards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6"></div>
+        <div class="res-card">
+          <div class="px-5 py-4 border-b font-medium text-slate-700 text-base">各活動營收概覽</div>
+          <div class="overflow-x-auto">
+            <table class="res-table">
+              <thead><tr>
+                <th>活動名稱</th><th class="text-center">報名數</th>
+                <th class="text-center">已付款</th><th class="text-center">實收</th>
+                <th class="text-center">待付款</th><th class="text-center">待收</th>
+              </tr></thead>
+              <tbody id="res-course-stats"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 訂單管理 ===== -->
+      <div id="res-panel-orders" class="hidden">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 mb-4 flex flex-wrap gap-3">
+          <input id="res-filter-kw" type="text" placeholder="搜尋姓名、電話、訂單號..." class="res-input flex-1 min-w-[160px] text-base">
+          <select id="res-filter-status" class="res-input w-40 text-base">
+            <option value="">全部狀態</option>
+            <option value="PENDING">待付款</option>
+            <option value="PAID">已完款</option>
+            <option value="REFUND_REQUESTED">申退款</option>
+            <option value="REFUNDED">已退款</option>
+            <option value="CANCELLED">已取消</option>
+          </select>
+          <select id="res-filter-course" class="res-input w-48 text-base">
+            <option value="">全部活動</option>
+          </select>
+        </div>
+        <div class="res-card overflow-x-auto">
+          <table class="res-table">
+            <thead><tr>
+              <th>訂單號</th><th>活動</th><th>學員</th>
+              <th class="text-center">金額</th><th class="text-center">狀態</th>
+              <th class="text-center">後五碼</th><th class="text-right">操作</th>
+            </tr></thead>
+            <tbody id="res-order-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== 活動管理 ===== -->
+      <div id="res-panel-courses" class="hidden">
+        <div class="flex justify-between items-center mb-4">
+          <input id="res-course-kw" type="text" placeholder="搜尋活動..." class="res-input w-64 text-base" oninput="window.ReservationModule.renderCourses()">
+          <button onclick="window.ReservationModule.openCourseModal(null)" class="res-btn-g"><i class="fas fa-plus"></i> 新增活動</button>
+        </div>
+
+        <!-- 一般活動列表 -->
+        <div class="font-medium text-lg text-slate-700 mb-3 border-l-4 border-blue-500 pl-3">一般活動</div>
+        <div class="res-card overflow-x-auto mb-8">
+          <table class="res-table">
+            <thead><tr>
+              <th>活動名稱</th><th>類型 / 日期</th><th class="text-center">費用</th>
+              <th class="text-center">名額</th><th class="text-center">報名狀況</th><th class="text-right">操作</th>
+            </tr></thead>
+            <tbody id="res-course-list-normal"></tbody>
+          </table>
+        </div>
+
+        <!-- 梯次活動群組 -->
+        <div class="font-medium text-lg text-slate-700 mb-3 border-l-4 border-green-500 pl-3">梯次活動 <span class="text-sm text-slate-500 font-normal ml-2">(依主題/梯次摺疊)</span></div>
+        <div id="res-camp-groups"></div>
+      </div>
+
+      <!-- ===== 會員管理 ===== -->
+      <div id="res-panel-members" class="hidden">
+        <input id="res-member-kw" type="text" placeholder="搜尋姓名、身分證..." class="res-input w-72 text-base mb-4" oninput="window.ReservationModule.renderMembers()">
+        <div class="res-card overflow-x-auto">
+          <table class="res-table">
+            <thead><tr>
+              <th>姓名</th><th class="text-center">電話</th><th class="text-center">身分證</th>
+              <th class="text-center">家人數</th><th class="text-right">操作</th>
+            </tr></thead>
+            <tbody id="res-member-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== 簽到管理 ===== -->
+      <div id="res-panel-attend" class="hidden">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 mb-5 flex flex-wrap gap-4 items-end">
+          <div class="flex-1 min-w-[200px]">
+            <label class="res-label">選擇活動</label>
+            <select id="attend-course-sel" class="res-input text-base" onchange="window.ReservationModule.onAttendCourseChange()">
+              <option value="">-- 請選擇活動 --</option>
+            </select>
+          </div>
+          <div>
+            <label class="res-label">上課日期</label>
+            <input id="attend-date" type="date" class="res-input text-base" onchange="window.ReservationModule.loadAttendList()">
+          </div>
+          <button onclick="window.ReservationModule.saveAttendance()" class="res-btn-g py-3"><i class="fas fa-save"></i> 儲存簽到</button>
+        </div>
+        <div class="res-card overflow-x-auto">
+          <table class="res-table">
+            <thead><tr>
+              <th>學員姓名</th><th class="text-center">電話</th><th class="text-center">出席狀態</th>
+            </tr></thead>
+            <tbody id="res-attend-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== 🌟 系統設定 ===== -->
+      <div id="res-panel-settings" class="hidden">
+        <div class="max-w-2xl mx-auto mt-6">
+          <div class="res-card p-6 md:p-8">
+            <h3 class="font-bold text-xl mb-4 text-slate-800 flex items-center gap-2"><i class="fas fa-link text-[#06C755]"></i> 您的專屬前台網址</h3>
+            <p class="text-sm text-slate-500 mb-4">請將此網址設定於您的 LINE 官方帳號圖文選單中，客戶點擊後即可進行預約。</p>
+            <div class="flex gap-2">
+              <input id="setting-front-link" type="text" class="res-input font-mono text-sm bg-slate-50 text-slate-500 border-slate-200" readonly>
+              <button onclick="window.ReservationModule.copyFrontLink()" class="res-btn-g shrink-0 px-6"><i class="far fa-copy"></i> 複製</button>
+            </div>
+            
+            <hr class="my-8 border-slate-100">
+            
+            <h3 class="font-bold text-xl mb-4 text-slate-800 flex items-center gap-2"><i class="fas fa-headset text-indigo-500"></i> 客服小幫手連結</h3>
+            <p class="text-sm text-slate-500 mb-4">當客戶在報名紀錄中點擊聯絡客服，或需要退費時，將會被導向這個網址 (通常是您的 LINE 官方帳號聊天連結)。</p>
+            <input id="setting-service-link" type="text" class="res-input text-base font-mono mb-6" placeholder="例如: https://lin.ee/xxxx">
+
+            <hr class="my-8 border-slate-100">
+            
+            <h3 class="font-bold text-xl mb-4 text-slate-800 flex items-center gap-2"><i class="fab fa-telegram text-blue-500"></i> Telegram 推播通知設定</h3>
+            <p class="text-sm text-slate-500 mb-4">綁定後，每當有新預約或取消報名，您的 Telegram 就會即時收到通知。</p>
+            
+            <!-- 🌟 轉換 Chat ID 的 UI 區塊 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="res-label">Bot Token (機器人金鑰)</label>
+                    <div class="flex gap-2">
+                        <input id="setting-tg-token" type="text" class="res-input text-sm font-mono flex-1" placeholder="例如: 8740621450:AAHRax...">
+                        <button type="button" onclick="window.ReservationModule.fetchTgChatId()" class="res-btn-w shrink-0 px-3 bg-white text-sm whitespace-nowrap" style="color: #3b82f6; border-color: #93c5fd; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" title="自動獲取最近傳送訊息的 Chat ID">
+                            <i class="fas fa-sync-alt mr-1"></i>轉換
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="res-label">Chat ID (接收者ID)</label>
+                    <input id="setting-tg-chatid" type="text" class="res-input text-sm font-mono" placeholder="例如: -5248604938">
+                </div>
+            </div>
+            
+            <button onclick="window.ReservationModule.saveSettings()" class="res-btn-g w-full py-4 text-lg justify-center shadow-md">儲存系統設定</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- 訂單編輯 Modal -->
+<div id="res-order-modal" class="fixed inset-0 bg-black/60 z-[500] hidden items-center justify-center">
+  <div class="bg-white w-[95%] max-w-md rounded-2xl shadow-2xl overflow-hidden">
+    <div class="h-16 border-b px-6 flex justify-between items-center">
+      <h3 class="font-bold text-xl">編輯訂單</h3>
+      <button onclick="window.ReservationModule.closeOrderModal()" class="text-slate-400 hover:text-red-500"><i class="fas fa-times text-2xl"></i></button>
+    </div>
+    <div class="p-6 space-y-4">
+      <input type="hidden" id="modal-order-id">
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="res-label">狀態</label>
+          <select id="modal-order-status" class="res-input text-base">
+            <option value="PENDING">待付款</option><option value="PAID">已完款</option>
+            <option value="REFUND_REQUESTED">申退款</option><option value="REFUNDED">已退款</option>
+            <option value="CANCELLED">已取消</option>
+          </select>
+        </div>
+        <div><label class="res-label">實收金額</label>
+          <input id="modal-order-amount" type="number" class="res-input text-base">
+        </div>
+      </div>
+      <div><label class="res-label">匯款後五碼</label>
+        <input id="modal-order-remittance" maxlength="5" class="res-input text-center font-mono text-2xl tracking-widest">
+      </div>
+      <div><label class="res-label">備註</label>
+        <textarea id="modal-order-note" rows="3" class="res-input text-base resize-none"></textarea>
+      </div>
+    </div>
+    <div class="h-16 border-t px-6 flex justify-end items-center gap-4">
+      <button onclick="window.ReservationModule.closeOrderModal()" class="res-btn-w py-2 px-6">取消</button>
+      <button onclick="window.ReservationModule.saveOrder()" class="res-btn-g py-2 px-6">更新訂單</button>
+    </div>
+  </div>
+</div>
+
+<!-- 活動編輯 Modal -->
+<div id="res-course-modal" class="fixed inset-0 bg-black/60 z-[500] hidden items-center justify-center">
+  <div class="bg-white w-[95%] max-w-3xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div class="h-16 border-b px-6 flex justify-between items-center shrink-0">
+      <h3 id="res-course-modal-title" class="font-bold text-xl">新增活動</h3>
+      <button onclick="window.ReservationModule.closeCourseModal()" class="text-slate-400 hover:text-red-500"><i class="fas fa-times text-2xl"></i></button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6 space-y-4">
+      <input type="hidden" id="cm-id">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="res-label">類型</label>
+          <select id="cm-type" class="res-input text-base" onchange="window.ReservationModule.onCmTypeChange()">
+            <option value="單日活動">單日活動</option>
+            <option value="梯次活動">梯次活動</option>
+            <option value="常態活動">常態活動</option>
+          </select>
+        </div>
+        <div>
+          <label class="res-label">時段類型</label>
+          <select id="cm-timeslot" class="res-input text-base">
+            <option>全日</option><option>上午</option><option>下午</option><option>晚間</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 一般活動欄位 -->
+      <div id="cm-normal-fields">
+        <div class="mb-4"><label class="res-label">活動名稱 *</label><input id="cm-name" class="res-input text-base" placeholder="活動名稱"></div>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div><label class="res-label">開始日期</label><input id="cm-sdate" type="date" class="res-input text-base"></div>
+          <div><label class="res-label">結束日期</label><input id="cm-edate" type="date" class="res-input text-base"></div>
+          <div><label class="res-label">開始時間</label><input id="cm-stime" type="time" class="res-input text-base"></div>
+          <div><label class="res-label">結束時間</label><input id="cm-etime" type="time" class="res-input text-base"></div>
+          <div><label class="res-label">活動地點</label><input id="cm-location" class="res-input text-base"></div>
+          <div><label class="res-label">教練/老師</label><input id="cm-instructor" class="res-input text-base"></div>
+          <div><label class="res-label">原價</label><input id="cm-price" type="number" class="res-input text-base"></div>
+          <div><label class="res-label">總名額</label><input id="cm-capacity" type="number" class="res-input text-base" value="20"></div>
+          <div><label class="res-label">早鳥價</label><input id="cm-ebprice" type="number" class="res-input text-base"></div>
+          <div><label class="res-label">早鳥截止日</label><input id="cm-ebdate" type="date" class="res-input text-base"></div>
+          <div><label class="res-label">總堂數</label><input id="cm-sessions" type="number" value="1" class="res-input text-base"></div>
+          
+          <div class="col-span-2 md:col-span-1">
+            <label class="res-label">圖片網址 / 上傳圖片</label>
+            <div class="flex gap-2">
+              <input id="cm-image" class="res-input text-base flex-1" placeholder="網址或上傳圖片...">
+              <button type="button" onclick="document.getElementById('cm-image-upload').click()" class="res-btn-w shrink-0 px-3 bg-white text-sm whitespace-nowrap">
+                <i class="fas fa-upload mr-1"></i>上傳
+              </button>
+              <input type="file" id="cm-image-upload" class="hidden" accept="image/*" onchange="window.ReservationModule.compressAndSetImage('cm-image', this)">
+            </div>
+          </div>
+        </div>
+        <div><label class="res-label">活動說明</label><textarea id="cm-desc" rows="4" class="res-input text-base resize-none"></textarea></div>
+      </div>
+
+      <!-- 梯次活動大主題欄位 -->
+      <div id="cm-camp-fields" class="hidden space-y-4">
+        <div class="bg-green-50 border border-green-200 rounded-xl p-5">
+          <label class="res-label text-green-800"><i class="fas fa-flag mr-1"></i> 活動大主題 *</label>
+          <input id="cm-camp-theme" class="res-input text-base border-green-300" placeholder="如: 2026 運動島夏令營">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="res-label">開始時間</label><input id="cm-camp-stime" type="time" class="res-input text-base"></div>
+          <div><label class="res-label">結束時間</label><input id="cm-camp-etime" type="time" class="res-input text-base"></div>
+          <div><label class="res-label">活動地點</label><input id="cm-camp-location" class="res-input text-base"></div>
+          <div><label class="res-label">教練/老師</label><input id="cm-camp-instructor" class="res-input text-base"></div>
+          <div><label class="res-label">總堂數</label><input id="cm-camp-sessions" type="number" value="5" class="res-input text-base"></div>
+          
+          <div class="col-span-2">
+            <label class="res-label">主題圖片網址 / 上傳圖片</label>
+            <div class="flex gap-2">
+              <input id="cm-camp-image" class="res-input text-base flex-1" placeholder="網址或上傳圖片 (建議 800x400)...">
+              <button type="button" onclick="document.getElementById('cm-camp-image-upload').click()" class="res-btn-w shrink-0 px-3 bg-white text-sm whitespace-nowrap">
+                <i class="fas fa-upload mr-1"></i>上傳
+              </button>
+              <input type="file" id="cm-camp-image-upload" class="hidden" accept="image/*" onchange="window.ReservationModule.compressAndSetImage('cm-camp-image', this)">
+            </div>
+          </div>
+        </div>
+
+        <div><label class="res-label">活動說明 <span class="text-slate-400 font-normal text-xs ml-1">(顯示於前台梯次卡片)</span></label><textarea id="cm-camp-desc" rows="4" class="res-input text-base resize-none" placeholder="活動內容介紹、注意事項..."></textarea></div>
+        <div id="cm-camp-batches"></div>
+        <button type="button" onclick="window.ReservationModule.addCampBatch()" class="w-full py-4 border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium hover:bg-blue-50 transition text-base">
+          <i class="fas fa-plus mr-1"></i> 新增下一梯次
+        </button>
+        <div class="bg-yellow-50 text-yellow-700 text-sm p-4 rounded-xl border border-yellow-200">
+          <i class="fas fa-info-circle mr-1"></i> 儲存後系統將自動為每個「梯次 × 項目」建立獨立活動。
+        </div>
+      </div>
+
+      <!-- 梯次活動單筆編輯模式 -->
+      <div id="cm-camp-edit-fields" class="hidden">
+        <div class="bg-green-50 border border-green-200 rounded-xl p-5 mb-4">
+          <div class="text-base font-medium text-green-800 mb-3"><i class="fas fa-flag mr-1"></i> 單筆梯次活動編輯</div>
+          <div class="grid grid-cols-3 gap-4">
+            <div><label class="res-label text-green-700">大主題</label><input id="cm-camp-edit-theme" class="res-input text-base border-green-300"></div>
+            <div><label class="res-label text-green-700">梯次名稱</label><input id="cm-camp-edit-batch" class="res-input text-base border-green-300"></div>
+            <div><label class="res-label text-green-700">活動項目</label><input id="cm-camp-edit-item" class="res-input text-base border-green-300"></div>
+          </div>
+          <div class="mt-3 text-sm text-slate-600 bg-white p-3 rounded-lg border border-green-100">
+            預覽：<span id="cm-camp-edit-preview" class="font-medium text-slate-800"></span>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="res-label">開始日期</label><input id="cm-camp-edit-sdate" type="date" class="res-input text-base"></div>
+          <div><label class="res-label">結束日期</label><input id="cm-camp-edit-edate" type="date" class="res-input text-base"></div>
+          <div><label class="res-label">開始時間</label><input id="cm-camp-edit-stime" type="time" class="res-input text-base"></div>
+          <div><label class="res-label">結束時間</label><input id="cm-camp-edit-etime" type="time" class="res-input text-base"></div>
+          <div><label class="res-label">活動地點</label><input id="cm-camp-edit-location" class="res-input text-base"></div>
+          <div><label class="res-label">教練/老師</label><input id="cm-camp-edit-instructor" class="res-input text-base"></div>
+          <div><label class="res-label">原價</label><input id="cm-camp-edit-price" type="number" class="res-input text-base"></div>
+          <div><label class="res-label">總名額</label><input id="cm-camp-edit-capacity" type="number" class="res-input text-base"></div>
+          <div><label class="res-label">早鳥價</label><input id="cm-camp-edit-ebprice" type="number" class="res-input text-base"></div>
+          <div><label class="res-label">早鳥截止日</label><input id="cm-camp-edit-ebdate" type="date" class="res-input text-base"></div>
+          <div><label class="res-label">總堂數</label><input id="cm-camp-edit-sessions" type="number" value="5" class="res-input text-base"></div>
+        </div>
+      </div>
+    </div>
+    <div class="h-16 border-t px-6 flex justify-between items-center gap-4 shrink-0">
+      <div id="cm-progress" class="text-base text-slate-500 font-medium hidden"><i class="fas fa-spinner fa-spin mr-2"></i> 建立中 <span id="cm-progress-text"></span></div>
+      <div class="flex gap-4 ml-auto">
+        <button onclick="window.ReservationModule.closeCourseModal()" class="res-btn-w py-2 px-6">取消</button>
+        <button onclick="window.ReservationModule.saveCourse()" class="res-btn-g py-2 px-6" id="cm-save-btn"><i class="fas fa-save"></i> 儲存活動</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 會員詳情 Modal -->
+<div id="res-member-modal" class="fixed inset-0 bg-black/60 z-[500] hidden items-center justify-center">
+  <div class="bg-white w-[95%] max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div class="h-16 border-b px-6 flex justify-between items-center shrink-0">
+      <h3 class="font-bold text-xl">會員資料</h3>
+      <button onclick="window.ReservationModule.closeMemberModal()" class="text-slate-400 hover:text-red-500"><i class="fas fa-times text-2xl"></i></button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <input type="hidden" id="mm-uid">
+      <div><label class="res-label">姓名</label><input id="mm-name" class="res-input text-base"></div>
+      <div><label class="res-label">身分證（不可改）</label><input id="mm-nid" class="res-input text-base bg-slate-100" readonly></div>
+      <div><label class="res-label">生日</label><input id="mm-birthday" type="date" class="res-input text-base"></div>
+      <div><label class="res-label">性別</label><select id="mm-gender" class="res-input text-base"><option>男</option><option>女</option></select></div>
+      <div><label class="res-label">電話</label><input id="mm-phone" class="res-input text-base"></div>
+      <div><label class="res-label">地址</label><input id="mm-address" class="res-input text-base"></div>
+      <div class="md:col-span-2"><label class="res-label">健康備註</label><textarea id="mm-health" rows="3" class="res-input text-base resize-none"></textarea></div>
+      <div class="md:col-span-2">
+        <div class="res-label mb-2">家人名單</div>
+        <div id="mm-family" class="bg-slate-50 border rounded-xl p-4 min-h-[60px] text-base text-slate-600 space-y-2"></div>
+      </div>
+    </div>
+    <div class="h-16 border-t px-6 flex justify-end items-center gap-4 shrink-0">
+      <button onclick="window.ReservationModule.closeMemberModal()" class="res-btn-w py-2 px-6">取消</button>
+      <button onclick="window.ReservationModule.saveMember()" class="res-btn-g py-2 px-6">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.ReservationModule = (function () {
+  var API = typeof WORKER_URL !== 'undefined' ? WORKER_URL : 'https://goodservice.fangwl591021.workers.dev';
+  var courses = [], orders = [], members = [];
+  var editingOrder = null, editingMember = null, editingCourseId = null;
+  var campBatchData = [];
+  var expandedBatches = {};
+  var attendList = [];
+  var tabs = ['dashboard','orders','courses','members','attend','settings'];
+  var titles = { dashboard:'營運統計', orders:'訂單管理', courses:'活動管理', members:'會員管理', attend:'簽到管理', settings:'系統設定' };
+
+  function callAPI(action, payload, userProfile) {
+    var acc = window.currentUser ? window.currentUser.username : '';
+    var body = { action: action, payload: Object.assign({}, payload || {}, { accountId: acc }) };
+    return fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.status === 'success') return d.data;
+        if (d.success) return d.data || d;
+        throw new Error(d.message || d.msg || '操作失敗');
+      });
+  }
+
+  function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtDate(d) { if (!d) return ''; return String(d).substring(0,10); }
+
+  function statusLabel(s) {
+    return {PENDING:'待付款',PAID:'已完款',REFUND_REQUESTED:'申退款中',REFUNDED:'已退款',CANCELLED:'已取消'}[s] || s || '-';
+  }
+  function statusCls(s) {
+    return {PENDING:'bg-yellow-100 text-yellow-800',PAID:'bg-green-100 text-green-700',
+      REFUND_REQUESTED:'bg-orange-100 text-orange-700',REFUNDED:'bg-red-100 text-red-600',
+      CANCELLED:'bg-slate-100 text-slate-500'}[s] || 'bg-slate-100 text-slate-500';
+  }
+
+  function parseCampName(name) {
+    if (!name) return { theme:'', batch:'', item:'' };
+    var parts = String(name).split(/\s*-\s*/);
+    if (parts.length >= 3) {
+      return { theme: parts[0], batch: parts.slice(1, parts.length-1).join('-'), item: parts[parts.length-1] };
+    }
+    return { theme:'其他梯次活動', batch:'', item: name };
+  }
+
+  function setTab(tab) {
+    tabs.forEach(function(t) {
+      var panel = document.getElementById('res-panel-' + t);
+      if (panel) panel.classList.toggle('hidden', t !== tab);
+      var nav = document.getElementById('res-nav-' + t);
+      if (nav) nav.classList.toggle('active', t === tab);
+      var mTab = document.getElementById('res-tab-' + t);
+      if (mTab) {
+        if (t === tab) { mTab.classList.remove('bg-slate-100','text-slate-600'); mTab.classList.add('bg-[#06C755]','text-white'); }
+        else { mTab.classList.remove('bg-[#06C755]','text-white'); mTab.classList.add('bg-slate-100','text-slate-600'); }
+      }
+    });
+    var titleEl = document.getElementById('res-page-title');
+    if (titleEl) titleEl.innerText = titles[tab] || '';
+    var exportBtn = document.getElementById('res-export-btn');
+    if (exportBtn) exportBtn.classList.toggle('hidden', tab !== 'orders');
+    if (tab === 'attend') refreshAttendCourseSelect();
+  }
+
+  function syncAll() {
+    var linkBtn = document.getElementById('res-front-link');
+    var acc = window.currentUser ? window.currentUser.username : '';
+    var liffUrl = "https://liff.line.me/2009524128-bJMVabyM?accountId=" + encodeURIComponent(acc);
+    if (linkBtn && acc) {
+      linkBtn.onclick = function(e) { e.preventDefault(); window.open(liffUrl, '_blank'); };
+    }
+    var settingsInput = document.getElementById('setting-front-link');
+    if (settingsInput && acc) settingsInput.value = liffUrl;
+    var dashLiffInput = document.getElementById('dash-liff-link');
+    if (dashLiffInput && acc) dashLiffInput.value = liffUrl;
+
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    callAPI('SI_ADMIN_GET_DATA').then(function(data) {
+      courses = data.courses || [];
+      orders = (data.orders || []).slice().reverse();
+      members = data.users || [];
+      
+      var sLink = document.getElementById('setting-service-link');
+      if (sLink && data.serviceLink !== undefined) sLink.value = data.serviceLink;
+      var dashSLink = document.getElementById('dash-service-link');
+      if (dashSLink && data.serviceLink !== undefined) dashSLink.value = data.serviceLink;
+
+      var tgToken = document.getElementById('setting-tg-token');
+      if (tgToken && data.tgToken !== undefined) tgToken.value = data.tgToken;
+      var tgChatId = document.getElementById('setting-tg-chatid');
+      if (tgChatId && data.tgChatId !== undefined) tgChatId.value = data.tgChatId;
+
+      renderDashboard(); renderOrders(); renderCourses(); renderMembers(); refreshCourseFilter();
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+    }).catch(function(e) {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      alert('同步失敗：' + e.message);
+    });
+  }
+
+  function saveSettings() {
+    var sLink = document.getElementById('dash-service-link') ? document.getElementById('dash-service-link').value.trim() : document.getElementById('setting-service-link').value.trim();
+    var tgToken = document.getElementById('setting-tg-token') ? document.getElementById('setting-tg-token').value.trim() : '';
+    var tgChatId = document.getElementById('setting-tg-chatid') ? document.getElementById('setting-tg-chatid').value.trim() : '';
+    
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    callAPI('SI_UPDATE_MERCHANT_SETTINGS', { serviceLink: sLink, tgToken: tgToken, tgChatId: tgChatId }).then(function() {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      if (typeof showToast === 'function') showToast('系統設定已儲存！');
+      else alert('設定已儲存！');
+    }).catch(function(e) {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      alert('儲存失敗：' + e.message);
+    });
+  }
+
+  function copyLiffLink() {
+    var el = document.getElementById("dash-liff-link");
+    if (!el || !el.value) return;
+    el.select(); el.setSelectionRange(0, 99999); document.execCommand("copy");
+    if (typeof showToast === 'function') showToast("網址已複製！"); else alert("網址已複製！");
+  }
+  function copyFrontLink() {
+    var el = document.getElementById("setting-front-link");
+    if (!el || !el.value) return;
+    el.select(); el.setSelectionRange(0, 99999); document.execCommand("copy");
+    if (typeof showToast === 'function') showToast("網址已複製！"); else alert("網址已複製！");
+  }
+
+  // 🌟 前端壓縮圖片並轉換為 Base64
+  function compressAndSetImage(targetInputId, fileInput) {
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        
+        // 壓縮設定 (最大寬度 800)
+        var MAX_WIDTH = 800;
+        var scaleSize = MAX_WIDTH / img.width;
+        if (scaleSize > 1) scaleSize = 1; // 圖片小於 800 不放大
+        
+        canvas.width = img.width * scaleSize;
+        canvas.height = img.height * scaleSize;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // 轉為 Base64 格式 (JPEG, 0.7 品質，縮小檔案體積)
+        var base64Data = canvas.toDataURL('image/jpeg', 0.7);
+        
+        document.getElementById(targetInputId).value = base64Data;
+        fileInput.value = ''; // 清空 file input 以便下次能選同一個檔案
+        
+        if (typeof showToast === 'function') showToast("圖片壓縮並載入成功！");
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // 🌟 新增：透過 Telegram API 提取 Chat ID
+  function fetchTgChatId() {
+    var token = document.getElementById('setting-tg-token').value.trim();
+    if (!token) {
+        alert('請先輸入 Bot Token！');
+        return;
+    }
+
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    fetch('https://api.telegram.org/bot' + token + '/getUpdates')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (typeof toggleLoader === 'function') toggleLoader(false);
+        if (!data.ok) {
+            alert('Token 無效或連線失敗：' + data.description);
+            return;
+        }
+        if (!data.result || data.result.length === 0) {
+            alert('目前找不到任何對話紀錄！\n\n請先到 Telegram 中：\n1. 尋找您的機器人並按下 Start 或隨便傳送一句話\n2. 若要推播到群組，請先將機器人加入該群組\n\n完成後再按一次轉換按鈕！');
+            return;
+        }
+
+        var chatId = null;
+        // 反向尋找最近的訊息，取得對應的 chat id
+        for (var i = data.result.length - 1; i >= 0; i--) {
+            var update = data.result[i];
+            if (update.message && update.message.chat && update.message.chat.id) {
+                chatId = update.message.chat.id;
+                break;
+            } else if (update.my_chat_member && update.my_chat_member.chat && update.my_chat_member.chat.id) {
+                chatId = update.my_chat_member.chat.id;
+                break;
+            } else if (update.channel_post && update.channel_post.chat && update.channel_post.chat.id) {
+                chatId = update.channel_post.chat.id;
+                break;
+            }
+        }
+
+        if (chatId) {
+            document.getElementById('setting-tg-chatid').value = chatId;
+            if (typeof showToast === 'function') showToast('成功獲取 Chat ID！');
+            else alert('成功獲取 Chat ID：' + chatId);
+        } else {
+            alert('無法從最近的紀錄中解析出 Chat ID，請再傳送一次訊息給機器人試試看。');
+        }
+    })
+    .catch(function(err) {
+        if (typeof toggleLoader === 'function') toggleLoader(false);
+        alert('網路連線發生錯誤：' + err.message);
+    });
+  }
+
+  function renderDashboard() {
+    var totalPaid=0, totalPending=0, validOrders=0;
+    orders.forEach(function(o) {
+      if (o.status==='PAID') { totalPaid += Number(o.amount)||0; validOrders++; }
+      else if (o.status==='PENDING') { totalPending += Number(o.amount)||0; validOrders++; }
+    });
+    var cards = [
+      { label:'實收金額', val:'$'+totalPaid.toLocaleString(), color:'text-[#06C755]', bg:'bg-green-50', icon:'fa-dollar-sign' },
+      { label:'待收金額', val:'$'+totalPending.toLocaleString(), color:'text-amber-500', bg:'bg-amber-50', icon:'fa-hourglass-half' },
+      { label:'有效訂單', val:validOrders+'筆', color:'text-blue-600', bg:'bg-blue-50', icon:'fa-file-signature' },
+      { label:'活動數',   val:courses.length+'項', color:'text-purple-600', bg:'bg-purple-50', icon:'fa-calendar-check' },
+      { label:'會員數',   val:members.length+'人', color:'text-rose-500', bg:'bg-rose-50', icon:'fa-users' }
     ];
+    var el = document.getElementById('res-stat-cards');
+    if (el) el.innerHTML = cards.map(function(c) {
+      return '<div class="stat-box relative"><p class="text-sm font-medium text-slate-500 mb-1">'+c.label+'</p>'
+        +'<h3 class="text-2xl font-bold '+c.color+'">'+c.val+'</h3>'
+        +'<div class="absolute right-4 top-4 w-10 h-10 '+c.bg+' rounded-xl flex items-center justify-center opacity-70">'
+        +'<i class="fas '+c.icon+' '+c.color+'"></i></div></div>';
+    }).join('');
 
-    const HOT_SPOTS = ['國旅', '亞洲', '歐洲', '美洲', '大洋洲', '非洲'];
+    var tbody = document.getElementById('res-course-stats');
+    if (!tbody) return;
+    tbody.innerHTML = courses.map(function(c) {
+      var co = orders.filter(function(o){ return o.courseId===c.id; });
+      var paid = co.filter(function(o){ return o.status==='PAID'; });
+      var pending = co.filter(function(o){ return o.status==='PENDING'; });
+      var paidRev = paid.reduce(function(s,o){ return s+(Number(o.amount)||0); },0);
+      var pendingRev = pending.reduce(function(s,o){ return s+(Number(o.amount)||0); },0);
+      return '<tr><td class="font-medium text-slate-800">'+esc(c.name)+'</td>'
+        +'<td class="text-center text-slate-700">'+(paid.length+pending.length)+'</td>'
+        +'<td class="text-center text-green-600 font-medium">'+paid.length+'</td>'
+        +'<td class="text-center text-green-600 font-medium">$'+paidRev.toLocaleString()+'</td>'
+        +'<td class="text-center text-amber-500">'+pending.length+'</td>'
+        +'<td class="text-center text-amber-500">$'+pendingRev.toLocaleString()+'</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="text-center py-8 text-slate-400">尚無活動資料</td></tr>';
+  }
 
-    function App() {
-      const [activeTab, setActiveTab] = useState('home');
-      const [itineraries, setItineraries] = useState(INITIAL_ITINERARIES);
-      const [toast, setToast] = useState(null);
+  function getFilteredOrders() {
+    var kw = ((document.getElementById('res-filter-kw')||{}).value||'').toLowerCase();
+    var st = (document.getElementById('res-filter-status')||{}).value||'';
+    var cv = (document.getElementById('res-filter-course')||{}).value||'';
+    return orders.filter(function(o) {
+      var ok = true;
+      if (kw) ok = ok && [o.name,o.phone,o.orderId].join(' ').toLowerCase().includes(kw);
+      if (st) ok = ok && o.status===st;
+      if (cv) ok = ok && o.courseId===cv;
+      return ok;
+    });
+  }
 
-      // Search State
-      const [searchRegion, setSearchRegion] = useState('');
-      const [searchPrice, setSearchPrice] = useState('');
-      const [filteredResults, setFilteredResults] = useState(INITIAL_ITINERARIES);
-      const [isLoading, setIsLoading] = useState(false);
+  function renderOrders() {
+    var list = getFilteredOrders();
+    var tbody = document.getElementById('res-order-list');
+    if (!tbody) return;
+    tbody.innerHTML = list.map(function(o) {
+      var cancelled = o.status==='CANCELLED';
+      return '<tr class="'+(cancelled?'opacity-50':'')+'">'
+        +'<td class="font-mono text-sm text-slate-500">'+(o.orderId||'').slice(-8)+'</td>'
+        +'<td class="font-medium '+(cancelled?'line-through':'')+' text-slate-800 max-w-[140px] truncate">'+esc(o.courseName||o.courseId)+'</td>'
+        +'<td><div class="font-medium text-slate-800">'+esc(o.name)+'</div><div class="text-sm text-slate-500">'+esc(o.phone)+'</div></td>'
+        +'<td class="text-center font-bold text-[#06C755]">$'+esc(o.amount)+'</td>'
+        +'<td class="text-center"><span class="badge '+statusCls(o.status)+'">'+statusLabel(o.status)+'</span></td>'
+        +'<td class="text-center font-mono font-medium text-blue-600">'+(o.remittance||'-')+'</td>'
+        +'<td class="text-right"><button onclick="window.ReservationModule.openOrderModal(\''+esc(o.orderId)+'\')" class="res-btn-w text-sm py-1.5 px-4">編輯</button></td>'
+        +'</tr>';
+    }).join('') || '<tr><td colspan="7" class="text-center py-10 text-slate-400">沒有符合的訂單</td></tr>';
+  }
 
-      // Banner State
-      const [bannerImage, setBannerImage] = useState(() => {
-        return localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80';
+  function bindOrderFilters() {
+    ['res-filter-kw','res-filter-status','res-filter-course'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && !el._bound) { el._bound=true; el.addEventListener('input',renderOrders); el.addEventListener('change',renderOrders); }
+    });
+  }
+
+  function refreshCourseFilter() {
+    var sel = document.getElementById('res-filter-course');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">全部活動</option>' +
+      courses.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>'; }).join('');
+  }
+
+  function openOrderModal(orderId) {
+    var o = orders.find(function(x){ return x.orderId===orderId; });
+    if (!o) return;
+    editingOrder = o;
+    document.getElementById('modal-order-id').value = o.orderId;
+    document.getElementById('modal-order-status').value = o.status || 'PENDING';
+    document.getElementById('modal-order-amount').value = o.amount || 0;
+    document.getElementById('modal-order-remittance').value = o.remittance || '';
+    document.getElementById('modal-order-note').value = o.note || '';
+    var m = document.getElementById('res-order-modal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+  }
+  function closeOrderModal() {
+    var m = document.getElementById('res-order-modal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+  }
+  function saveOrder() {
+    if (!editingOrder) return;
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    callAPI('SI_ADMIN_UPDATE_ORDER', { orderData: {
+      orderId: editingOrder.orderId,
+      status: document.getElementById('modal-order-status').value,
+      amount: document.getElementById('modal-order-amount').value,
+      remittance: document.getElementById('modal-order-remittance').value,
+      note: document.getElementById('modal-order-note').value,
+      extraData: editingOrder.extraData || {}
+    }}).then(function() {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      if (typeof showToast === 'function') showToast('訂單已更新');
+      closeOrderModal(); syncAll();
+    }).catch(function(e) {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      alert('更新失敗：' + e.message);
+    });
+  }
+
+  function getPaidCount(courseId) { return orders.filter(function(o){ return o.courseId===courseId && o.status==='PAID'; }).length; }
+  function getPendingCount(courseId) { return orders.filter(function(o){ return o.courseId===courseId && o.status==='PENDING'; }).length; }
+
+  function copyCourse(courseId) {
+    var c = courses.find(function(x){ return x.id===courseId; });
+    if (!c) return;
+    openCourseModal(courseId);
+    editingCourseId = null; // 設為新增
+    var title = document.getElementById('res-course-modal-title');
+    if (title) title.innerText = '新增活動 (複製)';
+    document.getElementById('cm-id').value = '';
+    document.getElementById('cm-name').value = c.name + ' (複製)';
+  }
+
+  function copyCampTheme(themeName) {
+    // 收集該主題所有活動
+    var themeItems = courses.filter(function(c) {
+      return c.type === '梯次活動' && parseCampName(c.name).theme === themeName;
+    });
+    if (!themeItems.length) { alert('找不到此主題的活動資料'); return; }
+
+    var first = themeItems[0];
+    var batches = {};
+    themeItems.forEach(function(c) {
+      var p = parseCampName(c.name);
+      if (!batches[p.batch]) {
+        batches[p.batch] = { name: p.batch, startDate: fmtDate(c.startDate), endDate: fmtDate(c.endDate), items: [] };
+      }
+      batches[p.batch].items.push({ name: p.item, price: String(c.price || 0), capacity: String(c.capacity || 20) });
+    });
+
+    openCourseModal(null);
+    document.getElementById('cm-type').value = '梯次活動';
+    document.getElementById('cm-type').disabled = false;
+
+    var title = document.getElementById('res-course-modal-title');
+    if (title) title.innerText = '新增活動 (複製主題：' + themeName + ')';
+
+    document.getElementById('cm-camp-theme').value = themeName + ' (複製)';
+    document.getElementById('cm-camp-stime').value = first.startTime || '';
+    document.getElementById('cm-camp-etime').value = first.endTime || '';
+    document.getElementById('cm-camp-location').value = first.location || '';
+    document.getElementById('cm-camp-instructor').value = first.instructor || '';
+    document.getElementById('cm-camp-sessions').value = first.totalSessions || 5;
+    document.getElementById('cm-camp-image').value = first.image || '';
+    document.getElementById('cm-camp-desc').value = first.description || '';
+
+    campBatchData = Object.values(batches);
+    if (!campBatchData.length) campBatchData = [{ name:'', startDate:'', endDate:'', items:[{ name:'', price:'', capacity:'' }] }];
+    renderCampBatches();
+    onCmTypeChange();
+  }
+
+  function renderCourses() {
+    var kw = ((document.getElementById('res-course-kw')||{}).value||'').toLowerCase();
+    var list = courses.filter(function(c){ return !kw || c.name.toLowerCase().includes(kw); });
+
+    var normalList = list.filter(function(c){ return c.type !== '梯次活動' || parseCampName(c.name).theme === '其他梯次活動'; });
+    var normalTbody = document.getElementById('res-course-list-normal');
+    if (normalTbody) {
+      normalTbody.innerHTML = normalList.map(function(c) {
+        var paid = getPaidCount(c.id), pending = getPendingCount(c.id);
+        return '<tr>'
+          +'<td><div class="font-medium text-slate-800">'+esc(c.name)+'</div><span class="text-sm font-mono text-slate-500">'+esc(c.id)+'</span></td>'
+          +'<td><span class="badge bg-blue-50 text-blue-700">'+esc(c.type)+'</span><div class="text-sm text-slate-500 mt-1.5">'+esc(c.startDate)+' ~ '+esc(c.endDate)+'</div></td>'
+          +'<td class="text-center font-bold text-[#06C755]">$'+esc(c.price)+'</td>'
+          +'<td class="text-center text-slate-600">'+esc(c.enrolled)+' / '+esc(c.capacity)+'</td>'
+          +'<td class="text-center text-sm"><span class="text-green-600 font-medium">付:'+paid+'</span> <span class="text-amber-500 font-medium ml-1">待:'+pending+'</span></td>'
+          +'<td class="text-right space-x-2">'
+          +'<button onclick="window.ReservationModule.goAttend(\''+esc(c.id)+'\')" class="text-green-600 hover:text-green-700 text-sm font-medium">簽到</button>'
+          +'<button onclick="window.ReservationModule.copyCourse(\''+esc(c.id)+'\')" class="text-slate-500 hover:text-slate-800 text-sm font-medium transition"><i class="far fa-copy mr-1"></i>複製</button>'
+          +'<button onclick="window.ReservationModule.openCourseModal(\''+esc(c.id)+'\')" class="res-btn-w text-sm py-1.5 px-3">編輯</button>'
+          +'</td></tr>';
+      }).join('') || '<tr><td colspan="6" class="text-center py-8 text-slate-400">尚無一般活動資料</td></tr>';
+    }
+
+    var campList = list.filter(function(c){ return c.type === '梯次活動' && parseCampName(c.name).theme !== '其他梯次活動'; });
+    var groups = {};
+    campList.forEach(function(c) {
+      var p = parseCampName(c.name);
+      if (!groups[p.theme]) groups[p.theme] = {};
+      if (!groups[p.theme][p.batch]) groups[p.theme][p.batch] = [];
+      groups[p.theme][p.batch].push({ course: c, itemName: p.item });
+    });
+
+    var campEl = document.getElementById('res-camp-groups');
+    if (!campEl) return;
+    if (!Object.keys(groups).length) {
+      campEl.innerHTML = '<div class="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-100 text-base font-medium">尚無梯次活動資料</div>';
+      return;
+    }
+    var html = '';
+    Object.keys(groups).forEach(function(theme) {
+      html += '<div class="res-card mb-5 border border-green-200">'
+        +'<div class="bg-green-50 px-6 py-4 border-b border-green-200 flex items-center justify-between">'
+        +'<span class="font-bold text-green-800 text-lg"><i class="fas fa-flag mr-2 opacity-70"></i>'+esc(theme)+'</span>'
+        +'<button onclick="window.ReservationModule.copyCampTheme(\''+esc(theme)+'\')" '
+        +'style="background:#fff;border:1px solid #86efac;color:#16a34a;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s;" '
+        +'onmouseover="this.style.background=\'#f0fdf4\'" onmouseout="this.style.background=\'#fff\'">'
+        +'<i class="far fa-copy"></i> 複製整組梯次'
+        +'</button>'
+        +'</div>'
+        +'<div class="p-4 space-y-3">';
+
+      Object.keys(groups[theme]).forEach(function(batch) {
+        var bkey = theme + '_' + batch;
+        var items = groups[theme][batch];
+        var isOpen = !!expandedBatches[bkey];
+        html += '<div class="border border-gray-200 rounded-xl overflow-hidden">'
+          +'<button onclick="window.ReservationModule.toggleBatch(\''+esc(bkey)+'\')" class="w-full text-left px-5 py-4 bg-gray-50 hover:bg-green-50 flex justify-between items-center font-medium text-base transition">'
+          +'<span><i class="far fa-calendar-alt mr-2 text-blue-500"></i>'+esc(batch)+' <span class="text-sm text-slate-500 font-normal ml-2">'+items.length+' 項目</span></span>'
+          +'<i class="fas '+(isOpen?'fa-chevron-up text-green-600':'fa-chevron-down text-gray-400')+'"></i>'
+          +'</button>';
+        if (isOpen) {
+          html += '<div class="overflow-x-auto"><table class="res-table"><thead><tr>'
+            +'<th>活動項目</th><th class="text-center">費用</th><th class="text-center">名額</th>'
+            +'<th class="text-center">繳費狀況</th><th class="text-right">操作</th>'
+            +'</tr></thead><tbody>';
+          items.forEach(function(item) {
+            var c = item.course;
+            var paid = getPaidCount(c.id), pending = getPendingCount(c.id);
+            html += '<tr>'
+              +'<td><div class="font-medium text-slate-800">'+esc(item.itemName)+'</div><span class="text-sm font-mono text-slate-500">'+esc(c.id)+'</span></td>'
+              +'<td class="text-center font-bold text-[#06C755]">$'+esc(c.price)+'</td>'
+              +'<td class="text-center text-slate-600">'+esc(c.enrolled)+' / '+esc(c.capacity)+'</td>'
+              +'<td class="text-center text-sm"><span class="text-green-600 font-medium">付:'+paid+'</span> <span class="text-amber-500 font-medium ml-1">待:'+pending+'</span></td>'
+              +'<td class="text-right space-x-3">'
+              +'<button onclick="window.ReservationModule.goAttend(\''+esc(c.id)+'\')" class="text-green-600 hover:underline text-sm font-medium">簽到</button>'
+              +'<button onclick="window.ReservationModule.openCourseModal(\''+esc(c.id)+'\')" class="res-btn-w text-sm py-1.5 px-3">編輯</button>'
+              +'</td></tr>';
+          });
+          html += '</tbody></table></div>';
+        }
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+    campEl.innerHTML = html;
+  }
+
+  function toggleBatch(key) { expandedBatches[key] = !expandedBatches[key]; renderCourses(); }
+
+  function onCmTypeChange() {
+    var type = document.getElementById('cm-type').value;
+    var isEditing = !!editingCourseId;
+    document.getElementById('cm-normal-fields').classList.toggle('hidden', type === '梯次活動');
+    document.getElementById('cm-camp-fields').classList.toggle('hidden', type !== '梯次活動' || isEditing);
+    document.getElementById('cm-camp-edit-fields').classList.toggle('hidden', type !== '梯次活動' || !isEditing);
+  }
+
+  function renderCampBatches() {
+    var container = document.getElementById('cm-camp-batches');
+    if (!container) return;
+    var html = '';
+    campBatchData.forEach(function(b, bIdx) {
+      html += '<div class="camp-batch-block">'
+        +(campBatchData.length > 1 ? '<button type="button" onclick="window.ReservationModule.removeCampBatch('+bIdx+')" style="position:absolute;top:12px;right:16px;color:#ef4444;background:none;border:none;cursor:pointer;font-size:16px;"><i class="fas fa-trash"></i></button>' : '')
+        +'<div class="font-medium text-base text-slate-700 mb-3"><i class="fas fa-calendar-alt text-blue-500 mr-2"></i> 梯次 '+(bIdx+1)+'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">'
+        +'<div><label class="res-label">梯次名稱</label><input class="res-input text-base" placeholder="如: 第一梯次" value="'+esc(b.name)+'" oninput="window.ReservationModule.updateBatch('+bIdx+',\'name\',this.value)"></div>'
+        +'<div><label class="res-label">開始日期</label><input type="date" class="res-input text-base" value="'+esc(b.startDate)+'" oninput="window.ReservationModule.updateBatch('+bIdx+',\'startDate\',this.value)"></div>'
+        +'<div><label class="res-label">結束日期</label><input type="date" class="res-input text-base" value="'+esc(b.endDate)+'" oninput="window.ReservationModule.updateBatch('+bIdx+',\'endDate\',this.value)"></div>'
+        +'</div>'
+        +'<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+        +'<span class="font-medium text-base text-slate-700"><i class="fas fa-running text-orange-500 mr-2"></i> 活動項目</span>'
+        +'<button type="button" onclick="window.ReservationModule.addCampItem('+bIdx+')" style="font-size:13px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:6px;padding:4px 12px;font-weight:500;cursor:pointer;">+ 新增項目</button>'
+        +'</div>';
+      b.items.forEach(function(item, iIdx) {
+        html += '<div class="camp-item-row">'
+          +'<div style="flex:1;"><label class="res-label">項目名稱</label><input class="res-input text-base" placeholder="如: 籃球特訓" value="'+esc(item.name)+'" oninput="window.ReservationModule.updateItem('+bIdx+','+iIdx+',\'name\',this.value)"></div>'
+          +'<div style="width:100px;"><label class="res-label">單價</label><input type="number" class="res-input text-base" placeholder="金額" value="'+esc(item.price)+'" oninput="window.ReservationModule.updateItem('+bIdx+','+iIdx+',\'price\',this.value)"></div>'
+          +'<div style="width:90px;"><label class="res-label">名額</label><input type="number" class="res-input text-base" placeholder="人數" value="'+esc(item.capacity)+'" oninput="window.ReservationModule.updateItem('+bIdx+','+iIdx+',\'capacity\',this.value)"></div>'
+          +(b.items.length > 1 ? '<button type="button" onclick="window.ReservationModule.removeItem('+bIdx+','+iIdx+')" style="color:#ef4444;background:none;border:none;cursor:pointer;padding:10px;margin-bottom:4px;"><i class="fas fa-times text-lg"></i></button>' : '')
+          +'</div>';
+      });
+      html += '</div></div>';
+    });
+    container.innerHTML = html;
+  }
+
+  function addCampBatch() { campBatchData.push({ name:'', startDate:'', endDate:'', items:[{ name:'', price:'', capacity:'' }] }); renderCampBatches(); }
+  function removeCampBatch(idx) { campBatchData.splice(idx, 1); renderCampBatches(); }
+  function addCampItem(bIdx) { campBatchData[bIdx].items.push({ name:'', price:'', capacity:'' }); renderCampBatches(); }
+  function removeItem(bIdx, iIdx) { campBatchData[bIdx].items.splice(iIdx, 1); renderCampBatches(); }
+  function updateBatch(bIdx, field, val) { campBatchData[bIdx][field] = val; }
+  function updateItem(bIdx, iIdx, field, val) { campBatchData[bIdx].items[iIdx][field] = val; }
+
+  function openCourseModal(courseId) {
+    editingCourseId = courseId || null;
+    var c = courseId ? courses.find(function(x){ return x.id===courseId; }) : null;
+    var title = document.getElementById('res-course-modal-title');
+    if (title) title.innerText = c ? '編輯活動' : '新增活動';
+    document.getElementById('cm-id').value = c ? c.id : '';
+    document.getElementById('cm-type').value = c ? (c.type || '單日活動') : '單日活動';
+    document.getElementById('cm-type').disabled = !!c;
+
+    if (c && c.type === '梯次活動') {
+      var p = parseCampName(c.name);
+      document.getElementById('cm-camp-edit-theme').value = p.theme !== '其他梯次活動' ? p.theme : '';
+      document.getElementById('cm-camp-edit-batch').value = p.batch;
+      document.getElementById('cm-camp-edit-item').value = p.item;
+      updateCampEditPreview();
+      document.getElementById('cm-camp-edit-sdate').value = fmtDate(c.startDate);
+      document.getElementById('cm-camp-edit-edate').value = fmtDate(c.endDate);
+      document.getElementById('cm-camp-edit-stime').value = c.startTime || '';
+      document.getElementById('cm-camp-edit-etime').value = c.endTime || '';
+      document.getElementById('cm-camp-edit-location').value = c.location || '';
+      document.getElementById('cm-camp-edit-instructor').value = c.instructor || '';
+      document.getElementById('cm-camp-edit-price').value = c.price || 0;
+      document.getElementById('cm-camp-edit-capacity').value = c.capacity || 20;
+      document.getElementById('cm-camp-edit-ebprice').value = c.earlyBirdPrice || 0;
+      document.getElementById('cm-camp-edit-ebdate').value = fmtDate(c.earlyBirdDate);
+      document.getElementById('cm-camp-edit-sessions').value = c.totalSessions || 5;
+    } else if (c) {
+      document.getElementById('cm-name').value = c.name || '';
+      document.getElementById('cm-sdate').value = fmtDate(c.startDate);
+      document.getElementById('cm-edate').value = fmtDate(c.endDate);
+      document.getElementById('cm-stime').value = c.startTime || '';
+      document.getElementById('cm-etime').value = c.endTime || '';
+      document.getElementById('cm-location').value = c.location || '';
+      document.getElementById('cm-instructor').value = c.instructor || '';
+      document.getElementById('cm-price').value = c.price || 0;
+      document.getElementById('cm-capacity').value = c.capacity || 20;
+      document.getElementById('cm-ebprice').value = c.earlyBirdPrice || 0;
+      document.getElementById('cm-ebdate').value = fmtDate(c.earlyBirdDate);
+      document.getElementById('cm-sessions').value = c.totalSessions || 1;
+      document.getElementById('cm-image').value = c.image || '';
+      document.getElementById('cm-desc').value = c.description || '';
+      document.getElementById('cm-timeslot').value = c.timeSlotType || '全日';
+    } else {
+      ['cm-name','cm-sdate','cm-edate','cm-stime','cm-etime','cm-location','cm-instructor','cm-image','cm-desc','cm-camp-theme','cm-camp-image','cm-camp-desc'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+      document.getElementById('cm-price').value = 0;
+      document.getElementById('cm-capacity').value = 20;
+      document.getElementById('cm-ebprice').value = 0;
+      document.getElementById('cm-ebdate').value = '';
+      document.getElementById('cm-sessions').value = 1;
+      document.getElementById('cm-timeslot').value = '全日';
+      campBatchData = [{ name:'', startDate:'', endDate:'', items:[{ name:'', price:'', capacity:'' }] }];
+      renderCampBatches();
+    }
+    onCmTypeChange();
+    var m = document.getElementById('res-course-modal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+  }
+
+  function updateCampEditPreview() {
+    var theme = (document.getElementById('cm-camp-edit-theme')||{}).value || '主題';
+    var batch = (document.getElementById('cm-camp-edit-batch')||{}).value || '梯次';
+    var item  = (document.getElementById('cm-camp-edit-item')||{}).value || '項目';
+    var prev = document.getElementById('cm-camp-edit-preview');
+    if (prev) prev.innerText = theme + ' - ' + batch + ' - ' + item;
+  }
+
+  function closeCourseModal() {
+    var m = document.getElementById('res-course-modal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+    document.getElementById('cm-type').disabled = false;
+  }
+
+  function saveCourse() {
+    var type = document.getElementById('cm-type').value;
+    var isEditing = !!editingCourseId;
+
+    if (type === '梯次活動' && isEditing) {
+      var theme = document.getElementById('cm-camp-edit-theme').value.trim();
+      var batch = document.getElementById('cm-camp-edit-batch').value.trim();
+      var item  = document.getElementById('cm-camp-edit-item').value.trim();
+      if (!theme || !batch || !item) { alert('梯次活動的「大主題」、「梯次名稱」、「活動項目」皆為必填！'); return; }
+      var payload = {
+        id: editingCourseId,
+        name: theme + ' - ' + batch + ' - ' + item,
+        type: '梯次活動',
+        timeSlotType: document.getElementById('cm-timeslot').value,
+        startDate: document.getElementById('cm-camp-edit-sdate').value,
+        endDate: document.getElementById('cm-camp-edit-edate').value,
+        startTime: document.getElementById('cm-camp-edit-stime').value,
+        endTime: document.getElementById('cm-camp-edit-etime').value,
+        location: document.getElementById('cm-camp-edit-location').value,
+        instructor: document.getElementById('cm-camp-edit-instructor').value,
+        price: document.getElementById('cm-camp-edit-price').value,
+        capacity: document.getElementById('cm-camp-edit-capacity').value,
+        earlyBirdPrice: document.getElementById('cm-camp-edit-ebprice').value,
+        earlyBirdDate: document.getElementById('cm-camp-edit-ebdate').value,
+        totalSessions: document.getElementById('cm-camp-edit-sessions').value,
+        equipmentJson: '[]'
+      };
+      if (typeof toggleLoader === 'function') toggleLoader(true);
+      callAPI('SI_ADMIN_UPDATE_COURSE', payload).then(function() {
+        if (typeof toggleLoader === 'function') toggleLoader(false);
+        if (typeof showToast === 'function') showToast('活動已更新');
+        closeCourseModal(); syncAll();
+      }).catch(function(e) { if (typeof toggleLoader === 'function') toggleLoader(false); alert('失敗：' + e.message); });
+      return;
+    }
+
+    if (type === '梯次活動' && !isEditing) {
+      var campTheme = document.getElementById('cm-camp-theme').value.trim();
+      if (!campTheme) { alert('請填寫活動大主題'); return; }
+      for (var bi=0; bi<campBatchData.length; bi++) {
+        var b = campBatchData[bi];
+        if (!b.name || !b.startDate || !b.endDate) { alert('第'+(bi+1)+'梯次資訊不完整'); return; }
+        for (var ii=0; ii<b.items.length; ii++) {
+          var it = b.items[ii];
+          if (!it.name || !it.price || !it.capacity) { alert('第'+(bi+1)+'梯次第'+(ii+1)+'項目資訊不完整'); return; }
+        }
+      }
+      var total = campBatchData.reduce(function(s,b){ return s+b.items.length; }, 0);
+      if (!confirm('即將建立 '+total+' 項梯次活動，確定嗎？')) return;
+
+      var timeslot = document.getElementById('cm-timeslot').value;
+      var campStime = document.getElementById('cm-camp-stime').value;
+      var campEtime = document.getElementById('cm-camp-etime').value;
+      var campLoc   = document.getElementById('cm-camp-location').value;
+      var campInstr = document.getElementById('cm-camp-instructor').value;
+      var campSess  = document.getElementById('cm-camp-sessions').value;
+
+      var prog = document.getElementById('cm-progress');
+      var progText = document.getElementById('cm-progress-text');
+      var saveBtn = document.getElementById('cm-save-btn');
+      if (prog) prog.classList.remove('hidden');
+      if (saveBtn) saveBtn.disabled = true;
+      if (typeof toggleLoader === 'function') toggleLoader(true);
+
+      var current = 0;
+      var promises = [];
+      campBatchData.forEach(function(b) {
+        b.items.forEach(function(item) {
+          promises.push(function() {
+            var newId = 'CAMP-' + Date.now().toString().slice(-4) + Math.floor(Math.random()*10000);
+            var payload = {
+              id: newId,
+              name: campTheme + ' - ' + b.name.trim() + ' - ' + item.name.trim(),
+              type: '梯次活動',
+              timeSlotType: timeslot,
+              startDate: b.startDate, endDate: b.endDate,
+              startTime: campStime, endTime: campEtime,
+              location: campLoc, instructor: campInstr,
+              price: item.price, capacity: item.capacity,
+              totalSessions: campSess,
+              image: document.getElementById('cm-camp-image').value,
+              description: document.getElementById('cm-camp-desc').value,
+              earlyBirdPrice: 0, earlyBirdDate: '', equipmentJson: '[]'
+            };
+            return callAPI('SI_ADMIN_ADD_COURSE', payload).then(function() {
+              current++;
+              if (progText) progText.innerText = '(' + current + '/' + total + ')';
+            });
+          });
+        });
       });
 
-      // Admin State
-      const [uploadMode, setUploadMode] = useState('dm');
-      const [ocrStatus, setOcrStatus] = useState('idle');
-      const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });
-      
-      // Delete Modal State
-      const [deleteModalId, setDeleteModalId] = useState(null);
-
-      useEffect(() => {
-        fetchItineraries();
-      }, []);
-
-      const fetchItineraries = async () => {
-        setIsLoading(true);
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`);
-          if (!res.ok) throw new Error('Network error');
-          const data = await res.json();
-          if (data && data.length > 0) {
-            setItineraries(data);
-            setFilteredResults(data);
-          }
-        } catch (error) {
-          showToast('尚未取得資料庫最新資料，目前顯示預設行程', 'error');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
-      };
-
-      const handleSearch = () => {
-        let results = itineraries;
-        if (searchRegion) results = results.filter(item => item.region.includes(searchRegion));
-        if (searchPrice) results = results.filter(item => item.price <= parseInt(searchPrice, 10));
-        setFilteredResults(results);
-        showToast(`為您找到 ${results.length} 筆符合的行程`);
-      };
-
-      // Banner上傳處理
-      const handleBannerUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onloadend = () => {
-           setBannerImage(reader.result);
-           localStorage.setItem('travel_keeper_banner', reader.result);
-           showToast('✅ 首頁 Banner 更新成功！');
-        };
-      };
-
-      // --- DM 解析與自動上架 ---
-      const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setOcrStatus('processing');
-        
-        try {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onloadend = async () => {
-            const base64data = reader.result;
-            
-            const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: base64data })
-            });
-            
-            const aiResult = await res.json();
-            
-            if (aiResult.success) {
-              const parsedData = aiResult.data;
-              
-              let keyword = parsedData.imageKeyword || parsedData.region || "travel";
-              let searchTerms = encodeURIComponent(keyword.trim().replace(/\s+/g, ',') + ",landscape");
-              const autoImageUrl = `https://loremflickr.com/800/600/${searchTerms}`;
-              
-              parsedData.image = autoImageUrl; 
-              parsedData.id = Date.now(); 
-              
-              setDraftData(parsedData);
-              showToast('✅ AI 解析完成並已搜尋相關圖片！系統正自動為您寫入資料庫...');
-              
-              const newItinerary = {
-                ...parsedData,
-                action: 'addItinerary', 
-                price: parseInt(parsedData.price, 10) || 0,
-              };
-              
-              setItineraries(prev => [newItinerary, ...prev]);
-
-              try {
-                const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(newItinerary)
-                });
-                
-                const dbResult = await dbRes.json();
-                if (dbResult.success) {
-                  showToast('🎉 行程已成功寫入資料庫並上架！');
-                  setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });
-                  setOcrStatus('idle');
-                  fetchItineraries();
-                } else {
-                  throw new Error('寫入失敗');
-                }
-              } catch (dbErr) {
-                setOcrStatus('done');
-                showToast('已解析，但寫入失敗，請手動點擊「儲存」', 'error');
-              }
-            } else {
-              throw new Error(aiResult.error || '解析失敗');
-            }
-          };
-        } catch (error) {
-          setOcrStatus('idle');
-          showToast(error.message || '檔案上傳與解析失敗', 'error');
-        }
-      };
-
-      // --- 手動新增 或 修改儲存 ---
-      const handleUpdateContent = async () => {
-        if (!draftData.title) return showToast('請先填寫或解析行程內容', 'error');
-        
-        const isEditing = !!draftData.id;
-        const submitData = {
-          ...draftData,
-          id: draftData.id || Date.now(),
-          price: parseInt(draftData.price, 10) || 0,
-          action: isEditing ? 'updateItinerary' : 'addItinerary' 
-        };
-
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(submitData)
-          });
-          
-          const result = await res.json();
-          if (result.success) {
-            showToast(isEditing ? '修改成功！已更新至網站。' : '新增成功！行程已上架。');
-            setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });
-            setOcrStatus('idle');
-            setUploadMode('dm'); 
-            fetchItineraries(); 
-          } else {
-            throw new Error('操作失敗');
-          }
-        } catch (error) {
-          showToast('寫入資料庫發生錯誤', 'error');
-        }
-      };
-
-      const handleEditClick = (item) => {
-        setUploadMode('manual');
-        setOcrStatus('done');
-        setDraftData(item); 
-        window.scrollTo({ top: 0, behavior: 'smooth' }); 
-        showToast('已載入行程內容，請於上方表單修改');
-      };
-
-      const confirmDelete = async () => {
-        if (!deleteModalId) return;
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'deleteItinerary', id: deleteModalId })
-          });
-          
-          const result = await res.json();
-          if (result.success) {
-            showToast('已成功下架該行程！');
-            setDeleteModalId(null);
-            fetchItineraries();
-          } else {
-            throw new Error('刪除失敗');
-          }
-        } catch (error) {
-          showToast('下架發生錯誤', 'error');
-        }
-      };
-
-      const handleSyncLine = async () => {
-        if (!draftData.title) return showToast('請先選擇或填寫要推播的行程（從列表中點擊編輯）', 'error');
-        try {
-          const res = await fetch(`${WORKER_URL}/api/sync-line`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(draftData)
-          });
-          const result = await res.json();
-          if (result.success) showToast('已同步至 LINE@！關注者將立即看到最新推播。');
-          else throw new Error('同步失敗');
-        } catch (error) {
-          showToast('LINE 推播觸發失敗，請確認 Worker 設定', 'error');
-        }
-      };
-
-      return (
-        <div className="min-h-screen flex flex-col bg-gray-50">
-          {/* Navbar (永遠置頂 z-50) */}
-          <nav className="bg-white shadow-sm sticky top-0 z-50">
-            <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
-              <div className="flex justify-between h-16">
-                <div className="flex items-center cursor-pointer" onClick={() => setActiveTab('home')}>
-                  <Navigation className="h-8 w-8 text-blue-600 mr-2" />
-                  <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <button 
-                    onClick={() => setActiveTab('home')}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'home' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'}`}
-                  >
-                    找行程
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('admin')}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'admin' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'}`}
-                  >
-                    後台上稿系統
-                  </button>
-                </div>
-              </div>
-            </div>
-          </nav>
-
-          {/* Main Content Area */}
-          <div className="flex-grow w-full">
-            
-            {/* ====== 前台：找行程 ====== */}
-            {activeTab === 'home' && (
-              <div className="w-full animate-fade-in pb-12">
-                
-                {/* 1. 無邊界滿版 Banner (不置頂，隨畫面捲動) */}
-                <div className="relative w-full h-64 md:h-80 xl:h-96 group bg-gray-200">
-                  <img src={bannerImage} alt="Travel Banner" className="w-full h-full object-cover" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80'}} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                  
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center">
-                    <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-wider mb-4 drop-shadow-lg">探索世界的美好</h1>
-                    <p className="text-lg md:text-xl lg:text-2xl drop-shadow-md font-light">發現您的下一個夢幻旅程</p>
-                  </div>
-
-                  <label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0">
-                    <Camera className="w-5 h-5 mr-2 text-blue-600" />
-                    更換 Banner
-                    <input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} />
-                  </label>
-                </div>
-
-                {/* 2. 橫向搜尋列 (置頂 sticky top-16，永遠吸附在導覽列下方) */}
-                <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
-                  <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 md:py-5">
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                      
-                      <div className="flex-1 w-full">
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5 ml-1">前往地區</label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" />
-                          <select 
-                            value={searchRegion} 
-                            onChange={(e) => setSearchRegion(e.target.value)}
-                            className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors"
-                          >
-                            <option value="">探索所有地區</option>
-                            <option value="國旅">國旅 (台灣)</option>
-                            <option value="亞洲">亞洲</option>
-                            <option value="歐洲">歐洲</option>
-                            <option value="美洲">美洲</option>
-                            <option value="大洋洲">大洋洲</option>
-                            <option value="非洲">非洲</option>
-                          </select>
-                        </div>
-                      </div>
-                      
-                      <div className="flex-1 w-full">
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5 ml-1">預算範圍</label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" />
-                          <select 
-                            value={searchPrice} 
-                            onChange={(e) => setSearchPrice(e.target.value)}
-                            className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors"
-                          >
-                            <option value="">不限預算</option>
-                            <option value="20000">20,000 以下</option>
-                            <option value="50000">50,000 以下</option>
-                            <option value="100000">100,000 以下</option>
-                            <option value="150000">150,000 以下</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="w-full md:w-auto">
-                        <button 
-                          onClick={handleSearch}
-                          className="w-full md:w-48 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-md hover:shadow-lg flex items-center justify-center text-lg"
-                        >
-                          <Search className="w-5 h-5 mr-2" /> 搜尋行程
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 熱門標籤 (整合在搜尋列下方) */}
-                    <div className="mt-4 flex items-center gap-3 overflow-x-auto whitespace-nowrap custom-scrollbar pb-1">
-                      <span className="text-sm font-bold text-gray-700 flex items-center bg-gray-100 px-3 py-1.5 rounded-lg">
-                        <Sparkles className="w-4 h-4 mr-1.5 text-yellow-500"/> 熱門推薦
-                      </span>
-                      {HOT_SPOTS.map(spot => (
-                        <button 
-                          key={spot}
-                          onClick={() => { setSearchRegion(spot); handleSearch(); }}
-                          className="bg-blue-50 text-blue-700 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors border border-blue-100"
-                        >
-                          {spot}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. 精選行程列表 (放寬卡片寬度) */}
-                <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-10">
-                  <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-4">
-                    <h3 className="text-3xl font-bold text-gray-800 flex items-center">
-                       為您推薦的精選行程
-                    </h3>
-                    <span className="text-sm font-medium text-gray-500 bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200">
-                      共找到 {filteredResults.length} 筆行程
-                    </span>
-                  </div>
-
-                  {isLoading ? (
-                    <div className="text-center py-32 text-gray-500 bg-white rounded-3xl shadow-sm border border-gray-100">
-                      <RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
-                      <p className="font-medium text-lg">從資料庫載入行程中...</p>
-                    </div>
-                  ) : (
-                    /* 調整 Grid: 減少最大欄數 (最高到 4 欄)，增加 gap，強制卡片變寬 */
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8 lg:gap-10">
-                      {filteredResults.map(item => (
-                        <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
-                          {/* 圖片高度拉高以配合更寬的卡片 */}
-                          <div className="h-64 lg:h-72 overflow-hidden relative flex-shrink-0 bg-gray-100">
-                            <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={(e) => {e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'}}/>
-                            <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold tracking-wider shadow-lg">
-                              {item.region}
-                            </div>
-                          </div>
-                          <div className="p-6 md:p-8 flex flex-col flex-grow">
-                            <h4 className="font-bold text-xl lg:text-2xl mb-3 text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.title}</h4>
-                            <p className="text-gray-500 text-base mb-6 line-clamp-3 flex-grow leading-relaxed">{item.description}</p>
-                            <div className="flex justify-between items-end border-t border-gray-100 pt-5 mt-auto">
-                              <span className="text-base font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">{item.days} 天行程</span>
-                              <span className="text-3xl font-extrabold text-red-500">${Number(item.price).toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredResults.length === 0 && (
-                        <div className="col-span-full text-center py-32 text-gray-500 bg-white rounded-3xl border border-dashed border-gray-300">
-                          <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                          <p className="font-bold text-2xl text-gray-600">找不到符合條件的行程</p>
-                          <p className="text-base text-gray-400 mt-2">請嘗試調整上方的搜尋條件。</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ====== 後台：上稿與管理系統 (滿版展開) ====== */}
-            {activeTab === 'admin' && (
-              <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 space-y-6 animate-fade-in">
-                {/* 1. 表單區塊 */}
-                <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
-                  <div className="flex justify-between items-center border-b pb-4 mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                      <UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統
-                    </h2>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={handleUpdateContent}
-                        className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition shadow-sm hover:shadow"
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" /> {draftData.id ? '儲存修改' : '手動新增上架'}
-                      </button>
-                      <button 
-                        onClick={handleSyncLine}
-                        className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg font-medium transition shadow-sm hover:shadow"
-                      >
-                        <Send className="w-4 h-4 mr-2" /> LINE@同步推播
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 切換上傳模式 */}
-                  {!draftData.id && (
-                    <div className="flex space-x-4 mb-8 max-w-2xl">
-                      <button
-                        onClick={() => setUploadMode('dm')}
-                        className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        <ImageIcon className="mr-2 h-5 w-5" /> DM / 圖片智能解析 (自動上架)
-                      </button>
-                      <button
-                        onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' }); }}
-                        className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                      >
-                        <FileText className="mr-2 h-5 w-5" /> 人工手動填寫
-                      </button>
-                    </div>
-                  )}
-
-                  {/* 上傳區塊 */}
-                  {uploadMode === 'dm' && !draftData.id && (
-                    <div className="mb-8 w-full max-w-4xl">
-                      <label className="block text-base font-bold text-gray-700 mb-3">上傳旅遊 DM 圖片 (解析後將自動產生配圖並儲存至資料庫)</label>
-                      <div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative">
-                        <div className="space-y-2 text-center">
-                          <ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" />
-                          <div className="flex text-xl text-gray-600 justify-center items-center">
-                            <label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 hover:text-blue-500 focus-within:outline-none px-4 py-2 border shadow-sm transition-colors">
-                              <span>選擇檔案</span>
-                              <input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} />
-                            </label>
-                            <p className="pl-4">或拖曳圖片至此範圍</p>
-                          </div>
-                          <p className="text-base text-gray-400 mt-3">支援 PNG, JPG (限制 5MB)</p>
-                        </div>
-                        
-                        {ocrStatus === 'processing' && (
-                          <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm">
-                            <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-                            <p className="text-blue-700 font-bold text-2xl">ChatGPT 視覺模型解析中...</p>
-                            <p className="text-gray-600 mt-2 text-lg">正在提取文案與自動搜尋真實授權配圖，請稍候</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 編輯表單 (依網格展開，避免欄位過長) */}
-                  {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
-                    <div className="bg-gray-50/80 p-6 lg:p-8 rounded-2xl border border-gray-200 shadow-inner relative">
-                      {draftData.id && (
-                        <button 
-                          onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' }); setUploadMode('dm'); setOcrStatus('idle'); }}
-                          className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 bg-white rounded-full p-1.5 border shadow-sm transition-colors"
-                        >
-                          <X className="w-6 h-6" />
-                        </button>
-                      )}
-                      <div className="flex items-center mb-8">
-                        <h3 className="text-2xl font-bold text-gray-800">
-                          {draftData.id ? '✏️ 正在修改行程' : '📝 行程內容草稿'}
-                        </h3>
-                        {ocrStatus === 'done' && !draftData.id && (
-                          <span className="ml-4 inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-800 border border-green-200">
-                            <Sparkles className="w-4 h-4 mr-1.5" /> 已解析並自動上架
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-                        {/* 第一排 */}
-                        <div className="lg:col-span-2">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label>
-                          <input 
-                            type="text" 
-                            value={draftData.title}
-                            onChange={(e) => setDraftData({...draftData, title: e.target.value})}
-                            className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-lg"
-                            placeholder="例如：巴黎浪漫七日遊"
-                          />
-                        </div>
-                        <div className="lg:col-span-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label>
-                          <select 
-                            value={draftData.region}
-                            onChange={(e) => setDraftData({...draftData, region: e.target.value})}
-                            className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none transition-shadow text-lg"
-                          >
-                            <option value="">請選擇地區</option>
-                            <option value="國旅">國旅</option>
-                            <option value="亞洲">亞洲</option>
-                            <option value="歐洲">歐洲</option>
-                            <option value="美洲">美洲</option>
-                            <option value="大洋洲">大洋洲</option>
-                            <option value="非洲">非洲</option>
-                          </select>
-                        </div>
-                        <div className="lg:col-span-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label>
-                          <input 
-                            type="number" 
-                            value={draftData.price}
-                            onChange={(e) => setDraftData({...draftData, price: e.target.value})}
-                            className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-lg"
-                            placeholder="例如：85000"
-                          />
-                        </div>
-
-                        {/* 第二排 */}
-                        <div className="lg:col-span-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">天數</label>
-                          <input 
-                            type="number" 
-                            value={draftData.days}
-                            onChange={(e) => setDraftData({...draftData, days: e.target.value})}
-                            className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-lg"
-                            placeholder="例如：7"
-                          />
-                        </div>
-                        <div className="lg:col-span-3">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址 (已自動搜尋真實授權圖，也可手動修改)</label>
-                          <div className="flex gap-4 items-center">
-                            <input 
-                              type="text" 
-                              value={draftData.image || ''}
-                              onChange={(e) => setDraftData({...draftData, image: e.target.value})}
-                              className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-base text-gray-600 transition-shadow"
-                              placeholder="https://..."
-                            />
-                            {draftData.image && (
-                               <img src={draftData.image} alt="預覽" className="w-16 h-16 rounded-xl object-cover border shadow-sm flex-shrink-0" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=150&q=80'}} />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 第三排 */}
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案</label>
-                        <textarea 
-                          rows={6}
-                          value={draftData.description}
-                          onChange={(e) => setDraftData({...draftData, description: e.target.value})}
-                          className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 focus:border-blue-500 outline-none leading-relaxed transition-shadow custom-scrollbar text-lg"
-                          placeholder="請輸入詳細行程..."
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. 現有行程管理列表 (升級為多欄位卡片網格) */}
-                <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
-                  <div className="flex justify-between items-center mb-6 border-b pb-4">
-                    <h3 className="text-2xl font-bold text-gray-800 flex items-center">
-                      <FileText className="w-6 h-6 mr-2 text-gray-500" /> 現有行程管理
-                    </h3>
-                  </div>
-                  
-                  {isLoading ? (
-                    <div className="text-center py-16 text-gray-500"><RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3 text-blue-500" />載入資料中</div>
-                  ) : itineraries.length === 0 ? (
-                    <div className="text-center py-16 text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-lg">目前尚無已上架的行程</div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto custom-scrollbar pr-2 pb-2">
-                      {itineraries.map(item => (
-                        <div key={item.id} className="flex flex-col p-5 bg-white hover:bg-blue-50/40 rounded-2xl border border-gray-200 transition-all shadow-sm hover:shadow-md h-full">
-                          
-                          {/* 卡片上半部：圖片與資訊 */}
-                          <div className="flex gap-5 mb-5">
-                            <img src={item.image} className="w-28 h-28 rounded-xl object-cover flex-shrink-0 border border-gray-100 shadow-sm" alt="thumb" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=200&q=80'}} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start gap-2 mb-2 flex-wrap">
-                                <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs font-bold flex-shrink-0">{item.region}</span>
-                                <h4 className="font-bold text-lg text-gray-900 line-clamp-2 leading-snug" title={item.title}>{item.title}</h4>
-                              </div>
-                              <div className="text-gray-500 mt-3">
-                                <span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span> <span className="text-sm ml-1 font-medium">• {item.days}天</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* 卡片下半部：操作按鈕 */}
-                          <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
-                            <button 
-                              onClick={() => handleEditClick(item)}
-                              className="flex flex-1 justify-center items-center px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition shadow-sm hover:shadow"
-                            >
-                              <Edit2 className="w-4 h-4 mr-2" /> 編輯
-                            </button>
-                            <button 
-                              onClick={() => setDeleteModalId(item.id)}
-                              className="flex flex-1 justify-center items-center px-4 py-2.5 bg-white border border-red-200 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 transition shadow-sm hover:shadow"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" /> 下架
-                            </button>
-                          </div>
-
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-          </div>
-
-          {/* ====== 獨立元件：刪除確認 Modal ====== */}
-          {deleteModalId && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-              <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border border-gray-100 transform transition-all">
-                <div className="flex items-center text-red-600 mb-5">
-                  <AlertCircle className="w-8 h-8 mr-3" />
-                  <h3 className="text-2xl font-bold">確認下架此行程？</h3>
-                </div>
-                <p className="text-gray-600 mb-8 text-lg leading-relaxed">下架後該行程將從前台及資料庫移除，此動作無法復原。確定要繼續嗎？</p>
-                <div className="flex justify-end space-x-4">
-                  <button 
-                    onClick={() => setDeleteModalId(null)}
-                    className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition text-lg"
-                  >
-                    取消
-                  </button>
-                  <button 
-                    onClick={confirmDelete}
-                    className="px-6 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-md hover:shadow-lg text-lg"
-                  >
-                    確定下架
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Toast Notification */}
-          {toast && (
-            <div className="fixed bottom-6 right-6 z-[70] animate-fade-in-up">
-              <div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-gray-900 text-white'}`}>
-                {toast.type === 'error' ? <X className="w-6 h-6 mr-3 text-red-500" /> : <CheckCircle className="w-6 h-6 mr-3 text-green-400" />}
-                <span className="font-bold text-lg tracking-wide">{toast.message}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      );
+      promises.reduce(function(chain, fn) { return chain.then(fn); }, Promise.resolve())
+        .then(function() {
+          if (typeof toggleLoader === 'function') toggleLoader(false);
+          if (typeof showToast === 'function') showToast('全部 '+total+' 項梯次活動建立成功！');
+          if (prog) prog.classList.add('hidden');
+          if (saveBtn) saveBtn.disabled = false;
+          closeCourseModal(); syncAll();
+        }).catch(function(e) {
+          if (typeof toggleLoader === 'function') toggleLoader(false);
+          if (prog) prog.classList.add('hidden');
+          if (saveBtn) saveBtn.disabled = false;
+          alert('建立過程中發生錯誤：' + e.message);
+        });
+      return;
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
+    var name = document.getElementById('cm-name').value.trim();
+    if (!name) { alert('請填寫活動名稱'); return; }
+    var payload = {
+      id: editingCourseId || undefined,
+      name: name, type: type,
+      timeSlotType: document.getElementById('cm-timeslot').value,
+      startDate: document.getElementById('cm-sdate').value,
+      endDate: document.getElementById('cm-edate').value,
+      startTime: document.getElementById('cm-stime').value,
+      endTime: document.getElementById('cm-etime').value,
+      location: document.getElementById('cm-location').value,
+      instructor: document.getElementById('cm-instructor').value,
+      price: document.getElementById('cm-price').value,
+      capacity: document.getElementById('cm-capacity').value,
+      earlyBirdPrice: document.getElementById('cm-ebprice').value,
+      earlyBirdDate: document.getElementById('cm-ebdate').value,
+      totalSessions: document.getElementById('cm-sessions').value,
+      image: document.getElementById('cm-image').value,
+      description: document.getElementById('cm-desc').value,
+      equipmentJson: '[]'
+    };
+    if (!editingCourseId) {
+      payload.id = 'C' + Date.now().toString().slice(-5) + Math.floor(Math.random()*1000);
+    }
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    callAPI(editingCourseId ? 'SI_ADMIN_UPDATE_COURSE' : 'SI_ADMIN_ADD_COURSE', payload).then(function() {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      if (typeof showToast === 'function') showToast('活動已儲存');
+      closeCourseModal(); syncAll();
+    }).catch(function(e) { if (typeof toggleLoader === 'function') toggleLoader(false); alert('儲存失敗：' + e.message); });
+  }
+
+  function renderMembers() {
+    var kw = ((document.getElementById('res-member-kw')||{}).value||'').toLowerCase();
+    var list = members.filter(function(m){ return !kw || (m.name||'').toLowerCase().includes(kw)||(m.nationalId||'').includes(kw); });
+    var tbody = document.getElementById('res-member-list');
+    if (!tbody) return;
+    tbody.innerHTML = list.map(function(m) {
+      var fmCount = 0;
+      try { fmCount = JSON.parse(m.familyMembersJson||'[]').length; } catch(e){}
+      return '<tr>'
+        +'<td class="font-medium text-slate-800">'+esc(m.name)+'</td>'
+        +'<td class="text-center text-slate-600">'+esc(m.phone)+'</td>'
+        +'<td class="text-center font-mono text-slate-600">'+esc(m.nationalId)+'</td>'
+        +'<td class="text-center"><span class="badge bg-blue-50 text-blue-700">'+fmCount+'</span></td>'
+        +'<td class="text-right"><button onclick="window.ReservationModule.openMemberModal(\''+esc(m.userId)+'\')" class="text-blue-600 hover:underline text-sm font-bold">詳情</button></td>'
+        +'</tr>';
+    }).join('') || '<tr><td colspan="5" class="text-center py-10 text-slate-400">尚無會員資料</td></tr>';
+  }
+  function openMemberModal(userId) {
+    var m = members.find(function(x){ return x.userId===userId; });
+    if (!m) return;
+    editingMember = m;
+    document.getElementById('mm-uid').value = m.userId||'';
+    document.getElementById('mm-name').value = m.name||'';
+    document.getElementById('mm-nid').value = m.nationalId||'';
+    document.getElementById('mm-birthday').value = (m.birthday||'').substring(0,10);
+    document.getElementById('mm-gender').value = m.gender||'男';
+    document.getElementById('mm-phone').value = m.phone||'';
+    document.getElementById('mm-address').value = m.address||'';
+    document.getElementById('mm-health').value = m.healthNote||'';
+    var fmEl = document.getElementById('mm-family');
+    try {
+      var fms = JSON.parse(m.familyMembersJson||'[]');
+      fmEl.innerHTML = fms.map(function(f){
+        return '<div class="flex justify-between items-center bg-white border rounded-lg px-4 py-3">'
+          +'<span class="font-medium">'+esc(f.name)+'</span>'
+          +'<span class="text-sm text-[#06C755] font-bold">'+esc(f.relation)+'</span></div>';
+      }).join('') || '<div class="text-slate-400 text-sm">無家人資料</div>';
+    } catch(e) { fmEl.innerHTML = '<div class="text-slate-400 text-sm">無家人資料</div>'; }
+    var modal = document.getElementById('res-member-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+  }
+  function closeMemberModal() {
+    var modal = document.getElementById('res-member-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+  }
+  function saveMember() {
+    if (!editingMember) return;
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    callAPI('SI_ADMIN_UPDATE_MEMBER', { memberData: {
+      userId: document.getElementById('mm-uid').value,
+      name: document.getElementById('mm-name').value,
+      nationalId: editingMember.nationalId,
+      birthday: document.getElementById('mm-birthday').value,
+      gender: document.getElementById('mm-gender').value,
+      phone: document.getElementById('mm-phone').value,
+      address: document.getElementById('mm-address').value,
+      healthNote: document.getElementById('mm-health').value
+    }}).then(function() {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      if (typeof showToast === 'function') showToast('會員資料已更新');
+      closeMemberModal(); syncAll();
+    }).catch(function(e) { if (typeof toggleLoader === 'function') toggleLoader(false); alert('更新失敗：' + e.message); });
+  }
+
+  function refreshAttendCourseSelect() {
+    var sel = document.getElementById('attend-course-sel');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- 請選擇活動 --</option>' +
+      courses.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>'; }).join('');
+  }
+  function onAttendCourseChange() {
+    var sel = document.getElementById('attend-course-sel');
+    var c = courses.find(function(x){ return x.id===(sel?sel.value:''); });
+    var today = new Date().toISOString().split('T')[0];
+    var dateEl = document.getElementById('attend-date');
+    if (dateEl) {
+      if (c && c.startDate && today < c.startDate) dateEl.value = fmtDate(c.startDate);
+      else if (c && c.endDate && today > c.endDate) dateEl.value = fmtDate(c.endDate);
+      else dateEl.value = today;
+    }
+    loadAttendList();
+  }
+  function loadAttendList() {
+    var courseId = (document.getElementById('attend-course-sel')||{}).value||'';
+    var date = (document.getElementById('attend-date')||{}).value||'';
+    var tbody = document.getElementById('res-attend-list');
+    if (!tbody) return;
+    if (!courseId) { tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-slate-400">請先選擇活動</td></tr>'; return; }
+    var courseOrders = orders.filter(function(o){ return o.courseId===courseId && !['CANCELLED','REFUNDED'].includes(o.status); });
+    attendList = courseOrders.map(function(o) {
+      var att = (o.extraData && o.extraData.attendance) ? o.extraData.attendance : {};
+      return { orderId: o.orderId, name: o.name, phone: o.phone, status: att[date] || 'NONE' };
+    });
+    renderAttendList();
+  }
+  function renderAttendList() {
+    var tbody = document.getElementById('res-attend-list');
+    if (!tbody) return;
+    if (!attendList.length) { tbody.innerHTML = '<tr><td colspan="3" class="text-center py-10 text-slate-400">此活動尚無有效報名學員</td></tr>'; return; }
+    tbody.innerHTML = attendList.map(function(p, idx) {
+      var btnBase = 'padding:6px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:1px solid;transition:.15s;';
+      var present = p.status==='PRESENT' ? 'background:#22c55e;color:#fff;border-color:#22c55e;' : 'background:#fff;color:#374151;border-color:#d1d5db;';
+      var absent  = p.status==='ABSENT'  ? 'background:#ef4444;color:#fff;border-color:#ef4444;' : 'background:#fff;color:#374151;border-color:#d1d5db;';
+      var leave   = p.status==='LEAVE'   ? 'background:#eab308;color:#fff;border-color:#eab308;' : 'background:#fff;color:#374151;border-color:#d1d5db;';
+      return '<tr>'
+        +'<td class="font-medium text-slate-800">'+esc(p.name)+'</td>'
+        +'<td class="text-center text-slate-600">'+esc(p.phone)+'</td>'
+        +'<td class="text-center" style="white-space:nowrap;">'
+        +'<button style="'+btnBase+present+'" onclick="window.ReservationModule.setAttendStatus('+idx+',\'PRESENT\')">出席</button> '
+        +'<button style="'+btnBase+absent+'"  onclick="window.ReservationModule.setAttendStatus('+idx+',\'ABSENT\')">缺席</button> '
+        +'<button style="'+btnBase+leave+'"   onclick="window.ReservationModule.setAttendStatus('+idx+',\'LEAVE\')">請假</button>'
+        +(p.status!=='NONE' ? ' <button style="'+btnBase+'background:#fff;color:#94a3b8;border-color:#e2e8f0;" onclick="window.ReservationModule.setAttendStatus('+idx+',\'NONE\')">清除</button>' : '')
+        +'</td></tr>';
+    }).join('');
+  }
+  function setAttendStatus(idx, status) { attendList[idx].status = status; renderAttendList(); }
+  function saveAttendance() {
+    var courseId = (document.getElementById('attend-course-sel')||{}).value||'';
+    var date = (document.getElementById('attend-date')||{}).value||'';
+    if (!courseId || !date) { alert('請先選擇活動和日期'); return; }
+    if (!attendList.length) { alert('沒有學員資料可以儲存'); return; }
+    if (typeof toggleLoader === 'function') toggleLoader(true);
+    callAPI('SI_ADMIN_UPDATE_ATTENDANCE', {
+      courseId: courseId, date: date,
+      attendanceData: attendList.map(function(a){ return { orderId: a.orderId, status: a.status }; })
+    }).then(function() {
+      if (typeof toggleLoader === 'function') toggleLoader(false);
+      if (typeof showToast === 'function') showToast('簽到資料已儲存！');
+      syncAll();
+    }).catch(function(e) { if (typeof toggleLoader === 'function') toggleLoader(false); alert('儲存失敗：' + e.message); });
+  }
+  function goAttend(courseId) {
+    setTab('attend');
+    setTimeout(function() {
+      var sel = document.getElementById('attend-course-sel');
+      if (sel) { sel.value = courseId; onAttendCourseChange(); }
+    }, 100);
+  }
+
+  function exportCsv() {
+    var list = getFilteredOrders();
+    if (!list.length) { alert('沒有可匯出的資料'); return; }
+    var rows = [['訂單號','活動','學員','電話','金額','狀態','後五碼','建立時間']];
+    list.forEach(function(o) {
+      rows.push([o.orderId||'',o.courseName||'',o.name||'',o.phone||'',o.amount||0,statusLabel(o.status),o.remittance||'',o.createdAt||'']);
+    });
+    var csv = '\uFEFF'+rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+    a.download = 'orders_'+new Date().toISOString().slice(0,10)+'.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  function init() {
+    var linkBtn = document.getElementById('res-front-link');
+    var acc = window.currentUser ? window.currentUser.username : '';
+    if (linkBtn && acc) {
+      linkBtn.onclick = function(e) {
+        e.preventDefault();
+        window.open("https://liff.line.me/2009524128-bJMVabyM?accountId=" + encodeURIComponent(acc), '_blank');
+      };
+    }
+    setTab('dashboard');
+    syncAll();
+  }
+
+  return {
+    init:init, setTab:setTab, syncAll:syncAll,
+    renderOrders:renderOrders, renderCourses:renderCourses, renderMembers:renderMembers,
+    openOrderModal:openOrderModal, closeOrderModal:closeOrderModal, saveOrder:saveOrder,
+    openCourseModal:openCourseModal, closeCourseModal:closeCourseModal, saveCourse:saveCourse,
+    onCmTypeChange:onCmTypeChange, updateCampEditPreview:updateCampEditPreview,
+    addCampBatch:addCampBatch, removeCampBatch:removeCampBatch,
+    addCampItem:addCampItem, removeItem:removeItem, updateBatch:updateBatch, updateItem:updateItem,
+    toggleBatch:toggleBatch,
+    openMemberModal:openMemberModal, closeMemberModal:closeMemberModal, saveMember:saveMember,
+    exportCsv:exportCsv,
+    refreshAttendCourseSelect:refreshAttendCourseSelect, onAttendCourseChange:onAttendCourseChange,
+    loadAttendList:loadAttendList, setAttendStatus:setAttendStatus, saveAttendance:saveAttendance,
+    goAttend:goAttend, copyFrontLink:copyFrontLink, saveSettings:saveSettings,
+    copyCourse:copyCourse, copyCampTheme:copyCampTheme, copyLiffLink:copyLiffLink,
+    compressAndSetImage:compressAndSetImage, fetchTgChatId:fetchTgChatId
+  };
+})();
+
+setTimeout(function() {
+  if (window.ReservationModule) window.ReservationModule.init();
+}, 150);
+</script>
+</div>
