@@ -27,6 +27,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
+    // --- 圖示元件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -49,6 +50,7 @@
     const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
     const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
 
+    // --- 系統變數 ---
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
@@ -56,14 +58,64 @@
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
     const HOT_SPOTS = ['國旅', '亞洲', '歐洲', '美洲', '大洋洲', '非洲'];
 
+    // 【核心邏輯】獨立抽出的 Flex Message 產生器
+    const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
+        const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
+        
+        // 將勾選狀態轉換為二進位字串 (例如: 110011)，傳遞給接收端
+        const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
+        
+        // 【核心魔法】紅標籤專屬連結！點擊後自動開啟 LIFF 進行轉傳
+        const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
+
+        const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
+        
+        if (options.phone && distributorData.phone) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${distributorData.phone}` }});
+        if (options.line && distributorData.lineLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "💬 私訊 LINE", uri: distributorData.lineLink }});
+        if (options.lineAt && distributorData.lineAtLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "🟢 官方 LINE@", uri: distributorData.lineAtLink }});
+        if (options.fb && distributorData.fbLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "👍 FB 粉絲專頁", uri: distributorData.fbLink }});
+        if (options.web && distributorData.webLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "🌐 官方網站", uri: distributorData.webLink }});
+        if (options.map && distributorData.mapLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📍 門市導航", uri: distributorData.mapLink }});
+
+        return {
+          type: "flex", 
+          altText: `推薦行程：${tourItem.title}`,
+          contents: {
+            type: "bubble",
+            body: {
+              type: "box", layout: "vertical", paddingAll: "0px", 
+              contents: [
+                { type: "image", url: tourItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80', size: "full", aspectRatio: "20:13", aspectMode: "cover", animated: true },
+                { type: "box", layout: "vertical", paddingAll: "15px", contents: [
+                    { type: "text", text: tourItem.title, weight: "bold", size: "xl", align: "center", wrap: true },
+                    { type: "text", text: tourItem.description ? tourItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！', size: "xs", margin: "sm", color: "#666666", wrap: true },
+                    { type: "box", layout: "baseline", margin: "md", contents: [
+                        { type: "text", text: "🔥 熱門搶購中", size: "sm", color: "#999999", flex: 1 },
+                        { type: "text", text: `$${Number(tourItem.price).toLocaleString()}`, size: "xl", color: "#ff334b", weight: "bold", align: "end" }
+                      ]
+                    }
+                  ]
+                },
+                { type: "box", layout: "vertical", position: "absolute", backgroundColor: "#FF0000", cornerRadius: "xl", paddingTop: "7px", paddingBottom: "7px", paddingStart: "20px", paddingEnd: "20px", offsetTop: "10px", offsetEnd: "10px",
+                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, // MAGIC LINK: 綁定觸發 LIFF
+                  contents: [{ type: "text", text: "分享好友", color: "#ffffff", size: "12px", weight: "bold" }]
+                }
+              ]
+            },
+            footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "15px", backgroundColor: "#FFFFFF", contents: buttons }
+          }
+        };
+    };
+
     function App() {
-      const [activeTab, setActiveTab] = useState(() => {
-        const params = new URLSearchParams(window.location.search);
-        return params.get('tab') || 'home';
-      }); 
-      
+      // 解析網址參數
+      const urlParams = new URLSearchParams(window.location.search);
+      const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
+      const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
+      const [shareError, setShareError] = useState(null);
+
       const [refUid, setRefUid] = useState(() => {
-        const urlRef = new URLSearchParams(window.location.search).get('ref_uid');
+        const urlRef = urlParams.get('ref_uid');
         if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
         return urlRef || localStorage.getItem('tracking_ref_uid') || '';
       });
@@ -107,10 +159,43 @@
 
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
 
+      // --- 初始化與自動轉傳邏輯 ---
       useEffect(() => {
         initLiff();
         fetchItineraries();
       }, []);
+
+      useEffect(() => {
+        const processAutoShare = async () => {
+           if (isAutoSharing && isLiffReady && itineraries.length > 0 && crmDistributors.length > 0) {
+              const tourId = urlParams.get('tour_id');
+              const rUid = urlParams.get('ref_uid');
+              const optsParam = urlParams.get('opts') || '000000';
+              
+              const tour = itineraries.find(i => String(i.id) === String(tourId));
+              const dist = crmDistributors.find(d => d.uid === rUid) || {};
+              
+              if (!tour) { setShareError('找不到該行程資訊'); return; }
+
+              const cOptions = {
+                 phone: optsParam[0] === '1', line: optsParam[1] === '1', lineAt: optsParam[2] === '1',
+                 fb: optsParam[3] === '1', web: optsParam[4] === '1', map: optsParam[5] === '1',
+              };
+
+              if (liff.isApiAvailable('shareTargetPicker')) {
+                 try {
+                   const flexMsg = buildFlexMessage(tour, dist, rUid, cOptions);
+                   const res = await liff.shareTargetPicker([flexMsg]);
+                   if (res) showToast('✅ 成功轉傳名片！即將關閉視窗...');
+                 } catch(e) { setShareError('轉傳失敗: 您可能取消了操作，或授權未通過。'); }
+                 setTimeout(() => liff.closeWindow(), 1500);
+              } else {
+                 setShareError('電腦版 LINE 不支援直接轉傳名片，請使用「手機版 LINE」點擊名片上的標籤喔！');
+              }
+           }
+        };
+        processAutoShare();
+      }, [isLiffReady, itineraries, crmDistributors, isAutoSharing]);
 
       const initLiff = async () => {
         try {
@@ -208,7 +293,7 @@
               } else {
                 setBannerImage(result.url);
                 localStorage.setItem('travel_keeper_banner', result.url);
-                showToast('✅ Banner 已成功上傳至 Google Drive！');
+                showToast('✅ Banner 已成功更新！');
               }
             } else {
               throw new Error(result.message || result.error);
@@ -298,135 +383,28 @@
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
-      const getFlexMessageContents = () => {
-        if (!flexModalItem) return null;
-        
-        const trackingUrl = `${ENDPOINT_URL}?tour_id=${flexModalItem.id}&ref_uid=${liffProfile?.userId || 'GUEST'}`;
-        const myData = getCurrentUserData();
-        
-        const shareText = encodeURIComponent(`快來看看這個精選行程：${flexModalItem.title}\n${trackingUrl}`);
-        const shareUri = `https://line.me/R/msg/text/?${shareText}`;
-
-        const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多", uri: trackingUrl } }];
-        if (cardOptions.phone && myData.phone) buttons.push({ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${myData.phone}` }});
-        if (cardOptions.line && myData.lineLink) buttons.push({ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "💬 私訊 LINE", uri: myData.lineLink }});
-        if (cardOptions.lineAt && myData.lineAtLink) buttons.push({ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "🟢 官方 LINE@", uri: myData.lineAtLink }});
-        if (cardOptions.fb && myData.fbLink) buttons.push({ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "👍 FB 粉絲專頁", uri: myData.fbLink }});
-        if (cardOptions.web && myData.webLink) buttons.push({ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "🌐 官方網站", uri: myData.webLink }});
-        if (cardOptions.map && myData.mapLink) buttons.push({ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "📍 門市導航", uri: myData.mapLink }});
-
-        return {
-          type: "flex", 
-          altText: `推薦行程：${flexModalItem.title}`,
-          contents: {
-            type: "bubble",
-            body: {
-              type: "box",
-              layout: "vertical",
-              paddingAll: "0px", 
-              contents: [
-                {
-                  type: "image",
-                  url: flexModalItem.image || 'https://via.placeholder.com/800x600',
-                  size: "full",
-                  aspectRatio: "20:13",
-                  aspectMode: "cover",
-                  animated: true
-                },
-                {
-                  type: "box",
-                  layout: "vertical",
-                  paddingAll: "15px",
-                  contents: [
-                    {
-                      type: "text",
-                      text: flexModalItem.title,
-                      weight: "bold",
-                      size: "xl",
-                      align: "center", 
-                      wrap: true
-                    },
-                    {
-                      type: "text",
-                      text: flexModalItem.description ? flexModalItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！',
-                      size: "xs",
-                      margin: "sm",
-                      color: "#666666",
-                      wrap: true
-                    }
-                  ]
-                },
-                {
-                  type: "box",
-                  layout: "vertical",
-                  position: "absolute",
-                  backgroundColor: "#FF0000", 
-                  cornerRadius: "xl",
-                  paddingTop: "7px",
-                  paddingBottom: "7px",
-                  paddingStart: "20px",
-                  paddingEnd: "20px",
-                  offsetTop: "10px",
-                  offsetEnd: "10px",
-                  action: {
-                    type: "uri",
-                    label: "badge",
-                    uri: shareUri 
-                  },
-                  contents: [
-                    {
-                      type: "text",
-                      text: "分享好友",
-                      color: "#ffffff",
-                      size: "12px",
-                      weight: "bold"
-                    }
-                  ]
-                }
-              ]
-            },
-            footer: {
-              type: "box",
-              layout: "vertical",
-              spacing: "sm",
-              paddingAll: "15px",
-              backgroundColor: "#FFFFFF",
-              contents: buttons
-            }
-          }
-        };
-      };
-
-      // 【核心升級】發送名片邏輯：判斷 PC 或 手機
-      const shareFlexMessage = async () => {
+      // 【核心升級】發送名片：手機版喚出通訊錄 / PC版推播回官方帳號
+      const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
         try {
-          const flexMessage = getFlexMessageContents();
+          const flexMsg = buildFlexMessage(flexModalItem, getCurrentUserData(), liffProfile.userId, cardOptions);
           
           if (liff.isApiAvailable('shareTargetPicker')) {
-            // 手機版：直接喚起選擇好友視窗
-            const result = await liff.shareTargetPicker([flexMessage]);
+            // 手機版：直接喚出通訊錄
+            const result = await liff.shareTargetPicker([flexMsg]);
             if (result) { showToast('✅ 成功發送專屬推廣名片！'); setFlexModalItem(null); }
           } else {
-            // PC 版：透過 API 把 Flex Message 推播給自己
-            showToast('PC版不支援直接轉傳，系統正將名片發送至您的 LINE 聊天室中...', 'success');
-            
+            // PC版：推播給自己
+            showToast('PC版不支援直接轉傳，系統正將名片推播至您的 LINE 聊天室...', 'success');
             const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'pushFlexToUser',
-                uid: liffProfile.userId,
-                flexJson: flexMessage
-              })
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'pushFlexToUser', uid: liffProfile.userId, flexJson: flexMsg })
             });
             const data = await res.json();
             if (data.success) {
-               showToast('✅ 已成功推播至您的官方帳號對話框！請前往 LINE 複製轉傳給好友。');
+               showToast('✅ 已成功推播至您的對話框！請打開 LINE 對名片按右鍵「轉傳」給好友。');
                setFlexModalItem(null);
-            } else {
-               throw new Error(data.error || '推播失敗');
-            }
+            } else throw new Error(data.error);
           }
         } catch (error) { showToast('發送失敗：' + error.message, 'error'); }
       };
@@ -436,6 +414,18 @@
       else if (distributorStatus === 'approved') roleBadge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 金牌經銷商</span>;
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
+
+      // 如果正在自動轉傳名片中，顯示全螢幕 Loading 畫面
+      if (isAutoSharing) {
+         return (
+           <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center animate-fade-in">
+              <RefreshCw className="w-16 h-16 text-[#00B900] animate-spin mb-6 shadow-sm rounded-full bg-white p-3" />
+              <h2 className="text-2xl font-extrabold text-gray-800 mb-3 tracking-wider">正在為您準備名片...</h2>
+              <p className="text-gray-500 font-medium">請稍候，即將喚起 LINE 通訊錄供您轉傳</p>
+              {shareError && <div className="mt-8 bg-red-50 text-red-600 p-4 rounded-xl border border-red-200 font-bold max-w-md w-full">{shareError}</div>}
+           </div>
+         );
+      }
 
       const AdminDeniedScreen = () => (
         <div className="w-full max-w-3xl mx-auto px-4 py-32 animate-fade-in text-center">
@@ -547,6 +537,7 @@
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
+                  {/* 【修復】移除圖片的 onError，讓資料庫的正確圖片網址忠實呈現 */}
                   <img src={bannerImage} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center">
@@ -603,8 +594,8 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
                           <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            {/* 【修正】移除了原先會蓋掉照片的 onError 設定，如果沒有圖預設給灰底或預設圖 */}
-                            <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                            {/* 【修復】拔除圖片 onError 替換機制 */}
+                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="沒有提供照片" />
                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
                                {item.startDate && <span className="bg-white/90 backdrop-blur-md text-blue-800 px-3 py-1 rounded-lg text-xs font-bold shadow-sm w-fit border border-white/50">{item.startDate.replace(/-/g, '/')} 出發</span>}
@@ -688,7 +679,7 @@
                           {itineraries.map(item => (
                             <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                               <div className="h-56 overflow-hidden relative bg-gray-100">
-                                <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
+                                <img src={item.image} className="w-full h-full object-cover" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'}} />
                                 <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {getCurrentUserData().commission || 10}%</div>
                               </div>
                               <div className="p-6 flex flex-col flex-grow">
@@ -831,7 +822,7 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
                       {itineraries.map(item => (
                         <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                          <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
+                          <div className="flex gap-5 mb-5"><img src={item.image} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
                           <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
                             <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
                             <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
@@ -851,6 +842,7 @@
               <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
                 <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
                 
+                {/* 左側：設定面板 */}
                 <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
                   <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
                   <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
@@ -882,13 +874,15 @@
                     </div>
                     
                     <div className="pt-4">
-                      <button onClick={shareFlexMessage} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
+                      {/* 【核心修復】PC/手機通用按鈕 */}
+                      <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
                         <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片至 LINE (支援 PC 版)
                       </button>
                     </div>
                   </div>
                 </div>
 
+                {/* 右側：LINE 預覽畫面 */}
                 <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                    <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
                    
@@ -897,7 +891,7 @@
                         <div className="relative h-40">
                           <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
                         </div>
-                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md">
+                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
                           分享好友
                         </div>
                         <div className="p-4 flex flex-col items-center text-center">
@@ -913,6 +907,7 @@
                      </div>
                      <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
                         <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
+                        
                         {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                         {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                         {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
