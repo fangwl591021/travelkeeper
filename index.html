@@ -65,7 +65,6 @@
         return params.get('tab') || 'home';
       }); 
       
-      // 擷取並記錄來自推廣網址的 ref_uid
       const [refUid, setRefUid] = useState(() => {
         const urlRef = new URLSearchParams(window.location.search).get('ref_uid');
         if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
@@ -103,7 +102,6 @@
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
 
-      // 【核心升級】全展開 CRM 編輯頁面的狀態
       const [editingDistributor, setEditingDistributor] = useState(null);
       const [editFormData, setEditFormData] = useState({});
 
@@ -169,7 +167,6 @@
 
       const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
 
-      // 將 refUid 參數帶往註冊頁，讓資料庫可以綁定推薦人
       const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid}`; };
       const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid}`; };
 
@@ -239,7 +236,6 @@
         } catch (error) { showToast('下架發生錯誤', 'error'); }
       };
 
-      // 儲存全展開 CRM 經銷商編輯
       const saveDistributorEdit = async () => {
         try {
           const payload = { action: 'updateDistributorInfo', ...editFormData };
@@ -256,31 +252,115 @@
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
+      // ===============================================
+      // 【全新升級】組裝完全符合您指定版面格式的 Flex JSON
+      // ===============================================
       const getFlexMessageContents = () => {
         if (!flexModalItem) return null;
+        
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${flexModalItem.id}&ref_uid=${liffProfile?.userId || 'GUEST'}`;
         const myData = getCurrentUserData();
-        const buttons = [{ type: "button", style: "primary", color: "#00B900", action: { type: "uri", label: "立即查閱與報名", uri: trackingUrl } }];
-        if (cardOptions.phone && myData.phone) buttons.push({ type: "button", style: "secondary", margin: "sm", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${myData.phone}` }});
-        if (cardOptions.line && myData.lineLink) buttons.push({ type: "button", style: "secondary", margin: "sm", action: { type: "uri", label: "💬 私訊 LINE", uri: myData.lineLink }});
-        if (cardOptions.lineAt && myData.lineAtLink) buttons.push({ type: "button", style: "secondary", margin: "sm", action: { type: "uri", label: "🟢 官方 LINE@", uri: myData.lineAtLink }});
-        if (cardOptions.fb && myData.fbLink) buttons.push({ type: "button", style: "secondary", margin: "sm", action: { type: "uri", label: "👍 FB 粉絲專頁", uri: myData.fbLink }});
-        if (cardOptions.web && myData.webLink) buttons.push({ type: "button", style: "secondary", margin: "sm", action: { type: "uri", label: "🌐 官方網站", uri: myData.webLink }});
-        if (cardOptions.map && myData.mapLink) buttons.push({ type: "button", style: "secondary", margin: "sm", action: { type: "uri", label: "📍 門市導航", uri: myData.mapLink }});
+        
+        // 組合轉傳分享用的 URI (透過 LINE APP 自動叫出分享對象列表)
+        const shareText = encodeURIComponent(`快來看看這個精選行程：${flexModalItem.title}\n${trackingUrl}`);
+        const shareUri = `https://line.me/R/msg/text/?${shareText}`;
+
+        // 依據勾選組裝 Footer 按鈕
+        const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
+        if (cardOptions.phone && myData.phone) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${myData.phone}` }});
+        if (cardOptions.line && myData.lineLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "💬 私訊 LINE", uri: myData.lineLink }});
+        if (cardOptions.lineAt && myData.lineAtLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "🟢 官方 LINE@", uri: myData.lineAtLink }});
+        if (cardOptions.fb && myData.fbLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "👍 FB 粉絲專頁", uri: myData.fbLink }});
+        if (cardOptions.web && myData.webLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "🌐 官方網站", uri: myData.webLink }});
+        if (cardOptions.map && myData.mapLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📍 門市導航", uri: myData.mapLink }});
 
         return {
-          type: "flex", altText: `推薦行程：${flexModalItem.title}`,
+          type: "flex", 
+          altText: `推薦行程：${flexModalItem.title}`,
           contents: {
             type: "bubble",
-            hero: { type: "image", url: flexModalItem.image, size: "full", aspectRatio: "20:13", aspectMode: "cover" },
             body: {
-              type: "box", layout: "vertical",
+              type: "box",
+              layout: "vertical",
+              paddingAll: "0px", // 外層無邊距
               contents: [
-                { type: "text", text: flexModalItem.title, weight: "bold", size: "xl", wrap: true },
-                { type: "box", layout: "baseline", margin: "md", contents: [{ type: "text", text: "🔥 熱門搶購中", size: "sm", color: "#999999", flex: 1 }, { type: "text", text: `$${Number(flexModalItem.price).toLocaleString()}`, size: "xl", color: "#ff334b", weight: "bold", align: "end" }] }
+                // 1. 動態圖片 (移至 Body 內)
+                {
+                  type: "image",
+                  url: flexModalItem.image,
+                  size: "full",
+                  aspectRatio: "20:13",
+                  aspectMode: "cover",
+                  animated: true
+                },
+                // 2. 文字資訊區塊
+                {
+                  type: "box",
+                  layout: "vertical",
+                  paddingAll: "15px",
+                  contents: [
+                    {
+                      type: "text",
+                      text: flexModalItem.title,
+                      weight: "bold",
+                      size: "xl",
+                      align: "center", // 置中
+                      wrap: true
+                    },
+                    {
+                      type: "text",
+                      text: flexModalItem.description ? flexModalItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！',
+                      size: "xs",
+                      margin: "sm",
+                      color: "#666666",
+                      wrap: true
+                    },
+                    {
+                      type: "box", layout: "baseline", margin: "md", contents: [
+                        { type: "text", text: "🔥 熱門搶購中", size: "sm", color: "#999999", flex: 1 },
+                        { type: "text", text: `$${Number(flexModalItem.price).toLocaleString()}`, size: "xl", color: "#ff334b", weight: "bold", align: "end" }
+                      ]
+                    }
+                  ]
+                },
+                // 3. 漂浮分享按鈕 (Absolute)
+                {
+                  type: "box",
+                  layout: "vertical",
+                  position: "absolute",
+                  backgroundColor: "#FF0000", // 紅色背景
+                  cornerRadius: "xl",
+                  paddingTop: "7px",
+                  paddingBottom: "7px",
+                  paddingStart: "20px",
+                  paddingEnd: "20px",
+                  offsetTop: "10px",
+                  offsetEnd: "10px",
+                  action: {
+                    type: "uri",
+                    label: "badge",
+                    uri: shareUri // 【核心】點擊此標籤，立刻開啟 LINE 轉傳功能！
+                  },
+                  contents: [
+                    {
+                      type: "text",
+                      text: "分享好友",
+                      color: "#ffffff",
+                      size: "12px",
+                      weight: "bold"
+                    }
+                  ]
+                }
               ]
             },
-            footer: { type: "box", layout: "vertical", spacing: "sm", contents: buttons }
+            footer: {
+              type: "box",
+              layout: "vertical",
+              spacing: "sm",
+              paddingAll: "15px",
+              backgroundColor: "#FFFFFF",
+              contents: buttons
+            }
           }
         };
       };
@@ -308,35 +388,22 @@
         </div>
       );
 
-      // 【核心升級】全展開 CRM 經銷商詳細編輯頁面
       const CrmDistributorEditView = () => {
-        // 篩選出所有透過這位經銷商註冊的會員清單
         const referredUsers = crmUsers.filter(u => u.referredBy === editFormData.uid);
-
         return (
           <div className="animate-fade-in">
             <div className="flex items-center justify-between mb-6">
-              <button onClick={() => setEditingDistributor(null)} className="flex items-center text-gray-500 hover:text-purple-600 font-bold transition">
-                <Navigation className="w-5 h-5 mr-1 transform -rotate-90" /> 返回名單列表
-              </button>
-              <button onClick={saveDistributorEdit} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-bold shadow-md">
-                儲存修改
-              </button>
+              <button onClick={() => setEditingDistributor(null)} className="flex items-center text-gray-500 hover:text-purple-600 font-bold transition"><Navigation className="w-5 h-5 mr-1 transform -rotate-90" /> 返回名單列表</button>
+              <button onClick={saveDistributorEdit} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-bold shadow-md">儲存修改</button>
             </div>
-
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mb-8">
               <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex items-center justify-between">
                  <div className="flex items-center">
                    <div className="bg-purple-100 p-3 rounded-full mr-4"><Briefcase className="text-purple-600 w-6 h-6"/></div>
-                   <div>
-                     <h2 className="text-2xl font-bold text-gray-800">編輯經銷商: {editFormData.name}</h2>
-                     <p className="text-sm font-mono text-gray-500 mt-1">UID: {editFormData.uid}</p>
-                   </div>
+                   <div><h2 className="text-2xl font-bold text-gray-800">編輯經銷商: {editFormData.name}</h2><p className="text-sm font-mono text-gray-500 mt-1">UID: {editFormData.uid}</p></div>
                  </div>
               </div>
-
               <div className="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* 區塊 1：基本與聯絡資料 */}
                 <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
                   <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">聯絡與審核資料</h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -348,47 +415,23 @@
                     <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">實體店面導航 (Map)</label><input type="text" value={editFormData.mapLink || ''} onChange={e=>setEditFormData({...editFormData, mapLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
                   </div>
                 </div>
-
-                {/* 區塊 2：系統權限與分潤 */}
                 <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
                   <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">系統權限與分潤設定</h3>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">開通狀態</label>
-                    <select value={editFormData.status || 'pending'} onChange={e=>setEditFormData({...editFormData, status: e.target.value})} className="w-full rounded-lg border-2 border-purple-300 p-3 focus:ring-purple-500 outline-none font-bold">
-                      <option value="pending">待審核 (停權中)</option>
-                      <option value="approved">✅ 已核准開通</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2 mt-4">專屬分潤比例 (%)</label>
-                    <input type="number" value={editFormData.commission || ''} onChange={e=>setEditFormData({...editFormData, commission: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none text-lg font-bold text-red-500" placeholder="例如：10" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2 mt-4">內部審核備註</label>
-                    <textarea rows="3" value={editFormData.note || ''} onChange={e=>setEditFormData({...editFormData, note: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none" placeholder="輸入備註事項..." />
-                  </div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-2">開通狀態</label><select value={editFormData.status || 'pending'} onChange={e=>setEditFormData({...editFormData, status: e.target.value})} className="w-full rounded-lg border-2 border-purple-300 p-3 focus:ring-purple-500 outline-none font-bold"><option value="pending">待審核 (停權中)</option><option value="approved">✅ 已核准開通</option></select></div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">專屬分潤比例 (%)</label><input type="number" value={editFormData.commission || ''} onChange={e=>setEditFormData({...editFormData, commission: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none text-lg font-bold text-red-500" placeholder="例如：10" /></div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">內部審核備註</label><textarea rows="3" value={editFormData.note || ''} onChange={e=>setEditFormData({...editFormData, note: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none" placeholder="輸入備註事項..." /></div>
                 </div>
               </div>
             </div>
-
-            {/* 區塊 3：引薦的會員/客戶清單 */}
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                 <h3 className="text-xl font-bold text-gray-800 flex items-center"><Users className="w-6 h-6 mr-2 text-blue-500"/> 帶來的專屬客戶 / 會員清單</h3>
-                 <span className="bg-blue-100 text-blue-800 font-bold px-3 py-1 rounded-full text-sm">共 {referredUsers.length} 人</span>
-               </div>
+               <div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-xl font-bold text-gray-800 flex items-center"><Users className="w-6 h-6 mr-2 text-blue-500"/> 帶來的專屬客戶 / 會員清單</h3><span className="bg-blue-100 text-blue-800 font-bold px-3 py-1 rounded-full text-sm">共 {referredUsers.length} 人</span></div>
                <div className="p-0 overflow-x-auto">
                  <table className="w-full text-left border-collapse">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">註冊日期</th><th className="p-4 font-bold text-gray-600 text-sm">會員姓名</th><th className="p-4 font-bold text-gray-600 text-sm">聯絡電話</th><th className="p-4 font-bold text-gray-600 text-sm">LINE UID</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
                       {referredUsers.length === 0 ? <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">該經銷商目前尚未帶來任何新註冊會員</td></tr> : 
                        referredUsers.map(u => (
-                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-4 text-sm text-gray-500">{u.joinDate}</td>
-                          <td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td>
-                          <td className="p-4 font-medium text-gray-600">{u.phone}</td>
-                          <td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td>
-                        </tr>
+                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors"><td className="p-4 text-sm text-gray-500">{u.joinDate}</td><td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td><td className="p-4 font-medium text-gray-600">{u.phone}</td><td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td></tr>
                       ))}
                     </tbody>
                  </table>
@@ -403,6 +446,8 @@
           <nav className="bg-white shadow-sm sticky top-0 z-50">
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
               <div className="flex justify-between h-16">
+                
+                {/* 左側 LOGO 與選單 */}
                 <div className="flex items-center">
                   <div className="flex items-center cursor-pointer mr-8" onClick={() => changeTab('home')}>
                     <Navigation className="h-8 w-8 text-blue-600 mr-2" />
@@ -437,6 +482,7 @@
                     </button>
                   )}
                 </div>
+
               </div>
             </div>
           </nav>
@@ -530,8 +576,8 @@
                   <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10">
                      <Users className="w-20 h-20 text-orange-500 mx-auto mb-6" />
                      <h2 className="text-3xl font-bold mb-4">一般會員登入</h2>
-                     <p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p>
-                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button>
+                     <p className="text-gray-500 mb-8 text-lg">登入即可查看您的訂單、收藏行程與專屬優惠。</p>
+                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 快速登入</button>
                   </div>
                 ) : (
                   <div className="bg-orange-500 rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative">
@@ -561,7 +607,7 @@
                      <Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" />
                      <h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2>
                      <p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p>
-                     <button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往註冊經銷商</button>
+                     <button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button>
                   </div>
                 ) : (
                   <>
@@ -740,6 +786,7 @@
               <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
                 <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
                 
+                {/* 左側：設定面板 */}
                 <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
                   <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
                   <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
@@ -778,26 +825,42 @@
                   </div>
                 </div>
 
+                {/* 右側：LINE 預覽畫面 (套用全新的 Flex Message JSON 結構) */}
                 <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                    <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
                    
-                   <div className="w-full max-w-[300px] bg-white rounded-2xl overflow-hidden shadow-2xl transform scale-95 origin-top">
-                     <div className="relative h-40"><img src={flexModalItem.image} className="w-full h-full object-cover" /></div>
-                     <div className="p-5">
-                       <h4 className="font-bold text-lg text-gray-900 leading-snug mb-1 line-clamp-2">{flexModalItem.title}</h4>
-                       <div className="flex justify-between items-baseline mb-4 mt-2">
-                          <span className="text-gray-400 text-xs">🔥 熱門搶購中</span>
-                          <span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span>
-                       </div>
-                       <div className="space-y-2 mt-4 border-t border-gray-100 pt-4">
-                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">立即查閱與報名</div>
-                          {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
-                          {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
-                          {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
-                          {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
-                          {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
-                          {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
-                       </div>
+                   {/* 模擬的 LINE Flex Card */}
+                   <div className="w-full max-w-[300px] bg-white rounded-2xl overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
+                     {/* Body 區塊 (包含滿版圖片與文字) */}
+                     <div className="relative">
+                        <div className="relative h-40">
+                          <img src={flexModalItem.image} className="w-full h-full object-cover" />
+                        </div>
+                        {/* 絕對定位的「分享好友」標籤 */}
+                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
+                          分享好友
+                        </div>
+                        <div className="p-4 flex flex-col items-center text-center">
+                          <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
+                          <p className="text-xs text-gray-500 line-clamp-3 mb-3 text-left w-full">
+                            {flexModalItem.description ? flexModalItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！'}
+                          </p>
+                          <div className="flex justify-between items-baseline w-full mb-2">
+                             <span className="text-gray-400 text-xs">🔥 熱門搶購中</span>
+                             <span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span>
+                          </div>
+                        </div>
+                     </div>
+
+                     {/* Footer 按鈕區域 */}
+                     <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
+                        <div className="w-full bg-[#00B900] text-white text-center py-2 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
+                        {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
+                        {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
+                        {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
+                        {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
+                        {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
+                        {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
                      </div>
                    </div>
                 </div>
