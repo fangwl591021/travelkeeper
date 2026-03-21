@@ -160,6 +160,7 @@
         fetchItineraries();
       }, []);
 
+      // ====== 遞迴轉傳：紅標籤「分享好友」觸發 ======
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -179,11 +180,20 @@
 
               try {
                 const flexMsg = buildFlexMessage(tour, distData, rUid, cOptions);
-                await liff.shareTargetPicker([flexMsg]);
-                showToast('✅ 成功轉傳名片！即將關閉視窗...');
-                setTimeout(() => liff.closeWindow(), 1500);
+
+                // 如果是在 LINE APP 內 (手機版)，直接呼叫原生方法
+                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+                    await liff.shareTargetPicker([flexMsg]);
+                    showToast('✅ 成功轉傳名片！即將關閉視窗...');
+                    setTimeout(() => liff.closeWindow(), 1500);
+                } else {
+                    // 外部瀏覽器：使用隱藏 API 重新導向
+                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
+                    window.location.replace(shareUrl);
+                }
               } catch(e) { 
-                setShareError('⚠️ 轉傳失敗：外部瀏覽器無法喚出通訊錄。請將連結貼回 LINE 聊天室內點擊開啟。'); 
+                setShareError('⚠️ 轉傳發生錯誤或您取消了操作。'); 
               }
            }
         };
@@ -311,7 +321,7 @@
       };
 
       const handleFileUpload = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
+        const file = e.target.files[0]; if (!file) return; 
         setOcrStatus('processing');
         setIsUploadingImage(true);
 
@@ -320,36 +330,32 @@
           reader.onloadend = async () => {
             const base64data = reader.result;
 
-            // Worker 內部同時做：① Drive 上傳取圖片URL ② GPT-4o 解析文字
-            // 回傳的 parsedData.image 已經是 Drive 真實 URL，不需要再另外上傳
-            const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: base64data })
-            });
+            let uploadedUrl = '';
+            try {
+              const driveRes = await fetch(`${WORKER_URL}/api/itineraries`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'uploadImage', base64: base64data })
+              });
+              const driveResult = await driveRes.json();
+              if (driveResult.success) uploadedUrl = driveResult.url;
+            } catch (err) { console.warn('圖片上傳失敗', err); }
+
+            const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
 
             if (aiResult.success) {
               const parsedData = aiResult.data;
-              // parsedData.image 已由 Worker 填入 Drive URL
-              parsedData.id = Date.now();
-              setDraftData(parsedData);
-              showToast('✅ AI 解析完成，圖片已自動回填！系統正自動寫入資料庫...');
-
+              parsedData.image = uploadedUrl; 
+              parsedData.id = Date.now(); 
+              setDraftData(parsedData); 
+              showToast('✅ 圖片已上傳雲端且 AI 解析完成！系統正自動寫入資料庫...');
+              
               const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
               setItineraries(prev => [newItinerary, ...prev]);
               try {
-                const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(newItinerary)
-                });
+                const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newItinerary) });
                 const dbResult = await dbRes.json();
-                if (dbResult.success) {
-                  showToast('🎉 行程已成功上架！');
-                  setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' });
-                  setOcrStatus('idle');
-                  fetchItineraries();
-                } else throw new Error('寫入失敗');
+                if (dbResult.success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
               } catch (dbErr) { setOcrStatus('done'); showToast('寫入失敗，請手動點擊「儲存」', 'error'); }
             } else throw new Error(aiResult.error || '解析失敗');
             setIsUploadingImage(false);
@@ -407,14 +413,12 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 核心升級：PC + 手機通用，直接彈出 LINE 選好友視窗
+      // ★ 核心升級：經銷商點擊發送按鈕
       //   原理：window.open() 開 LINE 官方 OAuth 端點
-      //         messages 參數用 JSON.stringify → encodeURIComponent
       // ============================================================
-      const triggerFlexSharing = () => {
+      const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
 
-        // 建立 Flex Message
         const flexMsg = buildFlexMessage(
           flexModalItem,
           myDistributorData || {},
@@ -422,39 +426,45 @@
           cardOptions
         );
 
-        // messages: JSON 陣列 → encodeURIComponent（不用 base64）
-        const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+        // 如果在手機版 LINE APP 中，優先使用原生的體驗最順暢
+        if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+            try {
+                const res = await liff.shareTargetPicker([flexMsg]);
+                if (res) {
+                    showToast('✅ 名片已成功發送！');
+                    setFlexModalItem(null);
+                }
+            } catch(e) {
+                showToast('取消發送或發生錯誤', 'error');
+            }
+        } else {
+            // 外部瀏覽器 / 電腦版：使用您的黑科技彈出視窗
+            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
 
-        // LINE 官方 shareTargetPicker OAuth 端點
-        const shareUrl =
-          `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker` +
-          `?liffId=${LIFF_ID}` +
-          `&messages=${messagesParam}`;
+            const w = 600, h = 700;
+            const left = Math.round((window.screen.width  - w) / 2);
+            const top  = Math.round((window.screen.height - h) / 2);
 
-        // 置中彈窗
-        const w = 600, h = 700;
-        const left = Math.round((window.screen.width  - w) / 2);
-        const top  = Math.round((window.screen.height - h) / 2);
+            const popup = window.open(
+              shareUrl,
+              'line_share_picker',
+              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
+            );
 
-        const popup = window.open(
-          shareUrl,
-          'line_share_picker',
-          `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
-        );
+            if (!popup) {
+              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
+              return;
+            }
 
-        if (!popup) {
-          showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
-          return;
+            const timer = setInterval(() => {
+              if (popup.closed) {
+                clearInterval(timer);
+                showToast('✅ 名片已成功發送！');
+                setFlexModalItem(null);
+              }
+            }, 600);
         }
-
-        // 視窗關閉後顯示成功
-        const timer = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(timer);
-            showToast('✅ 名片已成功發送！');
-            setFlexModalItem(null);
-          }
-        }, 600);
       };
 
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
@@ -600,6 +610,7 @@
           </nav>
 
           <div className="flex-grow w-full">
+            {/* ====== 前台：找行程 ====== */}
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
@@ -659,7 +670,7 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
                           <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                            <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
                             </div>
@@ -683,14 +694,15 @@
               </div>
             )}
 
+            {/* ====== 模組 B：一般會員中心 ====== */}
             {activeTab === 'member' && (
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
                 {!isGeneralMember ? (
                   <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10">
                      <Users className="w-20 h-20 text-orange-500 mx-auto mb-6" />
                      <h2 className="text-3xl font-bold mb-4">一般會員登入</h2>
-                     <p className="text-gray-500 mb-8 text-lg">登入即可查看您的訂單、收藏行程與專屬優惠。</p>
-                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 快速登入</button>
+                     <p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p>
+                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button>
                   </div>
                 ) : (
                   <div className="bg-orange-500 rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative">
@@ -699,6 +711,11 @@
                       <div>
                         <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2>
                         <p className="text-orange-100 text-lg max-w-2xl">您已成功登入一般會員。未來預定的行程與報名紀錄都會歸屬在此帳號下。</p>
+                        {crmUsers.find(u => u.uid === liffProfile?.userId)?.referredBy && (
+                          <div className="mt-4 inline-block bg-white/20 px-3 py-1 rounded-md text-sm font-bold border border-white/30">
+                            ✨ 您是由專屬旅遊顧問推薦的 VIP 會員
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -706,6 +723,7 @@
               </div>
             )}
 
+            {/* ====== 模組 C：經銷商專區 ====== */}
             {activeTab === 'distributor' && (
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
                 {!distributorStatus ? (
@@ -722,7 +740,7 @@
                         <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
                         <div>
                           <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>
-                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
+                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友 (支援 PC 版 LINE)！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
                         </div>
                       </div>
                       <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div>
@@ -735,7 +753,7 @@
                           {itineraries.map(item => (
                             <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                               <div className="h-56 overflow-hidden relative bg-gray-100">
-                                <img src={item.image} className="w-full h-full object-cover" />
+                                <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
                                 <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</div>
                               </div>
                               <div className="p-6 flex flex-col flex-grow">
@@ -757,6 +775,7 @@
               </div>
             )}
 
+            {/* ====== 模組 D：後台 CRM (受限權限) ====== */}
             {activeTab === 'crm' && (
               isAdmin ? (
                 <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
@@ -822,6 +841,7 @@
               ) : <AdminDeniedScreen />
             )}
 
+            {/* ====== 模組 E：後台上稿系統 (受限權限) ====== */}
             {activeTab === 'admin' && (
               isAdmin ? (
                 <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
@@ -849,9 +869,11 @@
                           <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
                           <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label><select value={draftData.region} onChange={(e) => setDraftData({...draftData, region: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 bg-white outline-none text-lg"><option value="">請選擇</option><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
                           <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label><input type="number" value={draftData.price} onChange={(e) => setDraftData({...draftData, price: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
+                          
                           <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">出發日期</label><input type="date" value={draftData.startDate} onChange={(e) => setDraftData({...draftData, startDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
                           <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">結束日期</label><input type="date" value={draftData.endDate} onChange={(e) => setDraftData({...draftData, endDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
                           <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg" placeholder="例如：7"/></div>
+                          
                           <div className="lg:col-span-4">
                             <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址 或 上傳雲端圖片</label>
                             <div className="flex gap-4 items-center">
@@ -874,7 +896,7 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
                       {itineraries.map(item => (
                         <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                          <div className="flex gap-5 mb-5"><img src={item.image} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
+                          <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
                           <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
                             <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
                             <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
@@ -888,12 +910,13 @@
             )}
           </div>
 
-          {/* ====== Flex Message Modal ====== */}
+          {/* ====== 獨立元件：Flex Message 設定與產生 Modal ====== */}
           {flexModalItem && (
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
               <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
                 <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
                 
+                {/* 左側：設定面板 */}
                 <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
                   <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
                   <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
@@ -901,6 +924,7 @@
                   <div className="space-y-6">
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
                       <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
+                      
                       <div className="grid grid-cols-2 gap-3">
                          <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
                            <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話
@@ -925,8 +949,9 @@
                     </div>
                     
                     <div className="pt-4">
+                      {/* 【核心修復】PC + 手機完美相容的分享按鈕 */}
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友（喚出通訊錄）
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
                       </button>
                     </div>
                   </div>
@@ -934,15 +959,20 @@
 
                 <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                    <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
+                   
                    <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
                      <div className="relative">
                         <div className="relative h-40">
-                          <img src={flexModalItem.image} className="w-full h-full object-cover" alt="" />
+                          <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
                         </div>
-                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md">分享好友</div>
+                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
+                          分享好友
+                        </div>
                         <div className="p-4 flex flex-col items-center text-center">
                           <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
-                          <p className="text-xs text-gray-500 line-clamp-3 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！'}</p>
+                          <p className="text-xs text-gray-500 line-clamp-3 mb-3 text-left w-full">
+                            {flexModalItem.description ? flexModalItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！'}
+                          </p>
                           <div className="flex justify-between items-baseline w-full mb-2">
                              <span className="text-gray-400 text-xs">🔥 熱門搶購中</span>
                              <span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span>
@@ -950,7 +980,7 @@
                         </div>
                      </div>
                      <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm">了解更多 / 立即報名</div>
+                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
                         {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                         {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                         {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
@@ -978,7 +1008,7 @@
             </div>
           )}
 
-          {/* Toast */}
+          {/* Toast Notification */}
           {toast && (
             <div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up">
               <div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div>
