@@ -4,18 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>旅遊管家 - 系統登入與驗證</title>
-  
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- React & ReactDOM -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
-  
-  <!-- LINE LIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-
   <style>
     @keyframes spin-slow { 100% { transform: rotate(360deg); } }
     .animate-spin-slow { animation: spin-slow 3s linear infinite; }
@@ -42,6 +35,7 @@
       const [statusMsg, setStatusMsg] = useState('正在連接 LINE 授權服務...');
       const [error, setError] = useState(null);
       const [applyType, setApplyType] = useState('user'); 
+      const [refUid, setRefUid] = useState(''); // 推薦人 UID
       
       const [profile, setProfile] = useState(null);
       const [formData, setFormData] = useState({ 
@@ -56,7 +50,9 @@
         try {
           const urlParams = new URLSearchParams(window.location.search);
           const type = urlParams.get('type') || 'user';
+          const ref = urlParams.get('ref_uid') || '';
           setApplyType(type);
+          setRefUid(ref);
           
           await liff.init({ liffId: LIFF_ID });
 
@@ -119,6 +115,7 @@
             body: JSON.stringify({ 
               action: actionType, 
               uid: profile.userId, 
+              ref_uid: refUid,          // 【核心】將推薦人 UID 送入資料庫綁定
               name: formData.name,      
               phone: formData.phone,
               companyName: formData.companyName,
@@ -170,7 +167,8 @@
               </h2>
               <p className="text-center text-gray-500 mb-8 text-sm">請核對並補全您的聯絡資訊以完成開通</p>
               
-              <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-4 mb-6 border border-gray-100">
+              <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-4 mb-6 border border-gray-100 relative overflow-hidden">
+                {refUid && <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">推薦開通</div>}
                 <img src={profile.pictureUrl || 'https://via.placeholder.com/150'} alt="LINE Avatar" className="w-16 h-16 rounded-full shadow-sm object-cover border-2 border-white"/>
                 <div>
                   <p className="text-xs text-gray-400 font-bold tracking-wider mb-1">LINE 授權身分</p>
