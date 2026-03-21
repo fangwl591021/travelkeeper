@@ -27,7 +27,6 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
-    // --- 圖示元件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -165,6 +164,36 @@
         fetchItineraries();
       }, []);
 
+      const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
+          try {
+            const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+            
+            await liff.shareTargetPicker([flexMsg]);
+            
+            if (isAutoMode) {
+                setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
+                setTimeout(() => liff.closeWindow(), 1500);
+            } else {
+                showToast('✅ 名片已成功發送！');
+                setFlexModalItem(null);
+            }
+          } catch(e) {
+            console.error("LIFF SDK Share Error:", e);
+            if (e.message && e.message.includes('not allowed')) {
+                alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。");
+                liff.logout();
+                window.location.reload();
+            } else {
+                if (isAutoMode) {
+                    setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
+                    setTimeout(() => liff.closeWindow(), 2000);
+                } else {
+                    showToast('已取消發送或發生未知的錯誤', 'error');
+                }
+            }
+          }
+      };
+
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -181,23 +210,8 @@
 
               const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
 
-              try {
-                const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-                setShareStatusText("正在喚起 LINE 通訊錄...");
-
-                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-                    await liff.shareTargetPicker([flexMsg]);
-                    setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                    setTimeout(() => liff.closeWindow(), 1500);
-                } else {
-                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-                    window.location.replace(shareUrl);
-                }
-              } catch(e) { 
-                setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
-                setTimeout(() => { if (liff.isInClient()) liff.closeWindow(); else window.close(); }, 2000);
-              }
+              setShareStatusText("正在喚起 LINE 通訊錄...");
+              await executeShare(tour, targetDistData, rUid, cOptions, true);
            }
         };
 
@@ -216,7 +230,7 @@
             const profile = await liff.getProfile();
             setLiffProfile(profile);
 
-            // ★ 靜默綁定機制：訪客只要點進來，立刻在背景將其 UID 與推薦人綁定寫入資料庫
+            // ★ 靜默綁定機制
             const activeRef = urlParams.get('r') || urlParams.get('ref_uid') || localStorage.getItem('tracking_ref_uid');
             if (activeRef && activeRef !== profile.userId) {
                 fetch(`${WORKER_URL}/api/itineraries`, {
@@ -405,20 +419,7 @@
 
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
-        try {
-          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
-          if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-            const res = await liff.shareTargetPicker([flexMsg]);
-            if (res) { showToast('✅ 名片已成功發送！'); setFlexModalItem(null); }
-          } else {
-            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-            const w = 600, h = 700, left = Math.round((window.screen.width - w) / 2), top = Math.round((window.screen.height - h) / 2);
-            const popup = window.open(shareUrl, 'line_share_picker', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`);
-            if (!popup) { showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error'); return; }
-            const timer = setInterval(() => { if (popup.closed) { clearInterval(timer); showToast('✅ 名片已成功發送！'); setFlexModalItem(null); } }, 600);
-          }
-        } catch (error) { console.error(error); showToast('發送取消或發生錯誤', 'error'); }
+        await executeShare(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions, false);
       };
 
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
@@ -533,6 +534,7 @@
           </nav>
 
           <div className="flex-grow w-full">
+            {/* ====== 前台：找行程 ====== */}
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
@@ -613,6 +615,7 @@
               </div>
             )}
 
+            {/* ====== 模組 B：一般會員中心 ====== */}
             {activeTab === 'member' && (
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
                 {!isGeneralMember ? (
@@ -639,6 +642,7 @@
               </div>
             )}
 
+            {/* ====== 模組 C：經銷商專區 ====== */}
             {activeTab === 'distributor' && (
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
                 {!distributorStatus ? (
@@ -686,6 +690,7 @@
               </div>
             )}
 
+            {/* ====== 模組 D：後台 CRM ====== */}
             {activeTab === 'crm' && (
               isAdmin ? (
                 <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
@@ -747,6 +752,7 @@
               ) : <AdminDeniedScreen />
             )}
 
+            {/* ====== 模組 E：後台上稿系統 ====== */}
             {activeTab === 'admin' && (
               isAdmin ? (
                 <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
@@ -814,6 +820,85 @@
               ) : <AdminDeniedScreen />
             )}
           </div>
+
+          {/* ====== 獨立元件：Flex Message 設定與產生 Modal ====== */}
+          {flexModalItem && (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
+                <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
+                
+                <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
+                  <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
+                  <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
+                  
+                  <div className="space-y-6">
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                      <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
+                      <div className="grid grid-cols-2 gap-3">
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話</label>
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE</label>
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@</label>
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專</label>
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站</label>
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
+                      </div>
+                      <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
+                    </div>
+                    
+                    <div className="pt-4">
+                      <button onClick={() => triggerFlexSharing()} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg"><Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
+                   <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
+                   
+                   <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
+                     <div className="relative">
+                        <div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div>
+                        <div className="p-4 flex flex-col items-center text-center">
+                          <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
+                          <p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p>
+                          <div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div>
+                        </div>
+                     </div>
+                     <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
+                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div>
+                        <div className="w-full bg-[#ff334b] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
+                        {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
+                        {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
+                        {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
+                        {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
+                        {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
+                        {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
+                     </div>
+                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 刪除確認 Modal */}
+          {deleteModalId && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
+                <div className="flex items-center text-red-600 mb-5"><AlertCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-bold">確認下架此行程？</h3></div>
+                <p className="text-gray-600 mb-8 text-lg leading-relaxed">下架後該行程將從前台及資料庫移除，確定要繼續嗎？</p>
+                <div className="flex justify-end space-x-4">
+                  <button onClick={() => setDeleteModalId(null)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-lg">取消</button>
+                  <button onClick={confirmDelete} className="px-6 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 text-lg">確定下架</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Toast Notification */}
+          {toast && (
+            <div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up">
+              <div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div>
+            </div>
+          )}
         </div>
       );
     }
