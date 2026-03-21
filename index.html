@@ -113,17 +113,25 @@
         finally { setIsLoading(false); }
       };
 
-      // 載入 CRM 資料並同步更新目前登入者的狀態
+      // 【修復核心】：嚴格補齊 headers: { 'Content-Type': 'application/json' }
       const fetchCrmDataAndCheckStatus = async (currentProfile) => {
         try {
-          // 拉取經銷商 (Worker 會把 POST Request 轉給 GAS)
-          const resD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', body: JSON.stringify({ action: 'getDistributors' })});
+          // 拉取經銷商
+          const resD = await fetch(`${WORKER_URL}/api/itineraries`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'getDistributors' })
+          });
           const dataD = await resD.json();
           const distArr = Array.isArray(dataD) ? dataD : [];
           setCrmDistributors(distArr);
           
           // 拉取一般會員
-          const resU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', body: JSON.stringify({ action: 'getUsers' })});
+          const resU = await fetch(`${WORKER_URL}/api/itineraries`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'getUsers' })
+          });
           const dataU = await resU.json();
           const userArr = Array.isArray(dataU) ? dataU : [];
           setCrmUsers(userArr);
@@ -136,7 +144,7 @@
             const meUser = userArr.find(u => u.uid === currentProfile.userId);
             if (meUser) setIsGeneralMember(true);
           }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error('CRM Fetch error', e); }
       };
 
       const initLiff = async () => {
@@ -338,7 +346,7 @@
 
           <div className="flex-grow w-full">
             
-            {/* ====== 前台：找行程 (無邊界滿版 + 橫向搜尋置頂) ====== */}
+            {/* ====== 前台：找行程 ====== */}
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
@@ -621,7 +629,7 @@
                         <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
                         <div className="lg:col-span-3">
                           <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址</label>
-                          <div className="flex gap-4 items-center"><input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base"/><img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" onError={(e)=>e.target.src='https://via.placeholder.com/150'} /></div>
+                          <div className="flex gap-4 items-center"><input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600"/><img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" onError={(e)=>e.target.src='https://via.placeholder.com/150'} /></div>
                         </div>
                       </div>
                       <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案</label><textarea rows={6} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed"/></div>
