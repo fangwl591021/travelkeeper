@@ -27,6 +27,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
+    // --- 圖示元件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -54,6 +55,7 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LOGIN_URL = 'login.html'; 
 
+    // 產生完整版且精簡過的 JSON
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
@@ -182,6 +184,7 @@
               try {
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
                 setShareStatusText("正在喚起 LINE 通訊錄...");
+
                 if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
                     await liff.shareTargetPicker([flexMsg]);
                     setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
@@ -241,14 +244,17 @@
         } catch (e) { console.error('Status check error', e); } finally { setIsStatusChecked(true); }
       };
 
+      // 修正：徹底解壓縮 JSON 解析，防止 Stream already read 錯誤導致讀不到經銷商資料
       const fetchFullCrmData = async () => {
         try {
           const currentTimestamp = new Date().getTime();
           const resD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors', timestamp: currentTimestamp }) });
-          setCrmDistributors(Array.isArray(await resD.json()) ? await resD.json() : []);
+          const dataD = await resD.json();
+          setCrmDistributors(Array.isArray(dataD) ? dataD : []);
           
           const resU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers', timestamp: currentTimestamp }) });
-          setCrmUsers(Array.isArray(await resU.json()) ? await resU.json() : []);
+          const dataU = await resU.json();
+          setCrmUsers(Array.isArray(dataU) ? dataU : []);
         } catch (e) { console.error('CRM Fetch error', e); }
       };
 
@@ -312,20 +318,43 @@
           const reader = new FileReader(); reader.readAsDataURL(file);
           reader.onloadend = async () => {
             const base64data = reader.result;
+
+            let uploadedUrl = '';
+            try {
+              const driveRes = await fetch(`${WORKER_URL}/api/itineraries`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'uploadImage', base64: base64data })
+              });
+              const driveResult = await driveRes.json();
+              if (driveResult.success) uploadedUrl = driveResult.url;
+            } catch (err) { console.warn('圖片上傳失敗', err); }
+
             const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
 
             if (aiResult.success) {
               const parsedData = aiResult.data;
+              const REGION_IMAGES = {
+                '國旅': 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=800&q=80',
+                '亞洲': 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
+                '歐洲': 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=800&q=80',
+                '美洲': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80',
+                '大洋洲': 'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=800&q=80',
+                '非洲': 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80',
+                '預設': 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80'
+              };
+
+              parsedData.image = uploadedUrl || REGION_IMAGES[parsedData.region] || REGION_IMAGES['預設'];
               parsedData.id = Date.now(); 
               setDraftData(parsedData); 
-              showToast('✅ DM 解析完成！已自動配上真實風景美照。');
+              showToast('✅ 圖片已上傳且 AI 解析完成！系統正自動寫入資料庫...');
               
               const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
               setItineraries(prev => [newItinerary, ...prev]);
               try {
                 const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newItinerary) });
-                if ((await dbRes.json()).success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
+                const dbResult = await dbRes.json();
+                if (dbResult.success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
               } catch (dbErr) { setOcrStatus('done'); showToast('寫入失敗，請手動點擊「儲存」', 'error'); }
             } else throw new Error(aiResult.error || '解析失敗');
             setIsUploadingImage(false);
@@ -339,7 +368,8 @@
         const submitData = { ...draftData, id: draftData.id || Date.now(), price: parseInt(draftData.price, 10) || 0, action: isEditing ? 'updateItinerary' : 'addItinerary' };
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submitData) });
-          if ((await res.json()).success) { showToast(isEditing ? '修改成功！' : '新增成功！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); setUploadMode('dm'); fetchItineraries(); } else throw new Error('操作失敗');
+          const result = await res.json();
+          if (result.success) { showToast(isEditing ? '修改成功！' : '新增成功！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); setUploadMode('dm'); fetchItineraries(); } else throw new Error('操作失敗');
         } catch (error) { showToast('寫入資料庫錯誤', 'error'); }
       };
 
@@ -349,7 +379,8 @@
         if (!deleteModalId) return;
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteItinerary', id: deleteModalId }) });
-          if ((await res.json()).success) { showToast('已成功下架！'); setDeleteModalId(null); fetchItineraries(); } else throw new Error('刪除失敗');
+          const result = await res.json();
+          if (result.success) { showToast('已成功下架！'); setDeleteModalId(null); fetchItineraries(); } else throw new Error('刪除失敗');
         } catch (error) { showToast('下架發生錯誤', 'error'); }
       };
 
@@ -357,7 +388,8 @@
         try {
           const payload = { action: 'updateDistributorInfo', ...editFormData };
           const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          if ((await res.json()).success) { showToast('✅ 經銷商資料與狀態已更新！'); setEditingDistributor(null); fetchFullCrmData(); } else throw new Error('儲存失敗');
+          const result = await res.json();
+          if (result.success) { showToast('✅ 經銷商資料與狀態已更新！'); setEditingDistributor(null); fetchFullCrmData(); } else throw new Error('儲存失敗');
         } catch (e) { showToast('更新失敗，請檢查資料', 'error'); }
       };
 
@@ -365,7 +397,8 @@
         if (!approveModalUser) return;
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorStatus', uid: approveModalUser.uid, status: 'approved', commission: approveData.commission, note: approveData.note }) });
-          if ((await res.json()).success) { showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); setApproveModalUser(null); fetchFullCrmData(); }
+          const result = await res.json();
+          if (result.success) { showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); setApproveModalUser(null); fetchFullCrmData(); }
         } catch (e) { showToast('審核失敗', 'error'); }
       };
 
