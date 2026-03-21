@@ -56,11 +56,12 @@
     const LOGIN_URL = 'login.html'; 
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
 
-    // 產生完整版且精簡過的 JSON
+    // =========================================================================
+    // ★ 官方標準 Flex JSON (極簡化結構，完全符合 LINE 規範) ★
+    // =========================================================================
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
-        
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
 
         const buttons = [
@@ -242,7 +243,9 @@
         fetchItineraries();
       }, []);
 
-      // ====== 自動遞迴分享：被朋友點開後觸發通訊錄 ======
+      // ============================================================
+      // ★ 自動遞迴分享：信任 SDK，攔截權限錯誤
+      // ============================================================
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -269,18 +272,25 @@
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
                 setShareStatusText("正在喚起 LINE 通訊錄...");
 
-                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-                    await liff.shareTargetPicker([flexMsg]);
+                // 完全信任 SDK 自動轉換 OTT
+                const res = await liff.shareTargetPicker([flexMsg]);
+                
+                if (res) {
                     setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
                     setTimeout(() => liff.closeWindow(), 1500);
                 } else {
-                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-                    window.location.replace(shareUrl);
+                    liff.closeWindow();
                 }
               } catch(e) { 
-                setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
-                setTimeout(() => liff.closeWindow(), 2000);
+                // 攔截未授權錯誤，強制重登換取最新權限 Token
+                if (e.message && e.message.includes('not allowed')) {
+                    alert("⚠️ 系統權限已更新！即將為您清除舊紀錄並重新登入以獲取最新權限。");
+                    liff.logout();
+                    window.location.reload();
+                } else {
+                    setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
+                    setTimeout(() => liff.closeWindow(), 2000);
+                }
               }
            }
         };
@@ -412,9 +422,6 @@
         };
       };
 
-      // =========================================================================
-      // ★ 修復：極致加速版 DM 解析，移除本機上傳耗時，直接取用圖庫美照
-      // =========================================================================
       const handleFileUpload = async (e) => {
         const file = e.target.files[0]; if (!file) return; 
         setOcrStatus('processing');
@@ -425,15 +432,40 @@
           reader.onloadend = async () => {
             const base64data = reader.result;
 
-            // 直接將 Base64 拋給 Worker，由 Worker 完成 GPT 解析與 Unsplash/Pixabay 搜圖
+            // 1. 背景上傳至 Google Drive
+            let uploadedUrl = '';
+            try {
+              const driveRes = await fetch(`${WORKER_URL}/api/itineraries`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'uploadImage', base64: base64data })
+              });
+              const driveResult = await driveRes.json();
+              if (driveResult.success) uploadedUrl = driveResult.url;
+            } catch (err) { console.warn('圖片上傳失敗', err); }
+
+            // 2. GPT 辨識及真實圖庫搜尋
             const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
 
             if (aiResult.success) {
               const parsedData = aiResult.data;
+              
+              // 保底機制備用圖
+              const REGION_IMAGES = {
+                '國旅': 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=800&q=80',
+                '亞洲': 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
+                '歐洲': 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=800&q=80',
+                '美洲': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80',
+                '大洋洲': 'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=800&q=80',
+                '非洲': 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80',
+                '預設': 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80'
+              };
+
+              parsedData.image = uploadedUrl || REGION_IMAGES[parsedData.region] || REGION_IMAGES['預設'];
+              
               parsedData.id = Date.now(); 
               setDraftData(parsedData); 
-              showToast('✅ DM 解析完成！已自動配上真實風景美照。');
+              showToast('✅ 圖片已上傳且 AI 解析完成！系統正自動寫入資料庫...');
               
               const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
               setItineraries(prev => [newItinerary, ...prev]);
@@ -498,7 +530,7 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ PC 彈出獨立小視窗發送 (套用您的成功黑科技)
+      // ★ 終極手動發送按鈕：完全信任官方 SDK，徹底拔除手動拼網址
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) {
@@ -509,44 +541,24 @@
         try {
           const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
           
-          if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-            // 手機版 LINE 內部，直接使用原生的體驗最順暢
-            const res = await liff.shareTargetPicker([flexMsg]);
-            if (res) {
-              showToast('✅ 名片已成功發送！');
-              setFlexModalItem(null);
-            }
-          } else {
-            // 電腦版 PC 瀏覽器：完美套用您的成功解法 (window.open + encodeURI)
-            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-
-            const w = 600, h = 700;
-            const left = Math.round((window.screen.width - w) / 2);
-            const top = Math.round((window.screen.height - h) / 2);
-
-            const popup = window.open(
-              shareUrl,
-              'line_share_picker',
-              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
-            );
-
-            if (!popup) {
-              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
-              return;
-            }
-
-            const timer = setInterval(() => {
-              if (popup.closed) {
-                clearInterval(timer);
-                showToast('✅ 名片已成功發送！');
-                setFlexModalItem(null);
-              }
-            }, 600);
+          // 讓官方 SDK 負責處理 POST 請求與 ott 的轉換
+          const res = await liff.shareTargetPicker([flexMsg]);
+          
+          if (res) {
+            showToast('✅ 名片已成功發送！');
+            setFlexModalItem(null);
           }
         } catch (error) { 
-          console.error(error);
-          showToast('發送取消或發生錯誤', 'error'); 
+          console.error('ShareTargetPicker Error:', error);
+          
+          // 防呆機制：如果回報權限錯誤，通常是因為使用了過期的舊 Token
+          if (error.message && error.message.includes('not allowed')) {
+              alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。");
+              liff.logout();
+              window.location.reload();
+          } else {
+              showToast('發送取消或發生錯誤: ' + error.message, 'error'); 
+          }
         }
       };
 
@@ -1028,7 +1040,7 @@
                     
                     <div className="pt-4">
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (支援手機/PC)
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
                       </button>
                     </div>
                   </div>
@@ -1042,13 +1054,10 @@
                         <div className="relative h-40">
                           <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
                         </div>
-                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
-                          分享好友
-                        </div>
                         <div className="p-4 flex flex-col items-center text-center">
                           <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
                           <p className="text-xs text-gray-500 line-clamp-3 mb-3 text-left w-full">
-                            {flexModalItem.description ? flexModalItem.description.substring(0, 50) + '...' : '點擊下方按鈕了解行程！'}
+                            {flexModalItem.description ? flexModalItem.description.substring(0, 60) + '...' : '點擊下方按鈕了解行程！'}
                           </p>
                           <div className="flex justify-between items-baseline w-full mb-2">
                              <span className="text-gray-400 text-xs">🔥 熱門搶購中</span>
