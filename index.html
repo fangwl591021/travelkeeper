@@ -27,6 +27,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
+    // --- 圖示元件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -60,7 +61,7 @@
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         
-        // 觸發 LIFF 內部自動轉傳的連結
+        // 觸發 LIFF 內部自動遞迴轉傳的連結
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
 
         const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
@@ -162,23 +163,11 @@
       }, []);
 
       // ============================================================
-      // ★ 核心魔法：全自動「遞迴」分享處理與 Session 防呆機制
+      // ★ 遞迴分享：處理紅標籤「分享好友」的自動發送 (雙軌制)
       // ============================================================
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
-              
-              // 【防無限迴圈機制】檢查 sessionStorage
-              if (sessionStorage.getItem('sharing_in_progress') === 'true') {
-                  sessionStorage.removeItem('sharing_in_progress');
-                  setShareStatusText('✅ 分享操作結束，視窗關閉中...');
-                  setTimeout(() => {
-                      if (liff.isInClient()) liff.closeWindow();
-                      else window.close();
-                  }, 500);
-                  return;
-              }
-
               const tourId = urlParams.get('tour_id');
               const rUid = urlParams.get('ref_uid');
               const optsParam = urlParams.get('opts') || '000000';
@@ -200,28 +189,28 @@
 
               try {
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-                setShareStatusText("正在喚起 LINE 通訊錄...");
-                
-                // 標記正在分享中，避免外部瀏覽器重新導向回來時無限迴圈
-                sessionStorage.setItem('sharing_in_progress', 'true');
 
-                // 呼叫官方安全 API，它會自動生成 Token 並跳轉，完全避開 400 Bad Request
-                await liff.shareTargetPicker([flexMsg]);
-                
-                // 若順利執行完畢沒有跳轉 (例如在 LINE App 內)
-                sessionStorage.removeItem('sharing_in_progress');
-                setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                setTimeout(() => {
-                    if (liff.isInClient()) liff.closeWindow();
-                    else window.close();
-                }, 1000);
+                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+                    // 手機端：正常彈出好友選擇
+                    await liff.shareTargetPicker([flexMsg]);
+                    setShareStatusText('✅ 成功發送名片！即將關閉視窗...');
+                    setTimeout(() => liff.closeWindow(), 1500);
+                } else {
+                    // 電腦端：呼叫您的推播 API，將名片發至操作者本人的聊天室
+                    setShareStatusText('PC版無法直接轉傳，正將名片推播至您的聊天室...');
+                    const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'pushFlexToUser', uid: liffProfile.userId, flexJson: flexMsg })
+                    });
+                    const data = await res.json();
+                    if (data.success) setShareStatusText('✅ 已推播至您的 LINE，請前往轉傳！');
+                    else setShareStatusText('⚠️ 推播發生錯誤。');
+                    
+                    setTimeout(() => { window.close(); liff.closeWindow(); }, 3000);
+                }
               } catch(e) { 
-                sessionStorage.removeItem('sharing_in_progress');
-                setShareStatusText('⚠️ 轉傳取消或無法開啟，即將返回...');
-                setTimeout(() => {
-                    if (liff.isInClient()) liff.closeWindow();
-                    else window.close();
-                }, 2000);
+                setShareStatusText('⚠️ 轉傳取消或發生錯誤。'); 
+                setTimeout(() => { window.close(); liff.closeWindow(); }, 2000);
               }
            }
         };
@@ -446,57 +435,42 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 完美版：PC + 手機通用，原地彈出獨立小視窗喚起通訊錄
+      // ★ 主動發送名片：採用 Push API 作為 PC 版的完美解法
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
 
-        try {
-          // 如果在手機版 LINE APP 內部，直接使用原生滿版喚起
-          if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-            const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
-            const res = await liff.shareTargetPicker([flexMsg]);
-            if (res) {
-              showToast('✅ 名片已成功發送！');
-              setFlexModalItem(null);
+        const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+
+        if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+            // 手機版 LINE APP 內部：直接使用原生滿版喚起
+            try {
+                const res = await liff.shareTargetPicker([flexMsg]);
+                if (res) {
+                    showToast('✅ 名片已成功發送！');
+                    setFlexModalItem(null);
+                }
+            } catch(e) {
+                showToast('已取消發送', 'error');
             }
-          } else {
-            // 在 PC 電腦版 / 外部瀏覽器：我們使用您傳授的「原地開啟獨立分享視窗」黑科技
-            const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
-            
-            // 呼叫我們自己系統的網址，並且加上 action=share
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('action', 'share');
-            currentUrl.searchParams.set('tour_id', flexModalItem.id);
-            currentUrl.searchParams.set('ref_uid', liffProfile.userId);
-            currentUrl.searchParams.set('opts', optsStr);
-
-            const w = 600, h = 700;
-            const left = Math.round((window.screen.width - w) / 2);
-            const top = Math.round((window.screen.height - h) / 2);
-
-            const popup = window.open(
-              currentUrl.toString(),
-              'line_share_picker',
-              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
-            );
-
-            if (!popup) {
-              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
-              return;
+        } else {
+            // 電腦版 / 外部瀏覽器：透過您的 Server Push API 發送給自己！
+            showToast('PC版不支援直接分享，正將名片推播至您的 LINE...', 'success');
+            try {
+                const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'pushFlexToUser', uid: liffProfile.userId, flexJson: flexMsg })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ 已成功推播！請打開 LINE 對名片按右鍵「轉傳」即可。');
+                    setFlexModalItem(null);
+                } else {
+                    throw new Error(data.error || '推播失敗');
+                }
+            } catch (error) {
+                showToast('發送失敗：' + error.message, 'error');
             }
-
-            // 監聽小視窗是否關閉
-            const timer = setInterval(() => {
-              if (popup.closed) {
-                clearInterval(timer);
-                showToast('✅ 名片發送操作完成！');
-                setFlexModalItem(null);
-              }
-            }, 600);
-          }
-        } catch (error) { 
-          showToast('發送失敗或已取消操作', 'error'); 
         }
       };
 
@@ -978,9 +952,9 @@
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【極速優化】：觸發 API URL 瞬間轉傳 (支援PC與手機) */}
+                      {/* 【終極完美版】PC + 手機通用分享按鈕 (使用 Server Push 推播) */}
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (支援 PC 版)
+                        <Share2 className="w-5 h-5 mr-2" /> 傳送推廣名片 (支援手機/PC版)
                       </button>
                     </div>
                   </div>
