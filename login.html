@@ -23,8 +23,8 @@
     .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
   </style>
 </head>
-<body class="bg-gray-100 font-sans text-gray-800 flex items-center justify-center min-h-screen p-4">
-  <div id="root" class="w-full max-w-md"></div>
+<body class="bg-gray-100 font-sans text-gray-800 flex items-center justify-center min-h-screen p-4 py-12">
+  <div id="root" class="w-full max-w-2xl"></div>
 
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
@@ -32,7 +32,7 @@
     // --- 系統變數 ---
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
-    const MAIN_APP_URL = 'index.html'; // 註冊完畢後導向的主程式網址
+    const MAIN_APP_URL = 'index.html'; 
 
     // 圖示元件
     const CheckCircle = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-16 h-16 text-green-500 mb-4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
@@ -40,15 +40,16 @@
     const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-orange-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
 
     function LoginApp() {
-      // 狀態管理: 'checking' | 'form' | 'submitting' | 'success' | 'error'
       const [step, setStep] = useState('checking'); 
       const [statusMsg, setStatusMsg] = useState('正在連接 LINE 授權服務...');
       const [error, setError] = useState(null);
-      const [applyType, setApplyType] = useState('user'); // 'user' 或 'distributor'
+      const [applyType, setApplyType] = useState('user'); 
       
-      // 用戶資料
       const [profile, setProfile] = useState(null);
-      const [formData, setFormData] = useState({ name: '', phone: '' });
+      // 擴充表單狀態
+      const [formData, setFormData] = useState({ 
+        name: '', phone: '', lineLink: '', lineAtLink: '', fbLink: '', webLink: '', mapLink: '' 
+      });
 
       useEffect(() => {
         initLogic();
@@ -56,61 +57,59 @@
 
       const initLogic = async () => {
         try {
-          // 1. 取得網址參數判斷類型
           const urlParams = new URLSearchParams(window.location.search);
           const type = urlParams.get('type') || 'user';
           setApplyType(type);
           
-          // 2. 初始化 LIFF
           await liff.init({ liffId: LIFF_ID });
 
-          // 3. 尚未登入則導向登入
           if (!liff.isLoggedIn()) {
             liff.login({ redirectUri: window.location.href });
             return; 
           }
 
-          // 4. 取得 LINE 資料
           setStatusMsg('授權成功！正在檢查會員狀態...');
           const userProfile = await liff.getProfile();
           setProfile(userProfile);
-          setFormData({ name: userProfile.displayName, phone: '' });
+          
+          // 預設帶入用戶 LINE 名字，並將個人 LINE 連結預設寫入
+          setFormData(prev => ({ 
+            ...prev, 
+            name: userProfile.displayName,
+            lineLink: `https://line.me/ti/p/~${userProfile.userId}` 
+          }));
 
-          // 5. 檢查是否已經註冊過
           const checkRes = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: type === 'distributor' ? 'getDistributors' : 'getUsers' })
           });
           const usersList = await checkRes.json();
-          
           const existingUser = usersList.find(u => u.uid === userProfile.userId);
 
           if (existingUser) {
-            // 已註冊過，直接跳轉
             setStep('success');
             setStatusMsg('歡迎回來！正在為您導向專屬頁面...');
-            setTimeout(() => {
-              window.location.href = `${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`;
-            }, 1000);
+            setTimeout(() => { window.location.href = `${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`; }, 1000);
           } else {
-            // 全新用戶，進入填寫表單階段
             setStep('form');
           }
 
         } catch (err) {
           console.error(err);
-          setStep('error');
-          setError('登入流程發生錯誤，請嘗試重新載入');
+          setStep('error'); setError('登入流程發生錯誤，請嘗試重新載入');
         }
       };
 
-      // 處理表單送出
       const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.name || !formData.phone) {
-          alert('請填寫完整資料以便後續聯繫');
-          return;
+          alert('請填寫必填資料以便後續聯繫'); return;
+        }
+
+        // 地址轉 Map 網址智慧處理
+        let finalMapLink = formData.mapLink.trim();
+        if (finalMapLink && !finalMapLink.startsWith('http')) {
+           finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
         }
 
         setStep('submitting');
@@ -118,64 +117,51 @@
 
         try {
           const actionType = applyType === 'distributor' ? 'registerDistributor' : 'registerUser';
-          
           const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               action: actionType, 
               uid: profile.userId, 
-              name: formData.name,      // 存入用戶填寫的真實姓名
-              phone: formData.phone,    // 存入用戶填寫的手機號碼
-              lineLink: `https://line.me/ti/p/~${profile.userId}` // 模擬的 LINE 連結
+              name: formData.name,      
+              phone: formData.phone,    
+              lineLink: formData.lineLink,
+              lineAtLink: formData.lineAtLink,
+              fbLink: formData.fbLink,
+              webLink: formData.webLink,
+              mapLink: finalMapLink
             })
           });
 
           const result = await res.json();
-
           if (result.success) {
             setStep('success');
             setStatusMsg('註冊成功！正在前往系統...');
-            setTimeout(() => {
-              window.location.href = `${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`;
-            }, 1500);
-          } else {
-            throw new Error(result.message || '資料寫入失敗');
-          }
+            setTimeout(() => { window.location.href = `${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`; }, 1500);
+          } else throw new Error(result.message || '資料寫入失敗');
         } catch(err) {
-          setStep('error');
-          setError('註冊失敗，請檢查網路連線或聯絡客服');
+          setStep('error'); setError('註冊失敗，請檢查網路連線或聯絡客服');
         }
       };
 
-      // === 畫面渲染區 ===
       return (
         <div className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl w-full border border-gray-100 animate-fade-in">
-          
-          {/* 狀態：載入中 / 寫入中 */}
           {(step === 'checking' || step === 'submitting') && (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <div className="relative mb-8 w-24 h-24 mx-auto">
                  <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div>
-                 <div className="relative bg-gradient-to-tr from-blue-600 to-blue-400 w-full h-full rounded-full flex items-center justify-center shadow-lg text-white font-bold text-2xl">
-                    Travel
-                 </div>
+                 <div className="relative bg-gradient-to-tr from-blue-600 to-blue-400 w-full h-full rounded-full flex items-center justify-center shadow-lg text-white font-bold text-2xl">Travel</div>
               </div>
               <h2 className="text-2xl font-bold text-gray-800 mb-4">系統安全驗證中</h2>
               <div className="flex flex-col items-center">
-                 <svg className="animate-spin-slow w-8 h-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                 </svg>
+                 <svg className="animate-spin-slow w-8 h-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                  <p className="text-gray-500 font-medium">{statusMsg}</p>
               </div>
             </div>
           )}
 
-          {/* 狀態：填寫註冊表單 */}
           {step === 'form' && profile && (
             <div className="animate-fade-in">
-              <div className="flex justify-center mb-6">
+              <div className="flex justify-center mb-4">
                  <div className={`p-4 rounded-2xl ${applyType === 'distributor' ? 'bg-emerald-50' : 'bg-orange-50'}`}>
                     {applyType === 'distributor' ? <Briefcase /> : <UserIcon />}
                  </div>
@@ -193,61 +179,69 @@
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">真實姓名 / 顯示名稱</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow bg-white text-lg"
-                    placeholder="請輸入您的姓名"
-                  />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 必填區塊 */}
+                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 flex items-center">
+                    <span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs mr-2">必填</span> 基本資訊
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">真實姓名 / 顯示名稱</label>
+                    <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="請輸入姓名"/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡手機</label>
+                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="例如：0912345678"/>
+                  </div>
+
+                  {/* 選填區塊 (產生名片用) */}
+                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center">
+                    <span className="bg-gray-300 text-white px-2 py-0.5 rounded text-xs mr-2">選填</span> 更多聯絡管道 (未來可自動放入推廣名片按鈕)
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">個人 LINE 網址</label>
+                    <input type="url" value={formData.lineLink} onChange={(e) => setFormData({...formData, lineLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://line.me/..."/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">官方 LINE@ 網址</label>
+                    <input type="url" value={formData.lineAtLink} onChange={(e) => setFormData({...formData, lineAtLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://lin.ee/..."/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">FB 粉絲專頁網址</label>
+                    <input type="url" value={formData.fbLink} onChange={(e) => setFormData({...formData, fbLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://facebook.com/..."/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">個人/公司網站網址</label>
+                    <input type="url" value={formData.webLink} onChange={(e) => setFormData({...formData, webLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://..."/>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">實體店面導航 (輸入完整地址或 Google Map 網址)</label>
+                    <input type="text" value={formData.mapLink} onChange={(e) => setFormData({...formData, mapLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="例如：台北市信義區信義路五段7號 (系統將自動轉為導航網址)"/>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">聯絡手機</label>
-                  <input 
-                    type="tel" 
-                    required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow bg-white text-lg"
-                    placeholder="例如：0912345678"
-                  />
-                </div>
-                <button 
-                  type="submit"
-                  className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg mt-4 text-white
-                    ${applyType === 'distributor' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}
-                >
-                  確認送出並開通
+
+                <button type="submit" className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg mt-6 text-white ${applyType === 'distributor' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
+                  確認資料並開通
                 </button>
               </form>
             </div>
           )}
 
-          {/* 狀態：成功 */}
           {step === 'success' && (
-            <div className="text-center py-10 animate-fade-in">
+            <div className="text-center py-12 animate-fade-in">
               <div className="flex justify-center"><CheckCircle /></div>
               <h2 className="text-2xl font-bold text-gray-800 mb-3">{statusMsg}</h2>
               <p className="text-gray-500">畫面即將自動跳轉...</p>
             </div>
           )}
 
-          {/* 狀態：錯誤 */}
           {step === 'error' && (
-            <div className="text-center py-10 animate-fade-in">
-              <div className="bg-red-50 text-red-600 p-6 rounded-2xl text-base font-bold border border-red-200 inline-block w-full">
-                ❌ {error}
-              </div>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="mt-6 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-700 transition"
-              >
-                重新整理頁面
-              </button>
+            <div className="text-center py-12 animate-fade-in">
+              <div className="bg-red-50 text-red-600 p-6 rounded-2xl text-base font-bold border border-red-200 inline-block w-full">❌ {error}</div>
+              <button onClick={() => window.location.reload()} className="mt-6 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-700 transition">重新整理頁面</button>
             </div>
           )}
 
