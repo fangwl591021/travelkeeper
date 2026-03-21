@@ -188,15 +188,16 @@
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
                 setShareStatusText("正在喚起 LINE 通訊錄...");
 
-                if (liff.isApiAvailable('shareTargetPicker')) {
+                // 手機版：直接使用原生滿版喚起
+                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
                     await liff.shareTargetPicker([flexMsg]);
                     setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                    setTimeout(() => {
-                        if (liff.isInClient()) liff.closeWindow();
-                        else window.close();
-                    }, 1000);
+                    setTimeout(() => liff.closeWindow(), 1500);
                 } else {
-                    setShareStatusText('⚠️ 請先至 LINE 後台開啟 Share Target Picker 權限');
+                    // 電腦版 / 外部瀏覽器：直接重導向至隱藏版 API
+                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
+                    window.location.replace(shareUrl);
                 }
               } catch(e) { 
                 setShareStatusText('⚠️ 轉傳取消或發生錯誤，即將返回...');
@@ -428,7 +429,7 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 終極分享機制：交給 LIFF SDK 在背後去抓 ott 換出通訊錄！
+      // ★ 終極分享機制：完美還原 PC + 手機通用邏輯 (window.open + encodeURI)
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
@@ -436,17 +437,40 @@
         try {
           const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
           
-          // 只要開發者有在 LINE 後台開啟 Share Target Picker
-          // 呼叫這行時，SDK 就會在電腦上自動跳出小視窗（它會自動帶入正確的 ott 鑰匙），在手機上則滿版彈出
-          if (liff.isApiAvailable('shareTargetPicker')) {
+          if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+            // 在手機版 LINE 內部，直接使用原生的體驗最順暢
             const res = await liff.shareTargetPicker([flexMsg]);
             if (res) {
               showToast('✅ 名片已成功發送！');
               setFlexModalItem(null);
             }
           } else {
-            // 如果沒開啟權限，給予明確提示
-            alert('⚠️ 發送失敗！\n\n這通常是因為您尚未在 LINE Developer 後台開啟「Share Target Picker」的權限，請先前往後台的 LIFF 頁籤中將其切換為 ON！');
+            // PC 版或外部瀏覽器：使用您實測成功的黑科技！
+            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
+
+            const w = 600, h = 700;
+            const left = Math.round((window.screen.width - w) / 2);
+            const top = Math.round((window.screen.height - h) / 2);
+
+            const popup = window.open(
+              shareUrl,
+              'line_share_picker',
+              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
+            );
+
+            if (!popup) {
+              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
+              return;
+            }
+
+            const timer = setInterval(() => {
+              if (popup.closed) {
+                clearInterval(timer);
+                showToast('✅ 名片已成功發送！');
+                setFlexModalItem(null);
+              }
+            }, 600);
           }
         } catch (error) { 
           console.error(error);
