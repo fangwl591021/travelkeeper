@@ -61,7 +61,7 @@
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         
-        // 【核心魔法】紅標籤專屬連結！點擊後自動開啟 LIFF 進行遞迴轉傳
+        // 遞迴呼叫自己的 LIFF 網址，並帶上參數。讓朋友點擊時也能觸發分享。
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
 
         const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
@@ -93,7 +93,7 @@
                   ]
                 },
                 { type: "box", layout: "vertical", position: "absolute", backgroundColor: "#FF0000", cornerRadius: "xl", paddingTop: "7px", paddingBottom: "7px", paddingStart: "20px", paddingEnd: "20px", offsetTop: "10px", offsetEnd: "10px",
-                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, // 觸發 LIFF 遞迴轉傳
+                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, // 點擊觸發遞迴分享
                   contents: [{ type: "text", text: "分享好友", color: "#ffffff", size: "12px", weight: "bold" }]
                 }
               ]
@@ -107,7 +107,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
-      const [shareError, setShareError] = useState(null);
+      const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
 
       const [refUid, setRefUid] = useState(() => {
         const urlRef = urlParams.get('ref_uid');
@@ -162,7 +162,7 @@
         fetchItineraries();
       }, []);
 
-      // ====== 遞迴轉傳核心機制：自動組裝名片並彈出通訊錄 ======
+      // ====== 遞迴分享：全自動處理邏輯 ======
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -179,7 +179,7 @@
                 targetDistData = crmDistributors.find(d => d.uid === rUid) || {};
               }
               
-              if (!tour) { setShareError('找不到該行程資訊'); return; }
+              if (!tour) { setShareStatusText('找不到該行程資訊'); return; }
 
               const cOptions = {
                  phone: optsParam[0] === '1', line: optsParam[1] === '1', lineAt: optsParam[2] === '1',
@@ -187,18 +187,19 @@
               };
 
               try {
-                // 將過長的 JSON 在內部記憶體組合，完美避開 URL 400 Bad Request 錯誤！
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-
-                if (liff.isApiAvailable('shareTargetPicker')) {
-                    await liff.shareTargetPicker([flexMsg]);
-                    showToast('✅ 成功轉傳名片！即將關閉視窗...');
+                setShareStatusText("準備發送訊息...");
+                
+                const res = await liff.shareTargetPicker([flexMsg]);
+                if (res) {
+                    setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
                     setTimeout(() => liff.closeWindow(), 1500);
                 } else {
-                    setShareError('⚠️ 轉傳失敗：您使用的瀏覽器環境不支援喚出通訊錄。請在 LINE 聊天室內直接點擊該連結。'); 
+                    liff.closeWindow();
                 }
               } catch(e) { 
-                setShareError('⚠️ 轉傳取消或發生預期外的錯誤。'); 
+                setShareStatusText('⚠️ 轉傳取消或無法開啟。');
+                setTimeout(() => liff.closeWindow(), 2000);
               }
            }
         };
@@ -423,13 +424,16 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 核心升級：PC + 手機通用，使用官方 LIFF 網址開啟並遞迴轉傳
+      // ★ 核心觸發：判斷環境呼叫 API 或新開視窗
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
+        
+        const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
+        const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${flexModalItem.id}&ref_uid=${liffProfile.userId}&opts=${optsStr}`;
 
-        // 在手機版 LINE APP 內，維持最順暢的原生呼叫體驗
-        if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+        // 判斷是否支援原生的 shareTargetPicker
+        if (liff.isApiAvailable('shareTargetPicker')) {
             try {
                 const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
                 const res = await liff.shareTargetPicker([flexMsg]);
@@ -438,13 +442,10 @@
                     setFlexModalItem(null);
                 }
             } catch(e) {
-                showToast('取消發送或發生錯誤', 'error');
+                showToast('取消發送', 'error');
             }
         } else {
-            // 在外部瀏覽器 (Chrome / 電腦版)，自動導向並新開 LIFF 專屬網址
-            const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
-            const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${flexModalItem.id}&ref_uid=${liffProfile.userId}&opts=${optsStr}`;
-            
+            // 在外部瀏覽器或不支援直接分享的環境：自動引導至 LIFF 網址進行二次轉換
             window.open(shareLiffUrl, '_blank');
             setFlexModalItem(null);
         }
@@ -456,13 +457,14 @@
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
+      // --- 全螢幕分享載入畫面 ---
       if (isAutoSharing) {
          return (
-           <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center animate-fade-in">
-              <RefreshCw className="w-16 h-16 text-[#00B900] animate-spin mb-6 shadow-sm rounded-full bg-white p-3" />
-              <h2 className="text-2xl font-extrabold text-gray-800 mb-3 tracking-wider">正在為您準備名片...</h2>
-              <p className="text-gray-500 font-medium">請稍候，即將喚起 LINE 通訊錄供您轉傳</p>
-              {shareError && <div className="mt-8 bg-red-50 text-red-600 p-4 rounded-xl border border-red-200 font-bold max-w-md w-full">{shareError}</div>}
+           <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center">
+              <div className="text-[#00B900] text-5xl mb-4 animate-bounce">
+                <Send className="w-12 h-12 inline-block" />
+              </div>
+              <p className="text-gray-500 font-bold text-sm tracking-widest">{shareStatusText}</p>
            </div>
          );
       }
@@ -518,12 +520,7 @@
                     <tbody className="divide-y divide-gray-100">
                       {referredUsers.length === 0 ? <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">該經銷商目前尚未帶來任何新註冊會員</td></tr> : 
                        referredUsers.map(u => (
-                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-4 text-sm text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td>
-                          <td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td>
-                          <td className="p-4 font-medium text-gray-600">{u.phone}</td>
-                          <td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td>
-                        </tr>
+                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors"><td className="p-4 text-sm text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td><td className="p-4 font-medium text-gray-600">{u.phone}</td><td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td></tr>
                       ))}
                     </tbody>
                  </table>
@@ -653,7 +650,7 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
                           <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
                             </div>
@@ -723,7 +720,7 @@
                         <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
                         <div>
                           <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>
-                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
+                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友 (支援 PC 版 LINE)！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
                         </div>
                       </div>
                       <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div>
@@ -736,7 +733,7 @@
                           {itineraries.map(item => (
                             <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                               <div className="h-56 overflow-hidden relative bg-gray-100">
-                                <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
+                                <img src={item.image} className="w-full h-full object-cover" />
                                 <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</div>
                               </div>
                               <div className="p-6 flex flex-col flex-grow">
@@ -879,7 +876,7 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
                       {itineraries.map(item => (
                         <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                          <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
+                          <div className="flex gap-5 mb-5"><img src={item.image} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
                           <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
                             <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
                             <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
@@ -932,9 +929,9 @@
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【修正】文字改回「一鍵發送名片給 LINE 好友 (喚出通訊錄)」 */}
+                      {/* 【極速優化】：觸發 API URL 瞬間轉傳 (支援PC與手機) */}
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (喚出通訊錄)
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (支援 PC 版)
                       </button>
                     </div>
                   </div>
