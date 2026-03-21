@@ -27,7 +27,6 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
-    // --- 圖示元件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -108,13 +107,41 @@
         };
     };
 
+    // ★ 核心解析器：自動將文案中的圖片 URL 轉換為唯美的全版圖片 ★
+    const renderBlogDescription = (text) => {
+      if (!text) return null;
+      return text.split('\n').map((line, idx) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return <div key={idx} className="h-6"></div>; // 空行轉為大間距
+
+        // 判斷是否為 Markdown 圖片 ![alt](url)
+        const mdMatch = trimmedLine.match(/^!\[(.*?)\]\((.*?)\)$/);
+        if (mdMatch) {
+            return <img key={idx} src={mdMatch[2]} alt={mdMatch[1]} className="w-full rounded-2xl my-8 shadow-md object-cover" />;
+        }
+
+        // 判斷是否為獨立的圖片網址 (以 http 開頭，並確保沒有多餘的文字)
+        if (trimmedLine.startsWith('http') && !trimmedLine.includes(' ')) {
+            const isImage = trimmedLine.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || 
+                            trimmedLine.includes('googleusercontent.com/d/') ||
+                            trimmedLine.includes('unsplash.com') ||
+                            trimmedLine.includes('pollinations.ai');
+            if (isImage) {
+                return <img key={idx} src={trimmedLine} className="w-full rounded-3xl my-10 shadow-xl object-cover border border-gray-100" />;
+            }
+        }
+
+        // 一般段落文字
+        return <p key={idx} className="mb-4 text-[1.1rem] leading-loose text-gray-700 tracking-wide">{trimmedLine}</p>;
+      });
+    };
+
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
       const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
 
-      // ★ 專屬網頁檢視狀態：只要網址有 t，預設就會載入專屬頁面
       const [selectedTourId, setSelectedTourId] = useState(() => {
         return urlParams.get('t') || urlParams.get('tour_id') || null;
       });
@@ -287,7 +314,7 @@
 
       const changeTab = (newTab) => {
         setActiveTab(newTab);
-        setSelectedTourId(null); // 切換 Tab 時清除專屬頁面狀態
+        setSelectedTourId(null); 
         window.history.replaceState({}, '', `?tab=${newTab}`);
         if (newTab === 'crm' || newTab === 'distributor') fetchFullCrmData();
       };
@@ -551,22 +578,22 @@
           </nav>
 
           <div className="flex-grow w-full">
-            {/* ====== 前台：找行程 ====== */}
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 
-                {/* ★ 專屬網頁 (Blog Detail View) ★ */}
+                {/* ★ 升級版專屬網頁 (Blog Detail View) - 解放版面與支援圖片渲染 ★ */}
                 {selectedTourId ? (() => {
                   const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
                   if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={() => {setSelectedTourId(null); window.history.pushState({}, '', '?tab=home');}} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
                   
                   return (
-                    <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 animate-fade-in">
+                    <div className="w-full max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 animate-fade-in">
                       <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="mb-6 flex items-center text-gray-500 hover:text-blue-600 font-bold transition group">
                         <ArrowLeft className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform" /> 返回所有行程
                       </button>
                       
                       <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
+                        {/* 滿版超大主圖，沒有邊界 */}
                         <div className="h-[400px] md:h-[500px] lg:h-[600px] relative bg-gray-100">
                           <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
                           <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-5 py-2 rounded-xl text-lg font-bold shadow-lg tracking-wider">
@@ -574,7 +601,7 @@
                           </div>
                         </div>
                         
-                        <div className="p-8 md:p-12 lg:p-16">
+                        <div className="p-6 md:p-10 lg:p-16">
                           <div className="flex flex-col lg:flex-row justify-between lg:items-end border-b border-gray-100 pb-8 mb-10 gap-6">
                             <div className="flex-1">
                               <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-6 leading-tight">{tour.title}</h1>
@@ -592,12 +619,13 @@
                             </div>
                           </div>
                           
-                          <div className="prose max-w-none mb-12">
-                            <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                              <FileText className="w-8 h-8 mr-3 text-blue-500" /> 詳細行程介紹
+                          {/* ★ 解放版面的部落格內文區：無灰色包框、自動解析圖片、超大行距與字體 ★ */}
+                          <div className="max-w-4xl mx-auto mb-16">
+                            <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-8 flex items-center border-b-2 border-blue-500 pb-4 inline-flex">
+                              <Sparkles className="w-8 h-8 mr-3 text-blue-500" /> 行程亮點與詳細介紹
                             </h3>
-                            <div className="text-gray-700 text-lg leading-loose whitespace-pre-wrap bg-gray-50 p-8 rounded-3xl border border-gray-100 font-medium">
-                              {tour.description}
+                            <div className="text-gray-800 text-[1.1rem] leading-relaxed font-medium tracking-wide">
+                              {renderBlogDescription(tour.description)}
                             </div>
                           </div>
                           
@@ -885,7 +913,7 @@
                             </div>
                           </div>
                         </div>
-                        <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案 (支援多段落長文，將完整展示於專屬頁面)</label><textarea rows={15} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed" placeholder="請輸入詳細行程內容... 支援換行與多段落撰寫。這段文字將完整呈現於該行程的專屬部落格頁面中。"/></div>
+                        <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案 (支援自動呈現圖片，無邊框純淨排版)</label><textarea rows={15} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed" placeholder="請輸入詳細行程內容... 支援換行與多段落撰寫。若要插入圖片，請在新的一行直接貼上圖片網址（例如 Google Drive 網址），前台將自動轉為滿版圖片！"/></div>
                       </div>
                     )}
                   </div>
