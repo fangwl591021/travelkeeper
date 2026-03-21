@@ -424,30 +424,52 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 核心觸發：判斷環境呼叫 API 或新開視窗
+      // ★ 核心升級：PC + 手機通用，原地彈出獨立小視窗喚起通訊錄
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
-        
-        const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
-        const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${flexModalItem.id}&ref_uid=${liffProfile.userId}&opts=${optsStr}`;
 
-        // 判斷是否支援原生的 shareTargetPicker
-        if (liff.isApiAvailable('shareTargetPicker')) {
-            try {
-                const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
-                const res = await liff.shareTargetPicker([flexMsg]);
-                if (res) {
-                    showToast('✅ 名片已成功發送！');
-                    setFlexModalItem(null);
-                }
-            } catch(e) {
-                showToast('取消發送', 'error');
+        try {
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+          
+          if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+            // 手機版 LINE APP 內部，直接使用原生滿版喚起
+            const res = await liff.shareTargetPicker([flexMsg]);
+            if (res) {
+              showToast('✅ 名片已成功發送！');
+              setFlexModalItem(null);
             }
-        } else {
-            // 在外部瀏覽器或不支援直接分享的環境：自動引導至 LIFF 網址進行二次轉換
-            window.open(shareLiffUrl, '_blank');
-            setFlexModalItem(null);
+          } else {
+            // PC 電腦版 / 外部瀏覽器：原地彈出獨立小視窗 (600x700)
+            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
+
+            const w = 600, h = 700;
+            const left = Math.round((window.screen.width - w) / 2);
+            const top = Math.round((window.screen.height - h) / 2);
+
+            const popup = window.open(
+              shareUrl,
+              'line_share_picker',
+              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
+            );
+
+            if (!popup) {
+              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
+              return;
+            }
+
+            // 監聽小視窗是否關閉，關閉代表發送完成或取消
+            const timer = setInterval(() => {
+              if (popup.closed) {
+                clearInterval(timer);
+                showToast('✅ 名片發送操作完成！');
+                setFlexModalItem(null);
+              }
+            }, 600);
+          }
+        } catch (error) { 
+          showToast('發送失敗或已取消操作', 'error'); 
         }
       };
 
