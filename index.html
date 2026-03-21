@@ -244,7 +244,6 @@
         } catch (e) { console.error('Status check error', e); } finally { setIsStatusChecked(true); }
       };
 
-      // 修正：徹底解壓縮 JSON 解析，防止 Stream already read 錯誤導致讀不到經銷商資料
       const fetchFullCrmData = async () => {
         try {
           const currentTimestamp = new Date().getTime();
@@ -434,6 +433,16 @@
          );
       }
 
+      // --- 內部元件：拒絕存取畫面 ---
+      const AdminDeniedScreen = () => (
+        <div className="w-full max-w-3xl mx-auto px-4 py-32 animate-fade-in text-center">
+          <AlertCircle className="w-24 h-24 text-red-500 mx-auto mb-6" />
+          <h2 className="text-4xl font-bold text-gray-800 mb-4">權限不足 (Access Denied)</h2>
+          <p className="text-gray-500 text-xl mb-10">此區塊為最高權限管理員專屬，您的帳號無權限訪問。</p>
+        </div>
+      );
+
+      // --- 內部元件：CRM經銷商編輯畫面 ---
       const CrmDistributorEditView = () => {
         const referredUsers = crmUsers.filter(u => u.referredBy === editFormData.uid);
         return (
@@ -805,85 +814,6 @@
               ) : <AdminDeniedScreen />
             )}
           </div>
-
-          {/* ====== 獨立元件：Flex Message 設定與產生 Modal ====== */}
-          {flexModalItem && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
-                <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
-                
-                <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
-                  <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
-                  <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
-                  
-                  <div className="space-y-6">
-                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-                      <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
-                      <div className="grid grid-cols-2 gap-3">
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
-                      </div>
-                      <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
-                    </div>
-                    
-                    <div className="pt-4">
-                      <button onClick={() => triggerFlexSharing()} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg"><Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
-                   <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
-                   
-                   <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
-                     <div className="relative">
-                        <div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div>
-                        <div className="p-4 flex flex-col items-center text-center">
-                          <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
-                          <p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p>
-                          <div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div>
-                        </div>
-                     </div>
-                     <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div>
-                        <div className="w-full bg-[#ff334b] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
-                        {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
-                        {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
-                        {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
-                        {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
-                        {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
-                        {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
-                     </div>
-                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 刪除確認 Modal */}
-          {deleteModalId && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
-                <div className="flex items-center text-red-600 mb-5"><AlertCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-bold">確認下架此行程？</h3></div>
-                <p className="text-gray-600 mb-8 text-lg leading-relaxed">下架後該行程將從前台及資料庫移除，確定要繼續嗎？</p>
-                <div className="flex justify-end space-x-4">
-                  <button onClick={() => setDeleteModalId(null)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-lg">取消</button>
-                  <button onClick={confirmDelete} className="px-6 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 text-lg">確定下架</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Toast Notification */}
-          {toast && (
-            <div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up">
-              <div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div>
-            </div>
-          )}
         </div>
       );
     }
