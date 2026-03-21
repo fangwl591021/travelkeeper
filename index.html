@@ -60,6 +60,8 @@
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
+        
+        // 【核心魔法】紅標籤專屬連結！點擊後自動開啟 LIFF 進行遞迴轉傳
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
 
         const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
@@ -91,7 +93,7 @@
                   ]
                 },
                 { type: "box", layout: "vertical", position: "absolute", backgroundColor: "#FF0000", cornerRadius: "xl", paddingTop: "7px", paddingBottom: "7px", paddingStart: "20px", paddingEnd: "20px", offsetTop: "10px", offsetEnd: "10px",
-                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, 
+                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, // 觸發 LIFF 遞迴轉傳
                   contents: [{ type: "text", text: "分享好友", color: "#ffffff", size: "12px", weight: "bold" }]
                 }
               ]
@@ -160,7 +162,7 @@
         fetchItineraries();
       }, []);
 
-      // ====== 遞迴轉傳：紅標籤「分享好友」觸發 ======
+      // ====== 遞迴轉傳核心機制：自動組裝名片並彈出通訊錄 ======
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -169,7 +171,13 @@
               const optsParam = urlParams.get('opts') || '000000';
               
               const tour = itineraries.find(i => String(i.id) === String(tourId));
-              const distData = myDistributorData || {}; 
+              
+              let targetDistData = {};
+              if (rUid === liffProfile.userId) {
+                targetDistData = myDistributorData || {};
+              } else {
+                targetDistData = crmDistributors.find(d => d.uid === rUid) || {};
+              }
               
               if (!tour) { setShareError('找不到該行程資訊'); return; }
 
@@ -179,26 +187,28 @@
               };
 
               try {
-                const flexMsg = buildFlexMessage(tour, distData, rUid, cOptions);
+                // 將過長的 JSON 在內部記憶體組合，完美避開 URL 400 Bad Request 錯誤！
+                const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
 
-                // 如果是在 LINE APP 內 (手機版)，直接呼叫原生方法
-                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
+                if (liff.isApiAvailable('shareTargetPicker')) {
                     await liff.shareTargetPicker([flexMsg]);
                     showToast('✅ 成功轉傳名片！即將關閉視窗...');
                     setTimeout(() => liff.closeWindow(), 1500);
                 } else {
-                    // 外部瀏覽器：使用隱藏 API 重新導向
-                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-                    window.location.replace(shareUrl);
+                    setShareError('⚠️ 轉傳失敗：您使用的瀏覽器環境不支援喚出通訊錄。請在 LINE 聊天室內直接點擊該連結。'); 
                 }
               } catch(e) { 
-                setShareError('⚠️ 轉傳發生錯誤或您取消了操作。'); 
+                setShareError('⚠️ 轉傳取消或發生預期外的錯誤。'); 
               }
            }
         };
-        processAutoShare();
-      }, [isLiffReady, itineraries, isStatusChecked]);
+
+        if (crmDistributors.length > 0) {
+            processAutoShare();
+        } else if (isAutoSharing && isLiffReady && isStatusChecked) {
+            fetchFullCrmData(); 
+        }
+      }, [isLiffReady, itineraries, isStatusChecked, crmDistributors, isAutoSharing]);
 
       const initLiff = async () => {
         try {
@@ -261,7 +271,7 @@
       const changeTab = (newTab) => {
         setActiveTab(newTab);
         window.history.replaceState({}, '', `?tab=${newTab}`);
-        if (newTab === 'crm') fetchFullCrmData();
+        if (newTab === 'crm' || newTab === 'distributor') fetchFullCrmData();
       };
 
       const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
@@ -413,22 +423,15 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 核心升級：經銷商點擊發送按鈕
-      //   原理：window.open() 開 LINE 官方 OAuth 端點
+      // ★ 核心升級：PC + 手機通用，使用官方 LIFF 網址開啟並遞迴轉傳
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
 
-        const flexMsg = buildFlexMessage(
-          flexModalItem,
-          myDistributorData || {},
-          liffProfile.userId,
-          cardOptions
-        );
-
-        // 如果在手機版 LINE APP 中，優先使用原生的體驗最順暢
+        // 在手機版 LINE APP 內，維持最順暢的原生呼叫體驗
         if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
             try {
+                const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
                 const res = await liff.shareTargetPicker([flexMsg]);
                 if (res) {
                     showToast('✅ 名片已成功發送！');
@@ -438,32 +441,12 @@
                 showToast('取消發送或發生錯誤', 'error');
             }
         } else {
-            // 外部瀏覽器 / 電腦版：使用您的黑科技彈出視窗
-            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-
-            const w = 600, h = 700;
-            const left = Math.round((window.screen.width  - w) / 2);
-            const top  = Math.round((window.screen.height - h) / 2);
-
-            const popup = window.open(
-              shareUrl,
-              'line_share_picker',
-              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
-            );
-
-            if (!popup) {
-              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
-              return;
-            }
-
-            const timer = setInterval(() => {
-              if (popup.closed) {
-                clearInterval(timer);
-                showToast('✅ 名片已成功發送！');
-                setFlexModalItem(null);
-              }
-            }, 600);
+            // 在外部瀏覽器 (Chrome / 電腦版)，自動導向並新開 LIFF 專屬網址
+            const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
+            const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${flexModalItem.id}&ref_uid=${liffProfile.userId}&opts=${optsStr}`;
+            
+            window.open(shareLiffUrl, '_blank');
+            setFlexModalItem(null);
         }
       };
 
@@ -740,7 +723,7 @@
                         <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
                         <div>
                           <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>
-                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友 (支援 PC 版 LINE)！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
+                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
                         </div>
                       </div>
                       <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div>
@@ -949,9 +932,9 @@
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【核心修復】PC + 手機完美相容的分享按鈕 */}
+                      {/* 【修正】文字改回「一鍵發送名片給 LINE 好友 (喚出通訊錄)」 */}
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (喚出通訊錄)
                       </button>
                     </div>
                   </div>
