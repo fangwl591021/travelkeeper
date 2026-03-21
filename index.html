@@ -56,16 +56,13 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LOGIN_URL = 'login.html'; 
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
+
     const HOT_SPOTS = ['國旅', '亞洲', '歐洲', '美洲', '大洋洲', '非洲'];
 
     // 【核心邏輯】獨立抽出的 Flex Message 產生器
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
-        
-        // 將勾選狀態轉換為二進位字串 (例如: 110011)，傳遞給接收端
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
-        
-        // 【核心魔法】紅標籤專屬連結！點擊後自動開啟 LIFF 進行轉傳
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
 
         const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
@@ -97,7 +94,7 @@
                   ]
                 },
                 { type: "box", layout: "vertical", position: "absolute", backgroundColor: "#FF0000", cornerRadius: "xl", paddingTop: "7px", paddingBottom: "7px", paddingStart: "20px", paddingEnd: "20px", offsetTop: "10px", offsetEnd: "10px",
-                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, // MAGIC LINK: 綁定觸發 LIFF
+                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, 
                   contents: [{ type: "text", text: "分享好友", color: "#ffffff", size: "12px", weight: "bold" }]
                 }
               ]
@@ -108,7 +105,6 @@
     };
 
     function App() {
-      // 解析網址參數
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
@@ -131,6 +127,10 @@
       const [distributorStatus, setDistributorStatus] = useState(null); 
       const [isGeneralMember, setIsGeneralMember] = useState(false);
       const [isAdmin, setIsAdmin] = useState(false);
+
+      // 【效能優化】將當前經銷商的專屬資料拉出為獨立狀態
+      const [myDistributorData, setMyDistributorData] = useState(null);
+      const [isStatusChecked, setIsStatusChecked] = useState(false);
 
       const [crmDistributors, setCrmDistributors] = useState([]);
       const [crmUsers, setCrmUsers] = useState([]);
@@ -159,21 +159,21 @@
 
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
 
-      // --- 初始化與自動轉傳邏輯 ---
       useEffect(() => {
         initLiff();
         fetchItineraries();
       }, []);
 
+      // --- LIFF 遞迴轉傳機制 ---
       useEffect(() => {
         const processAutoShare = async () => {
-           if (isAutoSharing && isLiffReady && itineraries.length > 0 && crmDistributors.length > 0) {
+           if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
               const tourId = urlParams.get('tour_id');
               const rUid = urlParams.get('ref_uid');
               const optsParam = urlParams.get('opts') || '000000';
               
               const tour = itineraries.find(i => String(i.id) === String(tourId));
-              const dist = crmDistributors.find(d => d.uid === rUid) || {};
+              const distData = myDistributorData || {}; // 不論是不是經銷商，都能發出名片給朋友
               
               if (!tour) { setShareError('找不到該行程資訊'); return; }
 
@@ -184,19 +184,20 @@
 
               if (liff.isApiAvailable('shareTargetPicker')) {
                  try {
-                   const flexMsg = buildFlexMessage(tour, dist, rUid, cOptions);
+                   const flexMsg = buildFlexMessage(tour, distData, rUid, cOptions);
                    const res = await liff.shareTargetPicker([flexMsg]);
                    if (res) showToast('✅ 成功轉傳名片！即將關閉視窗...');
-                 } catch(e) { setShareError('轉傳失敗: 您可能取消了操作，或授權未通過。'); }
+                 } catch(e) { setShareError('轉傳失敗: 您可能取消了操作，或設備不支援。'); }
                  setTimeout(() => liff.closeWindow(), 1500);
               } else {
-                 setShareError('電腦版 LINE 不支援直接轉傳名片，請使用「手機版 LINE」點擊名片上的標籤喔！');
+                 setShareError('此環境不支援打開通訊錄，請確保您是在 LINE 軟體內開啟！');
               }
            }
         };
         processAutoShare();
-      }, [isLiffReady, itineraries, crmDistributors, isAutoSharing]);
+      }, [isLiffReady, itineraries, isStatusChecked]);
 
+      // --- 瞬間登入與輕量化權限檢查 ---
       const initLiff = async () => {
         try {
           await liff.init({ liffId: LIFF_ID });
@@ -206,32 +207,45 @@
             liff.login({ redirectUri: window.location.href });
           } else {
             const profile = await liff.getProfile();
-            setLiffProfile(profile);
-            fetchCrmDataAndCheckStatus(profile);
+            setLiffProfile(profile); // 【效能優化】這裡會瞬間把大頭貼渲染出來！
+            checkMyStatus(profile.userId);
           }
         } catch (err) { console.error('LIFF 初始化失敗', err); }
       };
 
-      const fetchCrmDataAndCheckStatus = async (currentProfile) => {
+      // 專屬極速權限檢查 API
+      const checkMyStatus = async (uid) => {
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ action: 'checkUserStatus', uid: uid }) 
+          });
+          const data = await res.json();
+          if (data.success) {
+             const info = data.data;
+             if (info.isAdmin) setIsAdmin(true);
+             if (info.role === 'distributor') {
+               setDistributorStatus(info.status ? info.status.toString().trim().toLowerCase() : 'pending');
+               setMyDistributorData(info.distributorData);
+             } else if (info.role === 'user') {
+               setIsGeneralMember(true);
+             }
+          }
+        } catch (e) { console.error('Status check error', e); }
+        finally { setIsStatusChecked(true); }
+      };
+
+      // 只有在進入 CRM 頁面時，才去下載龐大的資料庫清單
+      const fetchFullCrmData = async () => {
         try {
           const currentTimestamp = new Date().getTime();
           const resD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors', timestamp: currentTimestamp }) });
           const dataD = await resD.json();
-          const distArr = Array.isArray(dataD) ? dataD : [];
-          setCrmDistributors(distArr);
+          setCrmDistributors(Array.isArray(dataD) ? dataD : []);
           
           const resU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers', timestamp: currentTimestamp }) });
           const dataU = await resU.json();
-          const userArr = Array.isArray(dataU) ? dataU : [];
-          setCrmUsers(userArr);
-
-          if (currentProfile) {
-            if (currentProfile.userId === ADMIN_UID) setIsAdmin(true);
-            const meDist = distArr.find(d => d.uid === currentProfile.userId);
-            if (meDist) setDistributorStatus(meDist.status ? meDist.status.toString().trim().toLowerCase() : 'pending');
-            const meUser = userArr.find(u => u.uid === currentProfile.userId);
-            if (meUser) setIsGeneralMember(true);
-          }
+          setCrmUsers(Array.isArray(dataU) ? dataU : []);
         } catch (e) { console.error('CRM Fetch error', e); }
       };
 
@@ -247,7 +261,7 @@
       const changeTab = (newTab) => {
         setActiveTab(newTab);
         window.history.replaceState({}, '', `?tab=${newTab}`);
-        if (newTab === 'crm' || newTab === 'distributor') fetchCrmDataAndCheckStatus(liffProfile);
+        if (newTab === 'crm') fetchFullCrmData();
       };
 
       const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
@@ -360,7 +374,7 @@
           if ((await res.json()).success) { 
              showToast('✅ 經銷商資料與狀態已更新！'); 
              setEditingDistributor(null);
-             fetchCrmDataAndCheckStatus(liffProfile); 
+             fetchFullCrmData(); 
           } else throw new Error('儲存失敗');
         } catch (e) { showToast('更新失敗，請檢查資料', 'error'); }
       };
@@ -374,37 +388,24 @@
           });
           if ((await res.json()).success) { 
              showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); 
-             setApproveModalUser(null); fetchCrmDataAndCheckStatus(liffProfile); 
+             setApproveModalUser(null); fetchFullCrmData(); 
           }
         } catch (e) { showToast('審核失敗', 'error'); }
       };
 
-      const getCurrentUserData = () => { if (!liffProfile) return {}; return crmDistributors.find(d => d.uid === liffProfile.userId) || {}; };
-
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
-      // 【核心升級】發送名片：手機版喚出通訊錄 / PC版推播回官方帳號
+      // 【核心升級】僅打開通訊錄
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
         try {
-          const flexMsg = buildFlexMessage(flexModalItem, getCurrentUserData(), liffProfile.userId, cardOptions);
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
           
           if (liff.isApiAvailable('shareTargetPicker')) {
-            // 手機版：直接喚出通訊錄
             const result = await liff.shareTargetPicker([flexMsg]);
             if (result) { showToast('✅ 成功發送專屬推廣名片！'); setFlexModalItem(null); }
           } else {
-            // PC版：推播給自己
-            showToast('PC版不支援直接轉傳，系統正將名片推播至您的 LINE 聊天室...', 'success');
-            const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'pushFlexToUser', uid: liffProfile.userId, flexJson: flexMsg })
-            });
-            const data = await res.json();
-            if (data.success) {
-               showToast('✅ 已成功推播至您的對話框！請打開 LINE 對名片按右鍵「轉傳」給好友。');
-               setFlexModalItem(null);
-            } else throw new Error(data.error);
+            showToast('⚠️ 請在手機版 LINE 或電腦版 LINE 內部點擊網址，才能成功喚出通訊錄！', 'error');
           }
         } catch (error) { showToast('發送失敗：' + error.message, 'error'); }
       };
@@ -415,7 +416,6 @@
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
-      // 如果正在自動轉傳名片中，顯示全螢幕 Loading 畫面
       if (isAutoSharing) {
          return (
            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center animate-fade-in">
@@ -537,7 +537,6 @@
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
-                  {/* 【修復】移除圖片的 onError，讓資料庫的正確圖片網址忠實呈現 */}
                   <img src={bannerImage} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center">
@@ -594,8 +593,7 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
                           <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            {/* 【修復】拔除圖片 onError 替換機制 */}
-                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="沒有提供照片" />
+                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
                                {item.startDate && <span className="bg-white/90 backdrop-blur-md text-blue-800 px-3 py-1 rounded-lg text-xs font-bold shadow-sm w-fit border border-white/50">{item.startDate.replace(/-/g, '/')} 出發</span>}
@@ -679,8 +677,8 @@
                           {itineraries.map(item => (
                             <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                               <div className="h-56 overflow-hidden relative bg-gray-100">
-                                <img src={item.image} className="w-full h-full object-cover" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'}} />
-                                <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {getCurrentUserData().commission || 10}%</div>
+                                <img src={item.image} className="w-full h-full object-cover" />
+                                <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</div>
                               </div>
                               <div className="p-6 flex flex-col flex-grow">
                                 <h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4>
@@ -732,7 +730,7 @@
                                       <div><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span><span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span></div>
                                     ) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}
                                   </td>
-                                  <td className="p-4 text-right"><p className="font-bold text-gray-800 text-lg">{user.sales} 筆</p><p className="text-xs text-gray-500 font-medium">${Number(user.revenue).toLocaleString()}</p></td>
+                                  <td className="p-4 text-right"><p className="font-bold text-gray-800 text-lg">{user.sales || 0} 筆</p><p className="text-xs text-gray-500 font-medium">${Number(user.revenue || 0).toLocaleString()}</p></td>
                                   <td className="p-4 text-center">
                                     <button onClick={() => { setEditingDistributor(user); setEditFormData(user); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition">編輯 / 審核</button>
                                   </td>
@@ -850,33 +848,35 @@
                   <div className="space-y-6">
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
                       <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
+                      
+                      {/* 【防呆機制】如果使用者還沒填寫該聯絡方式，按鈕會反灰不可勾選 */}
                       <div className="grid grid-cols-2 gap-3">
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航
                          </label>
                       </div>
                       <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【核心修復】PC/手機通用按鈕 */}
-                      <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片至 LINE (支援 PC 版)
+                      {/* 【按鈕升級】移除了 PC 備註，一律使用通訊錄轉傳 */}
+                      <button onClick={shareFlexMessage} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
                       </button>
                     </div>
                   </div>
@@ -889,7 +889,7 @@
                    <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
                      <div className="relative">
                         <div className="relative h-40">
-                          <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
+                          <img src={flexModalItem.image} className="w-full h-full object-cover" />
                         </div>
                         <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
                           分享好友
@@ -907,7 +907,6 @@
                      </div>
                      <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
                         <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
-                        
                         {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                         {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                         {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
