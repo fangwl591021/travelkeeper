@@ -38,6 +38,7 @@
     const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
     const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
     const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
+    const Send = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
     const Sparkles = ({ className }) => <IconWrapper className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconWrapper>;
     const CheckCircle = ({ className }) => <IconWrapper className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
     const AlertCircle = ({ className }) => <IconWrapper className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
@@ -76,7 +77,7 @@
       const [crmDistributors, setCrmDistributors] = useState([]);
       const [crmUsers, setCrmUsers] = useState([]);
 
-      // 前台進階搜尋 (新增區間與關鍵字)
+      // 前台進階搜尋
       const [searchRegion, setSearchRegion] = useState('');
       const [searchStartDate, setSearchStartDate] = useState('');
       const [searchEndDate, setSearchEndDate] = useState('');
@@ -85,7 +86,7 @@
       
       const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
 
-      // 後台上稿 (新增起訖時間)
+      // 後台上稿
       const [uploadMode, setUploadMode] = useState('dm');
       const [ocrStatus, setOcrStatus] = useState('idle');
       const [draftData, setDraftData] = useState({ 
@@ -94,6 +95,10 @@
       
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
+
+      // 【新增】核准設定視窗的狀態
+      const [approveModalUser, setApproveModalUser] = useState(null);
+      const [approveData, setApproveData] = useState({ commission: 10, note: '' });
 
       const [cardOptions, setCardOptions] = useState({
         phone: false, line: false, lineAt: false, fb: false, web: false, map: false
@@ -169,7 +174,6 @@
       const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor`; };
       const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user`; };
 
-      // --- 進階搜尋邏輯 ---
       const handleSearch = () => {
         let results = itineraries;
         if (searchRegion) {
@@ -270,10 +274,25 @@
         } catch (error) { showToast('下架發生錯誤', 'error'); }
       };
 
-      const handleApproveUser = async (uid) => {
+      // 【新增】送出審核設定
+      const handleApproveSubmit = async () => {
+        if (!approveModalUser) return;
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorStatus', uid: uid, status: 'approved' }) });
-          if ((await res.json()).success) { showToast('已核准該經銷商資格！'); fetchCrmDataAndCheckStatus(liffProfile); }
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+              action: 'updateDistributorStatus', 
+              uid: approveModalUser.uid, 
+              status: 'approved',
+              commission: approveData.commission,
+              note: approveData.note
+            }) 
+          });
+          if ((await res.json()).success) { 
+             showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); 
+             setApproveModalUser(null);
+             fetchCrmDataAndCheckStatus(liffProfile); 
+          }
         } catch (e) { showToast('審核失敗', 'error'); }
       };
 
@@ -332,6 +351,9 @@
         } catch (error) { showToast('發送失敗：請在 LINE APP 內操作', 'error'); }
       };
 
+      // 取得經銷商當前的分潤比例 (預設10%)
+      const myCommissionRate = getCurrentUserData().commission || 10;
+
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
           <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -353,7 +375,7 @@
           </nav>
 
           <div className="flex-grow w-full">
-            {/* ====== 前台：找行程 (加入出發區間與關鍵字搜尋) ====== */}
+            {/* ====== 前台：找行程 ====== */}
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
@@ -368,7 +390,6 @@
                 <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
                   <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 md:py-6">
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
-                      {/* 地區 */}
                       <div className="w-full">
                         <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">前往地區</label>
                         <div className="relative">
@@ -378,8 +399,6 @@
                           </select>
                         </div>
                       </div>
-                      
-                      {/* 出發區間 */}
                       <div className="w-full">
                         <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">出發區間</label>
                         <div className="relative flex items-center bg-gray-50 rounded-xl border border-gray-300 hover:bg-white transition-colors focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
@@ -389,8 +408,6 @@
                           <input type="date" value={searchEndDate} onChange={e => setSearchEndDate(e.target.value)} className="px-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" />
                         </div>
                       </div>
-
-                      {/* 關鍵字 */}
                       <div className="w-full">
                         <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">關鍵字搜尋</label>
                         <div className="relative">
@@ -398,8 +415,6 @@
                           <input type="text" value={searchKeyword} onChange={e => setSearchKeyword(e.target.value)} placeholder="請輸入行程名稱或關鍵字..." className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors font-medium" />
                         </div>
                       </div>
-
-                      {/* 搜尋按鈕 */}
                       <div className="w-full">
                         <button onClick={handleSearch} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-md flex items-center justify-center text-lg"><Search className="w-5 h-5 mr-2" /> 搜尋行程</button>
                       </div>
@@ -494,7 +509,7 @@
                             <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                               <div className="h-56 overflow-hidden relative bg-gray-100">
                                 <img src={item.image} className="w-full h-full object-cover" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'}} />
-                                <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 10%</div>
+                                <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {myCommissionRate}%</div>
                               </div>
                               <div className="p-6 flex flex-col flex-grow">
                                 <h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4>
@@ -535,11 +550,24 @@
                            crmDistributors.map(user => (
                             <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
                               <td className="p-4 text-sm text-gray-500">{user.joinDate}</td>
-                              <td className="p-4"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p><div className="flex gap-2 mt-2">{user.lineLink && <a href={user.lineLink} target="_blank" className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold hover:bg-blue-200">LINE</a>}{user.fbLink && <a href={user.fbLink} target="_blank" className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold hover:bg-blue-200">FB</a>}</div></td>
+                              <td className="p-4"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td>
                               <td className="p-4"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td>
-                              <td className="p-4">{user.status === 'approved' ? <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span> : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}</td>
+                              <td className="p-4">
+                                {user.status === 'approved' ? (
+                                  <div>
+                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span>
+                                    <span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span>
+                                  </div>
+                                ) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}
+                              </td>
                               <td className="p-4 text-right"><p className="font-bold text-gray-800 text-lg">{user.sales} 筆</p><p className="text-xs text-gray-500 font-medium">${Number(user.revenue).toLocaleString()}</p></td>
-                              <td className="p-4 text-center">{user.status === 'pending' ? <button onClick={() => handleApproveUser(user.uid)} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm">核准開通</button> : <button className="border border-gray-300 text-gray-600 text-sm font-bold px-4 py-2 rounded-lg">停權</button>}</td>
+                              <td className="p-4 text-center">
+                                {user.status === 'pending' ? (
+                                  <button onClick={() => { setApproveModalUser(user); setApproveData({ commission: 10, note: '' }); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm">審核開通</button>
+                                ) : (
+                                  <button className="border border-gray-300 text-gray-600 text-sm font-bold px-4 py-2 rounded-lg">停權</button>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -564,7 +592,7 @@
               </div>
             )}
 
-            {/* ====== 模組 E：後台上稿系統 (新增日期欄位) ====== */}
+            {/* ====== 模組 E：後台上稿系統 ====== */}
             {activeTab === 'admin' && (
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
                 <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
@@ -624,6 +652,36 @@
             )}
           </div>
 
+          {/* ====== 獨立元件：核准設定 Modal ====== */}
+          {approveModalUser && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
+                <div className="flex items-center text-purple-600 mb-5"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-bold text-gray-800">核准經銷商資格</h3></div>
+                
+                <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                   <p className="text-sm text-gray-500 mb-1">申請人 / 公司名稱</p>
+                   <p className="font-bold text-gray-800 text-lg">{approveModalUser.name} ({approveModalUser.companyName})</p>
+                </div>
+
+                <div className="space-y-5 mb-8">
+                   <div>
+                     <label className="block text-sm font-bold text-gray-700 mb-2">設定專屬分潤比例 (%)</label>
+                     <input type="number" value={approveData.commission} onChange={e => setApproveData({...approveData, commission: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-purple-500 outline-none text-lg" />
+                   </div>
+                   <div>
+                     <label className="block text-sm font-bold text-gray-700 mb-2">內部審核備註 (選填)</label>
+                     <input type="text" value={approveData.note} onChange={e => setApproveData({...approveData, note: e.target.value})} placeholder="例如：總代介紹、已核對統編" className="w-full rounded-xl border-gray-300 border p-3 focus:ring-purple-500 outline-none text-base" />
+                   </div>
+                </div>
+
+                <div className="flex justify-end space-x-4">
+                  <button onClick={() => setApproveModalUser(null)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-lg">取消</button>
+                  <button onClick={handleApproveSubmit} className="px-6 py-2.5 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md text-lg">確認核准</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ====== 獨立元件：Flex Message 設定與產生 Modal ====== */}
           {flexModalItem && (
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -675,7 +733,10 @@
                      <div className="relative h-40"><img src={flexModalItem.image} className="w-full h-full object-cover" /></div>
                      <div className="p-5">
                        <h4 className="font-bold text-lg text-gray-900 leading-snug mb-1 line-clamp-2">{flexModalItem.title}</h4>
-                       <div className="flex justify-between items-baseline mb-4 mt-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div>
+                       <div className="flex justify-between items-baseline mb-4 mt-2">
+                          <span className="text-gray-400 text-xs">🔥 熱門搶購中</span>
+                          <span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span>
+                       </div>
                        <div className="space-y-2 mt-4 border-t border-gray-100 pt-4">
                           <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">立即查閱與報名</div>
                           {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
