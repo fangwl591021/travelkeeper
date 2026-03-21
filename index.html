@@ -56,48 +56,59 @@
     const LOGIN_URL = 'login.html'; 
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
 
-    // 產生完整版的華麗 JSON (會由 SDK 自動轉成 ott)
+    // =========================================================================
+    // ★ Flex JSON 極限瘦身版 ★
+    // 解決 400 Bad Request：移除複雜排版與絕對定位，大幅縮減編碼後的 URL 長度
+    // =========================================================================
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
-        const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
+        // 使用極短的參數名稱 (t, r, o) 節省網址長度
+        const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         
-        const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
+        // 遞迴分享的 LIFF 網址
+        const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
 
-        const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
+        const buttons = [
+            { type: "button", style: "primary", color: "#00B900", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } },
+            // 將原本複雜的「絕對定位標籤」改為 Footer 的第二顆強烈分享按鈕，極大縮減 JSON 長度
+            { type: "button", style: "primary", color: "#FF334B", action: { type: "uri", label: "📤 分享此行程給好友", uri: shareLiffUrl } }
+        ];
         
-        if (options.phone && distributorData.phone) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${distributorData.phone}` }});
-        if (options.line && distributorData.lineLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "💬 私訊 LINE", uri: distributorData.lineLink }});
-        if (options.lineAt && distributorData.lineAtLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "🟢 官方 LINE@", uri: distributorData.lineAtLink }});
-        if (options.fb && distributorData.fbLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "👍 FB 粉絲專頁", uri: distributorData.fbLink }});
-        if (options.web && distributorData.webLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "🌐 官方網站", uri: distributorData.webLink }});
-        if (options.map && distributorData.mapLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📍 門市導航", uri: distributorData.mapLink }});
+        if (options.phone && distributorData.phone) buttons.push({ type: "button", style: "secondary", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${distributorData.phone}` }});
+        if (options.line && distributorData.lineLink) buttons.push({ type: "button", style: "secondary", action: { type: "uri", label: "💬 私訊 LINE", uri: distributorData.lineLink }});
+        if (options.lineAt && distributorData.lineAtLink) buttons.push({ type: "button", style: "secondary", action: { type: "uri", label: "🟢 官方 LINE@", uri: distributorData.lineAtLink }});
+        if (options.fb && distributorData.fbLink) buttons.push({ type: "button", style: "secondary", action: { type: "uri", label: "👍 FB 粉絲專頁", uri: distributorData.fbLink }});
+        if (options.web && distributorData.webLink) buttons.push({ type: "button", style: "secondary", action: { type: "uri", label: "🌐 官方網站", uri: distributorData.webLink }});
+        if (options.map && distributorData.mapLink) buttons.push({ type: "button", style: "secondary", action: { type: "uri", label: "📍 門市導航", uri: distributorData.mapLink }});
 
         return {
           type: "flex", 
           altText: `推薦行程：${tourItem.title}`,
           contents: {
             type: "bubble",
+            // 採用扁平化的標準 Hero + Body 結構
+            hero: { 
+                type: "image", 
+                url: tourItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80', 
+                size: "full", 
+                aspectRatio: "20:13", 
+                aspectMode: "cover" 
+            },
             body: {
-              type: "box", layout: "vertical", paddingAll: "0px", 
+              type: "box", layout: "vertical", spacing: "sm",
               contents: [
-                { type: "image", url: tourItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80', size: "full", aspectRatio: "20:13", aspectMode: "cover", animated: true },
-                { type: "box", layout: "vertical", paddingAll: "15px", contents: [
-                    { type: "text", text: tourItem.title, weight: "bold", size: "xl", align: "center", wrap: true },
-                    { type: "text", text: tourItem.description ? tourItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！', size: "xs", margin: "sm", color: "#666666", wrap: true },
-                    { type: "box", layout: "baseline", margin: "md", contents: [
-                        { type: "text", text: "🔥 熱門搶購中", size: "sm", color: "#999999", flex: 1 },
-                        { type: "text", text: `$${Number(tourItem.price).toLocaleString()}`, size: "xl", color: "#ff334b", weight: "bold", align: "end" }
-                      ]
-                    }
+                { type: "text", text: tourItem.title, weight: "bold", size: "xl", wrap: true },
+                { type: "text", text: tourItem.description ? tourItem.description.substring(0, 50) + '...' : '點擊下方按鈕了解行程！', size: "xs", color: "#666666", wrap: true },
+                { type: "box", layout: "baseline", contents: [
+                    { type: "text", text: "🔥 熱門搶購中", size: "sm", color: "#999999", flex: 1 },
+                    { type: "text", text: `$${Number(tourItem.price).toLocaleString()}`, size: "lg", color: "#ff334b", weight: "bold", align: "end" }
                   ]
-                },
-                { type: "box", layout: "vertical", position: "absolute", backgroundColor: "#FF0000", cornerRadius: "xl", paddingTop: "7px", paddingBottom: "7px", paddingStart: "20px", paddingEnd: "20px", offsetTop: "10px", offsetEnd: "10px",
-                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, 
-                  contents: [{ type: "text", text: "分享好友", color: "#ffffff", size: "12px", weight: "bold" }]
                 }
               ]
             },
-            footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "15px", backgroundColor: "#FFFFFF", contents: buttons }
+            footer: { 
+                type: "box", layout: "vertical", spacing: "sm", contents: buttons 
+            }
           }
         };
     };
@@ -108,8 +119,9 @@
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
       const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
 
+      // 支援短網址的參數解析 (t, r, o)
       const [refUid, setRefUid] = useState(() => {
-        const urlRef = urlParams.get('ref_uid');
+        const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
         if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
         return urlRef || localStorage.getItem('tracking_ref_uid') || '';
       });
@@ -161,85 +173,13 @@
         fetchItineraries();
       }, []);
 
-      // ============================================================
-      // ★ 執行核心分享邏輯 (防護 400 Bad Request)
-      // ============================================================
-      const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
-          try {
-            const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-            
-            // 讓 LIFF SDK 自動在背後產生 ott，無論手機或電腦都會跳出視窗！
-            await liff.shareTargetPicker([flexMsg]);
-            
-            if (isAutoMode) {
-                setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                setTimeout(() => liff.closeWindow(), 1500);
-            } else {
-                showToast('✅ 名片已成功發送！');
-                setFlexModalItem(null);
-            }
-          } catch(e) {
-            console.error("LIFF SDK Share Error:", e);
-            
-            // 如果遇到「未授權」的阻擋，啟動【緊急備用精簡名片】來繞過 400 錯誤！
-            if (e.message && e.message.includes('not allowed')) {
-               if (!isAutoMode) {
-                   alert("⚠️ 發現您的 LIFF 權限受限！\n\n由於您尚未在 LINE 後台同意「Share Target Picker 使用條款」，官方阻擋了完整名片的發送。\n\n系統將自動為您轉換為「超精簡備用名片」以完成發送！");
-               } else {
-                   setShareStatusText("⚠️ 權限受限，啟動備用發送模式...");
-               }
-
-               // 產生極度精簡的 JSON，確保字數小於 2000 字元，完美避開 400 Bad Request
-               const miniTrackingUrl = `${ENDPOINT_URL}?t=${tour.id}&r=${rUid || 'GUEST'}`;
-               const miniFlex = {
-                  type: "flex", altText: `推薦行程：${tour.title}`,
-                  contents: {
-                      type: "bubble",
-                      hero: { type: "image", url: tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80', size: "full", aspectRatio: "20:13", aspectMode: "cover" },
-                      body: { type: "box", layout: "vertical", contents: [{ type: "text", text: tour.title, weight: "bold", size: "xl", wrap: true }] },
-                      footer: { type: "box", layout: "vertical", contents: [{ type: "button", style: "primary", color: "#00B900", action: { type: "uri", label: "立即查看行程", uri: miniTrackingUrl } }] }
-                  }
-               };
-
-               const messagesParam = encodeURIComponent(JSON.stringify([miniFlex]));
-               const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-               
-               if (isAutoMode) {
-                   window.location.replace(shareUrl);
-               } else {
-                   const w = 600, h = 700;
-                   const left = Math.round((window.screen.width - w) / 2);
-                   const top = Math.round((window.screen.height - h) / 2);
-                   const popup = window.open(shareUrl, 'line_share', `width=${w},height=${h},left=${left},top=${top}`);
-                   
-                   if(popup) {
-                       const timer = setInterval(() => {
-                           if (popup.closed) { 
-                               clearInterval(timer); 
-                               showToast('✅ 備用名片發送完成！'); 
-                               setFlexModalItem(null); 
-                           }
-                       }, 600);
-                   }
-               }
-            } else {
-               if (isAutoMode) {
-                   setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
-                   setTimeout(() => liff.closeWindow(), 2000);
-               } else {
-                   showToast('發送取消或發生錯誤', 'error');
-               }
-            }
-          }
-      };
-
-      // 自動轉傳機制 (被分享的連結點開後觸發)
+      // ====== 自動遞迴分享：被朋友點開後觸發通訊錄 ======
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
-              const tourId = urlParams.get('tour_id');
-              const rUid = urlParams.get('ref_uid');
-              const optsParam = urlParams.get('opts') || '000000';
+              const tourId = urlParams.get('t') || urlParams.get('tour_id');
+              const rUid = urlParams.get('r') || urlParams.get('ref_uid');
+              const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
               
               const tour = itineraries.find(i => String(i.id) === String(tourId));
               let targetDistData = {};
@@ -256,8 +196,23 @@
                  fb: optsParam[3] === '1', web: optsParam[4] === '1', map: optsParam[5] === '1',
               };
 
-              setShareStatusText("正在喚起 LINE 通訊錄...");
-              await executeShare(tour, targetDistData, rUid, cOptions, true);
+              try {
+                const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+                setShareStatusText("正在喚起 LINE 通訊錄...");
+
+                // 呼叫官方安全 API，因為 JSON 已極致壓縮，不再產生 400 錯誤！
+                const res = await liff.shareTargetPicker([flexMsg]);
+                
+                if (res) {
+                    setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
+                    setTimeout(() => liff.closeWindow(), 1500);
+                } else {
+                    liff.closeWindow();
+                }
+              } catch(e) { 
+                setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
+                setTimeout(() => liff.closeWindow(), 2000);
+              }
            }
         };
 
@@ -481,11 +436,28 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 終極手動發送按鈕
+      // ★ 終極手動發送按鈕：無條件信任官方 SDK
       // ============================================================
       const triggerFlexSharing = async () => {
-        if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
-        await executeShare(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions, false);
+        if (!isLiffReady || !liff.isLoggedIn()) {
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+
+        try {
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+          
+          // 因為 JSON 已經極簡化，直接呼叫 SDK 即可完美自動判斷環境！
+          const res = await liff.shareTargetPicker([flexMsg]);
+          
+          if (res) {
+            showToast('✅ 名片已成功發送！');
+            setFlexModalItem(null);
+          }
+        } catch (error) { 
+          console.error('ShareTargetPicker Error:', error);
+          showToast('發送取消或發生錯誤', 'error'); 
+        }
       };
 
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
@@ -938,7 +910,7 @@
                   <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
                   
                   <div className="space-y-6">
-                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
                       <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
                       
                       <div className="grid grid-cols-2 gap-3">
@@ -965,14 +937,14 @@
                     </div>
                     
                     <div className="pt-4">
-                      <button onClick={() => executeShare(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions, false)} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (支援手機/PC)
+                      {/* 【終極完美版】完全信任官方 SDK */}
+                      <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* 右側：LINE 預覽畫面 */}
                 <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                    <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
                    
@@ -981,13 +953,10 @@
                         <div className="relative h-40">
                           <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
                         </div>
-                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
-                          分享好友
-                        </div>
                         <div className="p-4 flex flex-col items-center text-center">
                           <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
                           <p className="text-xs text-gray-500 line-clamp-3 mb-3 text-left w-full">
-                            {flexModalItem.description ? flexModalItem.description.substring(0, 80) + '...' : '點擊下方按鈕了解更多精彩行程！'}
+                            {flexModalItem.description ? flexModalItem.description.substring(0, 50) + '...' : '點擊下方按鈕了解行程！'}
                           </p>
                           <div className="flex justify-between items-baseline w-full mb-2">
                              <span className="text-gray-400 text-xs">🔥 熱門搶購中</span>
@@ -997,6 +966,7 @@
                      </div>
                      <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
                         <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
+                        <div className="w-full bg-[#ff334b] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
                         {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                         {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                         {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
