@@ -75,6 +75,7 @@
       const [itineraries, setItineraries] = useState([]);
       const [toast, setToast] = useState(null);
       const [isLoading, setIsLoading] = useState(false);
+      const [isUploadingImage, setIsUploadingImage] = useState(false); // 控制圖片上傳狀態
       
       const [liffProfile, setLiffProfile] = useState(null);
       const [isLiffReady, setIsLiffReady] = useState(false);
@@ -183,10 +184,45 @@
         showToast(`為您找到 ${results.length} 筆符合的行程`);
       };
 
-      const handleBannerUpload = (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader(); reader.readAsDataURL(file);
-        reader.onloadend = () => { setBannerImage(reader.result); localStorage.setItem('travel_keeper_banner', reader.result); showToast('✅ 首頁 Banner 更新成功！'); };
+      // ===============================================
+      // 【新增】統一上傳圖片至 Google Drive
+      // ===============================================
+      const handleImageUploadToDrive = async (e, type = 'itinerary') => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (type === 'itinerary') setIsUploadingImage(true);
+        else showToast('Banner 上傳雲端圖床中，請稍候...');
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onloadend = async () => {
+          try {
+            const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'uploadImage', base64: reader.result })
+            });
+            const result = await res.json();
+            
+            if (result.success) {
+              if (type === 'itinerary') {
+                setDraftData({ ...draftData, image: result.url });
+                showToast('✅ 圖片已成功上傳至 Google Drive！');
+              } else {
+                setBannerImage(result.url);
+                localStorage.setItem('travel_keeper_banner', result.url);
+                showToast('✅ Banner 已成功上傳至 Google Drive！');
+              }
+            } else {
+              throw new Error(result.message || result.error);
+            }
+          } catch (err) {
+            showToast('雲端圖床上傳失敗: ' + err.message, 'error');
+          } finally {
+            if (type === 'itinerary') setIsUploadingImage(false);
+          }
+        };
       };
 
       const handleFileUpload = async (e) => {
@@ -200,7 +236,7 @@
             if (aiResult.success) {
               const parsedData = aiResult.data;
               let keyword = parsedData.imageKeyword || parsedData.region || "travel";
-              parsedData.image = `https://loremflickr.com/800/600/${encodeURIComponent(keyword.trim().replace(/\s+/g, ',') + ",landscape")}`; 
+              parsedData.image = `https://image.pollinations.ai/prompt/${encodeURIComponent(keyword.trim() + " beautiful travel landscape photography")}?width=800&height=600&nologo=true`; 
               parsedData.id = Date.now(); 
               setDraftData(parsedData); showToast('✅ AI 解析完成！系統正自動寫入資料庫...');
               const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
@@ -252,20 +288,15 @@
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
-      // ===============================================
-      // 【全新升級】組裝完全符合您指定版面格式的 Flex JSON
-      // ===============================================
       const getFlexMessageContents = () => {
         if (!flexModalItem) return null;
         
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${flexModalItem.id}&ref_uid=${liffProfile?.userId || 'GUEST'}`;
         const myData = getCurrentUserData();
         
-        // 組合轉傳分享用的 URI (透過 LINE APP 自動叫出分享對象列表)
         const shareText = encodeURIComponent(`快來看看這個精選行程：${flexModalItem.title}\n${trackingUrl}`);
         const shareUri = `https://line.me/R/msg/text/?${shareText}`;
 
-        // 依據勾選組裝 Footer 按鈕
         const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
         if (cardOptions.phone && myData.phone) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "📞 聯絡電話", uri: `tel:${myData.phone}` }});
         if (cardOptions.line && myData.lineLink) buttons.push({ type: "button", style: "secondary", height: "sm", margin: "sm", action: { type: "uri", label: "💬 私訊 LINE", uri: myData.lineLink }});
@@ -282,18 +313,16 @@
             body: {
               type: "box",
               layout: "vertical",
-              paddingAll: "0px", // 外層無邊距
+              paddingAll: "0px", 
               contents: [
-                // 1. 動態圖片 (移至 Body 內)
                 {
                   type: "image",
-                  url: flexModalItem.image,
+                  url: flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80',
                   size: "full",
                   aspectRatio: "20:13",
                   aspectMode: "cover",
                   animated: true
                 },
-                // 2. 文字資訊區塊
                 {
                   type: "box",
                   layout: "vertical",
@@ -304,7 +333,7 @@
                       text: flexModalItem.title,
                       weight: "bold",
                       size: "xl",
-                      align: "center", // 置中
+                      align: "center", 
                       wrap: true
                     },
                     {
@@ -323,12 +352,11 @@
                     }
                   ]
                 },
-                // 3. 漂浮分享按鈕 (Absolute)
                 {
                   type: "box",
                   layout: "vertical",
                   position: "absolute",
-                  backgroundColor: "#FF0000", // 紅色背景
+                  backgroundColor: "#FF0000", 
                   cornerRadius: "xl",
                   paddingTop: "7px",
                   paddingBottom: "7px",
@@ -339,7 +367,7 @@
                   action: {
                     type: "uri",
                     label: "badge",
-                    uri: shareUri // 【核心】點擊此標籤，立刻開啟 LINE 轉傳功能！
+                    uri: shareUri 
                   },
                   contents: [
                     {
@@ -447,7 +475,6 @@
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
               <div className="flex justify-between h-16">
                 
-                {/* 左側 LOGO 與選單 */}
                 <div className="flex items-center">
                   <div className="flex items-center cursor-pointer mr-8" onClick={() => changeTab('home')}>
                     <Navigation className="h-8 w-8 text-blue-600 mr-2" />
@@ -482,7 +509,6 @@
                     </button>
                   )}
                 </div>
-
               </div>
             </div>
           </nav>
@@ -498,7 +524,11 @@
                     <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-wider mb-4 drop-shadow-lg">探索世界的美好</h1><p className="text-lg md:text-xl lg:text-2xl drop-shadow-md font-light">發現您的下一個夢幻旅程</p>
                   </div>
                   {isAdmin && (
-                    <label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0"><Camera className="w-5 h-5 mr-2 text-blue-600" />更換 Banner<input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} /></label>
+                    <label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0">
+                      <Camera className="w-5 h-5 mr-2 text-blue-600" />
+                      {isUploadingImage ? '上傳中...' : '更換 Banner'}
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'banner')} disabled={isUploadingImage} />
+                    </label>
                   )}
                 </div>
 
@@ -544,7 +574,7 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
                           <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={(e) => {e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'}} />
+                            <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={(e) => {e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'}} />
                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
                                {item.startDate && <span className="bg-white/90 backdrop-blur-md text-blue-800 px-3 py-1 rounded-lg text-xs font-bold shadow-sm w-fit border border-white/50">{item.startDate.replace(/-/g, '/')} 出發</span>}
@@ -586,7 +616,6 @@
                       <div>
                         <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2>
                         <p className="text-orange-100 text-lg max-w-2xl">您已成功登入一般會員。未來預定的行程與報名紀錄都會歸屬在此帳號下。</p>
-                        {/* 顯示是由哪位經銷商推薦進來的 */}
                         {crmUsers.find(u => u.uid === liffProfile?.userId)?.referredBy && (
                           <div className="mt-4 inline-block bg-white/20 px-3 py-1 rounded-md text-sm font-bold border border-white/30">
                             ✨ 您是由專屬旅遊顧問推薦的 VIP 會員
@@ -629,7 +658,7 @@
                           {itineraries.map(item => (
                             <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                               <div className="h-56 overflow-hidden relative bg-gray-100">
-                                <img src={item.image} className="w-full h-full object-cover" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'}} />
+                                <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'}} />
                                 <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {getCurrentUserData().commission || 10}%</div>
                               </div>
                               <div className="p-6 flex flex-col flex-grow">
@@ -655,7 +684,6 @@
             {activeTab === 'crm' && (
               isAdmin ? (
                 <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                  {/* 若正在編輯某個經銷商，展開整頁編輯器 */}
                   {editingDistributor ? (
                     <CrmDistributorEditView />
                   ) : (
@@ -752,8 +780,15 @@
                           <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg" placeholder="例如：7"/></div>
                           
                           <div className="lg:col-span-4">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址</label>
-                            <div className="flex gap-4 items-center"><input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600"/><img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" onError={(e)=>e.target.src='https://via.placeholder.com/150'} /></div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址 或 上傳雲端圖片</label>
+                            <div className="flex gap-4 items-center">
+                              <input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600" placeholder="https://..." />
+                              <label className={`cursor-pointer bg-blue-100 text-blue-700 px-4 py-3.5 rounded-xl font-bold hover:bg-blue-200 transition whitespace-nowrap ${isUploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                                {isUploadingImage ? '上傳中...' : '☁️ 上傳圖片'}
+                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'itinerary')} disabled={isUploadingImage} />
+                              </label>
+                              {draftData.image && <img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" onError={(e)=>e.target.src='https://via.placeholder.com/150'} />}
+                            </div>
                           </div>
                         </div>
                         <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案</label><textarea rows={6} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed"/></div>
@@ -766,7 +801,7 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
                       {itineraries.map(item => (
                         <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                          <div className="flex gap-5 mb-5"><img src={item.image} className="w-28 h-28 rounded-xl object-cover border" onError={(e)=>e.target.src='https://via.placeholder.com/150'}/><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
+                          <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" onError={(e)=>e.target.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'}/><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
                           <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
                             <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
                             <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
@@ -786,7 +821,6 @@
               <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
                 <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
                 
-                {/* 左側：設定面板 */}
                 <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
                   <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
                   <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
@@ -816,27 +850,17 @@
                       </div>
                       <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
                     </div>
-                    
-                    <div className="pt-4">
-                      <button onClick={shareFlexMessage} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片至 LINE 好友/群組
-                      </button>
-                    </div>
                   </div>
                 </div>
 
-                {/* 右側：LINE 預覽畫面 (套用全新的 Flex Message JSON 結構) */}
                 <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                    <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
                    
-                   {/* 模擬的 LINE Flex Card */}
-                   <div className="w-full max-w-[300px] bg-white rounded-2xl overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
-                     {/* Body 區塊 (包含滿版圖片與文字) */}
+                   <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
                      <div className="relative">
                         <div className="relative h-40">
-                          <img src={flexModalItem.image} className="w-full h-full object-cover" />
+                          <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
                         </div>
-                        {/* 絕對定位的「分享好友」標籤 */}
                         <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
                           分享好友
                         </div>
@@ -851,10 +875,8 @@
                           </div>
                         </div>
                      </div>
-
-                     {/* Footer 按鈕區域 */}
                      <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                        <div className="w-full bg-[#00B900] text-white text-center py-2 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
+                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
                         {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                         {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                         {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
