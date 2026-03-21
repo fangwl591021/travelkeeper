@@ -29,12 +29,10 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
-    // --- 系統變數 ---
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
     const MAIN_APP_URL = 'index.html'; 
 
-    // 圖示元件
     const CheckCircle = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-16 h-16 text-green-500 mb-4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
     const Briefcase = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-emerald-600"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
     const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-orange-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
@@ -46,9 +44,8 @@
       const [applyType, setApplyType] = useState('user'); 
       
       const [profile, setProfile] = useState(null);
-      // 擴充表單狀態
       const [formData, setFormData] = useState({ 
-        name: '', phone: '', lineLink: '', lineAtLink: '', fbLink: '', webLink: '', mapLink: '' 
+        name: '', phone: '', companyName: '', taxId: '', lineLink: '', lineAtLink: '', fbLink: '', webLink: '', mapLink: '' 
       });
 
       useEffect(() => {
@@ -72,7 +69,6 @@
           const userProfile = await liff.getProfile();
           setProfile(userProfile);
           
-          // 預設帶入用戶 LINE 名字，並將個人 LINE 連結預設寫入
           setFormData(prev => ({ 
             ...prev, 
             name: userProfile.displayName,
@@ -102,11 +98,12 @@
 
       const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.name || !formData.phone) {
-          alert('請填寫必填資料以便後續聯繫'); return;
+        
+        if (applyType === 'distributor' && (!formData.companyName || !formData.taxId)) {
+          alert('經銷商申請必須填寫「公司名稱」與「統一編號」，以利後台審核。');
+          return;
         }
 
-        // 地址轉 Map 網址智慧處理
         let finalMapLink = formData.mapLink.trim();
         if (finalMapLink && !finalMapLink.startsWith('http')) {
            finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
@@ -123,7 +120,9 @@
               action: actionType, 
               uid: profile.userId, 
               name: formData.name,      
-              phone: formData.phone,    
+              phone: formData.phone,
+              companyName: formData.companyName,
+              taxId: formData.taxId,
               lineLink: formData.lineLink,
               lineAtLink: formData.lineAtLink,
               fbLink: formData.fbLink,
@@ -180,10 +179,10 @@
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 必填區塊 */}
-                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 flex items-center">
+                  
+                  {/* 基本必填 */}
+                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 flex items-center mt-2">
                     <span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs mr-2">必填</span> 基本資訊
                   </div>
 
@@ -196,31 +195,33 @@
                     <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="例如：0912345678"/>
                   </div>
 
+                  {/* 經銷商專屬審核欄位 */}
+                  {applyType === 'distributor' && (
+                    <>
+                      <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center">
+                        <span className="bg-purple-500 text-white px-2 py-0.5 rounded text-xs mr-2">審核必填</span> 經銷商審核資料
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5">公司或門市名稱</label>
+                        <input type="text" required value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="例如：東南旅行社 信義分公司"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5">統一編號 / 交觀編號</label>
+                        <input type="text" required value={formData.taxId} onChange={(e) => setFormData({...formData, taxId: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="審核身分用"/>
+                      </div>
+                    </>
+                  )}
+
                   {/* 選填區塊 (產生名片用) */}
                   <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center">
                     <span className="bg-gray-300 text-white px-2 py-0.5 rounded text-xs mr-2">選填</span> 更多聯絡管道 (未來可自動放入推廣名片按鈕)
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">個人 LINE 網址</label>
-                    <input type="url" value={formData.lineLink} onChange={(e) => setFormData({...formData, lineLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://line.me/..."/>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">官方 LINE@ 網址</label>
-                    <input type="url" value={formData.lineAtLink} onChange={(e) => setFormData({...formData, lineAtLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://lin.ee/..."/>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">FB 粉絲專頁網址</label>
-                    <input type="url" value={formData.fbLink} onChange={(e) => setFormData({...formData, fbLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://facebook.com/..."/>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">個人/公司網站網址</label>
-                    <input type="url" value={formData.webLink} onChange={(e) => setFormData({...formData, webLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://..."/>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">實體店面導航 (輸入完整地址或 Google Map 網址)</label>
-                    <input type="text" value={formData.mapLink} onChange={(e) => setFormData({...formData, mapLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="例如：台北市信義區信義路五段7號 (系統將自動轉為導航網址)"/>
-                  </div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">個人 LINE 網址</label><input type="url" value={formData.lineLink} onChange={(e) => setFormData({...formData, lineLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://line.me/..."/></div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">官方 LINE@ 網址</label><input type="url" value={formData.lineAtLink} onChange={(e) => setFormData({...formData, lineAtLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://lin.ee/..."/></div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">FB 粉絲專頁網址</label><input type="url" value={formData.fbLink} onChange={(e) => setFormData({...formData, fbLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://facebook.com/..."/></div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">個人/公司網站網址</label><input type="url" value={formData.webLink} onChange={(e) => setFormData({...formData, webLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://..."/></div>
+                  <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-1.5">實體店面導航 (輸入完整地址或 Google Map 網址)</label><input type="text" value={formData.mapLink} onChange={(e) => setFormData({...formData, mapLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="例如：台北市信義區信義路五段7號 (系統將自動轉為導航網址)"/></div>
                 </div>
 
                 <button type="submit" className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg mt-6 text-white ${applyType === 'distributor' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
