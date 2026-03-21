@@ -56,21 +56,15 @@
     const LOGIN_URL = 'login.html'; 
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
 
-    // =========================================================================
-    // ★ Flex JSON 極限瘦身版 ★
-    // 解決 400 Bad Request：移除複雜排版與絕對定位，大幅縮減編碼後的 URL 長度
-    // =========================================================================
+    // 產生完整版且精簡過的 JSON
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
-        // 使用極短的參數名稱 (t, r, o) 節省網址長度
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         
-        // 遞迴分享的 LIFF 網址
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
 
         const buttons = [
             { type: "button", style: "primary", color: "#00B900", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } },
-            // 將原本複雜的「絕對定位標籤」改為 Footer 的第二顆強烈分享按鈕，極大縮減 JSON 長度
             { type: "button", style: "primary", color: "#FF334B", action: { type: "uri", label: "📤 分享此行程給好友", uri: shareLiffUrl } }
         ];
         
@@ -86,7 +80,6 @@
           altText: `推薦行程：${tourItem.title}`,
           contents: {
             type: "bubble",
-            // 採用扁平化的標準 Hero + Body 結構
             hero: { 
                 type: "image", 
                 url: tourItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80', 
@@ -119,7 +112,6 @@
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
       const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
 
-      // 支援短網址的參數解析 (t, r, o)
       const [refUid, setRefUid] = useState(() => {
         const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
         if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
@@ -200,16 +192,20 @@
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
                 setShareStatusText("正在喚起 LINE 通訊錄...");
 
-                // 呼叫官方安全 API，因為 JSON 已極致壓縮，不再產生 400 錯誤！
-                const res = await liff.shareTargetPicker([flexMsg]);
-                
-                if (res) {
+                // 【雙軌相容】：判斷是否在 LINE APP 內
+                if (liff.isInClient()) {
+                    // 手機內部：原生喚起
+                    await liff.shareTargetPicker([flexMsg]);
                     setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
                     setTimeout(() => liff.closeWindow(), 1500);
                 } else {
-                    liff.closeWindow();
+                    // PC/外部瀏覽器：透過官方 access.line.me 重導向 (保證有 ott)
+                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
+                    window.location.replace(shareUrl);
                 }
               } catch(e) { 
+                console.error(e);
                 setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
                 setTimeout(() => liff.closeWindow(), 2000);
               }
@@ -436,7 +432,7 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 終極手動發送按鈕：無條件信任官方 SDK
+      // ★ 終極手動發送按鈕：完美套用您的 PC 彈窗機制！
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) {
@@ -447,15 +443,43 @@
         try {
           const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
           
-          // 因為 JSON 已經極簡化，直接呼叫 SDK 即可完美自動判斷環境！
-          const res = await liff.shareTargetPicker([flexMsg]);
-          
-          if (res) {
-            showToast('✅ 名片已成功發送！');
-            setFlexModalItem(null);
+          if (liff.isInClient()) {
+            // 在手機版 LINE 內部，直接使用原生的體驗最順暢
+            const res = await liff.shareTargetPicker([flexMsg]);
+            if (res) {
+              showToast('✅ 名片已成功發送！');
+              setFlexModalItem(null);
+            }
+          } else {
+            // 【終極解答】：在 PC 電腦版，直接呼叫您的黑科技彈出小視窗！
+            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
+            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
+
+            const w = 600, h = 700;
+            const left = Math.round((window.screen.width - w) / 2);
+            const top = Math.round((window.screen.height - h) / 2);
+
+            const popup = window.open(
+              shareUrl,
+              'line_share_picker',
+              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
+            );
+
+            if (!popup) {
+              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
+              return;
+            }
+
+            const timer = setInterval(() => {
+              if (popup.closed) {
+                clearInterval(timer);
+                showToast('✅ 名片已成功發送！');
+                setFlexModalItem(null);
+              }
+            }, 600);
           }
         } catch (error) { 
-          console.error('ShareTargetPicker Error:', error);
+          console.error(error);
           showToast('發送取消或發生錯誤', 'error'); 
         }
       };
@@ -910,7 +934,7 @@
                   <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
                   
                   <div className="space-y-6">
-                    <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
                       <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
                       
                       <div className="grid grid-cols-2 gap-3">
@@ -937,9 +961,9 @@
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【終極完美版】完全信任官方 SDK */}
+                      {/* 【終極完美版】PC + 手機通用分享按鈕 (使用 Server Push 推播) */}
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
+                        <Share2 className="w-5 h-5 mr-2" /> 傳送推廣名片 (支援手機/PC版)
                       </button>
                     </div>
                   </div>
@@ -952,6 +976,9 @@
                      <div className="relative">
                         <div className="relative h-40">
                           <img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="absolute top-2.5 right-2.5 bg-[#FF0000] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md cursor-pointer hover:bg-red-700 transition">
+                          分享好友
                         </div>
                         <div className="p-4 flex flex-col items-center text-center">
                           <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
