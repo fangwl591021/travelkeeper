@@ -57,7 +57,7 @@
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
 
     // =========================================================================
-    // ★ 100% 官方標準 Flex JSON (使用 POST 機制避開網址長度限制) ★
+    // ★ 100% 官方標準 Flex JSON (極簡化結構，完全符合 LINE 規範) ★
     // =========================================================================
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
@@ -243,44 +243,7 @@
         fetchItineraries();
       }, []);
 
-      // ============================================================
-      // ★ 執行核心分享邏輯 (防護 "not allowed" 權限快取錯誤)
-      // ============================================================
-      const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
-          try {
-            const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-            
-            // 這是目前唯一解：透過原生 SDK 發出請求，背後自動獲取 ott 避開長度限制
-            await liff.shareTargetPicker([flexMsg]);
-            
-            if (isAutoMode) {
-                setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                setTimeout(() => liff.closeWindow(), 1500);
-            } else {
-                showToast('✅ 名片已成功發送！');
-                setFlexModalItem(null);
-            }
-          } catch(e) {
-            console.error("LIFF SDK Share Error:", e);
-            
-            // 【終極防呆】：如果 SDK 報錯 "not allowed"，代表瀏覽器裡存的是「舊的、沒權限的 Token」
-            // 我們直接清空並重新登入，這會逼迫 LINE 換發含有 shareTargetPicker 權限的新 Token 給您！
-            if (e.message && e.message.includes('not allowed')) {
-                alert("⚠️ 偵測到您的系統權限狀態已更新！\n\n為了啟用「分享通訊錄」功能，系統將為您自動重新登入並載入最新設定。請在網頁重新載入後再次點擊發送！");
-                liff.logout();
-                window.location.reload();
-            } else {
-                if (isAutoMode) {
-                    setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
-                    setTimeout(() => liff.closeWindow(), 2000);
-                } else {
-                    showToast('已取消發送或發生未知的錯誤', 'error');
-                }
-            }
-          }
-      };
-
-      // 自動轉傳機制 (被分享的連結點開後觸發)
+      // ====== 自動遞迴分享：被朋友點開後觸發通訊錄 ======
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -303,8 +266,30 @@
                  fb: optsParam[3] === '1', web: optsParam[4] === '1', map: optsParam[5] === '1',
               };
 
-              setShareStatusText("正在喚起 LINE 通訊錄...");
-              await executeShare(tour, targetDistData, rUid, cOptions, true);
+              try {
+                const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+                setShareStatusText("正在喚起 LINE 通訊錄...");
+
+                // 完全信任 SDK 自動轉換 OTT
+                const res = await liff.shareTargetPicker([flexMsg]);
+                
+                if (res) {
+                    setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
+                    setTimeout(() => liff.closeWindow(), 1500);
+                } else {
+                    liff.closeWindow();
+                }
+              } catch(e) { 
+                // 攔截未授權錯誤，強制重登換取最新權限 Token
+                if (e.message && e.message.includes('not allowed')) {
+                    alert("⚠️ 系統權限已更新！即將為您重新登入以獲取最新權限。");
+                    liff.logout();
+                    window.location.reload();
+                } else {
+                    setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
+                    setTimeout(() => liff.closeWindow(), 2000);
+                }
+              }
            }
         };
 
@@ -438,32 +423,26 @@
       const handleFileUpload = async (e) => {
         const file = e.target.files[0]; if (!file) return; 
         setOcrStatus('processing');
-        setIsUploadingImage(true);
 
         try {
           const reader = new FileReader(); reader.readAsDataURL(file);
           reader.onloadend = async () => {
             const base64data = reader.result;
 
-            let uploadedUrl = '';
-            try {
-              const driveRes = await fetch(`${WORKER_URL}/api/itineraries`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'uploadImage', base64: base64data })
-              });
-              const driveResult = await driveRes.json();
-              if (driveResult.success) uploadedUrl = driveResult.url;
-            } catch (err) { console.warn('圖片上傳失敗', err); }
-
             const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
 
             if (aiResult.success) {
               const parsedData = aiResult.data;
-              parsedData.image = uploadedUrl; 
+              
+              // 【核心修復】自動抓取免費圖片，並加上 seed 避免每次重整圖片亂跳！
+              let keyword = parsedData.imageKeyword || parsedData.region || "beautiful travel destination";
+              let randomSeed = Math.floor(Math.random() * 1000000);
+              parsedData.image = `https://image.pollinations.ai/prompt/${encodeURIComponent(keyword.trim() + " travel landscape photography, highly detailed")}?width=800&height=600&nologo=true&seed=${randomSeed}`;
+              
               parsedData.id = Date.now(); 
               setDraftData(parsedData); 
-              showToast('✅ 圖片已上傳雲端且 AI 解析完成！系統正自動寫入資料庫...');
+              showToast('✅ DM 解析完成！已自動配上精美風景圖並寫入資料庫。');
               
               const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
               setItineraries(prev => [newItinerary, ...prev]);
@@ -473,9 +452,8 @@
                 if (dbResult.success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
               } catch (dbErr) { setOcrStatus('done'); showToast('寫入失敗，請手動點擊「儲存」', 'error'); }
             } else throw new Error(aiResult.error || '解析失敗');
-            setIsUploadingImage(false);
           };
-        } catch (error) { setOcrStatus('idle'); setIsUploadingImage(false); showToast(error.message || '解析失敗', 'error'); }
+        } catch (error) { setOcrStatus('idle'); showToast(error.message || '解析失敗', 'error'); }
       };
 
       const handleUpdateContent = async () => {
@@ -528,14 +506,36 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 終極手動發送按鈕
+      // ★ 終極手動發送按鈕：完全信任 SDK 並攔截權限錯誤
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) {
           liff.login({ redirectUri: window.location.href });
           return;
         }
-        await executeShare(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions, false);
+
+        try {
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+          
+          // 完全信任官方 SDK 在底層完成 POST 及 OTT 的轉換
+          const res = await liff.shareTargetPicker([flexMsg]);
+          
+          if (res) {
+            showToast('✅ 名片已成功發送！');
+            setFlexModalItem(null);
+          }
+        } catch (error) { 
+          console.error('ShareTargetPicker Error:', error);
+          
+          // 防呆機制：如果回報權限錯誤，通常是因為使用了過期的舊 Token
+          if (error.message && error.message.includes('not allowed')) {
+              alert("⚠️ 系統權限已更新！即將為您重新登入以獲取最新權限。");
+              liff.logout();
+              window.location.reload();
+          } else {
+              showToast('發送取消或發生錯誤: ' + error.message, 'error'); 
+          }
+        }
       };
 
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
@@ -1016,7 +1016,7 @@
                     
                     <div className="pt-4">
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (自動偵測手機/PC)
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友
                       </button>
                     </div>
                   </div>
@@ -1042,7 +1042,7 @@
                         </div>
                      </div>
                      <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">了解更多 / 立即報名</div>
+                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div>
                         <div className="w-full bg-[#ff334b] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
                         {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                         {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
