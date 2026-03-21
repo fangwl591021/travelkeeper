@@ -27,6 +27,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
+    // --- 圖示元件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -480,20 +481,16 @@
 
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
-          
-          {/* 【全端響應式修復】手機版正常顯示，不會被隱藏 */}
           <nav className="bg-white shadow-sm sticky top-0 z-50">
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
               <div className="flex flex-col md:flex-row md:items-center justify-between py-3 md:py-0 md:h-16">
                 
-                {/* 手機版：上方 Logo 與 頭像 */}
                 <div className="flex justify-between items-center w-full md:w-auto">
                   <div className="flex items-center cursor-pointer mr-8" onClick={() => changeTab('home')}>
                     <Navigation className="h-8 w-8 text-blue-600 mr-2" />
                     <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
                   </div>
                   
-                  {/* 手機版頭像 (螢幕小於768px顯示) */}
                   <div className="md:hidden flex items-center">
                     {liffProfile ? (
                       <div className="flex items-center gap-2">
@@ -508,7 +505,6 @@
                   </div>
                 </div>
 
-                {/* 選單列 (手機版可橫向滑動，電腦版正常排列) */}
                 <div className="flex items-center space-x-1 overflow-x-auto custom-scrollbar mt-3 md:mt-0 pb-1 md:pb-0 w-full md:w-auto flex-nowrap">
                   <button onClick={() => changeTab('home')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>找行程</button>
                   <button onClick={() => changeTab('member')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600 hover:bg-gray-100'}`}><Users className="w-4 h-4 mr-1.5" /> 會員中心</button>
@@ -522,7 +518,6 @@
                   )}
                 </div>
 
-                {/* 電腦版：右側頭像與資訊 (螢幕大於768px顯示) */}
                 <div className="hidden md:flex items-center ml-4 pl-4 border-l border-gray-200 shrink-0">
                   {liffProfile ? (
                     <div className="flex items-center gap-3">
@@ -604,7 +599,7 @@
                       {filteredResults.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
                           <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                             <div className="absolute top-4 left-4 flex flex-col gap-2">
                                <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
                                {item.startDate && <span className="bg-white/90 backdrop-blur-md text-blue-800 px-3 py-1 rounded-lg text-xs font-bold shadow-sm w-fit border border-white/50">{item.startDate.replace(/-/g, '/')} 出發</span>}
@@ -636,8 +631,8 @@
                   <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10">
                      <Users className="w-20 h-20 text-orange-500 mx-auto mb-6" />
                      <h2 className="text-3xl font-bold mb-4">一般會員登入</h2>
-                     <p className="text-gray-500 mb-8 text-lg">登入即可查看您的訂單、收藏行程與專屬優惠。</p>
-                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 快速登入</button>
+                     <p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p>
+                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button>
                   </div>
                 ) : (
                   <div className="bg-orange-500 rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative">
@@ -859,31 +854,31 @@
                   <div className="space-y-6">
                     <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200">
                       <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
+                      
                       <div className="grid grid-cols-2 gap-3">
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站
                          </label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!getCurrentUserData().mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
-                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!getCurrentUserData().mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航
+                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}>
+                           <input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航
                          </label>
                       </div>
                       <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【核心修復】PC/手機通用喚起按鈕 */}
                       <button onClick={() => window.location.href = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${flexModalItem.id}&ref_uid=${liffProfile.userId}&opts=${[cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('')}`} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
                         <Share2 className="w-5 h-5 mr-2" /> 點此開啟 LINE 選擇好友發送
                       </button>
