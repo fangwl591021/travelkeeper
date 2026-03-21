@@ -57,16 +57,13 @@
     const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
 
     // =========================================================================
-    // ★ 100% 官方標準 Flex JSON ★
-    // 嚴格對齊 LINE 的官方 Baseline 排版標準，不添加任何未知或實驗性屬性
+    // ★ 100% 官方標準 Flex JSON (使用 POST 機制避開網址長度限制) ★
     // =========================================================================
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
-        // 短網址參數 (t, r, o)
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
 
-        // 建立按鈕陣列
         const buttons = [
             {
                 "type": "button",
@@ -246,7 +243,44 @@
         fetchItineraries();
       }, []);
 
-      // ====== 自動遞迴分享：被朋友點開後觸發通訊錄 ======
+      // ============================================================
+      // ★ 執行核心分享邏輯 (防護 "not allowed" 權限快取錯誤)
+      // ============================================================
+      const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
+          try {
+            const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+            
+            // 這是目前唯一解：透過原生 SDK 發出請求，背後自動獲取 ott 避開長度限制
+            await liff.shareTargetPicker([flexMsg]);
+            
+            if (isAutoMode) {
+                setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
+                setTimeout(() => liff.closeWindow(), 1500);
+            } else {
+                showToast('✅ 名片已成功發送！');
+                setFlexModalItem(null);
+            }
+          } catch(e) {
+            console.error("LIFF SDK Share Error:", e);
+            
+            // 【終極防呆】：如果 SDK 報錯 "not allowed"，代表瀏覽器裡存的是「舊的、沒權限的 Token」
+            // 我們直接清空並重新登入，這會逼迫 LINE 換發含有 shareTargetPicker 權限的新 Token 給您！
+            if (e.message && e.message.includes('not allowed')) {
+                alert("⚠️ 偵測到您的系統權限狀態已更新！\n\n為了啟用「分享通訊錄」功能，系統將為您自動重新登入並載入最新設定。請在網頁重新載入後再次點擊發送！");
+                liff.logout();
+                window.location.reload();
+            } else {
+                if (isAutoMode) {
+                    setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
+                    setTimeout(() => liff.closeWindow(), 2000);
+                } else {
+                    showToast('已取消發送或發生未知的錯誤', 'error');
+                }
+            }
+          }
+      };
+
+      // 自動轉傳機制 (被分享的連結點開後觸發)
       useEffect(() => {
         const processAutoShare = async () => {
            if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
@@ -269,28 +303,8 @@
                  fb: optsParam[3] === '1', web: optsParam[4] === '1', map: optsParam[5] === '1',
               };
 
-              try {
-                const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-                setShareStatusText("正在喚起 LINE 通訊錄...");
-
-                // 手機版 LINE 內：使用原生 API
-                if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-                    await liff.shareTargetPicker([flexMsg]);
-                    setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                    setTimeout(() => liff.closeWindow(), 1500);
-                } else {
-                    // 電腦版：重導向至 access.line.me (因 JSON 已經符合標準格式，不會報錯 400)
-                    const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-                    const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-                    window.location.replace(shareUrl);
-                }
-              } catch(e) { 
-                setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
-                setTimeout(() => {
-                    if (liff.isInClient()) liff.closeWindow();
-                    else window.close();
-                }, 2000);
-              }
+              setShareStatusText("正在喚起 LINE 通訊錄...");
+              await executeShare(tour, targetDistData, rUid, cOptions, true);
            }
         };
 
@@ -514,57 +528,14 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 終極手動發送按鈕：完美套用您的 PC 彈窗機制！
+      // ★ 終極手動發送按鈕
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) {
           liff.login({ redirectUri: window.location.href });
           return;
         }
-
-        try {
-          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
-          
-          if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-            // 在手機版 LINE 內部，直接使用原生的體驗最順暢
-            const res = await liff.shareTargetPicker([flexMsg]);
-            if (res) {
-              showToast('✅ 名片已成功發送！');
-              setFlexModalItem(null);
-            }
-          } else {
-            // 【終極解答】：在 PC 電腦版，直接呼叫您的黑科技彈出小視窗！
-            // JSON 已經修復為官方最嚴謹的標準格式，不會再觸發 400 Bad Request 了
-            const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
-            const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
-
-            const w = 600, h = 700;
-            const left = Math.round((window.screen.width - w) / 2);
-            const top = Math.round((window.screen.height - h) / 2);
-
-            const popup = window.open(
-              shareUrl,
-              'line_share_picker',
-              `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
-            );
-
-            if (!popup) {
-              showToast('⚠️ 請允許此網站的彈出視窗，再重試一次', 'error');
-              return;
-            }
-
-            const timer = setInterval(() => {
-              if (popup.closed) {
-                clearInterval(timer);
-                showToast('✅ 名片已成功發送！');
-                setFlexModalItem(null);
-              }
-            }, 600);
-          }
-        } catch (error) { 
-          console.error(error);
-          showToast('發送取消或發生錯誤', 'error'); 
-        }
+        await executeShare(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions, false);
       };
 
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
@@ -1044,9 +1015,8 @@
                     </div>
                     
                     <div className="pt-4">
-                      {/* 【終極完美版】PC/手機通用按鈕 */}
                       <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg">
-                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (支援 PC 版)
+                        <Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友 (自動偵測手機/PC)
                       </button>
                     </div>
                   </div>
