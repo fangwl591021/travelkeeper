@@ -59,6 +59,8 @@
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?tour_id=${tourItem.id}&ref_uid=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
+        
+        // 觸發 LIFF 的專屬連結 (遞迴轉傳機制)
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&tour_id=${tourItem.id}&ref_uid=${refUidStr || ''}&opts=${optsStr}`;
 
         const buttons = [{ type: "button", style: "primary", color: "#00B900", height: "sm", margin: "sm", action: { type: "uri", label: "了解更多 / 立即報名", uri: trackingUrl } }];
@@ -90,7 +92,7 @@
                   ]
                 },
                 { type: "box", layout: "vertical", position: "absolute", backgroundColor: "#FF0000", cornerRadius: "xl", paddingTop: "7px", paddingBottom: "7px", paddingStart: "20px", paddingEnd: "20px", offsetTop: "10px", offsetEnd: "10px",
-                  action: { type: "uri", label: "badge", uri: shareLiffUrl }, 
+                  action: { type: "uri", label: "badge", uri: shareLiffUrl },
                   contents: [{ type: "text", text: "分享好友", color: "#ffffff", size: "12px", weight: "bold" }]
                 }
               ]
@@ -188,13 +190,13 @@
                 const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
                 setShareStatusText("正在喚起 LINE 通訊錄...");
 
-                // 手機版：直接使用原生滿版喚起
+                // 【修正】：不論是否在手機內，如果沒有原生支援，就直接用 URL 跳轉
                 if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
                     await liff.shareTargetPicker([flexMsg]);
                     setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
                     setTimeout(() => liff.closeWindow(), 1500);
                 } else {
-                    // 電腦版 / 外部瀏覽器：直接重導向至隱藏版 API
+                    // 使用您的黑科技：將 JSON 轉碼後帶入 LINE 官方的 shareTargetPicker URL
                     const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
                     const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
                     window.location.replace(shareUrl);
@@ -429,7 +431,7 @@
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       // ============================================================
-      // ★ 終極分享機制：完美還原 PC + 手機通用邏輯 (window.open + encodeURI)
+      // ★ 終極發送機制：直接在 PC 打開獨立小視窗並塞入轉碼的 JSON
       // ============================================================
       const triggerFlexSharing = async () => {
         if (!isLiffReady || !liff.isLoggedIn()) return showToast('請先登入', 'error');
@@ -438,14 +440,14 @@
           const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
           
           if (liff.isInClient() && liff.isApiAvailable('shareTargetPicker')) {
-            // 在手機版 LINE 內部，直接使用原生的體驗最順暢
+            // 在手機版 LINE 內部，使用原生
             const res = await liff.shareTargetPicker([flexMsg]);
             if (res) {
               showToast('✅ 名片已成功發送！');
               setFlexModalItem(null);
             }
           } else {
-            // PC 版或外部瀏覽器：使用您實測成功的黑科技！
+            // 【修復核心】：在電腦版/外部瀏覽器，直接用 window.open 開啟官方的 URL 進行分享
             const messagesParam = encodeURIComponent(JSON.stringify([flexMsg]));
             const shareUrl = `https://access.line.me/oauth2/v2.1/liff/shareTargetPicker?liffId=${LIFF_ID}&messages=${messagesParam}`;
 
@@ -467,7 +469,7 @@
             const timer = setInterval(() => {
               if (popup.closed) {
                 clearInterval(timer);
-                showToast('✅ 名片已成功發送！');
+                showToast('✅ 名片發送操作完成！');
                 setFlexModalItem(null);
               }
             }, 600);
@@ -484,7 +486,6 @@
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
-      // --- 全螢幕分享載入畫面 ---
       if (isAutoSharing) {
          return (
            <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center">
@@ -547,12 +548,7 @@
                     <tbody className="divide-y divide-gray-100">
                       {referredUsers.length === 0 ? <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">該經銷商目前尚未帶來任何新註冊會員</td></tr> : 
                        referredUsers.map(u => (
-                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-4 text-sm text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td>
-                          <td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td>
-                          <td className="p-4 font-medium text-gray-600">{u.phone}</td>
-                          <td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td>
-                        </tr>
+                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors"><td className="p-4 text-sm text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td><td className="p-4 font-medium text-gray-600">{u.phone}</td><td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td></tr>
                       ))}
                     </tbody>
                  </table>
@@ -752,7 +748,7 @@
                         <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
                         <div>
                           <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>
-                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友 (支援手機/PC)！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
+                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
                         </div>
                       </div>
                       <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div>
