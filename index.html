@@ -56,6 +56,9 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LOGIN_URL = 'login.html'; 
 
+    // 【新增核心常數】最高管理員的 LINE UID
+    const ADMIN_UID = 'Uf729764dbb5b652a5a90a467320bea29';
+
     const HOT_SPOTS = ['國旅', '亞洲', '歐洲', '美洲', '大洋洲', '非洲'];
 
     function App() {
@@ -69,10 +72,14 @@
       const [toast, setToast] = useState(null);
       const [isLoading, setIsLoading] = useState(false);
       
+      // 帳號與 LIFF 狀態
       const [liffProfile, setLiffProfile] = useState(null);
       const [isLiffReady, setIsLiffReady] = useState(false);
       const [distributorStatus, setDistributorStatus] = useState(null); 
       const [isGeneralMember, setIsGeneralMember] = useState(false);
+      
+      // 【新增狀態】是否為系統管理員
+      const [isAdmin, setIsAdmin] = useState(false);
 
       const [crmDistributors, setCrmDistributors] = useState([]);
       const [crmUsers, setCrmUsers] = useState([]);
@@ -96,7 +103,7 @@
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
 
-      // 【新增】核准設定視窗的狀態
+      // 核准設定視窗的狀態
       const [approveModalUser, setApproveModalUser] = useState(null);
       const [approveData, setApproveData] = useState({ commission: 10, note: '' });
 
@@ -135,6 +142,11 @@
           setCrmUsers(userArr);
 
           if (currentProfile) {
+            // 【核心安全檢查】驗證 UID 是否為最高管理員
+            if (currentProfile.userId === ADMIN_UID) {
+              setIsAdmin(true);
+            }
+
             const meDist = distArr.find(d => d.uid === currentProfile.userId);
             if (meDist) setDistributorStatus(meDist.status);
             
@@ -274,7 +286,6 @@
         } catch (error) { showToast('下架發生錯誤', 'error'); }
       };
 
-      // 【新增】送出審核設定
       const handleApproveSubmit = async () => {
         if (!approveModalUser) return;
         try {
@@ -351,8 +362,21 @@
         } catch (error) { showToast('發送失敗：請在 LINE APP 內操作', 'error'); }
       };
 
-      // 取得經銷商當前的分潤比例 (預設10%)
       const myCommissionRate = getCurrentUserData().commission || 10;
+
+      // 【新增獨立元件】權限不足警告畫面
+      const AdminDeniedScreen = () => (
+        <div className="w-full max-w-3xl mx-auto px-4 py-32 animate-fade-in text-center">
+          <AlertCircle className="w-24 h-24 text-red-500 mx-auto mb-6" />
+          <h2 className="text-4xl font-bold text-gray-800 mb-4">權限不足 (Access Denied)</h2>
+          <p className="text-gray-500 text-xl mb-10">此區塊為最高權限管理員專屬，您的帳號無權限訪問。</p>
+          {!liffProfile && (
+            <button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 px-12 rounded-2xl shadow-lg transition-all text-xl">
+              管理員請先登入 LINE
+            </button>
+          )}
+        </div>
+      );
 
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
@@ -367,8 +391,14 @@
                   <button onClick={() => changeTab('home')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>找行程</button>
                   <button onClick={() => changeTab('member')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600 hover:bg-gray-100'}`}><Users className="w-4 h-4 mr-1.5" /> 會員中心</button>
                   <button onClick={() => changeTab('distributor')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 hover:bg-gray-100'}`}><Briefcase className="w-4 h-4 mr-1.5" /> 經銷商專區</button>
-                  <button onClick={() => changeTab('crm')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台 CRM</button>
-                  <button onClick={() => changeTab('admin')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台上稿</button>
+                  
+                  {/* 【安全防護】僅管理員可見後台按鈕 */}
+                  {isAdmin && (
+                    <button onClick={() => changeTab('crm')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台 CRM</button>
+                  )}
+                  {isAdmin && (
+                    <button onClick={() => changeTab('admin')} className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台上稿</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -384,7 +414,9 @@
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center">
                     <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-wider mb-4 drop-shadow-lg">探索世界的美好</h1><p className="text-lg md:text-xl lg:text-2xl drop-shadow-md font-light">發現您的下一個夢幻旅程</p>
                   </div>
-                  <label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0"><Camera className="w-5 h-5 mr-2 text-blue-600" />更換 Banner<input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} /></label>
+                  {isAdmin && (
+                    <label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0"><Camera className="w-5 h-5 mr-2 text-blue-600" />更換 Banner<input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} /></label>
+                  )}
                 </div>
 
                 <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
@@ -530,125 +562,129 @@
               </div>
             )}
 
-            {/* ====== 模組 D：後台 CRM ====== */}
+            {/* ====== 模組 D：後台 CRM (受限權限) ====== */}
             {activeTab === 'crm' && (
-              <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-                  <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center">
-                    <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 管理</h2><p className="text-gray-500 mt-2">檢視一般會員名單，審核經銷商資格與業績。</p></div>
-                  </div>
-                  <div className="flex border-b border-gray-200 px-6 pt-4 bg-gray-50">
-                    <button onClick={() => setCrmSubTab('distributors')} className={`pb-3 px-6 font-bold text-lg transition-colors ${crmSubTab === 'distributors' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>經銷商審核與管理</button>
-                    <button onClick={() => setCrmSubTab('users')} className={`pb-3 px-6 font-bold text-lg transition-colors ${crmSubTab === 'users' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>會員列表</button>
-                  </div>
-                  <div className="overflow-x-auto p-4">
-                    {crmSubTab === 'distributors' ? (
-                      <table className="w-full text-left border-collapse min-w-[1000px]">
-                        <thead><tr className="bg-gray-100 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">申請日期</th><th className="p-4 font-bold text-gray-600 text-sm">經銷商資訊</th><th className="p-4 font-bold text-gray-600 text-sm">審核資料 (公司/統編)</th><th className="p-4 font-bold text-gray-600 text-sm">資格狀態</th><th className="p-4 font-bold text-gray-600 text-sm text-right">累積業績</th><th className="p-4 font-bold text-gray-600 text-sm text-center">操作</th></tr></thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {crmDistributors.length === 0 ? <tr><td colSpan="6" className="p-8 text-center text-gray-400">尚無資料</td></tr> : 
-                           crmDistributors.map(user => (
-                            <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
-                              <td className="p-4 text-sm text-gray-500">{user.joinDate}</td>
-                              <td className="p-4"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td>
-                              <td className="p-4"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td>
-                              <td className="p-4">
-                                {user.status === 'approved' ? (
-                                  <div>
-                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span>
-                                    <span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span>
-                                  </div>
-                                ) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}
-                              </td>
-                              <td className="p-4 text-right"><p className="font-bold text-gray-800 text-lg">{user.sales} 筆</p><p className="text-xs text-gray-500 font-medium">${Number(user.revenue).toLocaleString()}</p></td>
-                              <td className="p-4 text-center">
-                                {user.status === 'pending' ? (
-                                  <button onClick={() => { setApproveModalUser(user); setApproveData({ commission: 10, note: '' }); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm">審核開通</button>
-                                ) : (
-                                  <button className="border border-gray-300 text-gray-600 text-sm font-bold px-4 py-2 rounded-lg">停權</button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <table className="w-full text-left border-collapse">
-                        <thead><tr className="bg-gray-100 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">註冊日期</th><th className="p-4 font-bold text-gray-600 text-sm">會員暱稱</th><th className="p-4 font-bold text-gray-600 text-sm">聯絡方式</th></tr></thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {crmUsers.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚無資料</td></tr> : 
-                           crmUsers.map(user => (
-                            <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
-                              <td className="p-4 text-sm text-gray-500">{user.joinDate}</td>
-                              <td className="p-4 font-bold text-gray-800 text-lg">{user.name}</td>
-                              <td className="p-4"><p className="text-sm text-gray-800">{user.phone}</p></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+              isAdmin ? (
+                <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
+                  <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+                    <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center">
+                      <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 管理</h2><p className="text-gray-500 mt-2">檢視一般會員名單，審核經銷商資格與業績。</p></div>
+                    </div>
+                    <div className="flex border-b border-gray-200 px-6 pt-4 bg-gray-50">
+                      <button onClick={() => setCrmSubTab('distributors')} className={`pb-3 px-6 font-bold text-lg transition-colors ${crmSubTab === 'distributors' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>經銷商審核與管理</button>
+                      <button onClick={() => setCrmSubTab('users')} className={`pb-3 px-6 font-bold text-lg transition-colors ${crmSubTab === 'users' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>會員列表</button>
+                    </div>
+                    <div className="overflow-x-auto p-4">
+                      {crmSubTab === 'distributors' ? (
+                        <table className="w-full text-left border-collapse min-w-[1000px]">
+                          <thead><tr className="bg-gray-100 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">申請日期</th><th className="p-4 font-bold text-gray-600 text-sm">經銷商資訊</th><th className="p-4 font-bold text-gray-600 text-sm">審核資料 (公司/統編)</th><th className="p-4 font-bold text-gray-600 text-sm">資格狀態</th><th className="p-4 font-bold text-gray-600 text-sm text-right">累積業績</th><th className="p-4 font-bold text-gray-600 text-sm text-center">操作</th></tr></thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {crmDistributors.length === 0 ? <tr><td colSpan="6" className="p-8 text-center text-gray-400">尚無資料</td></tr> : 
+                             crmDistributors.map(user => (
+                              <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
+                                <td className="p-4 text-sm text-gray-500">{user.joinDate}</td>
+                                <td className="p-4"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td>
+                                <td className="p-4"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td>
+                                <td className="p-4">
+                                  {user.status === 'approved' ? (
+                                    <div>
+                                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span>
+                                      <span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span>
+                                    </div>
+                                  ) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}
+                                </td>
+                                <td className="p-4 text-right"><p className="font-bold text-gray-800 text-lg">{user.sales} 筆</p><p className="text-xs text-gray-500 font-medium">${Number(user.revenue).toLocaleString()}</p></td>
+                                <td className="p-4 text-center">
+                                  {user.status === 'pending' ? (
+                                    <button onClick={() => { setApproveModalUser(user); setApproveData({ commission: 10, note: '' }); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm">審核開通</button>
+                                  ) : (
+                                    <button className="border border-gray-300 text-gray-600 text-sm font-bold px-4 py-2 rounded-lg">停權</button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <table className="w-full text-left border-collapse">
+                          <thead><tr className="bg-gray-100 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">註冊日期</th><th className="p-4 font-bold text-gray-600 text-sm">會員暱稱</th><th className="p-4 font-bold text-gray-600 text-sm">聯絡方式</th></tr></thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {crmUsers.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚無資料</td></tr> : 
+                             crmUsers.map(user => (
+                              <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
+                                <td className="p-4 text-sm text-gray-500">{user.joinDate}</td>
+                                <td className="p-4 font-bold text-gray-800 text-lg">{user.name}</td>
+                                <td className="p-4"><p className="text-sm text-gray-800">{user.phone}</p></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : <AdminDeniedScreen />
             )}
 
-            {/* ====== 模組 E：後台上稿系統 ====== */}
+            {/* ====== 模組 E：後台上稿系統 (受限權限) ====== */}
             {activeTab === 'admin' && (
-              <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
-                  <div className="flex justify-between items-center border-b pb-4 mb-6"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統</h2><button onClick={handleUpdateContent} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm"><RefreshCw className="w-4 h-4 mr-2" /> {draftData.id ? '儲存修改' : '手動新增上架'}</button></div>
-                  {!draftData.id && (
-                    <div className="flex space-x-4 mb-8 max-w-2xl">
-                      <button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button>
-                      <button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button>
-                    </div>
-                  )}
-                  {uploadMode === 'dm' && !draftData.id && (
-                    <div className="mb-8 w-full max-w-4xl">
-                      <div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative">
-                        <div className="space-y-2 text-center"><ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" /><label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 border shadow-sm px-4 py-2"><span>選擇 DM 圖片</span><input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} /></label></div>
-                        {ocrStatus === 'processing' && <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm"><RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" /><p className="text-blue-700 font-bold text-2xl">ChatGPT 解析中...</p></div>}
+              isAdmin ? (
+                <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
+                  <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
+                    <div className="flex justify-between items-center border-b pb-4 mb-6"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統</h2><button onClick={handleUpdateContent} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm"><RefreshCw className="w-4 h-4 mr-2" /> {draftData.id ? '儲存修改' : '手動新增上架'}</button></div>
+                    {!draftData.id && (
+                      <div className="flex space-x-4 mb-8 max-w-2xl">
+                        <button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button>
+                        <button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button>
                       </div>
-                    </div>
-                  )}
-                  {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
-                    <div className="bg-gray-50/80 p-6 lg:p-8 rounded-2xl border border-gray-200 relative">
-                      {draftData.id && <button onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setUploadMode('dm'); setOcrStatus('idle'); }} className="absolute top-6 right-6 text-gray-400 bg-white rounded-full p-1.5 border shadow-sm"><X className="w-6 h-6" /></button>}
-                      <div className="flex items-center mb-8"><h3 className="text-2xl font-bold">{draftData.id ? '✏️ 修改行程' : '📝 行程內容草稿'}</h3></div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-                        <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
-                        <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label><select value={draftData.region} onChange={(e) => setDraftData({...draftData, region: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 bg-white outline-none text-lg"><option value="">請選擇</option><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
-                        <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label><input type="number" value={draftData.price} onChange={(e) => setDraftData({...draftData, price: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
-                        
-                        <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">出發日期</label><input type="date" value={draftData.startDate} onChange={(e) => setDraftData({...draftData, startDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
-                        <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">結束日期</label><input type="date" value={draftData.endDate} onChange={(e) => setDraftData({...draftData, endDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
-                        <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg" placeholder="例如：7"/></div>
-                        
-                        <div className="lg:col-span-4">
-                          <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址</label>
-                          <div className="flex gap-4 items-center"><input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600"/><img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" onError={(e)=>e.target.src='https://via.placeholder.com/150'} /></div>
+                    )}
+                    {uploadMode === 'dm' && !draftData.id && (
+                      <div className="mb-8 w-full max-w-4xl">
+                        <div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative">
+                          <div className="space-y-2 text-center"><ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" /><label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 border shadow-sm px-4 py-2"><span>選擇 DM 圖片</span><input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} /></label></div>
+                          {ocrStatus === 'processing' && <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm"><RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" /><p className="text-blue-700 font-bold text-2xl">ChatGPT 解析中...</p></div>}
                         </div>
                       </div>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案</label><textarea rows={6} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed"/></div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                    {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
+                      <div className="bg-gray-50/80 p-6 lg:p-8 rounded-2xl border border-gray-200 relative">
+                        {draftData.id && <button onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setUploadMode('dm'); setOcrStatus('idle'); }} className="absolute top-6 right-6 text-gray-400 bg-white rounded-full p-1.5 border shadow-sm"><X className="w-6 h-6" /></button>}
+                        <div className="flex items-center mb-8"><h3 className="text-2xl font-bold">{draftData.id ? '✏️ 修改行程' : '📝 行程內容草稿'}</h3></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+                          <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
+                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label><select value={draftData.region} onChange={(e) => setDraftData({...draftData, region: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 bg-white outline-none text-lg"><option value="">請選擇</option><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
+                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label><input type="number" value={draftData.price} onChange={(e) => setDraftData({...draftData, price: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
+                          
+                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">出發日期</label><input type="date" value={draftData.startDate} onChange={(e) => setDraftData({...draftData, startDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
+                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">結束日期</label><input type="date" value={draftData.endDate} onChange={(e) => setDraftData({...draftData, endDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
+                          <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg" placeholder="例如：7"/></div>
+                          
+                          <div className="lg:col-span-4">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址</label>
+                            <div className="flex gap-4 items-center"><input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600"/><img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" onError={(e)=>e.target.src='https://via.placeholder.com/150'} /></div>
+                          </div>
+                        </div>
+                        <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案</label><textarea rows={6} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed"/></div>
+                      </div>
+                    )}
+                  </div>
 
-                <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100 mt-6">
-                  <div className="flex justify-between items-center mb-6 border-b pb-4"><h3 className="text-2xl font-bold flex items-center"><FileText className="w-6 h-6 mr-2" /> 現有行程管理</h3></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
-                    {itineraries.map(item => (
-                      <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                        <div className="flex gap-5 mb-5"><img src={item.image} className="w-28 h-28 rounded-xl object-cover border" onError={(e)=>e.target.src='https://via.placeholder.com/150'}/><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
-                        <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
-                          <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
-                          <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
+                  <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100 mt-6">
+                    <div className="flex justify-between items-center mb-6 border-b pb-4"><h3 className="text-2xl font-bold flex items-center"><FileText className="w-6 h-6 mr-2" /> 現有行程管理</h3></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
+                      {itineraries.map(item => (
+                        <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
+                          <div className="flex gap-5 mb-5"><img src={item.image} className="w-28 h-28 rounded-xl object-cover border" onError={(e)=>e.target.src='https://via.placeholder.com/150'}/><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
+                          <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
+                            <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
+                            <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : <AdminDeniedScreen />
             )}
           </div>
 
