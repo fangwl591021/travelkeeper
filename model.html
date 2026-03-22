@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅遊管家 · 推廣工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Noto Sans TC', sans-serif; }
+    :root {
+      --red: #b82337;
+      --red-dark: #8f1a29;
+      --green: #00B900;
+      --emerald: #10b981;
+      --slate: #1e293b;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+    /* ── Animations ── */
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes popIn  { 0% { transform:scale(.85); opacity:0; } 60% { transform:scale(1.04); } 100% { transform:scale(1); opacity:1; } }
+    @keyframes shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
+    .anim-fade-up  { animation: fadeUp .35s ease both; }
+    .anim-pop-in   { animation: popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
+    .shimmer       { animation: shimmer 1.4s ease infinite; }
+
+    /* ── Card ── */
+    .tour-card {
+      position: relative;
+      background: #fff;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+      user-select: none;
+    }
+    .tour-card:hover { border-color: #94a3b8; box-shadow: 0 4px 20px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .tour-card.selected {
+      border-color: var(--emerald);
+      box-shadow: 0 0 0 3px rgba(16,185,129,.2), 0 4px 20px rgba(0,0,0,.08);
+    }
+
+    /* Checkbox overlay */
+    .card-check {
+      position: absolute; top: 8px; left: 8px; z-index: 5;
+      width: 22px; height: 22px; border-radius: 6px;
+      border: 2.5px solid #fff;
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, border-color .15s;
+    }
+    .tour-card.selected .card-check {
+      background: var(--emerald);
+      border-color: var(--emerald);
+    }
+    .card-check svg { display:none; }
+    .tour-card.selected .card-check svg { display:block; }
+
+    /* Badge */
+    .mode-badge {
+      font-size: 10px; font-weight: 900; letter-spacing: .08em;
+      padding: 3px 8px; border-radius: 99px;
+    }
+
+    /* Bottom bar */
+    #bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      background: var(--slate);
+      box-shadow: 0 -4px 24px rgba(0,0,0,.3);
+      padding: 12px 16px;
+      transform: translateY(100%);
+      transition: transform .3s cubic-bezier(.16,1,.3,1);
+    }
+    #bottom-bar.visible { transform: translateY(0); }
+
+    /* Tab */
+    .tab-btn { transition: all .2s; }
+    .tab-btn.active {
+      background: var(--red);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(184,35,55,.35);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset:0; z-index: 80;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity:0; pointer-events:none; transition: opacity .25s;
+    }
+    .modal-overlay.open { opacity:1; pointer-events:auto; }
+    .modal-sheet {
+      background: #fff; border-radius: 20px 20px 0 0;
+      width: 100%; max-width: 600px;
+      max-height: 90vh; overflow-y: auto;
+      transform: translateY(40px); transition: transform .3s cubic-bezier(.16,1,.3,1);
+    }
+    .modal-overlay.open .modal-sheet { transform: translateY(0); }
+
+    /* Preview bubble */
+    .preview-bubble {
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      border: 3px solid #1e293b;
+      background: #fff;
+    }
+    .preview-item { display:flex; align-items:center; padding:6px 10px; border-bottom:1px solid #f1f5f9; }
+    .preview-item:last-child { border-bottom:none; }
+
+    /* Skeleton */
+    .skeleton { background: linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:200% 100%; animation: skeleton-slide 1.2s infinite; border-radius:6px; }
+    @keyframes skeleton-slide { 0%{background-position:200%} 100%{background-position:-200%} }
+
+    /* Btn */
+    .btn-green { background:var(--green); color:#fff; font-weight:700; border-radius:10px; transition: filter .15s; }
+    .btn-green:hover { filter: brightness(1.1); }
+    .btn-red   { background:var(--red); color:#fff; font-weight:700; border-radius:10px; transition: filter .15s; }
+    .btn-red:hover { filter: brightness(1.08); }
+    .btn-ghost { background:#f1f5f9; color:#334155; font-weight:700; border-radius:10px; transition: background .15s; }
+    .btn-ghost:hover { background:#e2e8f0; }
+
+    /* Toast */
+    #toast {
+      position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(16px);
+      background:#1e293b; color:#fff; padding:10px 20px; border-radius:10px;
+      font-size:13px; font-weight:700; white-space:nowrap;
+      opacity:0; pointer-events:none; transition: all .25s; z-index:999;
+    }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* Social icon row */
+    .soc-check label { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; cursor:pointer; border:1.5px solid #e2e8f0; transition:all .15s; font-size:13px; font-weight:600; }
+    .soc-check input:checked + label { border-color:var(--emerald); background:#f0fdf4; color:#065f46; }
+    .soc-check input { display:none; }
+  </style>
+</head>
+<body class="bg-[#F0F4F8] min-h-screen pb-28">
+
+  <!-- ── TOP NAV ── -->
+  <nav class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        <span class="font-black text-lg text-slate-800 tracking-wide">推廣工具</span>
+        <span class="mode-badge bg-emerald-100 text-emerald-700 ml-2">Model</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <!-- Mode toggle -->
+        <div class="flex bg-slate-100 rounded-lg p-0.5 text-xs font-bold">
+          <button id="mode-single" onclick="setMode('single')" class="tab-btn active px-3 py-1.5 rounded-md transition-all">單選</button>
+          <button id="mode-multi"  onclick="setMode('multi')"  class="tab-btn px-3 py-1.5 rounded-md transition-all text-slate-500">多選</button>
+        </div>
+        <!-- Profile -->
+        <img id="nav-avatar" src="" class="w-8 h-8 rounded-full object-cover border-2 border-slate-200 hidden">
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── SEARCH BAR ── -->
+  <div class="sticky top-14 z-30 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex gap-2">
+      <div class="relative flex-1">
+        <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search-input" type="text" placeholder="搜尋行程名稱…" oninput="filterCards()" class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-400 transition">
+      </div>
+      <select id="filter-region" onchange="filterCards()" class="text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-emerald-400 transition">
+        <option value="">全部地區</option>
+        <option value="國旅">國旅</option>
+        <option value="亞洲">亞洲</option>
+        <option value="歐洲">歐洲</option>
+        <option value="美洲">美洲</option>
+        <option value="大洋洲">大洋洲</option>
+        <option value="非洲">非洲</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ── MAIN GRID ── -->
+  <main class="max-w-5xl mx-auto px-4 pt-5">
+    <!-- count -->
+    <div class="flex items-center justify-between mb-4">
+      <p id="count-label" class="text-xs font-bold text-slate-400 tracking-wide"></p>
+      <button id="select-all-btn" onclick="toggleSelectAll()" class="text-xs font-bold text-emerald-600 hidden underline underline-offset-2">全選</button>
+    </div>
+    <!-- grid -->
+    <div id="cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 anim-fade-up"></div>
+    <!-- empty state -->
+    <div id="empty-state" class="hidden py-24 text-center">
+      <div class="text-5xl mb-4">🔍</div>
+      <p class="text-slate-400 font-bold">找不到符合的行程</p>
+    </div>
+  </main>
+
+  <!-- ── BOTTOM BAR (multi select) ── -->
+  <div id="bottom-bar">
+    <div class="max-w-5xl mx-auto flex items-center gap-3">
+      <div class="flex-1">
+        <p class="text-white text-sm font-bold leading-none">已選 <span id="selected-count" class="text-emerald-400 text-lg font-black">0</span> 個行程</p>
+        <p class="text-slate-400 text-xs mt-0.5">最多可選 8 個</p>
+      </div>
+      <button onclick="clearSelection()" class="btn-ghost text-xs px-4 py-2.5">清除</button>
+      <button onclick="openShareModal()" id="share-btn" disabled class="btn-green text-sm px-5 py-2.5 opacity-50 cursor-not-allowed transition-all">
+        發送推廣 ✈️
+      </button>
+    </div>
+  </div>
+
+  <!-- ── SINGLE SHARE MODAL ── -->
+  <div id="single-modal" class="modal-overlay" onclick="closeSingleModal(event)">
+    <div class="modal-sheet anim-pop-in" style="max-width:540px;">
+      <div class="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-[20px]">
+        <div>
+          <p class="font-black text-slate-800 text-base">產生推廣連結</p>
+          <p id="single-modal-title" class="text-xs text-slate-400 mt-0.5 truncate max-w-xs"></p>
+        </div>
+        <button onclick="document.getElementById('single-modal').classList.remove('open')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition">✕</button>
+      </div>
+      <div class="px-5 py-5 space-y-5">
+        <!-- Contact options -->
+        <div>
+          <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">名片聯絡按鈕</p>
+          <div id="single-soc-options" class="grid grid-cols-2 gap-2 soc-check"></div>
+        </div>
+        <!-- Actions -->
+        <div class="space-y-2.5 pt-2 border-t border-slate-100">
+          <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">推廣方式</p>
+          <button onclick="singleAction('web')"   class="w-full btn-ghost text-sm py-3 flex items-center justify-center gap-2">🔗 複製「純網頁版」連結（全場域）</button>
+          <button onclick="singleAction('send')"  class="w-full bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition">📨 複製「LINE OA 原地傳送」連結</button>
+          <button onclick="singleAction('share')" class="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition">📋 複製「群發轉傳」連結</button>
+          <button onclick="singleAction('picker')" class="w-full btn-green text-sm py-3 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            立即分享給好友（喚起通訊錄）
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MULTI SHARE MODAL ── -->
+  <div id="multi-modal" class="modal-overlay" onclick="closeMultiModal(event)">
+    <div class="modal-sheet" style="max-width:600px;">
+      <div class="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-[20px]">
+        <div>
+          <p class="font-black text-slate-800 text-base">多選推廣 · V3 商品列表卡片</p>
+          <p class="text-xs text-slate-400 mt-0.5">已選 <span id="modal-count" class="text-emerald-600 font-black">0</span> 個行程</p>
+        </div>
+        <button onclick="document.getElementById('multi-modal').classList.remove('open')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition">✕</button>
+      </div>
+
+      <div class="px-5 py-5 flex flex-col gap-5">
+        <!-- Preview -->
+        <div>
+          <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">名片預覽</p>
+          <div class="bg-[#749cbd] rounded-2xl p-4 flex justify-center">
+            <div id="multi-preview" class="preview-bubble w-full max-w-[280px] bg-white"></div>
+          </div>
+        </div>
+
+        <!-- Hero image picker -->
+        <div>
+          <p class="text-xs font-bold text-slate-500 mb-1.5">主圖（預設使用第一張行程圖）</p>
+          <div class="flex gap-2">
+            <input id="multi-hero-url" type="text" placeholder="https://..." oninput="renderMultiPreview()" class="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-emerald-400 font-mono">
+            <button onclick="document.getElementById('multi-hero-file').click()" class="text-xs btn-ghost px-3 py-2">換圖</button>
+            <input type="file" id="multi-hero-file" class="hidden" accept="image/*" onchange="uploadHeroImage(this)">
+          </div>
+        </div>
+
+        <!-- Button style -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-xs font-bold text-slate-500 mb-1.5">按鈕底色</p>
+            <input type="color" id="multi-btn-color" value="#00B900" oninput="renderMultiPreview()" class="w-full h-10 rounded-lg border border-slate-200 cursor-pointer">
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-500 mb-1.5">按鈕文字色</p>
+            <input type="color" id="multi-btn-txt" value="#FFFFFF" oninput="renderMultiPreview()" class="w-full h-10 rounded-lg border border-slate-200 cursor-pointer">
+          </div>
+        </div>
+
+        <!-- Contact options -->
+        <div>
+          <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">底部社群按鈕</p>
+          <div id="multi-soc-options" class="grid grid-cols-3 gap-2 soc-check"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="space-y-2.5 pt-2 border-t border-slate-100">
+          <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">推廣方式</p>
+          <button onclick="multiAction('copy')"   class="w-full btn-ghost text-sm py-3 flex items-center justify-center gap-2">📋 複製 Flex JSON（貼到 LINE OA）</button>
+          <button onclick="multiAction('picker')" class="w-full btn-green text-sm py-3 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            立即分享給好友（喚起通訊錄）
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TOAST ── -->
+  <div id="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIG
+========================================================= */
+const WORKER_URL   = 'https://travelkeeper.fangwl591021.workers.dev';
+const LIFF_ID      = '2009367829-BDZCGti8';
+const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
+
+/* Social icon CDN mapping */
+const SOC_ICONS = {
+  YT:   'https://aiwe.cc/wp-content/uploads/2026/02/87e6f8054bd3672f2885e38bddb112e2.png',
+  FB:   'https://aiwe.cc/wp-content/uploads/2026/02/3986d1fd62384c8cdaa0e7c82f2740d1.png',
+  IG:   'https://aiwe.cc/wp-content/uploads/2026/02/0089b4a4960e49eba9140544307711c6.png',
+  LINE: 'https://aiwe.cc/wp-content/uploads/2026/02/b75a5831fd553c7130aeafbb9783cf79.png',
+  MAP:  'https://aiwe.cc/wp-content/uploads/2026/02/5af1a3a285c2bdee4192223e31e1f833.png',
+  TEL:  'https://aiwe.cc/wp-content/uploads/2026/02/7254567388850a6b4d77b75208ebd4b8.png',
+};
+
+/* =========================================================
+   STATE
+========================================================= */
+let allItineraries  = [];
+let filtered        = [];
+let selectedIds     = new Set();
+let mode            = 'single'; // 'single' | 'multi'
+let liffProfile     = null;
+let distData        = null;
+let currentTourId   = null; // for single modal
+
+const urlParams = new URLSearchParams(window.location.search);
+const refUid    = urlParams.get('r') || localStorage.getItem('tracking_ref_uid') || '';
+
+/* =========================================================
+   INIT
+========================================================= */
+(async function init() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
+    const profile = await liff.getProfile();
+    liffProfile = profile;
+    document.getElementById('nav-avatar').src = profile.pictureUrl || '';
+    document.getElementById('nav-avatar').classList.remove('hidden');
+    await loadDistData(profile.userId);
+  } catch(e) { console.error('LIFF init failed', e); }
+
+  await fetchItineraries();
+  buildSocOptions();
+})();
+
+async function loadDistData(uid) {
+  try {
+    const res  = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${Date.now()}`);
+    const data = await res.json();
+    if (data.success && data.data?.role === 'distributor') {
+      distData = data.data.distributorData || {};
+    }
+  } catch(e) {}
+}
+
+async function fetchItineraries() {
+  renderSkeletons();
+  try {
+    const res  = await fetch(`${WORKER_URL}/api/itineraries?_t=${Date.now()}`);
+    const data = await res.json();
+    allItineraries = Array.isArray(data) ? data : (data?.data || []);
+    filtered = allItineraries;
+    renderCards();
+    document.getElementById('count-label').textContent = `共 ${allItineraries.length} 個行程`;
+  } catch(e) {
+    document.getElementById('cards-grid').innerHTML = `<div class="col-span-full py-20 text-center text-slate-400 font-bold">載入失敗，請重新整理</div>`;
+  }
+}
+
+/* =========================================================
+   RENDER CARDS
+========================================================= */
+function renderSkeletons() {
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = Array.from({length:8}).map(() => `
+    <div class="bg-white rounded-xl overflow-hidden border-2 border-slate-100">
+      <div class="skeleton h-36 w-full"></div>
+      <div class="p-3 space-y-2">
+        <div class="skeleton h-3 w-3/4"></div>
+        <div class="skeleton h-3 w-1/2"></div>
+        <div class="skeleton h-4 w-1/3 mt-3"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCards() {
+  const grid = document.getElementById('cards-grid');
+  const empty = document.getElementById('empty-state');
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  grid.innerHTML = filtered.map((item, i) => {
+    const isSel = selectedIds.has(String(item.id));
+    return `
+    <div class="tour-card ${isSel ? 'selected' : ''} anim-fade-up"
+         style="animation-delay:${Math.min(i * 30, 300)}ms"
+         data-id="${item.id}"
+         onclick="onCardClick('${item.id}')">
+      <!-- check badge (multi mode only) -->
+      <div class="card-check" style="${mode==='single'?'display:none':''}">
+        <svg width="12" height="12" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <!-- region badge -->
+      <span style="position:absolute;top:8px;right:8px;z-index:5;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;letter-spacing:.05em;">${item.region||''}</span>
+      <!-- image -->
+      <div class="overflow-hidden bg-slate-100" style="height:130px;">
+        <img src="${item.image||'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400&q=70'}"
+             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+             onerror="this.src='https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400&q=70'">
+      </div>
+      <!-- info -->
+      <div class="p-3">
+        <p class="text-[12px] font-bold text-slate-800 line-clamp-2 leading-snug mb-2">${item.title}</p>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-400">${item.days} 天</span>
+          <span class="text-[13px] font-black" style="color:var(--red)">$${Number(item.price).toLocaleString()}</span>
+        </div>
+        ${mode==='single'?`<button class="mt-2 w-full text-[11px] font-bold py-1.5 rounded-lg text-white" style="background:var(--emerald)">產生推廣連結</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* =========================================================
+   CARD CLICK
+========================================================= */
+function onCardClick(id) {
+  if (mode === 'single') {
+    openSingleModal(id);
+    return;
+  }
+  // multi
+  const sid = String(id);
+  if (selectedIds.has(sid)) {
+    selectedIds.delete(sid);
+  } else {
+    if (selectedIds.size >= 8) { showToast('最多只能選 8 個行程'); return; }
+    selectedIds.add(sid);
+  }
+  updateMultiUI();
+  // re-render just this card's state
+  document.querySelectorAll('.tour-card').forEach(el => {
+    if (el.dataset.id == id) {
+      el.classList.toggle('selected', selectedIds.has(sid));
+    }
+  });
+}
+
+function updateMultiUI() {
+  const count = selectedIds.size;
+  document.getElementById('selected-count').textContent = count;
+  const bar    = document.getElementById('bottom-bar');
+  const btn    = document.getElementById('share-btn');
+  if (count > 0) {
+    bar.classList.add('visible');
+    btn.disabled = false;
+    btn.classList.remove('opacity-50','cursor-not-allowed');
+  } else {
+    bar.classList.remove('visible');
+    btn.disabled = true;
+    btn.classList.add('opacity-50','cursor-not-allowed');
+  }
+}
+
+/* =========================================================
+   MODE TOGGLE
+========================================================= */
+function setMode(m) {
+  mode = m;
+  document.getElementById('mode-single').classList.toggle('active', m==='single');
+  document.getElementById('mode-multi').classList.toggle('active',  m==='multi');
+  document.getElementById('select-all-btn').classList.toggle('hidden', m==='single');
+  if (m==='single') { clearSelection(); }
+  renderCards();
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  updateMultiUI();
+  document.querySelectorAll('.tour-card.selected').forEach(el => el.classList.remove('selected'));
+}
+
+function toggleSelectAll() {
+  if (selectedIds.size === filtered.length) {
+    clearSelection();
+  } else {
+    filtered.forEach(item => {
+      if (selectedIds.size < 8) selectedIds.add(String(item.id));
+    });
+    updateMultiUI();
+    renderCards();
+  }
+}
+
+/* =========================================================
+   FILTER
+========================================================= */
+function filterCards() {
+  const kw     = document.getElementById('search-input').value.toLowerCase();
+  const region = document.getElementById('filter-region').value;
+  filtered = allItineraries.filter(item => {
+    const matchKw     = !kw || (item.title||'').toLowerCase().includes(kw) || (item.description||'').toLowerCase().includes(kw);
+    const matchRegion = !region || item.region === region;
+    return matchKw && matchRegion;
+  });
+  renderCards();
+  document.getElementById('count-label').textContent = `顯示 ${filtered.length} / ${allItineraries.length} 個行程`;
+}
+
+/* =========================================================
+   SINGLE MODAL
+========================================================= */
+function openSingleModal(id) {
+  currentTourId = id;
+  const tour = allItineraries.find(t => String(t.id) === String(id));
+  if (!tour) return;
+  document.getElementById('single-modal-title').textContent = tour.title;
+  document.getElementById('single-modal').classList.add('open');
+}
+
+function closeSingleModal(e) {
+  if (e.target.id === 'single-modal') document.getElementById('single-modal').classList.remove('open');
+}
+
+function singleAction(type) {
+  const tour = allItineraries.find(t => String(t.id) === String(currentTourId));
+  if (!tour) return;
+
+  const optsStr = buildOptsStr('single');
+  const uid = liffProfile?.userId || '';
+
+  if (type === 'web') {
+    copyText(`${ENDPOINT_URL}?t=${tour.id}&r=${uid}`, '✅ 純網頁連結已複製！');
+  } else if (type === 'send') {
+    copyText(`https://liff.line.me/${LIFF_ID}?action=send&t=${tour.id}&r=${uid}&o=${optsStr}`, '✅ 原地傳送連結已複製！');
+  } else if (type === 'share') {
+    copyText(`https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`, '✅ 群發轉傳連結已複製！');
+  } else if (type === 'picker') {
+    const flex = buildSingleFlex(tour, optsStr);
+    liff.shareTargetPicker([flex]).then(() => {
+      document.getElementById('single-modal').classList.remove('open');
+      showToast('✅ 已成功分享！');
+    }).catch(e => {
+      const url = `https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`;
+      copyText(url, '✅ 已複製分享連結（通訊錄喚起失敗）');
+    });
+  }
+}
+
+/* =========================================================
+   MULTI MODAL
+========================================================= */
+function openShareModal() {
+  const items = getSelectedItems();
+  if (!items.length) return;
+  document.getElementById('modal-count').textContent = items.length;
+  // auto-fill hero from first item
+  if (!document.getElementById('multi-hero-url').value && items[0]?.image) {
+    document.getElementById('multi-hero-url').value = items[0].image;
+  }
+  renderMultiPreview();
+  document.getElementById('multi-modal').classList.add('open');
+}
+
+function closeMultiModal(e) {
+  if (e.target.id === 'multi-modal') document.getElementById('multi-modal').classList.remove('open');
+}
+
+function getSelectedItems() {
+  return [...selectedIds].map(id => allItineraries.find(t => String(t.id) === id)).filter(Boolean);
+}
+
+function renderMultiPreview() {
+  const items    = getSelectedItems();
+  const heroUrl  = document.getElementById('multi-hero-url')?.value || (items[0]?.image) || '';
+  const btnColor = document.getElementById('multi-btn-color')?.value || '#00B900';
+  const btnTxt   = document.getElementById('multi-btn-txt')?.value   || '#FFFFFF';
+
+  const preview  = document.getElementById('multi-preview');
+  if (!preview) return;
+
+  let html = `<div style="aspect-ratio:12/5;overflow:hidden;background:#f1f5f9;">
+    <img src="${heroUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
+  </div>`;
+
+  items.forEach(item => {
+    html += `<div class="preview-item">
+      <img src="${item.image||''}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;margin-right:10px;flex-shrink:0;" onerror="this.style.display='none'">
+      <div style="flex:1;min-width:0;">
+        <p style="font-size:10px;font-weight:700;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.title}</p>
+        <p style="font-size:10px;font-weight:900;color:#b82337;margin-top:1px;">NT$ ${Number(item.price).toLocaleString()}</p>
+      </div>
+      <div style="width:28px;height:28px;border-radius:50%;background:${btnColor};color:${btnTxt};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0;margin-left:8px;">報</div>
+    </div>`;
+  });
+
+  // footer icons
+  const selectedSocs = getCheckedSocs('multi');
+  if (selectedSocs.length > 0) {
+    html += `<div style="padding:8px 10px;display:flex;justify-content:center;gap:10px;border-top:1px solid #f1f5f9;">
+      ${selectedSocs.map(s=>`<img src="${SOC_ICONS[s.type]||''}" style="width:18px;height:18px;object-fit:contain;">`).join('')}
+    </div>`;
+  }
+
+  preview.innerHTML = html;
+}
+
+function multiAction(type) {
+  const items    = getSelectedItems();
+  if (!items.length) return;
+  const flex     = buildV3Flex(items);
+  const uid      = liffProfile?.userId || '';
+
+  if (type === 'copy') {
+    copyText(JSON.stringify(flex, null, 2), '✅ Flex JSON 已複製！貼到 LINE OA 使用');
+  } else if (type === 'picker') {
+    const msg = { type: 'flex', altText: `推薦 ${items.length} 個精選行程`, contents: flex.contents };
+    liff.shareTargetPicker([msg]).then(() => {
+      document.getElementById('multi-modal').classList.remove('open');
+      clearSelection();
+      showToast('✅ 推廣卡片已成功發送！');
+    }).catch(e => {
+      copyText(JSON.stringify(msg, null, 2), '✅ 已複製 JSON（通訊錄喚起失敗）');
+    });
+  }
+}
+
+/* =========================================================
+   BUILD FLEX MESSAGES
+========================================================= */
+
+// Single bubble (original format)
+function buildSingleFlex(tour, optsStr) {
+  const uid         = liffProfile?.userId || '';
+  const trackingUrl = `${ENDPOINT_URL}?t=${tour.id}&r=${uid}`;
+  const shareLiff   = `https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`;
+  const opts        = parseOptsStr(optsStr);
+  const buttons     = [
+    { type:'button', style:'primary', color:'#00B900', height:'sm', action:{ type:'uri', label:'查看行程 / 立即報名', uri:trackingUrl } },
+    { type:'button', style:'primary', color:'#b82337', height:'sm', margin:'sm', action:{ type:'uri', label:'分享行程給好友', uri:shareLiff } },
+  ];
+  if (opts.phone && distData?.phone)     buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'📞 聯絡電話', uri:`tel:${distData.phone}` } });
+  if (opts.line  && distData?.lineLink)  buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'💬 私訊 LINE', uri:distData.lineLink } });
+  if (opts.lineAt&& distData?.lineAtLink)buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'🟢 官方 LINE@', uri:distData.lineAtLink } });
+  if (opts.fb    && distData?.fbLink)    buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'👍 FB 粉絲專頁', uri:distData.fbLink } });
+  if (opts.map   && distData?.mapLink)   buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'📍 門市導航', uri:distData.mapLink } });
+
+  return {
+    type:'flex', altText:`推薦行程：${tour.title}`,
+    contents: {
+      type:'bubble',
+      hero:{ type:'image', url:tour.image||'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80', size:'full', aspectRatio:'20:13', aspectMode:'cover', action:{ type:'uri', uri:trackingUrl } },
+      body:{ type:'box', layout:'vertical', contents:[
+        { type:'text', text:tour.title, weight:'bold', size:'xl', wrap:true },
+        { type:'box', layout:'vertical', margin:'lg', spacing:'sm', contents:[
+          { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'天數',color:'#aaa',size:'sm',flex:1}, {type:'text',text:`${tour.days} 天`,color:'#666',size:'sm',flex:5} ]},
+          { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'價格',color:'#aaa',size:'sm',flex:1}, {type:'text',text:`TWD ${Number(tour.price).toLocaleString()}`,color:'#b82337',size:'md',weight:'bold',flex:5} ]},
+          { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'介紹',color:'#aaa',size:'sm',flex:1}, {type:'text',text:(tour.description||'').substring(0,120)+'…',wrap:true,maxLines:4,color:'#666',size:'sm',flex:5} ]},
+        ]},
+      ]},
+      footer:{ type:'box', layout:'vertical', spacing:'sm', contents:buttons },
+    }
+  };
+}
+
+// V3 product list bubble
+function buildV3Flex(items) {
+  const uid      = liffProfile?.userId || '';
+  const heroUrl  = document.getElementById('multi-hero-url')?.value || (items[0]?.image) || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80';
+  const btnColor = document.getElementById('multi-btn-color')?.value || '#00B900';
+  const btnTxt   = document.getElementById('multi-btn-txt')?.value   || '#FFFFFF';
+  const bubbleSize = 'mega';
+  const fontSize   = 'xs';
+
+  const bodyContents = items.flatMap((item, i) => {
+    const trackingUrl = `${ENDPOINT_URL}?t=${item.id}&r=${uid}`;
+    const row = {
+      type:'box', layout:'horizontal', paddingAll:'5px',
+      contents:[
+        { type:'image', url:item.image||'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400&q=70', size:'sm', aspectMode:'cover', aspectRatio:'1:1', flex:1 },
+        {
+          type:'box', layout:'vertical', flex:4, offsetStart:'8px',
+          contents:[
+            { type:'text', text:item.title, size:fontSize, wrap:true, color:'#111111', weight:'bold' },
+            { type:'text', text:`NT$ ${Number(item.price).toLocaleString()}`, weight:'bold', size:fontSize, color:'#FF0000', margin:'xs' },
+          ]
+        },
+        {
+          type:'box', layout:'vertical', width:'36px', height:'36px',
+          backgroundColor:btnColor, cornerRadius:'100px',
+          justifyContent:'center', alignItems:'center', flex:0,
+          contents:[ { type:'text', text:'報名', color:btnTxt, size:'xxs', weight:'bold', align:'center' } ],
+          action:{ type:'uri', uri:trackingUrl },
+        }
+      ]
+    };
+    return i < items.length - 1 ? [row, { type:'separator', color:'#F0F0F0' }] : [row];
+  });
+  bodyContents.push({ type:'box', layout:'vertical', height:'8px', contents:[] });
+
+  const selectedSocs = getCheckedSocs('multi');
+  const footerContents = selectedSocs.length > 0
+    ? selectedSocs.map(s => ({
+        type:'image', url:SOC_ICONS[s.type]||'', size:'xs', aspectRatio:'1:1', animated:true,
+        action:{ type:'uri', uri:s.url||'https://line.me' }
+      }))
+    : [{ type:'text', text:'立即報名精選行程', size:'xs', color:'#aaaaaa', align:'center' }];
+
+  return {
+    type:'flex', altText:`精選 ${items.length} 個推薦行程`,
+    contents:{
+      type:'bubble', size:bubbleSize,
+      hero:{
+        type:'box', layout:'vertical', paddingAll:'0px',
+        contents:[{ type:'image', url:heroUrl, size:'full', aspectRatio:'12:5', aspectMode:'cover' }]
+      },
+      body:{ type:'box', layout:'vertical', paddingAll:'0px', contents:bodyContents },
+      footer:{
+        type:'box', layout:'horizontal', paddingAll:'10px',
+        contents:footerContents, justifyContent:'center', spacing:'lg'
+      }
+    }
+  };
+}
+
+/* =========================================================
+   SOCIAL OPTIONS UI
+========================================================= */
+const SOC_DEFS = [
+  { key:'phone',   label:'📞 電話',   type:'TEL' },
+  { key:'line',    label:'💬 個人LINE', type:'LINE' },
+  { key:'lineAt',  label:'🟢 LINE@',  type:'LINE' },
+  { key:'fb',      label:'👍 FB',     type:'FB' },
+  { key:'map',     label:'📍 導航',   type:'MAP' },
+  { key:'yt',      label:'▶️ YouTube', type:'YT' },
+  { key:'ig',      label:'📷 IG',     type:'IG' },
+];
+
+function buildSocOptions() {
+  // Single modal
+  const singleCont = document.getElementById('single-soc-options');
+  if (singleCont) {
+    singleCont.innerHTML = SOC_DEFS.filter(s => ['phone','line','lineAt','fb','map'].includes(s.key)).map(s => {
+      const hasData = getSocUrl(s.key);
+      return `<div class="soc-check">
+        <input type="checkbox" id="soc-s-${s.key}" ${!hasData?'disabled':''}>
+        <label for="soc-s-${s.key}" class="${!hasData?'opacity-40 cursor-not-allowed':''}">${s.label}</label>
+      </div>`;
+    }).join('');
+  }
+
+  // Multi modal
+  const multiCont = document.getElementById('multi-soc-options');
+  if (multiCont) {
+    multiCont.innerHTML = SOC_DEFS.map(s => {
+      const hasData = getSocUrl(s.key);
+      return `<div class="soc-check">
+        <input type="checkbox" id="soc-m-${s.key}" onchange="renderMultiPreview()" ${!hasData?'disabled':''}>
+        <label for="soc-m-${s.key}" class="${!hasData?'opacity-40 cursor-not-allowed':''}">${s.label}</label>
+      </div>`;
+    }).join('');
+  }
+}
+
+function getSocUrl(key) {
+  if (!distData) return null;
+  const map = { phone:distData.phone, line:distData.lineLink, lineAt:distData.lineAtLink, fb:distData.fbLink, map:distData.mapLink };
+  return map[key] || null;
+}
+
+function buildOptsStr(prefix) {
+  return ['phone','line','lineAt','fb','web','map'].map(k => {
+    const el = document.getElementById(`soc-s-${k}`);
+    return (el && el.checked) ? '1' : '0';
+  }).join('');
+}
+
+function parseOptsStr(str) {
+  const keys = ['phone','line','lineAt','fb','web','map'];
+  const o = {};
+  keys.forEach((k,i) => o[k] = str[i] === '1');
+  return o;
+}
+
+function getCheckedSocs(prefix) {
+  return SOC_DEFS.filter(s => {
+    const el = document.getElementById(`soc-m-${s.key}`);
+    return el && el.checked;
+  }).map(s => ({ type:s.type, url:getSocUrl(s.key)||'https://line.me' }));
+}
+
+/* =========================================================
+   UPLOAD HERO IMAGE (multi)
+========================================================= */
+async function uploadHeroImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('圖片上傳中…');
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const res    = await fetch(`${WORKER_URL}/api/itineraries`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'uploadImage', base64:e.target.result }) });
+      const result = await res.json();
+      if (result.success) {
+        document.getElementById('multi-hero-url').value = result.url;
+        renderMultiPreview();
+        showToast('✅ 圖片已上傳！');
+      } else throw new Error();
+    } catch { showToast('❌ 圖片上傳失敗'); }
+  };
+  reader.readAsDataURL(file);
+}
+
+/* =========================================================
+   UTILS
+========================================================= */
+function copyText(text, msg) {
+  const fallback = t => {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast(msg); } catch { showToast('❌ 複製失敗'); }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showToast(msg)).catch(() => fallback(text));
+  } else { fallback(text); }
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
