@@ -90,69 +90,139 @@
         };
     };
 
+    // =========================================================================
+    // ★ 巨匠級行程渲染器：智慧狀態機解析
+    // =========================================================================
     const renderAgencyBlogDescription = (text) => {
-      if (!text) return null;
-      const lines = text.split('\n');
-      let elements = [];
-      let i = 0;
-      while (i < lines.length) {
-        const line = lines[i].trim();
-        if (!line) { elements.push(<div key={`space-${i}`} className="h-6"></div>); i++; continue; }
+        if (!text) return null;
+        const lines = text.split('\n');
+        const blocks = [];
+        let currentBlock = { type: 'intro', content: [], meals: [], hotels: [] };
         
-        const mdMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
-        if (mdMatch || (line.startsWith('http') && !line.includes(' '))) {
-            const imgUrl = mdMatch ? mdMatch[2] : line;
-            elements.push(
-                 <div key={`img-${i}`} className="my-10 w-full relative group">
-                     <img src={imgUrl} alt="行程景點" className="w-full h-auto object-cover rounded-xl shadow-md border border-gray-100" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                     <div className="hidden bg-gray-50 p-4 border-l-4 border-gray-400 my-2 rounded">
-                        <span className="text-gray-500 mr-2 text-sm font-bold">🔗 參考資訊 / 連結：</span>
-                        <a href={imgUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline break-all">{imgUrl}</a>
-                     </div>
-                 </div>
-            );
-            i++; continue;
-        }
+        let inMeal = false;
+        let inHotel = false;
 
-        const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
-        if (dayMatch) {
-            elements.push(
-                <div key={`day-${i}`} className="mt-20 mb-10 relative w-full flex items-center">
-                    <div className="flex-grow border-t-2 border-red-700"></div>
-                    <div className="mx-6 text-center">
-                      <h2 className="text-4xl md:text-5xl font-black text-red-700 tracking-wider">{dayMatch[1].replace(/\s+/g, '')}</h2>
-                      {dayMatch[2].trim() && (<h3 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">{dayMatch[2].replace(/^[:：\-\s]+/, '')}</h3>)}
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) {
+                currentBlock.content.push({ type: 'space' });
+                continue;
+            }
+
+            // 處理圖片 (Markdown 或 Http)
+            const mdMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
+            const isHttp = line.startsWith('http') && !line.includes(' ');
+            if (mdMatch || isHttp) {
+                const imgUrl = mdMatch ? mdMatch[2] : line;
+                currentBlock.content.push({ type: 'image', url: imgUrl });
+                inMeal = false; inHotel = false;
+                continue;
+            }
+
+            // 處理 Day 標題
+            const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
+            if (dayMatch) {
+                blocks.push(currentBlock);
+                currentBlock = { 
+                    type: 'day', 
+                    dayText: dayMatch[1].replace(/\s+/g, ''), 
+                    title: dayMatch[2].replace(/^[:：\-\s]+/, ''),
+                    content: [], meals: [], hotels: [] 
+                };
+                inMeal = false; inHotel = false;
+                continue;
+            }
+
+            // 處理餐食與住宿
+            if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) {
+                inMeal = true; inHotel = false;
+                currentBlock.meals.push(line);
+                continue;
+            }
+            if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) {
+                inHotel = true; inMeal = false;
+                currentBlock.hotels.push(line);
+                continue;
+            }
+            if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) {
+                currentBlock.meals.push(line);
+                continue;
+            }
+            if (inHotel && !line.startsWith('Day')) {
+                 if (line.length > 40) { // 太長表示回到內文了
+                     inHotel = false;
+                     currentBlock.content.push({ type: 'text', text: line });
+                 } else {
+                     currentBlock.hotels.push(line);
+                 }
+                 continue;
+            }
+
+            // 一般內文
+            inMeal = false; inHotel = false;
+            currentBlock.content.push({ type: 'text', text: line });
+        }
+        blocks.push(currentBlock);
+
+        return blocks.map((block, bIdx) => (
+            <div key={bIdx} className="mb-16 w-full">
+                {block.type === 'day' && (
+                    <div className="mb-10 mt-12">
+                        <div className="text-center mb-6">
+                            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-3">{block.dayText}</h2>
+                            <div className="flex justify-center"><div className="w-24 border-b-4 border-dashed border-red-700"></div></div>
+                        </div>
+                        {block.title && (
+                            <h3 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center justify-center lg:justify-start">
+                                <span className="text-red-600 mr-3 text-xl">— {block.dayText.replace(/\D/g, '') || '*'}</span> {block.title}
+                            </h3>
+                        )}
                     </div>
-                    <div className="flex-grow border-t-2 border-red-700"></div>
+                )}
+                
+                <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify px-2">
+                    {block.content.map((item, idx) => {
+                        if (item.type === 'space') return <div key={idx} className="h-6"></div>;
+                        if (item.type === 'image') return (
+                            <div key={idx} className="my-10 -mx-4 lg:-mx-8">
+                                <img src={item.url} className="w-full h-auto object-cover max-h-[800px] shadow-sm rounded-lg" alt="行程景點" />
+                                <div className="text-center text-sm text-gray-400 mt-2">
+                                   若圖片無法顯示，表示該圖庫禁止外部連接 (<a href={item.url} target="_blank" rel="noreferrer" className="underline">點此查看原圖</a>)
+                                </div>
+                            </div>
+                        );
+                        return <p key={idx} className="mb-5">{item.text}</p>;
+                    })}
                 </div>
-            );
-            i++; continue;
-        }
 
-        let infoMatch = line.match(/^(早餐|午餐|晚餐|餐食|住宿)\s*[:：]/);
-        if (infoMatch) {
-            let blockLines = [];
-            while (i < lines.length && lines[i].trim() && !lines[i].match(/^(Day|第\s*[\d一二三四五六七八九十]+\s*天)/i)) { blockLines.push(lines[i].trim()); i++; }
-            const isAcc = blockLines.some(l => l.includes('住宿') || l.includes('飯店') || l.includes('旅館') || l.includes('酒店'));
-            const isMeal = blockLines.some(l => l.includes('餐'));
-            elements.push(
-                <div key={`info-${i}`} className="my-8 border-l-4 border-red-700 p-6 flex flex-col md:flex-row items-start bg-gray-50 w-full shadow-sm">
-                   <div className="text-4xl mr-6 mb-4 md:mb-0 opacity-90 flex-shrink-0">{isAcc ? '🏨' : (isMeal ? '🍽️' : '📌')}</div>
-                   <div className="space-y-3 text-gray-800 font-medium text-lg w-full">
-                     {blockLines.map((bl, bidx) => {
-                         const parts = bl.split(/[:：](.+)/);
-                         if (parts.length > 1) { return (<div key={bidx} className="flex"><span className="font-bold text-gray-900 w-20 flex-shrink-0">{parts[0]}</span><span className="text-gray-600">: {parts[1]}</span></div>); }
-                         return <p key={bidx}>{bl}</p>;
-                     })}
-                   </div>
-                </div>
-            );
-            continue;
-        }
-        elements.push(<p key={`text-${i}`} className="mb-6 text-[1.15rem] md:text-[1.25rem] leading-[2.2] text-gray-800 tracking-wide text-justify">{line}</p>);
-        i++;
-      }
-      return elements;
+                {(block.meals.length > 0 || block.hotels.length > 0) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+                        {block.meals.length > 0 && (
+                            <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
+                                <div className="text-4xl mr-5 opacity-80">🍽️</div>
+                                <div className="w-full">
+                                    <p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">餐食</p>
+                                    <div className="space-y-3 text-gray-600 font-medium">
+                                        {block.meals.map((m, mIdx) => <p key={mIdx}>{m}</p>)}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {block.hotels.length > 0 && (
+                            <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
+                                <div className="text-4xl mr-5 opacity-80">🏨</div>
+                                <div className="w-full">
+                                    <p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">住宿</p>
+                                    <div className="space-y-3 text-gray-600 font-medium">
+                                        {block.hotels.map((h, hIdx) => <p key={hIdx}>{h}</p>)}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        ));
     };
 
     function App() {
@@ -172,7 +242,7 @@
       const [toast, setToast] = useState(null);
       const [isLoading, setIsLoading] = useState(false);
       const [isUploadingImage, setIsUploadingImage] = useState(false); 
-      const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); // ★ 內文插圖上傳狀態
+      const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); 
       
       const [liffProfile, setLiffProfile] = useState(null);
       const [isLiffReady, setIsLiffReady] = useState(false);
@@ -196,7 +266,6 @@
       const [filteredResults, setFilteredResults] = useState([]);
       
       const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
-
       const [uploadMode, setUploadMode] = useState('dm');
       const [ocrStatus, setOcrStatus] = useState('idle');
       const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' });
@@ -204,7 +273,6 @@
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
       const [bookingModalData, setBookingModalData] = useState(null);
-      
       const [editingDistributor, setEditingDistributor] = useState(null);
       const [editFormData, setEditFormData] = useState({});
       const [approveModalUser, setApproveModalUser] = useState(null);
@@ -350,21 +418,15 @@
         };
       };
 
-      // ★ 新增：專屬插入圖片到內文的功能
       const handleInsertImageToDescription = async (e) => {
         const file = e.target.files[0]; if (!file) return;
-        setIsInsertingContentImage(true);
-        showToast('內文圖片上傳中，請稍候...');
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
+        setIsInsertingContentImage(true); showToast('內文圖片上傳中，請稍候...');
+        const reader = new FileReader(); reader.readAsDataURL(file);
         reader.onloadend = async () => {
           try {
             const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'uploadImage', base64: reader.result }) });
             const result = await res.json();
-            if (result.success) {
-              setDraftData(prev => ({ ...prev, description: (prev.description ? prev.description + '\n\n' : '') + `![](${result.url})\n\n` }));
-              showToast('✅ 圖片已成功插入文案！');
-            } else throw new Error(result.message || result.error);
+            if (result.success) { setDraftData(prev => ({ ...prev, description: (prev.description ? prev.description + '\n\n' : '') + `![](${result.url})\n\n` })); showToast('✅ 圖片已成功插入文案！'); } else throw new Error(result.message || result.error);
           } catch (err) { showToast('圖片插入失敗: ' + err.message, 'error'); } finally { setIsInsertingContentImage(false); e.target.value = null; }
         };
       };
@@ -433,38 +495,15 @@
         } catch (e) { showToast('更新失敗，請檢查資料', 'error'); }
       };
 
-      const handleApproveSubmit = async () => {
-        if (!approveModalUser) return;
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorStatus', uid: approveModalUser.uid, status: 'approved', commission: approveData.commission, note: approveData.note }) });
-          const result = await res.json();
-          if (result.success) { showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); setApproveModalUser(null); fetchFullCrmData(); }
-        } catch (e) { showToast('審核失敗', 'error'); }
-      };
-
-      const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
-
-      const triggerFlexSharing = async () => {
-        if (!isLiffReady || !liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
-        try {
-          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
-          const res = await liff.shareTargetPicker([flexMsg]);
-          if (res) { showToast('✅ 名片已成功發送！'); setFlexModalItem(null); }
-        } catch (error) { 
-          if (error.message && error.message.includes('not allowed')) { alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。"); liff.logout(); window.location.reload(); } 
-          else { showToast('發送取消或發生錯誤: ' + error.message, 'error'); }
-        }
-      };
-
       // 權限徽章
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
-      if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 系統管理員</span>;
+      if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 管理員</span>;
       else if (distributorStatus === 'approved') roleBadge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 金牌經銷商</span>;
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
       // =========================================================================
-      // ★ 畫面渲染區 (Render Sections)
+      // ★ 模組拆分：獨立 Render 區塊
       // =========================================================================
 
       const renderNavBar = () => (
@@ -472,34 +511,17 @@
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
             <div className="flex flex-col md:flex-row md:items-center justify-between py-3 md:py-0 md:h-16">
               <div className="flex justify-between items-center w-full md:w-auto">
-                <div className="flex items-center cursor-pointer mr-8" onClick={() => changeTab('home')}>
-                  <Navigation className="h-8 w-8 text-blue-600 mr-2" />
-                  <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
-                </div>
-                <div className="md:hidden flex items-center">
-                  {liffProfile ? (
-                    <div className="flex items-center gap-2"><div className="flex flex-col items-end">{roleBadge}</div><img src={liffProfile.pictureUrl || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" /></div>
-                  ) : (
-                    <button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-[#00B900] hover:bg-[#009900] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">LINE 登入</button>
-                  )}
-                </div>
+                <div className="flex items-center cursor-pointer mr-8" onClick={() => changeTab('home')}><Navigation className="h-8 w-8 text-blue-600 mr-2" /><span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span></div>
+                <div className="md:hidden flex items-center">{liffProfile ? (<div className="flex items-center gap-2"><div className="flex flex-col items-end">{roleBadge}</div><img src={liffProfile.pictureUrl || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" /></div>) : (<button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-[#00B900] hover:bg-[#009900] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">LINE 登入</button>)}</div>
               </div>
               <div className="flex items-center space-x-1 overflow-x-auto custom-scrollbar mt-3 md:mt-0 pb-1 md:pb-0 w-full md:w-auto flex-nowrap">
                 <button onClick={() => changeTab('home')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>找行程</button>
                 <button onClick={() => changeTab('member')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600 hover:bg-gray-100'}`}><Users className="w-4 h-4 mr-1.5" /> 會員中心</button>
                 <button onClick={() => changeTab('distributor')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 hover:bg-gray-100'}`}><Briefcase className="w-4 h-4 mr-1.5" /> 經銷商專區</button>
-                {isAdmin && (
-                  <><button onClick={() => changeTab('crm')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台 CRM</button>
-                  <button onClick={() => changeTab('admin')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台上稿</button></>
-                )}
+                {isAdmin && (<><button onClick={() => changeTab('crm')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台 CRM</button><button onClick={() => changeTab('admin')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台上稿</button></>)}
               </div>
               <div className="hidden md:flex items-center ml-4 pl-4 border-l border-gray-200 shrink-0">
-                {liffProfile ? (
-                  <div className="flex items-center gap-3">
-                    <div className="text-right"><p className="text-sm font-bold text-gray-800 leading-none mb-1.5">{liffProfile.displayName}</p><div className="flex justify-end">{roleBadge}</div></div>
-                    <img src={liffProfile.pictureUrl || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />
-                  </div>
-                ) : (<button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-[#00B900] hover:bg-[#009900] text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">LINE 登入</button>)}
+                {liffProfile ? (<div className="flex items-center gap-3"><div className="text-right"><p className="text-sm font-bold text-gray-800 leading-none mb-1.5">{liffProfile.displayName}</p><div className="flex justify-end">{roleBadge}</div></div><img src={liffProfile.pictureUrl || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" /></div>) : (<button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-[#00B900] hover:bg-[#009900] text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">LINE 登入</button>)}
               </div>
             </div>
           </div>
@@ -513,7 +535,7 @@
             const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
 
             return (
-              <div className="w-full bg-white min-h-screen animate-fade-in">
+              <div className="w-full bg-white min-h-screen animate-fade-in pb-20">
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
                       <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -530,10 +552,10 @@
                           <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
                       </div>
                   </div>
-                  <div className="max-w-[1400px] mx-auto px-6 lg:px-12 py-12 lg:py-20 flex flex-col lg:flex-row gap-16 relative">
-                    <div className="flex-1 w-full min-w-0">
+                  <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-12 relative">
+                    <div className="flex-1 w-full min-w-0 pr-0 lg:pr-12">
                         <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
-                        <div className="pb-20">{renderAgencyBlogDescription(tour.description)}</div>
+                        <div className="pb-10 w-full">{renderAgencyBlogDescription(tour.description)}</div>
                     </div>
                     <div className="w-full lg:w-[400px] flex-shrink-0">
                         <div className="sticky top-40 bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-xl">
@@ -545,8 +567,8 @@
                                 </div>
                                 <button onClick={() => handleBookNow(tour)} className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-4 px-6 shadow-md transition-all text-xl mb-6 rounded-xl">立即報名保留名額</button>
                                 <p className="text-center text-gray-400 text-sm font-bold mb-3">—— 聯絡專屬旅遊顧問 ——</p>
-                                {currentDist?.phone && (<a href={`tel:${currentDist.phone}`} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center mb-3 rounded-xl">📞 撥打電話：{currentDist.name}</a>)}
-                                {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">💬 加入顧問 LINE</a>)}
+                                {currentDist?.phone && (<a href={`tel:${currentDist.phone}`} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center mb-3 rounded-xl">📞 聯絡電話</a>)}
+                                {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">💬 私訊 LINE</a>)}
                                 {!currentDist?.phone && !currentDist?.lineLink && (<button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">💬 聯絡官方客服</button>)}
                             </div>
                         </div>
@@ -592,17 +614,8 @@
         );
       };
 
-      // -------------------------------------------------------------
-      // 一般會員與訂單清單 (Member Tab)
-      // -------------------------------------------------------------
       const renderMemberTab = () => {
-        if (!isGeneralMember) {
-          return (
-            <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-              <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Users className="w-20 h-20 text-orange-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">一般會員登入</h2><p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p><button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button></div>
-            </div>
-          );
-        }
+        if (!isGeneralMember) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Users className="w-20 h-20 text-orange-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">一般會員登入</h2><p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p><button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button></div></div>);
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
               <div className="bg-orange-500 rounded-3xl p-8 md:p-12 text-white shadow-xl overflow-hidden relative">
@@ -627,17 +640,8 @@
         );
       };
 
-      // -------------------------------------------------------------
-      // 經銷商推廣專區 (Distributor Tab)
-      // -------------------------------------------------------------
       const renderDistributorTab = () => {
-        if (!distributorStatus) {
-          return (
-            <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-              <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2><p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p><button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button></div>
-            </div>
-          );
-        }
+        if (!distributorStatus) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2><p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p><button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button></div></div>);
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
             <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
@@ -657,9 +661,6 @@
         );
       };
 
-      // -------------------------------------------------------------
-      // 後台 CRM 管理列表 (CRM Tab)
-      // -------------------------------------------------------------
       const renderCrmTab = () => {
         if (!isAdmin) return <AdminDeniedScreen />;
         if (editingDistributor) return (
@@ -753,9 +754,6 @@
         );
       };
 
-      // -------------------------------------------------------------
-      // 後台智能上稿編輯區 (Admin Editor Tab) - 新增插入圖片功能
-      // -------------------------------------------------------------
       const renderAdminEditorTab = () => {
         if (!isAdmin) return <AdminDeniedScreen />;
         return (
@@ -823,9 +821,6 @@
         );
       };
 
-      // -------------------------------------------------------------
-      // 所有彈跳視窗群 (Modals)
-      // -------------------------------------------------------------
       const renderModals = () => {
         return (
           <>
@@ -908,13 +903,9 @@
         );
       };
 
-      // -------------------------------------------------------------
-      // 主頁面渲染入口 (Main Render)
-      // -------------------------------------------------------------
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
           {renderNavBar()}
-          
           <div className="flex-grow w-full">
             {activeTab === 'home' && renderHomeTab()}
             {activeTab === 'member' && renderMemberTab()}
@@ -922,9 +913,7 @@
             {activeTab === 'crm' && renderCrmTab()}
             {activeTab === 'admin' && renderAdminEditorTab()}
           </div>
-
           {renderModals()}
-
           {toast && (<div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up"><div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div></div>)}
         </div>
       );
