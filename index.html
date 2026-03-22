@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 平台級智能業務系統 (v3.0)</title>
+  <title>旅遊管家 - 平台級智能業務系統 (v3.3)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -49,7 +49,6 @@
     const Trash2 = ({ className }) => <IconWrapper className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
     const Camera = ({ className }) => <IconWrapper className={className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></IconWrapper>;
     const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
-    // ★ 修正：補上缺少的 UserIcon
     const UserIcon = ({ className }) => <IconWrapper className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconWrapper>;
     const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
     const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
@@ -72,6 +71,17 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LOGIN_URL = 'login.html'; 
 
+    // ★ 終極修復：自動幫缺失的電話補上 0 的顯示機制
+    const formatPhone = (phone) => {
+        if (!phone) return '';
+        const p = String(phone).trim();
+        // 台灣手機通常 10 碼 09xxxxxxxx，若被 Excel 吞掉 0 會變 9 開頭的 9 碼
+        if (p.length === 9 && p.startsWith('9')) {
+            return '0' + p;
+        }
+        return p;
+    };
+
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
@@ -80,12 +90,15 @@
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
             { "type": "button", "style": "primary", "color": "#b82337", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
         ];
-        if (options.phone && distributorData.phone) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${distributorData.phone}` }});
+        
+        // ★ 套用 formatPhone 防止電話無法撥打
+        if (options.phone && distributorData.phone) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${formatPhone(distributorData.phone)}` }});
         if (options.line && distributorData.lineLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "💬 私訊 LINE", "uri": distributorData.lineLink }});
         if (options.lineAt && distributorData.lineAtLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🟢 官方 LINE@", "uri": distributorData.lineAtLink }});
         if (options.fb && distributorData.fbLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "👍 FB 粉絲專頁", "uri": distributorData.fbLink }});
         if (options.web && distributorData.webLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🌐 官方網站", "uri": distributorData.webLink }});
         if (options.map && distributorData.mapLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📍 門市導航", "uri": distributorData.mapLink }});
+
         return {
           "type": "flex", "altText": `推薦行程：${tourItem.title}`,
           "contents": {
@@ -109,20 +122,27 @@
       const blocks = [];
       let currentBlock = { type: 'intro', dayText: '行程介紹', title: '', content: [], meals: [], hotels: [] };
       let inMeal = false; let inHotel = false;
+
       for (let i = 0; i < lines.length; i++) {
           let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
+
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
-              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') blocks.push(currentBlock);
+              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
+                  blocks.push(currentBlock);
+              }
               currentBlock = { type: 'day', dayText: dayMatch[1].replace(/\s+/g, ''), title: dayMatch[2].replace(/^[:：\-\s]+/, ''), content: [], meals: [], hotels: [] };
               inMeal = false; inHotel = false; continue;
           }
+
           if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
           if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
           if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
           if (inHotel && line.length < 40) { currentBlock.hotels.push(line); continue; }
+
           inMeal = false; inHotel = false;
+
           const parts = line.split(/(!\[.*?\]\(.*?\))/g);
           const parsedLine = parts.filter(p => p).map((part) => {
               const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
@@ -133,6 +153,7 @@
           currentBlock.content.push({ type: 'mixed', elements: parsedLine });
       }
       blocks.push(currentBlock);
+
       return blocks.map((block, bIdx) => (
           <div key={bIdx} className="mb-12 w-full max-w-full">
               {block.dayText !== '行程介紹' && (
@@ -141,9 +162,15 @@
                           <div className="absolute top-1/2 left-0 w-full border-t-[2px] border-dashed border-[#b82337] -z-10"></div>
                           <h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2>
                       </div>
-                      {block.title && (<div className="flex items-start mb-6 px-2"><span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span><h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3></div>)}
+                      {block.title && (
+                          <div className="flex items-start mb-6 px-2">
+                              <span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span>
+                              <h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3>
+                          </div>
+                      )}
                   </div>
               )}
+              
               <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
@@ -154,7 +181,10 @@
                                       if (el.type === 'image') return (
                                           <span key={eIdx} className="block my-10 w-full relative group">
                                               <img src={el.url} className="w-full h-auto max-w-full object-cover rounded-none md:rounded-2xl max-h-[800px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words"><span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a></span>
+                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words">
+                                                <span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>
+                                                原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a>
+                                              </span>
                                           </span>
                                       );
                                       return <span key={eIdx}>{el.text}</span>;
@@ -165,10 +195,39 @@
                       return null;
                   })}
               </div>
+
               {(block.meals.length > 0 || block.hotels.length > 0) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
-                      {block.meals.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">餐食</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.meals.map((m, mIdx) => { const parts = m.split(/[:：](.+)/); if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={mIdx}>{m}</p>; })}</div></div></div>)}
-                      {block.hotels.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">住宿</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.hotels.map((h, hIdx) => { const parts = h.split(/[:：](.+)/); if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={hIdx}>{h}</p>; })}</div></div></div>)}
+                      {block.meals.length > 0 && (
+                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
+                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div>
+                              <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
+                                  <p className="font-bold text-gray-900 mb-2 text-lg">餐食</p>
+                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
+                                      {block.meals.map((m, mIdx) => {
+                                          const parts = m.split(/[:：](.+)/);
+                                          if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
+                                          return <p key={mIdx}>{m}</p>;
+                                      })}
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+                      {block.hotels.length > 0 && (
+                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
+                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div>
+                              <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
+                                  <p className="font-bold text-gray-900 mb-2 text-lg">住宿</p>
+                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
+                                      {block.hotels.map((h, hIdx) => {
+                                          const parts = h.split(/[:：](.+)/);
+                                          if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
+                                          return <p key={hIdx}>{h}</p>;
+                                      })}
+                                  </div>
+                              </div>
+                          </div>
+                      )}
                   </div>
               )}
           </div>
@@ -187,6 +246,7 @@
         if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
         return urlRef || localStorage.getItem('tracking_ref_uid') || '';
       });
+
       const [crmSubTab, setCrmSubTab] = useState('orders');
       const [itineraries, setItineraries] = useState([]);
       const [toast, setToast] = useState(null);
@@ -194,27 +254,33 @@
       const [isUploadingImage, setIsUploadingImage] = useState(false); 
       const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); 
       const [isSubmitting, setIsSubmitting] = useState(false); 
+      
       const [liffProfile, setLiffProfile] = useState(null);
       const [isLiffReady, setIsLiffReady] = useState(false);
       const [distributorStatus, setDistributorStatus] = useState(null); 
       const [isGeneralMember, setIsGeneralMember] = useState(false);
       const [isAdmin, setIsAdmin] = useState(false);
+
       const [myDistributorData, setMyDistributorData] = useState(null);
       const [myUserData, setMyUserData] = useState(null);
       const [distributorStats, setDistributorStats] = useState({ users: [], orders: [] }); 
       const [isStatusChecked, setIsStatusChecked] = useState(false);
+
       const [crmDistributors, setCrmDistributors] = useState([]);
       const [crmUsers, setCrmUsers] = useState([]);
       const [crmOrders, setCrmOrders] = useState([]); 
       const [myOrders, setMyOrders] = useState([]); 
+
       const [searchRegion, setSearchRegion] = useState('');
       const [searchStartDate, setSearchStartDate] = useState('');
       const [searchEndDate, setSearchEndDate] = useState('');
       const [searchKeyword, setSearchKeyword] = useState('');
       const [filteredResults, setFilteredResults] = useState([]);
+      
       const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
       const [uploadMode, setUploadMode] = useState('dm');
       const [ocrStatus, setOcrStatus] = useState('idle');
+      
       const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' });
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
@@ -234,18 +300,22 @@
              const rUid = urlParams.get('r') || urlParams.get('ref_uid');
              const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
              const tour = itineraries.find(i => String(i.id) === String(tourId));
+             
              if (!tour) { setShareStatusText('❌ 找不到該行程資訊'); setTimeout(() => window.location.replace(ENDPOINT_URL), 2000); return; }
+
              let targetDistData = {};
              if (rUid === liffProfile.userId && myDistributorData) { targetDistData = myDistributorData; } 
              else if (rUid) {
                  try {
                      const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${getTimestamp()}`);
                      const distList = await res.json();
-                     targetDistData = (Array.isArray(distList) ? distList : []).find(d => d.uid === rUid) || {};
+                     targetDistData = (Array.isArray(distList) ? distList : []).find(d => String(d.uid) === String(rUid)) || {};
                  } catch(e) {}
              }
+
              const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
              const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+
              if (actionParam === 'send') {
                  setShareStatusText("極速傳送中...");
                  try {
@@ -259,6 +329,7 @@
                  catch(e) { if (e.message && e.message.includes('not allowed')) { liff.logout(); window.location.reload(); } else { liff.closeWindow(); } }
              }
         };
+
         if (actionParam === 'share' || actionParam === 'send') processAutoAction();
       }, [isLiffReady, isLoading, liffProfile, isStatusChecked, actionParam]);
 
@@ -312,7 +383,6 @@
           } catch(e) { console.error('Fetch Dist Stats error', e); }
       };
 
-      // ★ 核心修正：用 Promise.all + GET 呼叫，避免 body stream already read 錯誤
       const fetchFullCrmData = async () => {
         try {
           const [resD, resU, resO] = await Promise.all([
@@ -337,7 +407,7 @@
       };
 
       const handleUpdateOrder = async (orderId, field, value) => {
-          setCrmOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, [field]: value } : o));
+          setCrmOrders(prev => prev.map(o => String(o.orderId) === String(orderId) ? { ...o, [field]: value } : o));
           try {
               const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateOrder', orderId, [field]: value }) });
               const result = await res.json();
@@ -361,7 +431,13 @@
           try {
               const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addOrder', uid: liffProfile.userId, ref_uid: refUid, ...bookingModalData }) });
               const result = await res.json();
-              if (result.success) { showToast('🎉 報名成功！我們已收到您的訂單。'); setBookingModalData(null); setTimeout(() => { changeTab('member'); setIsSubmitting(false); }, 800); }
+              if (result.success) { 
+                  showToast('🎉 報名成功！我們已收到您的訂單。'); 
+                  setBookingModalData(null); 
+                  if (liffProfile) { fetchUserOrders(liffProfile.userId); if (distributorStatus === 'approved') fetchDistributorStats(liffProfile.userId); }
+                  if (isAdmin) fetchFullCrmData();
+                  setTimeout(() => { changeTab('member'); setIsSubmitting(false); }, 800); 
+              }
               else throw new Error(result.message || '報名失敗');
           } catch(err) { showToast('訂單送出失敗，請重試', 'error'); setIsSubmitting(false); }
       };
@@ -418,6 +494,7 @@
               const driveResult = await driveRes.json();
               if (driveResult.success) uploadedUrl = driveResult.url;
             } catch (err) { console.warn('圖片上傳失敗', err); }
+
             const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
             if (aiResult.success) {
@@ -450,7 +527,7 @@
       };
 
       const handleEditClick = (item) => { setUploadMode('manual'); setOcrStatus('done'); setDraftData(item); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-
+      
       const confirmDelete = async () => {
         if (!deleteModalId) return;
         try {
@@ -488,7 +565,6 @@
          navigator.clipboard.writeText(urlToCopy).then(() => showToast('✅ 網址已成功複製！快去貼在您的 LINE OA 吧！'), () => fallbackCopyTextToClipboard(urlToCopy));
       };
 
-      // ★ 修正：補上缺少的 triggerFlexSharing 函式
       const triggerFlexSharing = async () => {
         if (!flexModalItem || !liffProfile) return;
         const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
@@ -538,7 +614,7 @@
         if (selectedTourId) {
             const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
             if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={() => {setSelectedTourId(null); window.history.pushState({}, '', '?tab=home');}} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
-            const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
+            const currentDist = crmDistributors.find(d => String(d.uid) === String(refUid)) || myDistributorData;
             return (
               <div className="w-full bg-white min-h-screen animate-fade-in pb-20 overflow-x-hidden">
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
@@ -573,7 +649,7 @@
                                 </div>
                                 <button onClick={() => handleBookNow(tour)} className="w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-3 px-4 shadow-md transition-all text-lg mb-6 rounded-xl">立即報名保留名額</button>
                                 <p className="text-center text-gray-400 text-xs font-bold mb-4">—— 聯絡專屬旅遊顧問 ——</p>
-                                {currentDist?.phone && (<a href={`tel:${currentDist.phone}`} className="w-full bg-[#2a303c] hover:bg-black text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center mb-3 rounded-lg"><span className="mr-2">📞</span> 聯絡電話：{currentDist.name}</a>)}
+                                {currentDist?.phone && (<a href={`tel:${formatPhone(currentDist.phone)}`} className="w-full bg-[#2a303c] hover:bg-black text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center mb-3 rounded-lg"><span className="mr-2">📞</span> 聯絡電話：{formatPhone(currentDist.phone)}</a>)}
                                 {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 私訊顧問 LINE</a>)}
                                 {!currentDist?.phone && !currentDist?.lineLink && (<button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 聯絡官方客服</button>)}
                             </div>
@@ -591,7 +667,7 @@
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center"><h1 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-wider mb-4 drop-shadow-lg">探索世界的美好</h1><p className="text-lg md:text-xl lg:text-2xl drop-shadow-md font-light">發現您的下一個夢幻旅程</p></div>
               {isAdmin && (<label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0"><Camera className="w-5 h-5 mr-2 text-blue-600" />{isUploadingImage ? '上傳中...' : '更換 Banner'}<input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'banner')} disabled={isUploadingImage} /></label>)}
             </div>
-            <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200">
+            <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 md:py-6">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
                   <div className="w-full"><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">前往地區</label><div className="relative"><MapPin className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" /><select value={searchRegion} onChange={(e) => setSearchRegion(e.target.value)} className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors font-medium"><option value="">探索所有地區</option><option value="國旅">國旅 (台灣)</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div></div>
@@ -639,11 +715,11 @@
                         <div key={order.orderId} className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-lg transition relative overflow-hidden">
                            <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#b82337]"></div>
                            <div className="pl-4">
-                              <div className="flex flex-wrap items-center gap-3 mb-3"><span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">單號 #{order.orderId}</span><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-lg">{order.orderDate}</span></div>
+                              <div className="flex flex-wrap items-center gap-3 mb-3"><span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">單號 #{order.orderId}</span><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-lg">{order.orderDate ? String(order.orderDate).substring(0, 10) : ''}</span></div>
                               <h4 className="text-xl md:text-2xl font-bold text-gray-900 mb-4">{order.tourTitle}</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-gray-600 text-base">
                                  <p className="flex items-center"><UserIcon className="w-4 h-4 mr-2 text-gray-400"/>報名人：<span className="font-bold text-gray-800 ml-2">{order.contactName}</span></p>
-                                 <p className="flex items-center"><Smartphone className="w-4 h-4 mr-2 text-gray-400"/>聯絡電話：<span className="font-bold text-gray-800 ml-2">{order.contactPhone}</span></p>
+                                 <p className="flex items-center"><Smartphone className="w-4 h-4 mr-2 text-gray-400"/>聯絡電話：<span className="font-bold text-gray-800 ml-2">{formatPhone(order.contactPhone)}</span></p>
                                  <p className="flex items-center"><Users className="w-4 h-4 mr-2 text-gray-400"/>報名人數：<span className="font-bold text-[#b82337] ml-2">{order.pax} 人</span></p>
                               </div>
                               {order.note && <div className="mt-4 bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm border border-yellow-100"><span className="font-bold mr-2">📌 備註：</span>{order.note}</div>}
@@ -671,7 +747,7 @@
         const confirmedCommission = distributorStats.orders.filter(o => (o.orderStatus === '已完成' || o.orderStatus === '已出發') && o.paymentStatus === '已付款').reduce((sum, o) => sum + Number(o.commissionAmount || 0), 0);
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div></div>
+            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
             {distributorStatus === 'approved' && (<>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center relative overflow-hidden"><div className="bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><BadgeDollarSign className="w-8 h-8 text-emerald-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積總銷售額</p><p className="text-3xl font-black text-gray-800">${totalSales.toLocaleString()}</p></div></div>
@@ -688,11 +764,14 @@
                   ))}
                 </div>
                 <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-                    <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50"><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-emerald-600" /> 我的經銷業績明細</h2><p className="text-gray-500 mt-2">追蹤專屬客戶與訂單進度，預估分潤金額將於訂單確認後生效。</p></div>
+                    <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-emerald-600" /> 我的經銷業績明細</h2><p className="text-gray-500 mt-2">追蹤專屬客戶與訂單進度，預估分潤金額將於訂單確認後生效。</p></div>
+                        <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="text-emerald-600 hover:text-emerald-800 font-bold flex items-center text-sm border border-emerald-200 bg-white px-4 py-2 rounded-lg"><RefreshCw className="w-4 h-4 mr-1"/> 更新業績</button>
+                    </div>
                     <div className="p-6 md:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
                         <div className="xl:col-span-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                              <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center"><span className="flex items-center"><Users className="w-5 h-5 mr-2 text-blue-500"/> 專屬推薦會員</span><span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">{distributorStats.users.length} 人</span></div>
-                             <div className="p-0 max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-gray-50"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">加入日期</th><th className="p-4 font-bold text-gray-500">姓名</th><th className="p-4 font-bold text-gray-500">電話</th></tr></thead><tbody className="divide-y divide-gray-100">{distributorStats.users.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚未有推薦會員</td></tr> : distributorStats.users.map(u => (<tr key={u.uid} className="hover:bg-gray-50 transition"><td className="p-4 text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800">{u.name}</td><td className="p-4 text-gray-600 font-mono">{u.phone}</td></tr>))}</tbody></table></div>
+                             <div className="p-0 max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-gray-50"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">加入日期</th><th className="p-4 font-bold text-gray-500">姓名</th><th className="p-4 font-bold text-gray-500">電話</th></tr></thead><tbody className="divide-y divide-gray-100">{distributorStats.users.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚未有推薦會員</td></tr> : distributorStats.users.map(u => (<tr key={u.uid} className="hover:bg-gray-50 transition"><td className="p-4 text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800">{u.name}</td><td className="p-4 text-gray-600 font-mono">{formatPhone(u.phone)}</td></tr>))}</tbody></table></div>
                         </div>
                         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                              <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center"><span className="flex items-center"><Calendar className="w-5 h-5 mr-2 text-emerald-500"/> 推薦訂單明細</span><span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs">{distributorStats.orders.length} 筆</span></div>
@@ -716,8 +795,8 @@
                     <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
                       <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">聯絡與審核資料</h3>
                       <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editFormData.name || ''} onChange={e=>setEditFormData({...editFormData, name: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                        <div><label className="block text-xs font-bold text-gray-500 mb-1">手機</label><input type="text" value={editFormData.phone || ''} onChange={e=>setEditFormData({...editFormData, phone: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
+                        <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editFormData.name || ''} onChange={e=>setEditFormData({...editFormData, name: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 outline-none"/></div>
+                        <div><label className="block text-xs font-bold text-gray-500 mb-1">手機</label><input type="text" value={editFormData.phone || ''} onChange={e=>setEditFormData({...editFormData, phone: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 outline-none"/></div>
                         <div><label className="block text-xs font-bold text-purple-500 mb-1">公司/門市名稱</label><input type="text" value={editFormData.companyName || ''} onChange={e=>setEditFormData({...editFormData, companyName: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 outline-none"/></div>
                         <div><label className="block text-xs font-bold text-purple-500 mb-1">統編</label><input type="text" value={editFormData.taxId || ''} onChange={e=>setEditFormData({...editFormData, taxId: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 outline-none"/></div>
                         <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">個人 LINE 網址</label><input type="text" value={editFormData.lineLink || ''} onChange={e=>setEditFormData({...editFormData, lineLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 outline-none"/></div>
@@ -745,7 +824,10 @@
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><p className="text-gray-500 font-bold text-sm mb-1">總訂單數</p><p className="text-3xl font-black text-emerald-600">{crmOrders.length} 筆</p></div>
             </div>
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-              <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30"><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 管理</h2><p className="text-gray-500 mt-2">檢視全站訂單、一般會員名單，審核經銷商資格與業績。</p></div>
+              <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center">
+                  <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 訂單與客戶管理</h2><p className="text-gray-500 mt-2">檢視全站訂單並更新處理進度、一般會員名單，審核經銷商資格。</p></div>
+                  <button onClick={() => fetchFullCrmData()} className="text-purple-600 hover:text-purple-800 font-bold flex items-center text-sm bg-white px-4 py-2 border border-purple-200 rounded-lg"><RefreshCw className="w-4 h-4 mr-1"/> 重新整理</button>
+              </div>
               <div className="flex border-b border-gray-200 px-6 pt-4 bg-gray-50 overflow-x-auto">
                 <button onClick={() => setCrmSubTab('orders')} className={`pb-3 px-6 font-bold text-lg transition-colors whitespace-nowrap ${crmSubTab === 'orders' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>全站訂單總覽</button>
                 <button onClick={() => setCrmSubTab('distributors')} className={`pb-3 px-6 font-bold text-lg transition-colors whitespace-nowrap ${crmSubTab === 'distributors' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>經銷商名單與審核</button>
@@ -760,7 +842,7 @@
                        crmDistributors.map(user => {
                         const distOrders = crmOrders.filter(o => String(o.ref_uid) === String(user.uid) && o.orderStatus !== '已取消');
                         const calcSales = distOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
-                        return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td><td className="p-5"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td><td className="p-5">{user.status && user.status.trim().toLowerCase() === 'approved' ? (<div><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span><span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span></div>) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}</td><td className="p-5 text-right"><p className="font-bold text-gray-800 text-lg">{distOrders.length} 筆</p><p className="text-xs text-gray-500 font-medium">${calcSales.toLocaleString()}</p></td><td className="p-5 text-center"><button onClick={() => { setEditingDistributor(user); setEditFormData(user); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition">編輯 / 審核</button></td></tr>);
+                        return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{formatPhone(user.phone)}</p></td><td className="p-5"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td><td className="p-5">{user.status && user.status.trim().toLowerCase() === 'approved' ? (<div><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span><span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span></div>) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}</td><td className="p-5 text-right"><p className="font-bold text-gray-800 text-lg">{distOrders.length} 筆</p><p className="text-xs text-gray-500 font-medium">${calcSales.toLocaleString()}</p></td><td className="p-5 text-center"><button onClick={() => { setEditingDistributor(user); setEditFormData(user); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition">編輯 / 審核</button></td></tr>);
                       })}
                     </tbody>
                   </table>
@@ -769,7 +851,7 @@
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-5 font-bold text-gray-500 text-sm">註冊日期</th><th className="p-5 font-bold text-gray-500 text-sm">會員暱稱</th><th className="p-5 font-bold text-gray-500 text-sm">聯絡電話</th><th className="p-5 font-bold text-gray-500 text-sm">推薦來源</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
                       {crmUsers.length === 0 ? <tr><td colSpan="4" className="p-12 text-center text-gray-400 font-bold text-xl">尚無資料</td></tr> : 
-                       crmUsers.map(user => { const refDist = crmDistributors.find(d => d.uid === user.referredBy); return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5 font-bold text-gray-800 text-lg">{user.name}</td><td className="p-5 text-sm text-gray-800">{user.phone}</td><td className="p-5">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 經銷商: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg flex items-center w-fit">🌱 自然流量</span>}</td></tr>); })}
+                       crmUsers.map(user => { const refDist = crmDistributors.find(d => String(d.uid) === String(user.referredBy)); return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5 font-bold text-gray-800 text-lg">{user.name}</td><td className="p-5 text-sm text-gray-800">{formatPhone(user.phone)}</td><td className="p-5">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 經銷商: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg flex items-center w-fit">🌱 自然流量</span>}</td></tr>); })}
                     </tbody>
                   </table>
                 ) : (
@@ -778,12 +860,12 @@
                     <tbody className="divide-y divide-gray-100">
                       {crmOrders.length === 0 ? <tr><td colSpan="5" className="p-12 text-center text-gray-400 font-bold text-xl">尚無訂單資料</td></tr> : 
                        crmOrders.map(order => {
-                        const refDist = crmDistributors.find(d => d.uid === order.ref_uid);
+                        const refDist = crmDistributors.find(d => String(d.uid) === String(order.ref_uid));
                         return (
                           <tr key={order.orderId} className="hover:bg-purple-50/20 transition-colors">
-                            <td className="p-5"><p className="text-sm text-gray-600 font-bold">{order.orderDate}</p><p className="font-mono text-xs text-gray-400 mt-1">#{order.orderId}</p></td>
+                            <td className="p-5"><p className="text-sm text-gray-600 font-bold">{order.orderDate ? String(order.orderDate).substring(0, 10) : ''}</p><p className="font-mono text-xs text-gray-400 mt-1">#{order.orderId}</p></td>
                             <td className="p-5"><p className="font-bold text-gray-900 text-lg mb-2">{order.tourTitle}</p>{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 推: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex items-center w-fit">🌱 自來客</span>}</td>
-                            <td className="p-5"><p className="font-bold text-gray-800 flex items-center"><UserIcon className="w-4 h-4 mr-1 text-gray-400"/> {order.contactName} <span className="text-sm font-normal text-red-600 ml-1 bg-red-50 px-1.5 rounded">({order.pax}人)</span></p><p className="text-sm text-gray-600 mt-1 flex items-center"><Smartphone className="w-4 h-4 mr-1 text-gray-400"/> {order.contactPhone}</p>{order.note && <p className="text-xs text-gray-500 mt-2 bg-yellow-50 p-1.5 rounded truncate max-w-[200px]" title={order.note}>備註: {order.note}</p>}</td>
+                            <td className="p-5"><p className="font-bold text-gray-800 flex items-center"><UserIcon className="w-4 h-4 mr-1 text-gray-400"/> {order.contactName} <span className="text-sm font-normal text-red-600 ml-1 bg-red-50 px-1.5 rounded">({order.pax}人)</span></p><p className="text-sm text-gray-600 mt-1 flex items-center"><Smartphone className="w-4 h-4 mr-1 text-gray-400"/> {formatPhone(order.contactPhone)}</p>{order.note && <p className="text-xs text-gray-500 mt-2 bg-yellow-50 p-1.5 rounded truncate max-w-[200px]" title={order.note}>備註: {order.note}</p>}</td>
                             <td className="p-5 text-right bg-gray-50/50"><p className="font-black text-[#b82337] text-xl">${Number(order.totalAmount).toLocaleString()}</p>{Number(order.commissionAmount) > 0 && <p className="text-xs text-emerald-600 font-bold mt-1">分潤: ${Number(order.commissionAmount).toLocaleString()}</p>}</td>
                             <td className="p-5 text-center">
                                <div className="flex flex-col gap-2 items-center">
