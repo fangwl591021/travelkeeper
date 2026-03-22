@@ -950,29 +950,29 @@
           { id: 'settings',icon: '⚙️', label: '帳號設定' },
         ];
 
-        // ── right panel content ───────────────────────────────────────────────
+        // ── right panel content ──────────────────────────────────────────
         const renderPanel = () => {
           if (distPanel === 'tours') return (
             <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2"><span className="text-base">✈️</span> 可推廣行程</h2>
-                <span className="text-xs text-gray-400">{itineraries.length} 個行程</span>
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">✈️ 可推廣行程</h2>
+                <span className="text-sm text-gray-400 font-medium">{itineraries.length} 個行程</span>
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
                 {itineraries.map(item => (
-                  <div key={item.id} className="bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-md transition-all overflow-hidden cursor-pointer group" style={{borderRadius:'4px'}}>
-                    <div className="h-28 overflow-hidden relative bg-gray-100">
+                  <div key={item.id} className="bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-lg transition-all overflow-hidden cursor-pointer group" style={{borderRadius:'6px'}}>
+                    <div className="h-44 overflow-hidden relative bg-gray-100">
                       <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <span className="absolute top-1.5 left-1.5 bg-emerald-500 text-white px-1.5 py-0.5 text-[10px] font-bold rounded">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</span>
+                      <span className="absolute top-2 left-2 bg-emerald-500 text-white px-2.5 py-1 text-xs font-bold rounded shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</span>
                     </div>
-                    <div className="p-2.5">
-                      <p className="text-[12px] font-bold text-gray-800 line-clamp-2 leading-snug mb-1.5">{item.title}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-gray-400">{item.days}天</span>
-                        <span className="text-[12px] font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span>
+                    <div className="p-4">
+                      <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug mb-2">{item.title}</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm text-gray-400">{item.days} 天</span>
+                        <span className="text-base font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); openFlexModal(item); }} className="mt-2 w-full bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold py-1.5 rounded flex items-center justify-center gap-1 transition-colors">
-                        <Share2 className="w-3 h-3" /> 產生推廣連結
+                      <button onClick={(e) => { e.stopPropagation(); openFlexModal(item); }} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm">
+                        <Share2 className="w-4 h-4" /> 產生推廣連結
                       </button>
                     </div>
                   </div>
@@ -983,37 +983,46 @@
 
           if (distPanel === 'orders') return (
             <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100 flex-wrap gap-2">
-                <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2"><span className="text-base">📋</span> 業績訂單 <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">{filteredDistOrders.length}</span></h2>
-                <div className="flex gap-1.5">
-                  <select value={distOrderSearchMonth} onChange={e=>setDistOrderSearchMonth(e.target.value)} className="rounded border border-gray-200 px-2 py-1 text-[11px] outline-none bg-white">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 flex-wrap gap-3">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  📋 業績訂單
+                  <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-bold">{filteredDistOrders.length} 筆</span>
+                </h2>
+                <div className="flex gap-2">
+                  <select value={distOrderSearchMonth} onChange={e=>setDistOrderSearchMonth(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none bg-white">
                     <option value="">所有月份</option>{distOrderMonths.map(m=><option key={m} value={m}>{m}</option>)}
                   </select>
-                  <input type="text" value={distOrderSearchKeyword} onChange={e=>setDistOrderSearchKeyword(e.target.value)} placeholder="搜尋..." className="rounded border border-gray-200 px-2 py-1 text-[11px] outline-none w-28" />
+                  <input type="text" value={distOrderSearchKeyword} onChange={e=>setDistOrderSearchKeyword(e.target.value)} placeholder="搜尋訂單/行程/客戶…" className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none w-44" />
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[560px]">
-                  <thead><tr className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 font-bold">
-                    <th className="px-3 py-2">訂單號 / 日期</th>
-                    <th className="px-3 py-2">行程 / 客戶</th>
-                    <th className="px-3 py-2 text-right">金額</th>
-                    <th className="px-3 py-2 text-right">分潤</th>
-                    <th className="px-3 py-2 text-center">狀態</th>
+              <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead><tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500 font-bold">
+                    <th className="px-5 py-3.5">訂單號 / 日期</th>
+                    <th className="px-5 py-3.5">行程 / 客戶</th>
+                    <th className="px-5 py-3.5 text-right">金額</th>
+                    <th className="px-5 py-3.5 text-right">分潤</th>
+                    <th className="px-5 py-3.5 text-center">狀態</th>
                   </tr></thead>
-                  <tbody className="divide-y divide-gray-100 text-[12px]">
+                  <tbody className="divide-y divide-gray-100">
                     {filteredDistOrders.length === 0
-                      ? <tr><td colSpan="5" className="py-10 text-center text-gray-400 text-xs">查無符合訂單</td></tr>
+                      ? <tr><td colSpan="5" className="py-16 text-center text-gray-400 text-sm">查無符合訂單</td></tr>
                       : filteredDistOrders.map(o => (
                         <tr key={o.orderId} className="hover:bg-gray-50 transition">
-                          <td className="px-3 py-2"><p className="font-mono font-bold text-gray-700">#{o.orderId}</p><p className="text-[10px] text-gray-400">{o.orderDate ? String(o.orderDate).substring(0,10) : ''}</p></td>
-                          <td className="px-3 py-2"><p className="font-bold text-[#b82337] line-clamp-1 text-[11px]">{o.tourTitle}</p><p className="text-[10px] text-gray-500">{o.contactName}（{o.pax}人）</p></td>
-                          <td className="px-3 py-2 text-right font-bold text-gray-800">${Number(o.totalAmount).toLocaleString()}</td>
-                          <td className="px-3 py-2 text-right font-black text-emerald-600">${Number(o.commissionAmount).toLocaleString()}</td>
-                          <td className="px-3 py-2 text-center">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold w-full text-center ${o.paymentStatus === '已付款' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{o.paymentStatus || '未付款'}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold w-full text-center ${o.orderStatus === '已確認' || o.orderStatus === '已出發' ? 'bg-blue-100 text-blue-700' : o.orderStatus === '已取消' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'}`}>{o.orderStatus || '處理中'}</span>
+                          <td className="px-5 py-4">
+                            <p className="font-mono font-bold text-gray-800 text-sm">#{o.orderId}</p>
+                            <p className="text-xs text-gray-400 mt-1">{o.orderDate ? String(o.orderDate).substring(0,10) : ''}</p>
+                          </td>
+                          <td className="px-5 py-4">
+                            <p className="font-bold text-[#b82337] text-sm">{o.tourTitle}</p>
+                            <p className="text-xs text-gray-500 mt-1">{o.contactName}（{o.pax} 人）</p>
+                          </td>
+                          <td className="px-5 py-4 text-right font-bold text-gray-800">${Number(o.totalAmount).toLocaleString()}</td>
+                          <td className="px-5 py-4 text-right font-black text-emerald-600 text-base">${Number(o.commissionAmount).toLocaleString()}</td>
+                          <td className="px-5 py-4 text-center">
+                            <div className="flex flex-col items-center gap-1.5">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold w-full text-center ${o.paymentStatus === '已付款' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{o.paymentStatus || '未付款'}</span>
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold w-full text-center ${o.orderStatus === '已確認' || o.orderStatus === '已出發' ? 'bg-blue-100 text-blue-700' : o.orderStatus === '已取消' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'}`}>{o.orderStatus || '處理中'}</span>
                             </div>
                           </td>
                         </tr>
@@ -1026,23 +1035,25 @@
 
           if (distPanel === 'members') return (
             <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2"><span className="text-base">👥</span> 推薦會員</h2>
-                <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold">{distributorStats.users.length} 人</span>
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">👥 推薦會員</h2>
+                <span className="bg-blue-100 text-blue-700 text-xs px-2.5 py-1 rounded-full font-bold">{distributorStats.users.length} 人</span>
               </div>
-              <div className="overflow-x-auto">
+              <div className="rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <table className="w-full text-left border-collapse">
-                  <thead><tr className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 font-bold">
-                    <th className="px-3 py-2">加入日期</th><th className="px-3 py-2">姓名</th><th className="px-3 py-2">電話</th>
+                  <thead><tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500 font-bold">
+                    <th className="px-5 py-3.5">加入日期</th>
+                    <th className="px-5 py-3.5">姓名</th>
+                    <th className="px-5 py-3.5">聯絡電話</th>
                   </tr></thead>
-                  <tbody className="divide-y divide-gray-100 text-[12px]">
+                  <tbody className="divide-y divide-gray-100">
                     {distributorStats.users.length === 0
-                      ? <tr><td colSpan="3" className="py-10 text-center text-gray-400 text-xs">尚未有推薦會員</td></tr>
+                      ? <tr><td colSpan="3" className="py-16 text-center text-gray-400 text-sm">尚未有推薦會員</td></tr>
                       : distributorStats.users.map(u => (
                         <tr key={u.uid} className="hover:bg-gray-50 transition">
-                          <td className="px-3 py-2 text-gray-400 text-[11px]">{u.joinDate ? String(u.joinDate).substring(0,10) : ''}</td>
-                          <td className="px-3 py-2 font-bold text-gray-800">{u.name}</td>
-                          <td className="px-3 py-2 text-gray-600 font-mono text-[11px]">{formatPhone(u.phone)}</td>
+                          <td className="px-5 py-4 text-gray-400 text-sm">{u.joinDate ? String(u.joinDate).substring(0,10) : ''}</td>
+                          <td className="px-5 py-4 font-bold text-gray-800">{u.name}</td>
+                          <td className="px-5 py-4 text-gray-600 font-mono">{formatPhone(u.phone)}</td>
                         </tr>
                     ))}
                   </tbody>
@@ -1053,72 +1064,89 @@
 
           if (distPanel === 'stats') return (
             <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2"><span className="text-base">📊</span> 業績總覽</h2>
-                <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="text-emerald-600 hover:text-emerald-800 text-[11px] font-bold flex items-center gap-1 border border-emerald-200 bg-white px-2 py-1 rounded">
-                  <RefreshCw className="w-3 h-3" /> 更新
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">📊 業績總覽</h2>
+                <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="text-emerald-600 hover:text-emerald-800 text-sm font-bold flex items-center gap-1.5 border border-emerald-200 bg-white px-3 py-2 rounded-lg shadow-sm">
+                  <RefreshCw className="w-4 h-4" /> 更新資料
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-3 mb-6">
-                <div className="bg-white border border-emerald-100 rounded-lg p-4 flex flex-col items-center text-center shadow-sm">
-                  <BadgeDollarSign className="w-6 h-6 text-emerald-500 mb-2" />
-                  <p className="text-[10px] text-gray-500 font-bold mb-1">總銷售額</p>
-                  <p className="text-lg font-black text-gray-800">${totalSales.toLocaleString()}</p>
+              <div className="grid grid-cols-3 gap-5 mb-8">
+                <div className="bg-white border border-emerald-100 rounded-xl p-6 flex flex-col items-center text-center shadow-sm">
+                  <BadgeDollarSign className="w-8 h-8 text-emerald-500 mb-3" />
+                  <p className="text-sm text-gray-500 font-bold mb-2">累積總銷售額</p>
+                  <p className="text-2xl font-black text-gray-800">${totalSales.toLocaleString()}</p>
                 </div>
-                <div className="bg-white border border-blue-100 rounded-lg p-4 flex flex-col items-center text-center shadow-sm">
-                  <FileCheck className="w-6 h-6 text-blue-500 mb-2" />
-                  <p className="text-[10px] text-gray-500 font-bold mb-1">預估分潤</p>
-                  <p className="text-lg font-black text-gray-800">${totalCommission.toLocaleString()}</p>
+                <div className="bg-white border border-blue-100 rounded-xl p-6 flex flex-col items-center text-center shadow-sm">
+                  <FileCheck className="w-8 h-8 text-blue-500 mb-3" />
+                  <p className="text-sm text-gray-500 font-bold mb-2">累積預估分潤</p>
+                  <p className="text-2xl font-black text-gray-800">${totalCommission.toLocaleString()}</p>
                 </div>
-                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg p-4 flex flex-col items-center text-center shadow-sm text-white">
-                  <Sparkles className="w-6 h-6 mb-2" />
-                  <p className="text-[10px] text-emerald-100 font-bold mb-1">可結算分潤</p>
-                  <p className="text-lg font-black">${confirmedCommission.toLocaleString()}</p>
+                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-6 flex flex-col items-center text-center shadow-md text-white">
+                  <Sparkles className="w-8 h-8 mb-3" />
+                  <p className="text-sm text-emerald-100 font-bold mb-2">可結算分潤</p>
+                  <p className="text-2xl font-black">${confirmedCommission.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 text-[12px] text-gray-600 space-y-2">
-                <p className="flex justify-between"><span className="font-bold text-gray-700">推薦會員數</span><span className="font-bold text-blue-600">{distributorStats.users.length} 人</span></p>
-                <p className="flex justify-between"><span className="font-bold text-gray-700">總訂單數</span><span className="font-bold text-gray-800">{distributorStats.orders.length} 筆</span></p>
-                <p className="flex justify-between"><span className="font-bold text-gray-700">已取消訂單</span><span className="font-bold text-red-500">{distributorStats.orders.filter(o=>o.orderStatus==='已取消').length} 筆</span></p>
-                <p className="flex justify-between"><span className="font-bold text-gray-700">分潤比例</span><span className="font-bold text-emerald-600">{(myDistributorData && myDistributorData.commission) || 10}%</span></p>
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                <p className="text-sm font-bold text-gray-600 mb-4">詳細統計</p>
+                <div className="space-y-3">
+                  {[
+                    ['推薦會員數', `${distributorStats.users.length} 人`, 'text-blue-600'],
+                    ['總訂單數', `${distributorStats.orders.length} 筆`, 'text-gray-800'],
+                    ['已取消訂單', `${distributorStats.orders.filter(o=>o.orderStatus==='已取消').length} 筆`, 'text-red-500'],
+                    ['個人分潤比例', `${(myDistributorData && myDistributorData.commission) || 10}%`, 'text-emerald-600'],
+                  ].map(([label, val, cls]) => (
+                    <div key={label} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                      <span className="text-sm font-medium text-gray-600">{label}</span>
+                      <span className={`text-base font-black ${cls}`}>{val}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           );
 
           if (distPanel === 'settings') return (
-            <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2"><span className="text-base">⚙️</span> 帳號設定與推播</h2>
+            <div className="animate-fade-in max-w-3xl">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">⚙️ 帳號設定與推播</h2>
               </div>
-              <div className="space-y-5">
+              <div className="space-y-8">
                 <div>
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">名片聯絡按鈕</p>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {[['phone','📞 聯絡電話'],['lineLink','💬 個人 LINE'],['lineAtLink','🟢 LINE@'],['fbLink','👍 FB 粉專'],['mapLink','📍 門市導航']].map(([key,label]) => (
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">名片聯絡按鈕</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      ['phone',   '📞 聯絡電話',  '09xx-xxxxxx'],
+                      ['lineLink','💬 個人 LINE', 'https://line.me/...'],
+                      ['lineAtLink','🟢 官方 LINE@','https://lin.ee/...'],
+                      ['fbLink',  '👍 FB 粉絲專頁','https://fb.com/...'],
+                      ['mapLink', '📍 門市導航',  'https://maps.google.com/...'],
+                    ].map(([key, label, ph]) => (
                       <div key={key}>
-                        <label className="block text-[10px] font-bold text-gray-500 mb-1">{label}</label>
-                        <input type="text" value={myDistributorData?.[key] || ''} onChange={e=>setMyDistributorData({...myDistributorData,[key]:e.target.value})} className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] outline-none focus:border-emerald-400" placeholder={key==='phone'?'09xx-xxxxxx':'https://...'} />
+                        <label className="block text-sm font-bold text-gray-600 mb-1.5">{label}</label>
+                        <input type="text" value={myDistributorData?.[key] || ''} onChange={e=>setMyDistributorData({...myDistributorData,[key]:e.target.value})} className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200" placeholder={ph} />
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                  <p className="text-[11px] font-bold text-blue-800 mb-3">📡 Telegram 訂單推播</p>
-                  <div className="space-y-2">
+                <div className="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                  <p className="text-base font-bold text-blue-800 mb-1 flex items-center gap-2">📡 Telegram 訂單自動推播</p>
+                  <p className="text-xs text-blue-500 mb-5">設定後，每當有客戶透過您的連結下單，即時推播通知到您的 Telegram。</p>
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-blue-700 mb-1">Bot Token</label>
-                      <input type="text" value={myDistributorData?.tgToken || ''} onChange={e=>setMyDistributorData({...myDistributorData,tgToken:e.target.value})} className="w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-[11px] outline-none font-mono" placeholder="123456:ABCdef..." />
+                      <label className="block text-sm font-bold text-blue-700 mb-1.5">Bot Token</label>
+                      <input type="text" value={myDistributorData?.tgToken || ''} onChange={e=>setMyDistributorData({...myDistributorData,tgToken:e.target.value})} className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm outline-none font-mono" placeholder="123456789:ABCDefghIJKLmnop..." />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-bold text-blue-700">Chat ID</label>
-                        <button onClick={autoFetchTgChatId} className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded hover:bg-blue-200 font-bold">自動轉換</button>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-sm font-bold text-blue-700">Chat ID</label>
+                        <button onClick={autoFetchTgChatId} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-200 font-bold border border-blue-200">自動轉換取得</button>
                       </div>
-                      <input type="text" value={myDistributorData?.tgChatId || ''} onChange={e=>setMyDistributorData({...myDistributorData,tgChatId:e.target.value})} className="w-full rounded border border-blue-200 bg-white px-2 py-1.5 text-[11px] outline-none font-mono" placeholder="-5248604938" />
+                      <input type="text" value={myDistributorData?.tgChatId || ''} onChange={e=>setMyDistributorData({...myDistributorData,tgChatId:e.target.value})} className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm outline-none font-mono" placeholder="-5248604938" />
                     </div>
                   </div>
                 </div>
-                <button onClick={saveMySettings} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-lg text-sm transition-colors shadow-sm">
+                <button onClick={saveMySettings} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl text-base transition-colors shadow-md">
                   儲存所有設定
                 </button>
               </div>
@@ -1128,38 +1156,38 @@
           return null;
         };
 
-        // ── shell ──────────────────────────────────────────────────────────────
+        // ── shell ─────────────────────────────────────────────────────────────
         return (
-          <div className="w-full h-[calc(100vh-64px)] flex overflow-hidden bg-gray-100 animate-fade-in">
+          <div className="w-full flex animate-fade-in min-h-screen">
 
-            {/* ── Left sidebar ── */}
-            <div className="w-[220px] flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+            {/* ── Left sidebar — sticky so it stays while right panel scrolls ── */}
+            <div className="w-64 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col sticky top-16 self-start" style={{height:'calc(100vh - 64px)'}}>
               {/* Profile header */}
-              <div className={`p-4 flex items-center gap-3 border-b border-gray-100 ${isPending ? 'bg-gray-50' : 'bg-emerald-50'}`}>
-                <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full border-2 border-white shadow object-cover flex-shrink-0" />
+              <div className={`px-5 py-5 flex items-center gap-3 border-b border-gray-100 ${isPending ? 'bg-gray-50' : 'bg-emerald-50'}`}>
+                <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-12 h-12 rounded-full border-2 border-white shadow object-cover flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-[12px] font-bold text-gray-800 truncate">{liffProfile?.displayName}</p>
+                  <p className="text-sm font-bold text-gray-800 truncate">{liffProfile?.displayName}</p>
                   {isPending
-                    ? <span className="text-[10px] text-yellow-600 font-bold bg-yellow-100 px-1.5 py-0.5 rounded">審核中</span>
-                    : <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">💼 金牌經銷商</span>
+                    ? <span className="text-xs text-yellow-600 font-bold bg-yellow-100 px-2 py-0.5 rounded mt-1 inline-block">審核中</span>
+                    : <span className="text-xs text-emerald-600 font-bold bg-emerald-100 px-2 py-0.5 rounded mt-1 inline-block">💼 金牌經銷商</span>
                   }
                 </div>
               </div>
 
               {/* App title */}
-              <div className="px-4 pt-4 pb-2">
-                <p className="text-[13px] font-black text-gray-800">經銷商專區</p>
-                <p className="text-[10px] text-gray-400">Distributor Console</p>
+              <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+                <p className="text-base font-black text-gray-800">經銷商專區</p>
+                <p className="text-xs text-gray-400 mt-0.5">Distributor Console</p>
               </div>
 
               {/* Nav items */}
-              <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+              <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
                 {NAV.map(item => (
                   <button
                     key={item.id}
                     onClick={() => !isPending && setDistPanel(item.id)}
                     disabled={isPending && item.id !== 'settings'}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[12px] font-bold transition-all text-left
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all text-left
                       ${distPanel === item.id && !isPending
                         ? 'bg-emerald-500 text-white shadow-sm'
                         : isPending && item.id !== 'settings'
@@ -1167,36 +1195,36 @@
                           : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                       }`}
                   >
-                    <span className="text-base leading-none">{item.icon}</span>
-                    {item.label}
+                    <span className="text-lg leading-none">{item.icon}</span>
+                    <span>{item.label}</span>
                     {item.id === 'orders' && distributorStats.orders.length > 0 && (
-                      <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-black ${distPanel === 'orders' ? 'bg-white/30 text-white' : 'bg-gray-100 text-gray-600'}`}>{distributorStats.orders.length}</span>
+                      <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-black ${distPanel === 'orders' ? 'bg-white/30 text-white' : 'bg-gray-100 text-gray-600'}`}>{distributorStats.orders.length}</span>
                     )}
                     {item.id === 'members' && distributorStats.users.length > 0 && (
-                      <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-black ${distPanel === 'members' ? 'bg-white/30 text-white' : 'bg-blue-100 text-blue-600'}`}>{distributorStats.users.length}</span>
+                      <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-black ${distPanel === 'members' ? 'bg-white/30 text-white' : 'bg-blue-100 text-blue-600'}`}>{distributorStats.users.length}</span>
                     )}
                   </button>
                 ))}
               </nav>
 
-              {/* Refresh + sync button */}
-              <div className="p-3 border-t border-gray-100">
-                <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="w-full flex items-center justify-center gap-1.5 text-[11px] text-gray-500 hover:text-emerald-600 font-bold py-2 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
-                  <RefreshCw className="w-3.5 h-3.5" /> 同步資料
+              {/* Sync button */}
+              <div className="p-4 border-t border-gray-100">
+                <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="w-full flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-emerald-600 font-bold py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
+                  <RefreshCw className="w-4 h-4" /> 同步資料
                 </button>
               </div>
             </div>
 
-            {/* ── Right content panel ── */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+            {/* ── Right content panel — natural scroll, generous padding ── */}
+            <div className="flex-1 bg-gray-50 min-h-screen">
               {isPending ? (
-                <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                  <div className="text-5xl mb-4">⏳</div>
-                  <h3 className="text-lg font-bold text-gray-700 mb-2">審核中，請稍候</h3>
-                  <p className="text-sm text-gray-400 max-w-xs">您的經銷商申請正在審核中，開通後即可使用所有功能。</p>
+                <div className="flex flex-col items-center justify-center py-40 text-center px-8">
+                  <div className="text-6xl mb-6">⏳</div>
+                  <h3 className="text-xl font-bold text-gray-700 mb-3">審核中，請稍候</h3>
+                  <p className="text-gray-400 max-w-xs">您的經銷商申請正在審核中，開通後即可使用所有功能。</p>
                 </div>
               ) : (
-                <div className="p-6">
+                <div className="p-8 lg:p-10">
                   {renderPanel()}
                 </div>
               )}
