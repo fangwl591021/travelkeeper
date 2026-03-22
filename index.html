@@ -21,7 +21,6 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     .line-chat-bg { background-color: #749cbd; }
-    /* CRM 下拉選單特別設計 */
     select.crm-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 7l3-3 3 3m0 6l-3 3-3-3'/%3E%3C/svg%3E"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1em; padding-right: 2rem; }
   </style>
 </head>
@@ -37,7 +36,7 @@
     const MapPin = ({ className }) => <IconWrapper className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
     const Calendar = ({ className }) => <IconWrapper className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
     const Type = ({ className }) => <IconWrapper className={className}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconWrapper>;
-    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></IconWrapper>;
+    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></IconWrapper>;
     const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
     const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
     const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
@@ -50,6 +49,8 @@
     const Trash2 = ({ className }) => <IconWrapper className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
     const Camera = ({ className }) => <IconWrapper className={className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></IconWrapper>;
     const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
+    // ★ 修正：補上缺少的 UserIcon
+    const UserIcon = ({ className }) => <IconWrapper className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconWrapper>;
     const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
     const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
     const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
@@ -60,7 +61,6 @@
     const Smartphone = ({ className }) => <IconWrapper className={className}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></IconWrapper>;
     const BadgeDollarSign = ({ className }) => <IconWrapper className={className}><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></IconWrapper>;
     const FileCheck = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></IconWrapper>;
-    
     const RunningMan = ({ className }) => (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <circle cx="16" cy="5" r="2"/><path d="M12 9l3-2 1.5 2.5"/><path d="M10.5 16.5L8 11h3l2.5 4 4.5-1.5"/><path d="M14.5 22l-2-6-3.5 2.5"/><path d="M5.5 22L8 17"/>
@@ -76,7 +76,6 @@
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
-
         const buttons = [
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
             { "type": "button", "style": "primary", "color": "#b82337", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
@@ -87,7 +86,6 @@
         if (options.fb && distributorData.fbLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "👍 FB 粉絲專頁", "uri": distributorData.fbLink }});
         if (options.web && distributorData.webLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🌐 官方網站", "uri": distributorData.webLink }});
         if (options.map && distributorData.mapLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📍 門市導航", "uri": distributorData.mapLink }});
-
         return {
           "type": "flex", "altText": `推薦行程：${tourItem.title}`,
           "contents": {
@@ -111,27 +109,20 @@
       const blocks = [];
       let currentBlock = { type: 'intro', dayText: '行程介紹', title: '', content: [], meals: [], hotels: [] };
       let inMeal = false; let inHotel = false;
-
       for (let i = 0; i < lines.length; i++) {
           let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
-
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
-              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
-                  blocks.push(currentBlock);
-              }
+              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') blocks.push(currentBlock);
               currentBlock = { type: 'day', dayText: dayMatch[1].replace(/\s+/g, ''), title: dayMatch[2].replace(/^[:：\-\s]+/, ''), content: [], meals: [], hotels: [] };
               inMeal = false; inHotel = false; continue;
           }
-
           if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
           if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
           if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
           if (inHotel && line.length < 40) { currentBlock.hotels.push(line); continue; }
-
           inMeal = false; inHotel = false;
-
           const parts = line.split(/(!\[.*?\]\(.*?\))/g);
           const parsedLine = parts.filter(p => p).map((part) => {
               const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
@@ -142,7 +133,6 @@
           currentBlock.content.push({ type: 'mixed', elements: parsedLine });
       }
       blocks.push(currentBlock);
-
       return blocks.map((block, bIdx) => (
           <div key={bIdx} className="mb-12 w-full max-w-full">
               {block.dayText !== '行程介紹' && (
@@ -151,15 +141,9 @@
                           <div className="absolute top-1/2 left-0 w-full border-t-[2px] border-dashed border-[#b82337] -z-10"></div>
                           <h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2>
                       </div>
-                      {block.title && (
-                          <div className="flex items-start mb-6 px-2">
-                              <span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span>
-                              <h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3>
-                          </div>
-                      )}
+                      {block.title && (<div className="flex items-start mb-6 px-2"><span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span><h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3></div>)}
                   </div>
               )}
-              
               <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
@@ -170,10 +154,7 @@
                                       if (el.type === 'image') return (
                                           <span key={eIdx} className="block my-10 w-full relative group">
                                               <img src={el.url} className="w-full h-auto max-w-full object-cover rounded-none md:rounded-2xl max-h-[800px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words">
-                                                <span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>
-                                                原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a>
-                                              </span>
+                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words"><span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a></span>
                                           </span>
                                       );
                                       return <span key={eIdx}>{el.text}</span>;
@@ -184,39 +165,10 @@
                       return null;
                   })}
               </div>
-
               {(block.meals.length > 0 || block.hotels.length > 0) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
-                      {block.meals.length > 0 && (
-                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
-                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div>
-                              <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
-                                  <p className="font-bold text-gray-900 mb-2 text-lg">餐食</p>
-                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
-                                      {block.meals.map((m, mIdx) => {
-                                          const parts = m.split(/[:：](.+)/);
-                                          if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
-                                          return <p key={mIdx}>{m}</p>;
-                                      })}
-                                  </div>
-                              </div>
-                          </div>
-                      )}
-                      {block.hotels.length > 0 && (
-                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
-                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div>
-                              <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
-                                  <p className="font-bold text-gray-900 mb-2 text-lg">住宿</p>
-                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
-                                      {block.hotels.map((h, hIdx) => {
-                                          const parts = h.split(/[:：](.+)/);
-                                          if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
-                                          return <p key={hIdx}>{h}</p>;
-                                      })}
-                                  </div>
-                              </div>
-                          </div>
-                      )}
+                      {block.meals.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">餐食</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.meals.map((m, mIdx) => { const parts = m.split(/[:：](.+)/); if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={mIdx}>{m}</p>; })}</div></div></div>)}
+                      {block.hotels.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">住宿</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.hotels.map((h, hIdx) => { const parts = h.split(/[:：](.+)/); if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={hIdx}>{h}</p>; })}</div></div></div>)}
                   </div>
               )}
           </div>
@@ -229,56 +181,46 @@
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
       const [tourDetailTab, setTourDetailTab] = useState('itinerary'); 
       const [shareStatusText, setShareStatusText] = useState('搜尋中...'); 
-      const [selectedTourId, setSelectedTourId] = useState(() => { return urlParams.get('t') || urlParams.get('tour_id') || null; });
+      const [selectedTourId, setSelectedTourId] = useState(() => urlParams.get('t') || urlParams.get('tour_id') || null);
       const [refUid, setRefUid] = useState(() => {
         const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
         if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
         return urlRef || localStorage.getItem('tracking_ref_uid') || '';
       });
-
-      const [crmSubTab, setCrmSubTab] = useState('orders'); // ★ CRM 預設顯示訂單
+      const [crmSubTab, setCrmSubTab] = useState('orders');
       const [itineraries, setItineraries] = useState([]);
       const [toast, setToast] = useState(null);
       const [isLoading, setIsLoading] = useState(true); 
       const [isUploadingImage, setIsUploadingImage] = useState(false); 
       const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); 
       const [isSubmitting, setIsSubmitting] = useState(false); 
-      
       const [liffProfile, setLiffProfile] = useState(null);
       const [isLiffReady, setIsLiffReady] = useState(false);
       const [distributorStatus, setDistributorStatus] = useState(null); 
       const [isGeneralMember, setIsGeneralMember] = useState(false);
       const [isAdmin, setIsAdmin] = useState(false);
-
       const [myDistributorData, setMyDistributorData] = useState(null);
       const [myUserData, setMyUserData] = useState(null);
       const [distributorStats, setDistributorStats] = useState({ users: [], orders: [] }); 
       const [isStatusChecked, setIsStatusChecked] = useState(false);
-
       const [crmDistributors, setCrmDistributors] = useState([]);
       const [crmUsers, setCrmUsers] = useState([]);
       const [crmOrders, setCrmOrders] = useState([]); 
       const [myOrders, setMyOrders] = useState([]); 
-
       const [searchRegion, setSearchRegion] = useState('');
       const [searchStartDate, setSearchStartDate] = useState('');
       const [searchEndDate, setSearchEndDate] = useState('');
       const [searchKeyword, setSearchKeyword] = useState('');
       const [filteredResults, setFilteredResults] = useState([]);
-      
       const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
       const [uploadMode, setUploadMode] = useState('dm');
       const [ocrStatus, setOcrStatus] = useState('idle');
-      
       const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' });
-      
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
       const [bookingModalData, setBookingModalData] = useState(null);
       const [editingDistributor, setEditingDistributor] = useState(null);
       const [editFormData, setEditFormData] = useState({});
-      const [approveModalUser, setApproveModalUser] = useState(null);
-      const [approveData, setApproveData] = useState({ commission: 10, note: '' });
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
 
       const getTimestamp = () => new Date().getTime();
@@ -292,46 +234,32 @@
              const rUid = urlParams.get('r') || urlParams.get('ref_uid');
              const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
              const tour = itineraries.find(i => String(i.id) === String(tourId));
-             
              if (!tour) { setShareStatusText('❌ 找不到該行程資訊'); setTimeout(() => window.location.replace(ENDPOINT_URL), 2000); return; }
-
              let targetDistData = {};
              if (rUid === liffProfile.userId && myDistributorData) { targetDistData = myDistributorData; } 
              else if (rUid) {
                  try {
-                     const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors' }) });
+                     const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${getTimestamp()}`);
                      const distList = await res.json();
-                     targetDistData = distList.find(d => d.uid === rUid) || {};
+                     targetDistData = (Array.isArray(distList) ? distList : []).find(d => d.uid === rUid) || {};
                  } catch(e) {}
              }
-
              const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
              const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-
              if (actionParam === 'send') {
                  setShareStatusText("極速傳送中...");
                  try {
                      const context = liff.getContext();
-                     if (context && context.type !== 'none' && context.type !== 'external') {
-                         await liff.sendMessages([flexMsg]);
-                         liff.closeWindow(); 
-                     } else {
-                         setShareStatusText('電腦版無聊天室，即將展開網頁...');
-                         setTimeout(() => window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`), 1000);
-                     }
+                     if (context && context.type !== 'none' && context.type !== 'external') { await liff.sendMessages([flexMsg]); liff.closeWindow(); } 
+                     else { setShareStatusText('電腦版無聊天室，即將展開網頁...'); setTimeout(() => window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`), 1000); }
                  } catch (e) { window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`); }
              } else if (actionParam === 'share') {
                  setShareStatusText("準備通訊錄...");
-                 try {
-                     await liff.shareTargetPicker([flexMsg]);
-                     liff.closeWindow();
-                 } catch(e) {
-                     if (e.message && e.message.includes('not allowed')) { liff.logout(); window.location.reload(); } else { liff.closeWindow(); }
-                 }
+                 try { await liff.shareTargetPicker([flexMsg]); liff.closeWindow(); } 
+                 catch(e) { if (e.message && e.message.includes('not allowed')) { liff.logout(); window.location.reload(); } else { liff.closeWindow(); } }
              }
         };
-
-        if (actionParam === 'share' || actionParam === 'send') { processAutoAction(); }
+        if (actionParam === 'share' || actionParam === 'send') processAutoAction();
       }, [isLiffReady, isLoading, liffProfile, isStatusChecked, actionParam]);
 
       const initLiff = async () => {
@@ -351,7 +279,7 @@
 
       const checkMyStatus = async (uid) => {
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'checkUserStatus', uid: uid }) });
+          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${getTimestamp()}`);
           const data = await res.json();
           if (data.success) {
              const info = data.data;
@@ -362,7 +290,6 @@
         } catch (e) { console.error('Status check error', e); } finally { setIsStatusChecked(true); }
       };
 
-      // ★ 自動抓取資料 Engine
       useEffect(() => {
           if (activeTab === 'crm' && isAdmin) fetchFullCrmData();
           if (activeTab === 'distributor' && distributorStatus === 'approved' && liffProfile) fetchDistributorStats(liffProfile.userId);
@@ -371,7 +298,7 @@
 
       const fetchUserOrders = async (uid) => {
           try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUserOrders', uid: uid }) });
+              const res = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}&_t=${getTimestamp()}`);
               const data = await res.json();
               if (data.success) setMyOrders(data.data);
           } catch(e) { console.error('Fetch Orders error', e); }
@@ -379,34 +306,26 @@
 
       const fetchDistributorStats = async (uid) => {
           try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributorPerformance', uid: uid }) });
+              const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributorPerformance&uid=${uid}&_t=${getTimestamp()}`);
               const data = await res.json();
               if (data.success) setDistributorStats({ users: data.users || [], orders: data.orders || [] });
           } catch(e) { console.error('Fetch Dist Stats error', e); }
       };
 
+      // ★ 核心修正：用 Promise.all + GET 呼叫，避免 body stream already read 錯誤
       const fetchFullCrmData = async () => {
-  try {
-    const [resD, resU, resO] = await Promise.all([
-      fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${getTimestamp()}`),
-      fetch(`${WORKER_URL}/api/itineraries?action=getUsers&_t=${getTimestamp()}`),
-      fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders&_t=${getTimestamp()}`)
-    ]);
-
-    const [dataD, dataU, dataO] = await Promise.all([
-      resD.json(),
-      resU.json(),
-      resO.json()
-    ]);
-
-    setCrmDistributors(Array.isArray(dataD) ? dataD : []);
-    setCrmUsers(Array.isArray(dataU) ? dataU : []);
-    if (dataO && dataO.success) setCrmOrders(dataO.data || []);
-
-  } catch (e) {
-    console.error('CRM Fetch error', e);
-  }
-};
+        try {
+          const [resD, resU, resO] = await Promise.all([
+            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${getTimestamp()}`),
+            fetch(`${WORKER_URL}/api/itineraries?action=getUsers&_t=${getTimestamp()}`),
+            fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders&_t=${getTimestamp()}`)
+          ]);
+          const [dataD, dataU, dataO] = await Promise.all([resD.json(), resU.json(), resO.json()]);
+          setCrmDistributors(Array.isArray(dataD) ? dataD : []);
+          setCrmUsers(Array.isArray(dataU) ? dataU : []);
+          if (dataO && dataO.success) setCrmOrders(dataO.data || []);
+        } catch (e) { console.error('CRM Fetch error', e); }
+      };
 
       const fetchItineraries = async () => {
         setIsLoading(true);
@@ -417,7 +336,6 @@
         } catch (error) { console.error('Fetch error', error); } finally { setIsLoading(false); }
       };
 
-      // ★ 快速更新訂單狀態 (後台 CRM 用)
       const handleUpdateOrder = async (orderId, field, value) => {
           setCrmOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, [field]: value } : o));
           try {
@@ -425,16 +343,10 @@
               const result = await res.json();
               if (result.success) showToast('✅ 訂單狀態已更新');
               else throw new Error();
-          } catch(e) {
-              showToast('❌ 更新失敗，請重試', 'error');
-              fetchFullCrmData(); // 失敗則還原
-          }
+          } catch(e) { showToast('❌ 更新失敗，請重試', 'error'); fetchFullCrmData(); }
       };
 
-      const changeTab = (newTab) => { 
-          setActiveTab(newTab); setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.replaceState({}, '', `?tab=${newTab}`); 
-      };
-
+      const changeTab = (newTab) => { setActiveTab(newTab); setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.replaceState({}, '', `?tab=${newTab}`); };
       const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
       const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid || ''}`; };
       const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; };
@@ -445,16 +357,12 @@
       };
 
       const submitBooking = async (e) => {
-          e.preventDefault();
-          setIsSubmitting(true);
+          e.preventDefault(); setIsSubmitting(true);
           try {
               const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addOrder', uid: liffProfile.userId, ref_uid: refUid, ...bookingModalData }) });
               const result = await res.json();
-              if (result.success) { 
-                  showToast('🎉 報名成功！我們已收到您的訂單。'); 
-                  setBookingModalData(null); 
-                  setTimeout(() => { changeTab('member'); setIsSubmitting(false); }, 800);
-              } else throw new Error(result.message || '報名失敗');
+              if (result.success) { showToast('🎉 報名成功！我們已收到您的訂單。'); setBookingModalData(null); setTimeout(() => { changeTab('member'); setIsSubmitting(false); }, 800); }
+              else throw new Error(result.message || '報名失敗');
           } catch(err) { showToast('訂單送出失敗，請重試', 'error'); setIsSubmitting(false); }
       };
 
@@ -491,7 +399,8 @@
           try {
             const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'uploadImage', base64: reader.result }) });
             const result = await res.json();
-            if (result.success) { setDraftData(prev => ({ ...prev, description: (prev.description ? prev.description + '\n\n' : '') + `![](${result.url})\n\n` })); showToast('✅ 圖片已成功插入文案！'); } else throw new Error(result.message || result.error);
+            if (result.success) { setDraftData(prev => ({ ...prev, description: (prev.description ? prev.description + '\n\n' : '') + `![](${result.url})\n\n` })); showToast('✅ 圖片已成功插入文案！'); } 
+            else throw new Error(result.message || result.error);
           } catch (err) { showToast('圖片插入失敗: ' + err.message, 'error'); } finally { setIsInsertingContentImage(false); e.target.value = null; }
         };
       };
@@ -509,14 +418,13 @@
               const driveResult = await driveRes.json();
               if (driveResult.success) uploadedUrl = driveResult.url;
             } catch (err) { console.warn('圖片上傳失敗', err); }
-
             const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
             if (aiResult.success) {
               const parsedData = aiResult.data;
               const REGION_IMAGES = { '國旅': 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=800&q=80', '亞洲': 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80', '歐洲': 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=800&q=80', '美洲': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80', '大洋洲': 'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=800&q=80', '非洲': 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80', '預設': 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80' };
               parsedData.image = uploadedUrl || REGION_IMAGES[parsedData.region] || REGION_IMAGES['預設'];
-              parsedData.id = Date.now(); setDraftData(parsedData); showToast('✅ 圖片已上傳且 AI 解析完成！系統正自動寫入資料庫...');
+              parsedData.id = Date.now(); setDraftData(parsedData); showToast('✅ AI 解析完成！系統正自動寫入資料庫...');
               const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
               setItineraries(prev => [newItinerary, ...prev]);
               try {
@@ -542,6 +450,7 @@
       };
 
       const handleEditClick = (item) => { setUploadMode('manual'); setOcrStatus('done'); setDraftData(item); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
       const confirmDelete = async () => {
         if (!deleteModalId) return;
         try {
@@ -553,38 +462,44 @@
 
       const saveDistributorEdit = async () => {
         try {
-          const payload = { action: 'updateDistributorInfo', ...editFormData };
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorInfo', ...editFormData }) });
           const result = await res.json();
-          if (result.success) { showToast('✅ 經銷商資料與狀態已更新！'); setEditingDistributor(null); fetchFullCrmData(); } else throw new Error('儲存失敗');
-        } catch (e) { showToast('更新失敗，請檢查資料', 'error'); }
+          if (result.success) { showToast('✅ 經銷商資料已更新！'); setEditingDistributor(null); fetchFullCrmData(); } else throw new Error('儲存失敗');
+        } catch (e) { showToast('更新失敗', 'error'); }
       };
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       const fallbackCopyTextToClipboard = (text) => {
         var textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.top = "0"; textArea.style.left = "0"; textArea.style.position = "fixed";
-        document.body.appendChild(textArea);
-        textArea.focus(); textArea.select();
-        try { document.execCommand('copy'); showToast('✅ 網址已成功複製！快去貼在您的 LINE OA 吧！'); } 
-        catch (err) { showToast('❌ 複製失敗，請手動選取複製', 'error'); }
+        textArea.value = text; textArea.style.top = "0"; textArea.style.left = "0"; textArea.style.position = "fixed";
+        document.body.appendChild(textArea); textArea.focus(); textArea.select();
+        try { document.execCommand('copy'); showToast('✅ 網址已成功複製！'); } catch (err) { showToast('❌ 複製失敗', 'error'); }
         document.body.removeChild(textArea);
-      }
+      };
 
       const handleCopyUrl = (type) => {
          const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
          let urlToCopy = '';
-         if (type === 'share') {
-             urlToCopy = `https://liff.line.me/${LIFF_ID}?action=share&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
-         } else if (type === 'send') {
-             urlToCopy = `https://liff.line.me/${LIFF_ID}?action=send&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
-         } else if (type === 'web') {
-             urlToCopy = `${ENDPOINT_URL}?t=${flexModalItem.id}&r=${liffProfile.userId}`;
-         }
+         if (type === 'share') urlToCopy = `https://liff.line.me/${LIFF_ID}?action=share&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
+         else if (type === 'send') urlToCopy = `https://liff.line.me/${LIFF_ID}?action=send&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
+         else if (type === 'web') urlToCopy = `${ENDPOINT_URL}?t=${flexModalItem.id}&r=${liffProfile.userId}`;
          if (!navigator.clipboard) { fallbackCopyTextToClipboard(urlToCopy); return; }
-         navigator.clipboard.writeText(urlToCopy).then(function() { showToast('✅ 網址已成功複製！快去貼在您的 LINE OA 吧！'); }, function(err) { fallbackCopyTextToClipboard(urlToCopy); });
+         navigator.clipboard.writeText(urlToCopy).then(() => showToast('✅ 網址已成功複製！快去貼在您的 LINE OA 吧！'), () => fallbackCopyTextToClipboard(urlToCopy));
+      };
+
+      // ★ 修正：補上缺少的 triggerFlexSharing 函式
+      const triggerFlexSharing = async () => {
+        if (!flexModalItem || !liffProfile) return;
+        const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
+        const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+        try {
+          await liff.shareTargetPicker([flexMsg]);
+        } catch(e) {
+          const shareUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
+          if (!navigator.clipboard) { fallbackCopyTextToClipboard(shareUrl); return; }
+          navigator.clipboard.writeText(shareUrl).then(() => showToast('✅ 已複製分享連結！')).catch(() => fallbackCopyTextToClipboard(shareUrl));
+        }
       };
 
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
@@ -594,17 +509,8 @@
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
       if (actionParam === 'share' || actionParam === 'send') {
-          return (
-             <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center">
-                 <div className="text-blue-600 mb-6"><RunningMan className="w-20 h-20 animate-run" /></div>
-                 <p className="text-gray-600 font-bold text-2xl tracking-widest animate-pulse">{shareStatusText}</p>
-             </div>
-          );
+          return (<div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center"><div className="text-blue-600 mb-6"><RunningMan className="w-20 h-20 animate-run" /></div><p className="text-gray-600 font-bold text-2xl tracking-widest animate-pulse">{shareStatusText}</p></div>);
       }
-
-      // =========================================================================
-      // ★ 畫面渲染區 (Render Sections)
-      // =========================================================================
 
       const renderNavBar = () => (
         <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -633,20 +539,13 @@
             const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
             if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={() => {setSelectedTourId(null); window.history.pushState({}, '', '?tab=home');}} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
             const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
-
             return (
               <div className="w-full bg-white min-h-screen animate-fade-in pb-20 overflow-x-hidden">
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
                       <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                      <div className="absolute bottom-0 left-0 w-full pb-16">
-                          <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
-                              <div className="flex gap-3 mb-6"><span className="bg-[#b82337] text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.region}</span><span className="bg-black/50 backdrop-blur-sm text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.days} 天精華</span></div>
-                              <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-tight drop-shadow-2xl">{tour.title}</h1>
-                          </div>
-                      </div>
+                      <div className="absolute bottom-0 left-0 w-full pb-16"><div className="max-w-[1400px] mx-auto px-6 lg:px-12"><div className="flex gap-3 mb-6"><span className="bg-[#b82337] text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.region}</span><span className="bg-black/50 backdrop-blur-sm text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.days} 天精華</span></div><h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-tight drop-shadow-2xl">{tour.title}</h1></div></div>
                   </div>
-                  
                   <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
                       <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center h-16">
                           <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
@@ -656,26 +555,15 @@
                           <button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
                       </div>
                   </div>
-                  
                   <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-10 relative items-start">
-                    
                     <div className="flex-1 w-full min-w-0 pr-0 lg:pr-8 overflow-hidden">
                         <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
-                        <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200">
-                           <button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>行程介紹</button>
-                           <button onClick={() => setTourDetailTab('notes')} className={`pb-2 font-bold ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>注意事項</button>
-                        </div>
-                        
+                        <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200"><button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>行程介紹</button><button onClick={() => setTourDetailTab('notes')} className={`pb-2 font-bold ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>注意事項</button></div>
                         <div className="pb-10 w-full min-w-0 animate-fade-in break-words">
-                          {tourDetailTab === 'itinerary' ? renderAgencyBlogDescription(tour.description) : (
-                            <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide whitespace-pre-wrap font-medium">
-                              {tour.notes || '目前此行程尚無特殊注意事項。'}
-                            </div>
-                          )}
+                          {tourDetailTab === 'itinerary' ? renderAgencyBlogDescription(tour.description) : (<div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide whitespace-pre-wrap font-medium">{tour.notes || '目前此行程尚無特殊注意事項。'}</div>)}
                         </div>
                     </div>
-
-                    <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 lg:sticky lg:top-[150px] self-start transition-all duration-300 z-10">
+                    <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 lg:sticky lg:top-[150px] self-start z-10">
                         <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-2xl">
                             <div className="bg-[#b82337] text-white p-6 text-center"><p className="text-xs font-bold tracking-widest mb-1 opacity-90">專案特惠價</p><p className="text-4xl font-black"><span className="text-lg font-medium mr-1">TWD</span>{Number(tour.price).toLocaleString()}</p></div>
                             <div className="p-6">
@@ -695,7 +583,6 @@
               </div>
             );
         }
-
         return (
           <div className="w-full animate-fade-in pb-12">
             <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
@@ -704,23 +591,23 @@
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center"><h1 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-wider mb-4 drop-shadow-lg">探索世界的美好</h1><p className="text-lg md:text-xl lg:text-2xl drop-shadow-md font-light">發現您的下一個夢幻旅程</p></div>
               {isAdmin && (<label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0"><Camera className="w-5 h-5 mr-2 text-blue-600" />{isUploadingImage ? '上傳中...' : '更換 Banner'}<input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'banner')} disabled={isUploadingImage} /></label>)}
             </div>
-            <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
+            <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200">
               <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 md:py-6">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
                   <div className="w-full"><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">前往地區</label><div className="relative"><MapPin className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" /><select value={searchRegion} onChange={(e) => setSearchRegion(e.target.value)} className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors font-medium"><option value="">探索所有地區</option><option value="國旅">國旅 (台灣)</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div></div>
-                  <div className="w-full"><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">出發區間</label><div className="relative flex items-center bg-gray-50 rounded-xl border border-gray-300 hover:bg-white transition-colors focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"><Calendar className="absolute left-3.5 h-5 w-5 text-gray-400" /><input type="date" value={searchStartDate} onChange={e => setSearchStartDate(e.target.value)} className="pl-11 pr-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" /><span className="text-gray-400">-</span><input type="date" value={searchEndDate} onChange={e => setSearchEndDate(e.target.value)} className="px-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" /></div></div>
+                  <div className="w-full"><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">出發區間</label><div className="relative flex items-center bg-gray-50 rounded-xl border border-gray-300 hover:bg-white transition-colors focus-within:border-blue-500"><Calendar className="absolute left-3.5 h-5 w-5 text-gray-400" /><input type="date" value={searchStartDate} onChange={e => setSearchStartDate(e.target.value)} className="pl-11 pr-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" /><span className="text-gray-400">-</span><input type="date" value={searchEndDate} onChange={e => setSearchEndDate(e.target.value)} className="px-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" /></div></div>
                   <div className="w-full"><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">關鍵字搜尋</label><div className="relative"><Type className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" /><input type="text" value={searchKeyword} onChange={e => setSearchKeyword(e.target.value)} placeholder="請輸入行程名稱或關鍵字..." className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors font-medium" /></div></div>
                   <div className="w-full"><button onClick={handleSearch} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-md flex items-center justify-center text-lg"><Search className="w-5 h-5 mr-2" /> 搜尋行程</button></div>
                 </div>
               </div>
             </div>
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-10">
-              <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800 flex items-center">為您推薦的精選行程</h3><span className="text-sm font-medium text-gray-500 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">共 {filteredResults.length} 筆</span></div>
+              <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800">為您推薦的精選行程</h3><span className="text-sm font-medium text-gray-500 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">共 {filteredResults.length} 筆</span></div>
               {isLoading ? <div className="text-center py-32 text-gray-500 bg-white rounded-3xl shadow-sm border border-gray-100"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入中...</p></div> : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8 lg:gap-10">
                   {filteredResults.map(item => (
                     <div key={item.id} onClick={() => { setSelectedTourId(item.id); window.history.pushState({}, '', '?t=' + item.id + (refUid ? '&r=' + refUid : '')); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5 cursor-pointer">
-                      <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" /><div className="absolute top-4 left-4 flex flex-col gap-2"><span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span></div></div>
+                      <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" /><div className="absolute top-4 left-4"><span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg">{item.region}</span></div></div>
                       <div className="p-6 md:p-8 flex flex-col flex-grow"><h4 className="font-bold text-xl lg:text-2xl mb-3 text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.title}</h4><p className="text-gray-500 text-base mb-6 line-clamp-3 flex-grow leading-relaxed">{item.description}</p><div className="flex justify-between items-end border-t border-gray-100 pt-5 mt-auto"><span className="text-base font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">{item.days} 天</span><span className="text-3xl font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span></div></div>
                     </div>
                   ))}
@@ -737,9 +624,8 @@
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
               <div className="bg-[#b82337] rounded-3xl p-8 md:p-12 text-white shadow-xl overflow-hidden relative">
-                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2><p className="text-red-100 text-lg max-w-2xl">您已成功登入一般會員。下方為您的專屬預約紀錄，如有疑問可隨時聯絡您的專屬旅遊顧問。</p>{crmUsers.find(u => u.uid === liffProfile?.userId)?.referredBy && (<div className="mt-4 inline-block bg-white/20 px-3 py-1 rounded-md text-sm font-bold border border-white/30 flex items-center w-fit"><Sparkles className="w-4 h-4 mr-2" /> 您是由專屬旅遊顧問服務的 VIP 會員</div>)}</div></div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2><p className="text-red-100 text-lg max-w-2xl">您已成功登入一般會員。下方為您的專屬預約紀錄，如有疑問可隨時聯絡您的專屬旅遊顧問。</p></div></div>
               </div>
-              
               <div className="mt-12 max-w-6xl mx-auto">
                 <h3 className="text-2xl md:text-3xl font-black text-gray-800 mb-6 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-[#b82337]" /> 我的預約訂單</h3>
                 {myOrders.length === 0 ? (
@@ -749,15 +635,11 @@
                      {myOrders.map(order => {
                         const isPaid = order.paymentStatus === '已付款';
                         const isConfirmed = order.orderStatus === '已確認' || order.orderStatus === '已出發' || order.orderStatus === '已完成';
-                        
                         return (
                         <div key={order.orderId} className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-lg transition relative overflow-hidden">
                            <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#b82337]"></div>
                            <div className="pl-4">
-                              <div className="flex flex-wrap items-center gap-3 mb-3">
-                                 <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">單號 #{order.orderId}</span>
-                                 <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-lg">{order.orderDate}</span>
-                              </div>
+                              <div className="flex flex-wrap items-center gap-3 mb-3"><span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">單號 #{order.orderId}</span><span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-lg">{order.orderDate}</span></div>
                               <h4 className="text-xl md:text-2xl font-bold text-gray-900 mb-4">{order.tourTitle}</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-gray-600 text-base">
                                  <p className="flex items-center"><UserIcon className="w-4 h-4 mr-2 text-gray-400"/>報名人：<span className="font-bold text-gray-800 ml-2">{order.contactName}</span></p>
@@ -766,19 +648,11 @@
                               </div>
                               {order.note && <div className="mt-4 bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm border border-yellow-100"><span className="font-bold mr-2">📌 備註：</span>{order.note}</div>}
                            </div>
-                           
                            <div className="md:text-right bg-gray-50 p-6 rounded-2xl border border-gray-200 min-w-[240px] flex flex-col justify-between">
-                              <div className="mb-4">
-                                  <p className="text-sm text-gray-500 font-bold tracking-widest mb-1">訂單總額</p>
-                                  <p className="text-3xl font-black text-[#b82337]">TWD {Number(order.totalAmount).toLocaleString()}</p>
-                              </div>
+                              <div className="mb-4"><p className="text-sm text-gray-500 font-bold tracking-widest mb-1">訂單總額</p><p className="text-3xl font-black text-[#b82337]">TWD {Number(order.totalAmount).toLocaleString()}</p></div>
                               <div className="flex gap-2 justify-end">
-                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold w-full text-center border ${isPaid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                                      {order.paymentStatus || '未付款'}
-                                  </span>
-                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold w-full text-center border ${isConfirmed ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                                      {order.orderStatus || '處理中'}
-                                  </span>
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold w-full text-center border ${isPaid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{order.paymentStatus || '未付款'}</span>
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold w-full text-center border ${isConfirmed ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>{order.orderStatus || '處理中'}</span>
                               </div>
                            </div>
                         </div>
@@ -792,36 +666,18 @@
 
       const renderDistributorTab = () => {
         if (!distributorStatus) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2><p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p><button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button></div></div>);
-        
-        // ★ 計算財務指標
         const totalSales = distributorStats.orders.filter(o => o.orderStatus !== '已取消').reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
         const totalCommission = distributorStats.orders.filter(o => o.orderStatus !== '已取消').reduce((sum, o) => sum + Number(o.commissionAmount || 0), 0);
         const confirmedCommission = distributorStats.orders.filter(o => (o.orderStatus === '已完成' || o.orderStatus === '已出發') && o.paymentStatus === '已付款').reduce((sum, o) => sum + Number(o.commissionAmount || 0), 0);
-
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
-            
-            {distributorStatus === 'approved' && (
-              <>
-                {/* ★ 新增：財務與業績儀表板 */}
+            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div></div>
+            {distributorStatus === 'approved' && (<>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center relative overflow-hidden">
-                        <div className="bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><BadgeDollarSign className="w-8 h-8 text-emerald-600" /></div>
-                        <div><p className="text-gray-500 font-bold text-sm mb-1">累積總銷售額</p><p className="text-3xl font-black text-gray-800">${totalSales.toLocaleString()}</p></div>
-                        <div className="absolute -right-6 -bottom-6 opacity-5"><BadgeDollarSign className="w-32 h-32 text-emerald-600" /></div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 flex items-center relative overflow-hidden">
-                        <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><FileCheck className="w-8 h-8 text-blue-600" /></div>
-                        <div><p className="text-gray-500 font-bold text-sm mb-1">累積預估分潤</p><p className="text-3xl font-black text-gray-800">${totalCommission.toLocaleString()}</p></div>
-                        <div className="absolute -right-6 -bottom-6 opacity-5"><FileCheck className="w-32 h-32 text-blue-600" /></div>
-                    </div>
-                    <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg border border-emerald-400 flex items-center relative overflow-hidden text-white">
-                        <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><Sparkles className="w-8 h-8 text-white" /></div>
-                        <div><p className="text-emerald-100 font-bold text-sm mb-1">可結算分潤 (已付款且出發)</p><p className="text-3xl font-black text-white">${confirmedCommission.toLocaleString()}</p></div>
-                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center relative overflow-hidden"><div className="bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><BadgeDollarSign className="w-8 h-8 text-emerald-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積總銷售額</p><p className="text-3xl font-black text-gray-800">${totalSales.toLocaleString()}</p></div></div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 flex items-center relative overflow-hidden"><div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><FileCheck className="w-8 h-8 text-blue-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積預估分潤</p><p className="text-3xl font-black text-gray-800">${totalCommission.toLocaleString()}</p></div></div>
+                    <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 rounded-2xl shadow-lg border border-emerald-400 flex items-center relative overflow-hidden text-white"><div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><Sparkles className="w-8 h-8 text-white" /></div><div><p className="text-emerald-100 font-bold text-sm mb-1">可結算分潤</p><p className="text-3xl font-black text-white">${confirmedCommission.toLocaleString()}</p></div></div>
                 </div>
-
                 <div className="flex justify-between items-end mb-6 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800">可推廣的優質行程</h3></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8 mb-16">
                   {itineraries.map(item => (
@@ -831,126 +687,65 @@
                     </div>
                   ))}
                 </div>
-
-                {/* 經銷商業績與專屬客戶面板 */}
                 <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-                    <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                        <div>
-                            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-emerald-600" /> 我的經銷業績明細</h2>
-                            <p className="text-gray-500 mt-2">追蹤專屬客戶與他們的訂單進度，預估分潤金額將於訂單確認後生效。</p>
-                        </div>
-                    </div>
+                    <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50"><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-emerald-600" /> 我的經銷業績明細</h2><p className="text-gray-500 mt-2">追蹤專屬客戶與訂單進度，預估分潤金額將於訂單確認後生效。</p></div>
                     <div className="p-6 md:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
-                        
                         <div className="xl:col-span-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                             <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center">
-                                 <span className="flex items-center"><Users className="w-5 h-5 mr-2 text-blue-500"/> 專屬推薦會員</span>
-                                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">{distributorStats.users.length} 人</span>
-                             </div>
-                             <div className="p-0 max-h-[500px] overflow-y-auto custom-scrollbar">
-                                 <table className="w-full text-left text-sm">
-                                     <thead className="sticky top-0 bg-gray-50"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">加入日期</th><th className="p-4 font-bold text-gray-500">姓名</th><th className="p-4 font-bold text-gray-500">電話</th></tr></thead>
-                                     <tbody className="divide-y divide-gray-100">
-                                         {distributorStats.users.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚未有推薦會員</td></tr> :
-                                          distributorStats.users.map(u => (<tr key={u.uid} className="hover:bg-gray-50 transition"><td className="p-4 text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800">{u.name}</td><td className="p-4 text-gray-600 font-mono">{u.phone}</td></tr>))
-                                         }
-                                     </tbody>
-                                 </table>
-                             </div>
+                             <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center"><span className="flex items-center"><Users className="w-5 h-5 mr-2 text-blue-500"/> 專屬推薦會員</span><span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">{distributorStats.users.length} 人</span></div>
+                             <div className="p-0 max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-gray-50"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">加入日期</th><th className="p-4 font-bold text-gray-500">姓名</th><th className="p-4 font-bold text-gray-500">電話</th></tr></thead><tbody className="divide-y divide-gray-100">{distributorStats.users.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚未有推薦會員</td></tr> : distributorStats.users.map(u => (<tr key={u.uid} className="hover:bg-gray-50 transition"><td className="p-4 text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800">{u.name}</td><td className="p-4 text-gray-600 font-mono">{u.phone}</td></tr>))}</tbody></table></div>
                         </div>
-
                         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                             <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center">
-                                 <span className="flex items-center"><Calendar className="w-5 h-5 mr-2 text-emerald-500"/> 推薦訂單明細</span>
-                                 <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs">{distributorStats.orders.length} 筆</span>
-                             </div>
-                             <div className="p-0 overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-                                 <table className="w-full text-left text-sm min-w-[600px]">
-                                     <thead className="sticky top-0 bg-gray-50 shadow-sm"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">訂單編號 / 日期</th><th className="p-4 font-bold text-gray-500">行程與報名人</th><th className="p-4 font-bold text-gray-500 text-right">銷售金額</th><th className="p-4 font-bold text-gray-500 text-right">預估分潤</th><th className="p-4 font-bold text-gray-500 text-center">處理狀態</th></tr></thead>
-                                     <tbody className="divide-y divide-gray-100">
-                                         {distributorStats.orders.length === 0 ? <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold text-lg">尚未有訂單紀錄</td></tr> :
-                                          distributorStats.orders.map(o => (
-                                             <tr key={o.orderId} className="hover:bg-gray-50 transition">
-                                                <td className="p-4"><p className="text-gray-800 font-mono font-bold">#{o.orderId}</p><p className="text-xs text-gray-400 mt-1">{o.orderDate ? String(o.orderDate).substring(0, 10) : ''}</p></td>
-                                                <td className="p-4"><p className="font-bold text-[#b82337] line-clamp-1">{o.tourTitle}</p><p className="text-sm text-gray-600 mt-1">{o.contactName} ({o.pax}人)</p></td>
-                                                <td className="p-4 text-right font-bold text-gray-800">${Number(o.totalAmount).toLocaleString()}</td>
-                                                <td className="p-4 text-right font-black text-emerald-600 bg-emerald-50/50">${Number(o.commissionAmount).toLocaleString()}</td>
-                                                <td className="p-4 text-center">
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.paymentStatus === '已付款' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{o.paymentStatus || '未付款'}</span>
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.orderStatus === '已確認' || o.orderStatus === '已出發' ? 'bg-blue-100 text-blue-700' : o.orderStatus === '已取消' ? 'bg-gray-200 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{o.orderStatus || '處理中'}</span>
-                                                  </div>
-                                                </td>
-                                             </tr>
-                                          ))
-                                         }
-                                     </tbody>
-                                 </table>
-                             </div>
+                             <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center"><span className="flex items-center"><Calendar className="w-5 h-5 mr-2 text-emerald-500"/> 推薦訂單明細</span><span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs">{distributorStats.orders.length} 筆</span></div>
+                             <div className="p-0 overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm min-w-[600px]"><thead className="sticky top-0 bg-gray-50 shadow-sm"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">訂單編號 / 日期</th><th className="p-4 font-bold text-gray-500">行程與報名人</th><th className="p-4 font-bold text-gray-500 text-right">銷售金額</th><th className="p-4 font-bold text-gray-500 text-right">預估分潤</th><th className="p-4 font-bold text-gray-500 text-center">狀態</th></tr></thead><tbody className="divide-y divide-gray-100">{distributorStats.orders.length === 0 ? <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold text-lg">尚未有訂單紀錄</td></tr> : distributorStats.orders.map(o => (<tr key={o.orderId} className="hover:bg-gray-50 transition"><td className="p-4"><p className="text-gray-800 font-mono font-bold">#{o.orderId}</p><p className="text-xs text-gray-400 mt-1">{o.orderDate ? String(o.orderDate).substring(0, 10) : ''}</p></td><td className="p-4"><p className="font-bold text-[#b82337] line-clamp-1">{o.tourTitle}</p><p className="text-sm text-gray-600 mt-1">{o.contactName} ({o.pax}人)</p></td><td className="p-4 text-right font-bold text-gray-800">${Number(o.totalAmount).toLocaleString()}</td><td className="p-4 text-right font-black text-emerald-600 bg-emerald-50/50">${Number(o.commissionAmount).toLocaleString()}</td><td className="p-4 text-center"><div className="flex flex-col items-center gap-1"><span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.paymentStatus === '已付款' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{o.paymentStatus || '未付款'}</span><span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.orderStatus === '已確認' || o.orderStatus === '已出發' ? 'bg-blue-100 text-blue-700' : o.orderStatus === '已取消' ? 'bg-gray-200 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{o.orderStatus || '處理中'}</span></div></td></tr>))}</tbody></table></div>
                         </div>
                     </div>
                 </div>
-              </>
-            )}
+              </>)}
           </div>
         );
       };
 
       const renderCrmTab = () => {
-        if (!isAdmin) return <AdminDeniedScreen />;
+        if (!isAdmin) return <div className="p-20 text-center text-gray-500 font-bold text-2xl">無權限存取</div>;
         if (editingDistributor) return (
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-              <div className="flex items-center justify-between mb-6"><button onClick={() => setEditingDistributor(null)} className="flex items-center text-gray-500 hover:text-purple-600 font-bold transition"><Navigation className="w-5 h-5 mr-1 transform -rotate-90" /> 返回名單列表</button><button onClick={saveDistributorEdit} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-bold shadow-md">儲存修改</button></div>
+              <div className="flex items-center justify-between mb-6"><button onClick={() => setEditingDistributor(null)} className="flex items-center text-gray-500 hover:text-purple-600 font-bold transition"><ArrowLeft className="w-5 h-5 mr-1" /> 返回名單列表</button><button onClick={saveDistributorEdit} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-bold shadow-md">儲存修改</button></div>
               <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mb-8">
-                  <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex items-center justify-between"><div className="flex items-center"><div className="bg-purple-100 p-3 rounded-full mr-4"><Briefcase className="text-purple-600 w-6 h-6"/></div><div><h2 className="text-2xl font-bold text-gray-800">編輯經銷商: {editFormData.name}</h2><p className="text-sm font-mono text-gray-500 mt-1">UID: {editFormData.uid}</p></div></div></div>
+                  <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex items-center"><div className="bg-purple-100 p-3 rounded-full mr-4"><Briefcase className="text-purple-600 w-6 h-6"/></div><div><h2 className="text-2xl font-bold text-gray-800">編輯經銷商: {editFormData.name}</h2><p className="text-sm font-mono text-gray-500 mt-1">UID: {editFormData.uid}</p></div></div>
                   <div className="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
                       <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">聯絡與審核資料</h3>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editFormData.name || ''} onChange={e=>setEditFormData({...editFormData, name: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
                         <div><label className="block text-xs font-bold text-gray-500 mb-1">手機</label><input type="text" value={editFormData.phone || ''} onChange={e=>setEditFormData({...editFormData, phone: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                        <div><label className="block text-xs font-bold text-purple-500 mb-1">公司/門市名稱</label><input type="text" value={editFormData.companyName || ''} onChange={e=>setEditFormData({...editFormData, companyName: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 focus:ring-purple-500 outline-none"/></div>
-                        <div><label className="block text-xs font-bold text-purple-500 mb-1">統編</label><input type="text" value={editFormData.taxId || ''} onChange={e=>setEditFormData({...editFormData, taxId: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 focus:ring-purple-500 outline-none"/></div>
-                        <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">個人 LINE 網址</label><input type="text" value={editFormData.lineLink || ''} onChange={e=>setEditFormData({...editFormData, lineLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                        <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">實體店面導航 (Map)</label><input type="text" value={editFormData.mapLink || ''} onChange={e=>setEditFormData({...editFormData, mapLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
+                        <div><label className="block text-xs font-bold text-purple-500 mb-1">公司/門市名稱</label><input type="text" value={editFormData.companyName || ''} onChange={e=>setEditFormData({...editFormData, companyName: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 outline-none"/></div>
+                        <div><label className="block text-xs font-bold text-purple-500 mb-1">統編</label><input type="text" value={editFormData.taxId || ''} onChange={e=>setEditFormData({...editFormData, taxId: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 outline-none"/></div>
+                        <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">個人 LINE 網址</label><input type="text" value={editFormData.lineLink || ''} onChange={e=>setEditFormData({...editFormData, lineLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 outline-none"/></div>
+                        <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">實體店面導航 (Map)</label><input type="text" value={editFormData.mapLink || ''} onChange={e=>setEditFormData({...editFormData, mapLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 outline-none"/></div>
                       </div>
                     </div>
                     <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
                       <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">系統權限與分潤設定</h3>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-2">開通狀態</label><select value={editFormData.status || 'pending'} onChange={e=>setEditFormData({...editFormData, status: e.target.value})} className="w-full rounded-lg border-2 border-purple-300 p-3 focus:ring-purple-500 outline-none font-bold"><option value="pending">待審核 (停權中)</option><option value="approved">✅ 已核准開通</option></select></div>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">專屬分潤比例 (%)</label><input type="number" value={editFormData.commission || ''} onChange={e=>setEditFormData({...editFormData, commission: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none text-lg font-bold text-red-500" placeholder="例如：10" /></div>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">內部審核備註</label><textarea rows="3" value={editFormData.note || ''} onChange={e=>setEditFormData({...editFormData, note: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none" placeholder="輸入備註事項..." /></div>
+                      <div><label className="block text-sm font-bold text-gray-700 mb-2">開通狀態</label><select value={editFormData.status || 'pending'} onChange={e=>setEditFormData({...editFormData, status: e.target.value})} className="w-full rounded-lg border-2 border-purple-300 p-3 outline-none font-bold"><option value="pending">待審核 (停權中)</option><option value="approved">✅ 已核准開通</option></select></div>
+                      <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">專屬分潤比例 (%)</label><input type="number" value={editFormData.commission || ''} onChange={e=>setEditFormData({...editFormData, commission: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 outline-none text-lg font-bold text-red-500" placeholder="例如：10" /></div>
+                      <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">內部審核備註</label><textarea rows="3" value={editFormData.note || ''} onChange={e=>setEditFormData({...editFormData, note: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 outline-none" placeholder="輸入備註事項..." /></div>
                     </div>
                   </div>
               </div>
             </div>
         );
-
-        // ★ 計算 CRM 全站統計
         const crmTotalRevenue = crmOrders.filter(o => o.orderStatus !== '已取消').reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
         const crmTotalCommission = crmOrders.filter(o => o.orderStatus !== '已取消').reduce((sum, o) => sum + Number(o.commissionAmount || 0), 0);
-
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            
-            {/* ★ 新增：CRM 全站數據概覽 */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                    <p className="text-gray-500 font-bold text-sm mb-1">全站總銷售額</p><p className="text-3xl font-black text-gray-800">${crmTotalRevenue.toLocaleString()}</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                    <p className="text-gray-500 font-bold text-sm mb-1">預估發出分潤</p><p className="text-3xl font-black text-red-600">${crmTotalCommission.toLocaleString()}</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                    <p className="text-gray-500 font-bold text-sm mb-1">活躍經銷商</p><p className="text-3xl font-black text-blue-600">{crmDistributors.filter(d => d.status === 'approved').length} 人</p>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                    <p className="text-gray-500 font-bold text-sm mb-1">總訂單數</p><p className="text-3xl font-black text-emerald-600">{crmOrders.length} 筆</p>
-                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><p className="text-gray-500 font-bold text-sm mb-1">全站總銷售額</p><p className="text-3xl font-black text-gray-800">${crmTotalRevenue.toLocaleString()}</p></div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><p className="text-gray-500 font-bold text-sm mb-1">預估發出分潤</p><p className="text-3xl font-black text-red-600">${crmTotalCommission.toLocaleString()}</p></div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><p className="text-gray-500 font-bold text-sm mb-1">活躍經銷商</p><p className="text-3xl font-black text-blue-600">{crmDistributors.filter(d => d.status === 'approved').length} 人</p></div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><p className="text-gray-500 font-bold text-sm mb-1">總訂單數</p><p className="text-3xl font-black text-emerald-600">{crmOrders.length} 筆</p></div>
             </div>
-
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-              <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center"><div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 訂單與客戶管理</h2><p className="text-gray-500 mt-2">檢視全站訂單並更新處理進度、一般會員名單，審核經銷商資格。</p></div></div>
+              <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30"><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 管理</h2><p className="text-gray-500 mt-2">檢視全站訂單、一般會員名單，審核經銷商資格與業績。</p></div>
               <div className="flex border-b border-gray-200 px-6 pt-4 bg-gray-50 overflow-x-auto">
                 <button onClick={() => setCrmSubTab('orders')} className={`pb-3 px-6 font-bold text-lg transition-colors whitespace-nowrap ${crmSubTab === 'orders' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>全站訂單總覽</button>
                 <button onClick={() => setCrmSubTab('distributors')} className={`pb-3 px-6 font-bold text-lg transition-colors whitespace-nowrap ${crmSubTab === 'distributors' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>經銷商名單與審核</button>
@@ -959,15 +754,14 @@
               <div className="overflow-x-auto p-0">
                 {crmSubTab === 'distributors' ? (
                   <table className="w-full text-left border-collapse min-w-[1000px]">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-5 font-bold text-gray-500 text-sm">申請日期</th><th className="p-5 font-bold text-gray-500 text-sm">經銷商資訊</th><th className="p-5 font-bold text-gray-500 text-sm">審核資料 (公司/統編)</th><th className="p-5 font-bold text-gray-500 text-sm">資格狀態</th><th className="p-5 font-bold text-gray-500 text-sm text-right">累積業績</th><th className="p-5 font-bold text-gray-500 text-sm text-center">操作</th></tr></thead>
+                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-5 font-bold text-gray-500 text-sm">申請日期</th><th className="p-5 font-bold text-gray-500 text-sm">經銷商資訊</th><th className="p-5 font-bold text-gray-500 text-sm">審核資料</th><th className="p-5 font-bold text-gray-500 text-sm">資格狀態</th><th className="p-5 font-bold text-gray-500 text-sm text-right">累積業績</th><th className="p-5 font-bold text-gray-500 text-sm text-center">操作</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
                       {crmDistributors.length === 0 ? <tr><td colSpan="6" className="p-12 text-center text-gray-400 font-bold text-xl">尚無資料</td></tr> : 
                        crmDistributors.map(user => {
                         const distOrders = crmOrders.filter(o => String(o.ref_uid) === String(user.uid) && o.orderStatus !== '已取消');
                         const calcSales = distOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
-                        return (
-                        <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td><td className="p-5"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td><td className="p-5">{user.status && user.status.trim().toLowerCase() === 'approved' ? (<div><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span><span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span></div>) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}</td><td className="p-5 text-right"><p className="font-bold text-gray-800 text-lg">{distOrders.length} 筆</p><p className="text-xs text-gray-500 font-medium">${calcSales.toLocaleString()}</p></td><td className="p-5 text-center"><button onClick={() => { setEditingDistributor(user); setEditFormData(user); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition">編輯 / 審核</button></td></tr>
-                      )})}
+                        return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td><td className="p-5"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td><td className="p-5">{user.status && user.status.trim().toLowerCase() === 'approved' ? (<div><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span><span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span></div>) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}</td><td className="p-5 text-right"><p className="font-bold text-gray-800 text-lg">{distOrders.length} 筆</p><p className="text-xs text-gray-500 font-medium">${calcSales.toLocaleString()}</p></td><td className="p-5 text-center"><button onClick={() => { setEditingDistributor(user); setEditFormData(user); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition">編輯 / 審核</button></td></tr>);
+                      })}
                     </tbody>
                   </table>
                 ) : crmSubTab === 'users' ? (
@@ -975,14 +769,10 @@
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-5 font-bold text-gray-500 text-sm">註冊日期</th><th className="p-5 font-bold text-gray-500 text-sm">會員暱稱</th><th className="p-5 font-bold text-gray-500 text-sm">聯絡電話</th><th className="p-5 font-bold text-gray-500 text-sm">推薦來源</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
                       {crmUsers.length === 0 ? <tr><td colSpan="4" className="p-12 text-center text-gray-400 font-bold text-xl">尚無資料</td></tr> : 
-                       crmUsers.map(user => {
-                        const refDist = crmDistributors.find(d => d.uid === user.referredBy);
-                        return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5 font-bold text-gray-800 text-lg">{user.name}</td><td className="p-5"><p className="text-sm text-gray-800">{user.phone}</p></td><td className="p-5">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg shadow-sm border border-blue-200 flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 經銷商: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 flex items-center w-fit">🌱 自然流量</span>}</td></tr>)
-                      })}
+                       crmUsers.map(user => { const refDist = crmDistributors.find(d => d.uid === user.referredBy); return (<tr key={user.uid} className="hover:bg-purple-50/30 transition-colors"><td className="p-5 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-5 font-bold text-gray-800 text-lg">{user.name}</td><td className="p-5 text-sm text-gray-800">{user.phone}</td><td className="p-5">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 經銷商: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg flex items-center w-fit">🌱 自然流量</span>}</td></tr>); })}
                     </tbody>
                   </table>
                 ) : (
-                  // ★ 強化版：CRM 全站訂單總覽 (支援狀態切換)
                   <table className="w-full text-left border-collapse min-w-[1200px]">
                     <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-5 font-bold text-gray-500 text-sm w-48">訂單日期 / 編號</th><th className="p-5 font-bold text-gray-500 text-sm">行程名稱</th><th className="p-5 font-bold text-gray-500 text-sm">報名人資訊</th><th className="p-5 font-bold text-gray-500 text-sm text-right">銷售總額 / 分潤</th><th className="p-5 font-bold text-gray-500 text-sm text-center">付款與訂單狀態 (可修改)</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
@@ -992,31 +782,21 @@
                         return (
                           <tr key={order.orderId} className="hover:bg-purple-50/20 transition-colors">
                             <td className="p-5"><p className="text-sm text-gray-600 font-bold">{order.orderDate}</p><p className="font-mono text-xs text-gray-400 mt-1">#{order.orderId}</p></td>
-                            <td className="p-5"><p className="font-bold text-gray-900 text-lg mb-2">{order.tourTitle}</p>{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 推: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200 flex items-center w-fit">🌱 自來客</span>}</td>
+                            <td className="p-5"><p className="font-bold text-gray-900 text-lg mb-2">{order.tourTitle}</p>{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center w-fit"><Briefcase className="w-3 h-3 mr-1" /> 推: {refDist.name}</span> : <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex items-center w-fit">🌱 自來客</span>}</td>
                             <td className="p-5"><p className="font-bold text-gray-800 flex items-center"><UserIcon className="w-4 h-4 mr-1 text-gray-400"/> {order.contactName} <span className="text-sm font-normal text-red-600 ml-1 bg-red-50 px-1.5 rounded">({order.pax}人)</span></p><p className="text-sm text-gray-600 mt-1 flex items-center"><Smartphone className="w-4 h-4 mr-1 text-gray-400"/> {order.contactPhone}</p>{order.note && <p className="text-xs text-gray-500 mt-2 bg-yellow-50 p-1.5 rounded truncate max-w-[200px]" title={order.note}>備註: {order.note}</p>}</td>
                             <td className="p-5 text-right bg-gray-50/50"><p className="font-black text-[#b82337] text-xl">${Number(order.totalAmount).toLocaleString()}</p>{Number(order.commissionAmount) > 0 && <p className="text-xs text-emerald-600 font-bold mt-1">分潤: ${Number(order.commissionAmount).toLocaleString()}</p>}</td>
                             <td className="p-5 text-center">
                                <div className="flex flex-col gap-2 items-center">
-                                  {/* 付款狀態切換器 */}
-                                  <select 
-                                      value={order.paymentStatus || '未付款'} 
-                                      onChange={(e) => handleUpdateOrder(order.orderId, 'paymentStatus', e.target.value)}
-                                      className={`crm-select text-xs font-bold px-3 py-1.5 rounded-lg border outline-none cursor-pointer w-32 text-center transition-colors ${order.paymentStatus === '已付款' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'}`}
-                                  >
+                                  <select value={order.paymentStatus || '未付款'} onChange={(e) => handleUpdateOrder(order.orderId, 'paymentStatus', e.target.value)} className={`crm-select text-xs font-bold px-3 py-1.5 rounded-lg border outline-none cursor-pointer w-32 text-center transition-colors ${order.paymentStatus === '已付款' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'}`}>
                                       <option value="未付款">❌ 未付款</option><option value="已付款">✅ 已付款</option><option value="已退款">退款完成</option>
                                   </select>
-                                  {/* 訂單狀態切換器 */}
-                                  <select 
-                                      value={order.orderStatus || '處理中'} 
-                                      onChange={(e) => handleUpdateOrder(order.orderId, 'orderStatus', e.target.value)}
-                                      className={`crm-select text-xs font-bold px-3 py-1.5 rounded-lg border outline-none cursor-pointer w-32 text-center transition-colors ${order.orderStatus === '已確認' || order.orderStatus === '已出發' || order.orderStatus === '已完成' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.orderStatus === '已取消' ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'}`}
-                                  >
+                                  <select value={order.orderStatus || '處理中'} onChange={(e) => handleUpdateOrder(order.orderId, 'orderStatus', e.target.value)} className={`crm-select text-xs font-bold px-3 py-1.5 rounded-lg border outline-none cursor-pointer w-32 text-center transition-colors ${order.orderStatus === '已確認' || order.orderStatus === '已出發' || order.orderStatus === '已完成' ? 'bg-blue-50 text-blue-700 border-blue-200' : order.orderStatus === '已取消' ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
                                       <option value="處理中">處理中</option><option value="已確認">📌 已確認保位</option><option value="已出發">✈️ 已出發</option><option value="已完成">🎉 已完成</option><option value="已取消">🚫 已取消</option>
                                   </select>
                                </div>
                             </td>
                           </tr>
-                        )
+                        );
                       })}
                     </tbody>
                   </table>
@@ -1028,63 +808,47 @@
       };
 
       const renderAdminEditorTab = () => {
-        if (!isAdmin) return <AdminDeniedScreen />;
+        if (!isAdmin) return <div className="p-20 text-center text-gray-500 font-bold text-2xl">無權限存取</div>;
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
             <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
               <div className="flex justify-between items-center border-b pb-4 mb-6"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統</h2><button onClick={handleUpdateContent} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm"><RefreshCw className="w-4 h-4 mr-2" /> {draftData.id ? '儲存修改' : '手動新增上架'}</button></div>
-              {!draftData.id && (
-                <div className="flex space-x-4 mb-8 max-w-2xl"><button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button><button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button></div>
-              )}
-              {uploadMode === 'dm' && !draftData.id && (
-                <div className="mb-8 w-full max-w-4xl"><div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative"><div className="space-y-2 text-center"><ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" /><label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 border shadow-sm px-4 py-2"><span>選擇 DM 圖片</span><input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} /></label></div>{ocrStatus === 'processing' && <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm"><RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" /><p className="text-blue-700 font-bold text-2xl">ChatGPT 解析中...</p></div>}</div></div>
-              )}
+              {!draftData.id && (<div className="flex space-x-4 mb-8 max-w-2xl"><button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button><button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button></div>)}
+              {uploadMode === 'dm' && !draftData.id && (<div className="mb-8 w-full max-w-4xl"><div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative"><div className="space-y-2 text-center"><ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" /><label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 border shadow-sm px-4 py-2"><span>選擇 DM 圖片</span><input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} /></label></div>{ocrStatus === 'processing' && <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm"><RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" /><p className="text-blue-700 font-bold text-2xl">ChatGPT 解析中...</p></div>}</div></div>)}
               {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
                 <div className="bg-gray-50/80 p-6 lg:p-8 rounded-2xl border border-gray-200 relative">
                   {draftData.id && <button onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); setUploadMode('dm'); setOcrStatus('idle'); }} className="absolute top-6 right-6 text-gray-400 bg-white rounded-full p-1.5 border shadow-sm"><X className="w-6 h-6" /></button>}
-                  <div className="flex items-center mb-8"><h3 className="text-2xl font-bold">{draftData.id ? '✏️ 修改行程' : '📝 行程內容草稿'}</h3></div>
+                  <h3 className="text-2xl font-bold mb-8">{draftData.id ? '✏️ 修改行程' : '📝 行程內容草稿'}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-                    <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
-                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label><select value={draftData.region} onChange={(e) => setDraftData({...draftData, region: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 bg-white outline-none text-lg"><option value="">請選擇</option><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
-                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label><input type="number" value={draftData.price} onChange={(e) => setDraftData({...draftData, price: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
-                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">出發日期</label><input type="date" value={draftData.startDate} onChange={(e) => setDraftData({...draftData, startDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
-                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">結束日期</label><input type="date" value={draftData.endDate} onChange={(e) => setDraftData({...draftData, endDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
-                    <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg" placeholder="例如：7"/></div>
-                    
+                    <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 outline-none text-lg"/></div>
+                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label><select value={draftData.region} onChange={(e) => setDraftData({...draftData, region: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 bg-white outline-none text-lg"><option value="">請選擇</option><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
+                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label><input type="number" value={draftData.price} onChange={(e) => setDraftData({...draftData, price: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 outline-none text-lg"/></div>
+                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">出發日期</label><input type="date" value={draftData.startDate} onChange={(e) => setDraftData({...draftData, startDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 outline-none text-lg bg-white"/></div>
+                    <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">結束日期</label><input type="date" value={draftData.endDate} onChange={(e) => setDraftData({...draftData, endDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 outline-none text-lg bg-white"/></div>
+                    <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 outline-none text-lg" placeholder="例如：7"/></div>
                     <div className="lg:col-span-4">
-                      <label className="block text-sm font-bold text-gray-700 mb-2">首圖網址 或 上傳雲端圖片 (顯示於名片與專屬頁橫幅)</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">首圖網址 或 上傳雲端圖片</label>
                       <div className="flex gap-4 items-center">
-                        <input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600" placeholder="https://..." />
-                        <label className={`cursor-pointer bg-blue-100 text-blue-700 px-4 py-3.5 rounded-xl font-bold hover:bg-blue-200 transition whitespace-nowrap ${isUploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
-                          {isUploadingImage ? '上傳中...' : '☁️ 上傳圖片'}
-                          <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'itinerary')} disabled={isUploadingImage} />
-                        </label>
+                        <input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 outline-none font-mono text-base text-gray-600" placeholder="https://..." />
+                        <label className={`cursor-pointer bg-blue-100 text-blue-700 px-4 py-3.5 rounded-xl font-bold hover:bg-blue-200 transition whitespace-nowrap ${isUploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>{isUploadingImage ? '上傳中...' : '☁️ 上傳圖片'}<input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'itinerary')} disabled={isUploadingImage} /></label>
                         {draftData.image && <img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" />}
                       </div>
                     </div>
                   </div>
-                  
                   <div className="mt-8">
                     <div className="flex justify-between items-end mb-3">
-                      <label className="block text-sm font-bold text-gray-700">詳細行程文案 (無邊框排版)</label>
-                      <label className={`cursor-pointer bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-200 transition whitespace-nowrap flex items-center shadow-sm ${isInsertingContentImage ? 'opacity-50 pointer-events-none' : ''}`}>
-                        {isInsertingContentImage ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
-                        {isInsertingContentImage ? '上傳中...' : '插入內文圖片'}
-                        <input type="file" className="hidden" accept="image/*" onChange={handleInsertImageToDescription} disabled={isInsertingContentImage} />
-                      </label>
+                      <label className="block text-sm font-bold text-gray-700">詳細行程文案</label>
+                      <label className={`cursor-pointer bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-200 transition whitespace-nowrap flex items-center shadow-sm ${isInsertingContentImage ? 'opacity-50 pointer-events-none' : ''}`}>{isInsertingContentImage ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}{isInsertingContentImage ? '上傳中...' : '插入內文圖片'}<input type="file" className="hidden" accept="image/*" onChange={handleInsertImageToDescription} disabled={isInsertingContentImage} /></label>
                     </div>
-                    <textarea rows={15} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed" placeholder="輸入詳細內容... 點擊右上角「插入內文圖片」即可上傳圖片並自動插入版面中！"/>
+                    <textarea rows={15} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 outline-none text-lg leading-relaxed" placeholder="輸入詳細內容..."/>
                   </div>
-
                   <div className="mt-8">
                     <label className="block text-sm font-bold text-gray-700 mb-2">注意事項 / 報名須知</label>
-                    <textarea rows={8} value={draftData.notes || ''} onChange={(e) => setDraftData({...draftData, notes: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed" placeholder="輸入退費規定、航班行李限制、簽證須知等..."/>
+                    <textarea rows={8} value={draftData.notes || ''} onChange={(e) => setDraftData({...draftData, notes: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 outline-none text-lg leading-relaxed" placeholder="輸入退費規定、航班行李限制、簽證須知等..."/>
                   </div>
-
                 </div>
               )}
             </div>
-
             <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100 mt-6">
               <div className="flex justify-between items-center mb-6 border-b pb-4"><h3 className="text-2xl font-bold flex items-center"><FileText className="w-6 h-6 mr-2" /> 現有行程管理</h3></div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
@@ -1100,8 +864,7 @@
         );
       };
 
-      const renderModals = () => {
-        return (
+      const renderModals = () => (
           <>
             {flexModalItem && (
               <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -1122,30 +885,23 @@
                            <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
                         </div>
                       </div>
-                      
                       <div className="pt-6 border-t border-gray-200 mt-4 space-y-3">
                         <p className="text-gray-500 text-sm font-bold mb-2">🚀 平台推廣神器</p>
-                        <button onClick={() => handleCopyUrl('web')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg">
-                          <LinkIcon className="w-5 h-5 mr-2" /> (1) 複製「純網頁版」連結 (全場域通用)
-                        </button>
-                        <button onClick={() => handleCopyUrl('send')} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
-                          <Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (供 LINE OA 使用)
-                        </button>
-                        <button onClick={() => handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
-                          <CopyIcon className="w-5 h-5 mr-2" /> (3) 複製「轉傳名片」連結 (用來群發客群)
-                        </button>
-                        <button onClick={triggerFlexSharing} className="w-full bg-white text-[#00B900] border-2 border-[#00B900] hover:bg-green-50 font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
-                          <Share2 className="w-5 h-5 mr-2" /> (4) 在此裝置直接發送名片 (喚起通訊錄)
-                        </button>
+                        <button onClick={() => handleCopyUrl('web')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg"><LinkIcon className="w-5 h-5 mr-2" /> (1) 複製「純網頁版」連結 (全場域通用)</button>
+                        <button onClick={() => handleCopyUrl('send')} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (供 LINE OA 使用)</button>
+                        <button onClick={() => handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><CopyIcon className="w-5 h-5 mr-2" /> (3) 複製「轉傳名片」連結 (用來群發客群)</button>
+                        <button onClick={triggerFlexSharing} className="w-full bg-white text-[#00B900] border-2 border-[#00B900] hover:bg-green-50 font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><Share2 className="w-5 h-5 mr-2" /> (4) 在此裝置直接發送名片 (喚起通訊錄)</button>
                       </div>
                     </div>
                   </div>
                   <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                      <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">名片預覽畫面</p>
-                     <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
-                       <div className="relative"><div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div><div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#b82337] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div></div>
+                     <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top flex flex-col">
+                       <div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div>
+                       <div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#b82337] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div>
                        <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div><div className="w-full bg-[#b82337] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
+                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm">查看行程 / 立即報名</div>
+                          <div className="w-full bg-[#b82337] text-white text-center py-2.5 rounded-xl font-bold text-sm">📤 分享此行程給好友</div>
                           {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                           {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                           {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
@@ -1158,7 +914,6 @@
                 </div>
               </div>
             )}
-
             {bookingModalData && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
                 <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl animate-fade-in-up overflow-hidden">
@@ -1168,23 +923,20 @@
                           <p className="text-sm font-bold text-gray-400 mb-1">預約行程</p>
                           <p className="text-xl font-black text-gray-800 leading-tight mb-2">{bookingModalData.tourTitle}</p>
                           <div className="flex justify-between items-end">
-                              <div><label className="block text-sm font-bold text-gray-500 mb-1">報名人數</label><input type="number" min="1" required value={bookingModalData.pax} onChange={(e) => setBookingModalData({...bookingModalData, pax: parseInt(e.target.value)||1, totalAmount: (parseInt(e.target.value)||1) * bookingModalData.price})} className="w-24 rounded-lg border-gray-300 border p-2 focus:ring-[#b82337] outline-none text-center font-bold text-lg"/></div>
+                              <div><label className="block text-sm font-bold text-gray-500 mb-1">報名人數</label><input type="number" min="1" required value={bookingModalData.pax} onChange={(e) => setBookingModalData({...bookingModalData, pax: parseInt(e.target.value)||1, totalAmount: (parseInt(e.target.value)||1) * bookingModalData.price})} className="w-24 rounded-lg border-gray-300 border p-2 outline-none text-center font-bold text-lg"/></div>
                               <div className="text-right"><p className="text-xs text-gray-400 font-bold mb-1">總金額</p><p className="text-2xl font-black text-[#b82337]">TWD {Number(bookingModalData.totalAmount).toLocaleString()}</p></div>
                           </div>
                       </div>
                       <div className="space-y-4 mb-8">
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">主要聯絡人姓名</label><input type="text" required value={bookingModalData.contactName} onChange={(e) => setBookingModalData({...bookingModalData, contactName: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-[#b82337] outline-none text-base"/></div>
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡電話</label><input type="tel" required value={bookingModalData.contactPhone} onChange={(e) => setBookingModalData({...bookingModalData, contactPhone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-[#b82337] outline-none text-base"/></div>
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">特殊需求備註 (選填)</label><textarea rows="2" value={bookingModalData.note} onChange={(e) => setBookingModalData({...bookingModalData, note: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-[#b82337] outline-none text-base" placeholder="例如：素食、嬰兒車需求等"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">主要聯絡人姓名</label><input type="text" required value={bookingModalData.contactName} onChange={(e) => setBookingModalData({...bookingModalData, contactName: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡電話</label><input type="tel" required value={bookingModalData.contactPhone} onChange={(e) => setBookingModalData({...bookingModalData, contactPhone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">特殊需求備註 (選填)</label><textarea rows="2" value={bookingModalData.note} onChange={(e) => setBookingModalData({...bookingModalData, note: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base" placeholder="例如：素食、嬰兒車需求等"/></div>
                       </div>
-                      <button type="submit" disabled={isSubmitting} className={`w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}>
-                          {isSubmitting ? '訂單處理中...' : '確認送出訂單'}
-                      </button>
+                      <button type="submit" disabled={isSubmitting} className={`w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}>{isSubmitting ? '訂單處理中...' : '確認送出訂單'}</button>
                   </form>
                 </div>
               </div>
             )}
-
             {deleteModalId && (
               <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                 <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
@@ -1195,8 +947,7 @@
               </div>
             )}
           </>
-        );
-      };
+      );
 
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
@@ -1213,6 +964,7 @@
         </div>
       );
     }
+
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
