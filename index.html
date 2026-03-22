@@ -108,7 +108,7 @@
 
     // ============================================================================
     // ★ 巨匠級行程渲染器 (Artisan Style Rendering Engine) ★
-    // 解放排版邊界，自動將 Day1、餐食、住宿轉換為高級卡片，並具備防破圖連結機制
+    // 解放排版邊界，暴力加載圖片，自動產生 Day1 橫斷標題與獨立資訊卡
     // ============================================================================
     const renderAgencyBlogDescription = (text) => {
       if (!text) return null;
@@ -125,53 +125,46 @@
           continue;
         }
 
-        // 1. 圖片/連結防破圖解析 (處理 http 開頭的字串)
+        // 1. 圖片渲染器 (完全不躲藏，只要是網址就強制當圖片渲染出來)
         const mdMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
         if (mdMatch || (line.startsWith('http') && !line.includes(' '))) {
             const imgUrl = mdMatch ? mdMatch[2] : line;
             elements.push(
-                 <div key={`img-${i}`} className="my-8 w-full relative">
-                     {/* 防破圖機制：若載入失敗則隱藏圖片，顯示下方的 a 連結 */}
+                 <div key={`img-${i}`} className="my-10 w-full relative group">
+                     {/* 暴力全螢幕圖片，無邊框、無圓角，霸氣十足 */}
                      <img 
                         src={imgUrl} 
-                        alt="行程附圖" 
-                        className="w-full h-auto object-cover" 
-                        onError={(e) => { 
-                           e.target.style.display = 'none'; 
-                           e.target.nextSibling.style.display = 'block'; 
-                        }} 
+                        alt="行程景點" 
+                        className="w-full h-auto object-cover rounded-xl shadow-md border border-gray-100"
                      />
-                     <div className="hidden bg-gray-50 p-4 border-l-4 border-gray-400 my-2">
-                        <span className="text-gray-500 mr-2 text-sm font-bold">🔗 參考資訊 / 連結：</span>
-                        <a href={imgUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline break-all">{imgUrl}</a>
-                     </div>
                  </div>
             );
             i++;
             continue;
         }
 
-        // 2. Day 行程大標題解析 (如：Day1, 第1天) -> 轉為巨匠風紅線標題
+        // 2. Day 行程大標題解析 (將 Day1 變成橫跨全版的紅線與大字)
         const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
         if (dayMatch) {
             elements.push(
-                <div key={`day-${i}`} className="mt-16 mb-8 text-center relative max-w-[800px] mx-auto">
-                    {/* 紅色虛線背景 */}
-                    <div className="absolute top-[45%] left-0 w-full border-t-[3px] border-dashed border-[#b82337] -z-10"></div>
-                    {/* 標題文字區塊 */}
-                    <h2 className="inline-block text-4xl md:text-5xl font-black text-gray-900 bg-white px-6 relative z-10 tracking-wider">
-                      {dayMatch[1].replace(/\s+/g, '')}
-                    </h2>
-                    {dayMatch[2].trim() && (
-                      <h3 className="text-xl md:text-2xl font-bold text-gray-700 mt-4">{dayMatch[2].replace(/^[:：\-\s]+/, '')}</h3>
-                    )}
+                <div key={`day-${i}`} className="mt-20 mb-10 relative w-full flex items-center">
+                    <div className="flex-grow border-t-2 border-red-700"></div>
+                    <div className="mx-6 text-center">
+                      <h2 className="text-4xl md:text-5xl font-black text-red-700 tracking-wider">
+                        {dayMatch[1].replace(/\s+/g, '')}
+                      </h2>
+                      {dayMatch[2].trim() && (
+                        <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">{dayMatch[2].replace(/^[:：\-\s]+/, '')}</h3>
+                      )}
+                    </div>
+                    <div className="flex-grow border-t-2 border-red-700"></div>
                 </div>
             );
             i++;
             continue;
         }
 
-        // 3. 餐食 / 住宿 資訊卡片解析
+        // 3. 餐食 / 住宿 資訊卡片解析 (轉為乾淨的白底卡片)
         let infoMatch = line.match(/^(早餐|午餐|晚餐|餐食|住宿)\s*[:：]/);
         if (infoMatch) {
             let blockLines = [];
@@ -184,15 +177,15 @@
             const isMeal = blockLines.some(l => l.includes('餐'));
             
             elements.push(
-                <div key={`info-${i}`} className="my-6 border border-gray-200 p-6 flex flex-col md:flex-row items-start bg-white shadow-sm w-full">
-                   <div className="text-4xl mr-6 mb-4 md:mb-0 opacity-80 flex-shrink-0">{isAcc ? '🏨' : (isMeal ? '🍽️' : '📌')}</div>
-                   <div className="space-y-3 text-gray-700 font-medium text-lg w-full">
+                <div key={`info-${i}`} className="my-8 border-l-4 border-red-700 p-6 flex flex-col md:flex-row items-start bg-gray-50 w-full shadow-sm">
+                   <div className="text-4xl mr-6 mb-4 md:mb-0 opacity-90 flex-shrink-0">{isAcc ? '🏨' : (isMeal ? '🍽️' : '📌')}</div>
+                   <div className="space-y-3 text-gray-800 font-medium text-lg w-full">
                      {blockLines.map((bl, bidx) => {
                          const parts = bl.split(/[:：](.+)/);
                          if (parts.length > 1) {
                              return (
                                <div key={bidx} className="flex">
-                                  <span className="font-bold text-gray-900 w-16 flex-shrink-0">{parts[0]}</span> 
+                                  <span className="font-bold text-gray-900 w-20 flex-shrink-0">{parts[0]}</span> 
                                   <span className="text-gray-600">: {parts[1]}</span>
                                </div>
                              );
@@ -205,9 +198,9 @@
             continue;
         }
 
-        // 4. 一般內文段落 (大字體、高行距)
+        // 4. 一般內文段落 (大字體、高行距，完全不包框)
         elements.push(
-           <p key={`text-${i}`} className="mb-4 text-[1.1rem] md:text-[1.2rem] leading-[2.2] text-gray-700 tracking-wide text-justify">
+           <p key={`text-${i}`} className="mb-6 text-[1.15rem] md:text-[1.25rem] leading-[2.2] text-gray-800 tracking-wide text-justify">
              {line}
            </p>
         );
@@ -402,8 +395,8 @@
       };
 
       const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
-      const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid}`; };
-      const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid}`; };
+      const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid || ''}`; };
+      const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; };
 
       const handleSearch = () => {
         let results = itineraries;
@@ -670,6 +663,9 @@
                   const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
                   if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={() => {setSelectedTourId(null); window.history.pushState({}, '', '?tab=home');}} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
                   
+                  // 動態抓取這位客人的「專屬推薦人 (經銷商)」資料
+                  const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
+
                   return (
                     <div className="w-full bg-white min-h-screen">
                        
@@ -680,7 +676,7 @@
                            <div className="absolute bottom-0 left-0 w-full pb-16">
                               <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
                                   <div className="flex gap-3 mb-6">
-                                     <span className="bg-[#b82337] text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.region}</span>
+                                     <span className="bg-red-700 text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.region}</span>
                                      <span className="bg-black/50 backdrop-blur-sm text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.days} 天精華</span>
                                   </div>
                                   <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-tight drop-shadow-2xl">{tour.title}</h1>
@@ -692,10 +688,10 @@
                        <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
                            <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center h-16">
                                <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
-                                   <button className="text-[#b82337] border-b-4 border-[#b82337] h-full px-4">行程介紹與內容</button>
-                                   <button className="hover:text-[#b82337] h-full px-4 transition-colors">注意事項</button>
+                                   <button className="text-red-700 border-b-4 border-red-700 h-full px-4">行程介紹與內容</button>
+                                   <button className="hover:text-red-700 h-full px-4 transition-colors">注意事項</button>
                                </div>
-                               <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition">
+                               <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition">
                                    <ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽
                                </button>
                            </div>
@@ -707,7 +703,7 @@
                           {/* 左側：解放邊界的圖文介紹區 */}
                           <div className="flex-1 w-full min-w-0">
                               <div className="md:hidden mb-8">
-                                <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition">
+                                <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition">
                                      <ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽
                                 </button>
                               </div>
@@ -719,9 +715,9 @@
 
                           {/* 右側：報名與結帳側邊欄 (Sticky Sidebar) */}
                           <div className="w-full lg:w-[400px] flex-shrink-0">
-                              <div className="sticky top-40 bg-white shadow-2xl border border-gray-100 overflow-hidden">
+                              <div className="sticky top-40 bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-xl">
                                   {/* 價格區塊 */}
-                                  <div className="bg-[#b82337] text-white p-8 text-center">
+                                  <div className="bg-red-700 text-white p-8 text-center">
                                       <p className="text-sm font-bold tracking-widest mb-2 opacity-90">專案特惠價</p>
                                       <p className="text-5xl font-black"><span className="text-xl font-medium mr-2">TWD</span>{Number(tour.price).toLocaleString()}</p>
                                   </div>
@@ -730,23 +726,39 @@
                                   <div className="p-8">
                                       <div className="space-y-6 mb-10 border-b border-gray-100 pb-8">
                                          <div className="flex items-center text-gray-800 text-lg font-bold">
-                                            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mr-4"><Calendar className="w-6 h-6 text-[#b82337]" /></div>
+                                            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mr-4"><Calendar className="w-6 h-6 text-red-700" /></div>
                                             {tour.days} 天精彩行程
                                          </div>
                                          {tour.startDate && (
                                          <div className="flex items-center text-gray-800 text-lg font-bold">
-                                            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mr-4"><Navigation className="w-6 h-6 text-[#b82337]" /></div>
+                                            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mr-4"><Navigation className="w-6 h-6 text-red-700" /></div>
                                             出發日：{tour.startDate}
                                          </div>
                                          )}
                                       </div>
                                       
-                                      <button onClick={() => { window.location.href = LOGIN_URL + '?type=user&ref_uid=' + refUid; }} className="w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-4 px-6 shadow-md transition-all text-xl mb-4">
+                                      <button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-4 px-6 shadow-md transition-all text-xl mb-6 rounded-xl">
                                          立即報名保留名額
                                       </button>
-                                      <button onClick={() => { window.location.href = LOGIN_URL + '?type=user&ref_uid=' + refUid; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-6 shadow-md transition-all text-xl flex items-center justify-center">
-                                         <MessageCircle className="w-6 h-6 mr-2" /> 聯絡專屬旅遊顧問
-                                      </button>
+
+                                      {/* 動態專屬顧問聯絡按鈕 */}
+                                      <p className="text-center text-gray-400 text-sm font-bold mb-3">—— 聯絡專屬旅遊顧問 ——</p>
+                                      
+                                      {currentDist?.phone && (
+                                         <a href={`tel:${currentDist.phone}`} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center mb-3 rounded-xl">
+                                            📞 撥打電話：{currentDist.name}
+                                         </a>
+                                      )}
+                                      {currentDist?.lineLink && (
+                                         <a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">
+                                            💬 加入顧問 LINE
+                                         </a>
+                                      )}
+                                      {!currentDist?.phone && !currentDist?.lineLink && (
+                                         <button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">
+                                            💬 聯絡官方客服
+                                         </button>
+                                      )}
                                   </div>
                               </div>
                           </div>
