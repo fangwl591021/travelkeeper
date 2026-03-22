@@ -248,28 +248,38 @@
       const articleTopRef = useRef(null);
       // Ref for fixed price card anchor
       const priceCardAnchorRef = useRef(null);
+      // articleBodyRef marks the TOP of the article content section (below hero + tab bar)
+      const articleBodyRef = useRef(null);
       const [priceCardStyle, setPriceCardStyle] = useState({});
 
       useEffect(() => {
         if (!selectedTourId) return;
         const CARD_WIDTH = 360;
-        const TOP_OFFSET = 130;
+        const TOP_OFFSET = 130; // navbar 64 + tab bar 64 + 2px buffer
 
         const updateCardPos = () => {
-          if (!priceCardAnchorRef.current) return;
+          if (!priceCardAnchorRef.current || !articleBodyRef.current) return;
           const anchorRect = priceCardAnchorRef.current.getBoundingClientRect();
+          const articleRect = articleBodyRef.current.getBoundingClientRect();
           const rightGap = window.innerWidth - anchorRect.right;
-          setPriceCardStyle({
-            position: 'fixed',
-            top: TOP_OFFSET + 'px',
-            right: Math.max(rightGap, 12) + 'px',
-            width: CARD_WIDTH + 'px',
-            zIndex: 20,
-          });
+
+          // Only show card once the article section has scrolled up to the TOP_OFFSET line
+          // i.e. articleRect.top <= TOP_OFFSET means the article body is at or above where the card starts
+          if (articleRect.top > TOP_OFFSET) {
+            setPriceCardStyle({ display: 'none' });
+          } else {
+            setPriceCardStyle({
+              position: 'fixed',
+              top: TOP_OFFSET + 'px',
+              right: Math.max(rightGap, 12) + 'px',
+              width: CARD_WIDTH + 'px',
+              zIndex: 20,
+              display: 'block',
+            });
+          }
         };
 
-        // slight delay so DOM is painted
-        const tid = setTimeout(updateCardPos, 50);
+        const tid = setTimeout(updateCardPos, 80);
         window.addEventListener('scroll', updateCardPos, { passive: true });
         window.addEventListener('resize', updateCardPos, { passive: true });
         return () => {
@@ -739,7 +749,7 @@
                   </div>
 
                   {/* ★ Main layout — full width, article gets all space except reserved right gutter for fixed card */}
-                  <div className="w-full py-10 flex relative items-start">
+                  <div ref={articleBodyRef} className="w-full py-10 flex relative items-start">
                     {/* Invisible anchor at top-right: tells JS where to place the fixed card */}
                     <div ref={priceCardAnchorRef} className="hidden lg:block absolute top-0 right-6 xl:right-12 w-[360px] h-px pointer-events-none" />
 
