@@ -1679,10 +1679,10 @@
               </div>
               {/* 主體 */}
               <div className="flex flex-1 overflow-hidden">
-                {/* 左：卡片 */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+                {/* 左：卡片 (60%) */}
+                <div className="overflow-y-auto p-4 sm:p-5" style={{flex:'0 0 60%',minWidth:0}}>
                   <p className="text-xs text-gray-400 font-bold mb-3">共 {promoFiltered.length} 個行程</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {promoFiltered.map(item => {
                       const isSel     = distCardMode==='multi' && distSelectedIds.has(String(item.id));
                       const isCurrent = distCardMode==='single' && flexModalItem && String(flexModalItem.id)===String(item.id);
@@ -1731,7 +1731,7 @@
                   </div>
                 </div>
                 {/* 右：設定面板 */}
-                <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col overflow-hidden">
+                <div className="border-l border-gray-200 bg-white flex flex-col overflow-hidden" style={{flex:'0 0 40%',minWidth:'280px'}}>
                   {rightPanel}
                 </div>
               </div>
