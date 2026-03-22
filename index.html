@@ -386,19 +386,27 @@
       };
 
       const fetchFullCrmData = async () => {
-        try {
-          const resD = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors' }) });
-          setCrmDistributors(Array.isArray(await resD.json()) ? await resD.json() : []);
-          const resU = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers' }) });
-          setCrmUsers(Array.isArray(await resU.json()) ? await resU.json() : []);
-          
-          if (isAdmin) {
-              const resO = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getAllOrders' }) });
-              const dataO = await resO.json();
-              if (dataO.success) setCrmOrders(dataO.data);
-          }
-        } catch (e) { console.error('CRM Fetch error', e); }
-      };
+  try {
+    const [resD, resU, resO] = await Promise.all([
+      fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${getTimestamp()}`),
+      fetch(`${WORKER_URL}/api/itineraries?action=getUsers&_t=${getTimestamp()}`),
+      fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders&_t=${getTimestamp()}`)
+    ]);
+
+    const [dataD, dataU, dataO] = await Promise.all([
+      resD.json(),
+      resU.json(),
+      resO.json()
+    ]);
+
+    setCrmDistributors(Array.isArray(dataD) ? dataD : []);
+    setCrmUsers(Array.isArray(dataU) ? dataU : []);
+    if (dataO && dataO.success) setCrmOrders(dataO.data || []);
+
+  } catch (e) {
+    console.error('CRM Fetch error', e);
+  }
+};
 
       const fetchItineraries = async () => {
         setIsLoading(true);
