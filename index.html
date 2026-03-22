@@ -61,6 +61,7 @@
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
+
         const buttons = [
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
             { "type": "button", "style": "primary", "color": "#FF334B", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
@@ -89,80 +90,119 @@
         };
     };
 
+    // =========================================================================
+    // ★ 巨匠級行程渲染器：無邊界防呆解析引擎
+    // =========================================================================
     const renderAgencyBlogDescription = (text) => {
       if (!text) return null;
       const lines = text.split('\n');
       const blocks = [];
-      let currentBlock = { type: 'intro', content: [], meals: [], hotels: [] };
+      let currentBlock = { type: 'intro', dayText: '行程介紹', title: '', content: [], meals: [], hotels: [] };
       let inMeal = false; let inHotel = false;
 
       for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
+          let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
 
-          const mdMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
-          const isHttp = line.startsWith('http') && !line.includes(' ');
-          if (mdMatch || isHttp) {
-              const imgUrl = mdMatch ? mdMatch[2] : line;
-              currentBlock.content.push({ type: 'image', url: imgUrl });
-              inMeal = false; inHotel = false; continue;
-          }
-
+          // Day 標題判定 (巨匠風格紅線置中大標)
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
-              blocks.push(currentBlock);
+              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
+                  blocks.push(currentBlock);
+              }
               currentBlock = { type: 'day', dayText: dayMatch[1].replace(/\s+/g, ''), title: dayMatch[2].replace(/^[:：\-\s]+/, ''), content: [], meals: [], hotels: [] };
               inMeal = false; inHotel = false; continue;
           }
 
+          // 餐食與住宿判定
           if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
           if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
           if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
-          if (inHotel && !line.startsWith('Day')) {
-               if (line.length > 40) { inHotel = false; currentBlock.content.push({ type: 'text', text: line }); } 
-               else { currentBlock.hotels.push(line); }
-               continue;
-          }
+          if (inHotel && line.length < 40) { currentBlock.hotels.push(line); continue; }
 
           inMeal = false; inHotel = false;
-          currentBlock.content.push({ type: 'text', text: line });
+
+          // 圖片防呆解析 (支援 Inline Markdown 與直接貼上網址)
+          const parts = line.split(/(!\[.*?\]\(.*?\))/g);
+          const parsedLine = parts.filter(p => p).map((part) => {
+              const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
+              if (mdMatch) return { type: 'image', alt: mdMatch[1], url: mdMatch[2] };
+              if (part.startsWith('http') && !part.includes(' ') && parts.length === 1) return { type: 'image', alt: '圖片', url: part };
+              return { type: 'text', text: part };
+          });
+          currentBlock.content.push({ type: 'mixed', elements: parsedLine });
       }
       blocks.push(currentBlock);
 
       return blocks.map((block, bIdx) => (
           <div key={bIdx} className="mb-16 w-full">
-              {block.type === 'day' && (
-                  <div className="mb-10 mt-12">
-                      <div className="text-center mb-6"><h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-3">{block.dayText}</h2><div className="flex justify-center"><div className="w-24 border-b-4 border-dashed border-red-700"></div></div></div>
-                      {block.title && (<h3 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center justify-center lg:justify-start"><span className="text-red-600 mr-3 text-xl">— {block.dayText.replace(/\D/g, '') || '*'}</span> {block.title}</h3>)}
+              {block.dayText !== '行程介紹' && (
+                  <div className="mb-10 mt-16 w-full">
+                      <div className="text-center relative mb-8">
+                          <div className="absolute top-1/2 left-0 w-full border-t-2 border-dashed border-red-700 -z-10"></div>
+                          <h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2>
+                      </div>
+                      {block.title && (
+                          <div className="flex items-start mb-6">
+                              <span className="text-red-500 font-light text-2xl mr-4 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span>
+                              <h3 className="text-2xl font-bold text-gray-800 leading-tight">{block.title}</h3>
+                          </div>
+                      )}
                   </div>
               )}
               
-              <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify px-2">
+              <div className="text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full overflow-hidden break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
-                      if (item.type === 'image') return (
-                          <div key={idx} className="my-10 -mx-4 lg:-mx-8">
-                              <img src={item.url} className="w-full h-auto object-cover max-h-[800px] shadow-sm rounded-lg" alt="行程景點" />
-                              <div className="text-center text-sm text-gray-400 mt-2">若圖片無法顯示，表示該圖庫禁止外部連接 (<a href={item.url} target="_blank" rel="noreferrer" className="underline">點此查看原圖</a>)</div>
-                          </div>
-                      );
-                      return <p key={idx} className="mb-5">{item.text}</p>;
+                      if (item.type === 'mixed') {
+                          return (
+                              <p key={idx} className="mb-5 break-words whitespace-pre-wrap">
+                                  {item.elements.map((el, eIdx) => {
+                                      if (el.type === 'image') return (
+                                          <span key={eIdx} className="block my-10 w-full relative">
+                                              <img src={el.url} className="w-full h-auto object-cover rounded-none md:rounded-xl shadow-sm border border-gray-100 max-h-[800px]" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                              <span className="hidden bg-gray-50 p-4 border-l-4 border-gray-400 my-2 rounded text-sm text-gray-500 block break-all">🔗 連結/圖片無法顯示，請點擊參考：<a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline">{el.url}</a></span>
+                                          </span>
+                                      );
+                                      return <span key={eIdx}>{el.text}</span>;
+                                  })}
+                              </p>
+                          );
+                      }
+                      return null;
                   })}
               </div>
 
               {(block.meals.length > 0 || block.hotels.length > 0) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
                       {block.meals.length > 0 && (
-                          <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
-                              <div className="text-4xl mr-5 opacity-80">🍽️</div>
-                              <div className="w-full"><p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">餐食</p><div className="space-y-3 text-gray-600 font-medium">{block.meals.map((m, mIdx) => <p key={mIdx}>{m}</p>)}</div></div>
+                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full">
+                              <div className="text-3xl mr-4 opacity-80 flex-shrink-0 text-red-700">🍽️</div>
+                              <div className="w-full border-l-2 border-red-700 pl-4 min-w-0">
+                                  <p className="font-bold text-gray-900 mb-2 text-lg">餐食</p>
+                                  <div className="space-y-1 text-gray-600 font-medium text-sm break-words">
+                                      {block.meals.map((m, mIdx) => {
+                                          const parts = m.split(/[:：](.+)/);
+                                          if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-12 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
+                                          return <p key={mIdx}>{m}</p>;
+                                      })}
+                                  </div>
+                              </div>
                           </div>
                       )}
                       {block.hotels.length > 0 && (
-                          <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
-                              <div className="text-4xl mr-5 opacity-80">🏨</div>
-                              <div className="w-full"><p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">住宿</p><div className="space-y-3 text-gray-600 font-medium">{block.hotels.map((h, hIdx) => <p key={hIdx}>{h}</p>)}</div></div>
+                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full">
+                              <div className="text-3xl mr-4 opacity-80 flex-shrink-0 text-red-700">🏨</div>
+                              <div className="w-full border-l-2 border-red-700 pl-4 min-w-0">
+                                  <p className="font-bold text-gray-900 mb-2 text-lg">住宿</p>
+                                  <div className="space-y-1 text-gray-600 font-medium text-sm break-words">
+                                      {block.hotels.map((h, hIdx) => {
+                                          const parts = h.split(/[:：](.+)/);
+                                          if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-12 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
+                                          return <p key={hIdx}>{h}</p>;
+                                      })}
+                                  </div>
+                              </div>
                           </div>
                       )}
                   </div>
@@ -174,7 +214,7 @@
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
-      const [tourDetailTab, setTourDetailTab] = useState('itinerary'); // ★ 專屬網頁頁籤狀態 (itinerary | notes)
+      const [tourDetailTab, setTourDetailTab] = useState('itinerary'); 
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
       const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
       const [selectedTourId, setSelectedTourId] = useState(() => { return urlParams.get('t') || urlParams.get('tour_id') || null; });
@@ -216,7 +256,6 @@
       const [uploadMode, setUploadMode] = useState('dm');
       const [ocrStatus, setOcrStatus] = useState('idle');
       
-      // ★ DraftData 加入 notes 屬性
       const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' });
       
       const [deleteModalId, setDeleteModalId] = useState(null);
@@ -473,10 +512,6 @@
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
-      // =========================================================================
-      // ★ 畫面渲染區 (Render Sections)
-      // =========================================================================
-
       const renderNavBar = () => (
         <nav className="bg-white shadow-sm sticky top-0 z-50">
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
@@ -506,7 +541,7 @@
             const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
 
             return (
-              <div className="w-full bg-white min-h-screen animate-fade-in pb-20">
+              <div className="w-full bg-white min-h-screen animate-fade-in pb-20 overflow-x-hidden">
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
                       <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -518,7 +553,6 @@
                       </div>
                   </div>
                   
-                  {/* ★ 加入前端切換頁籤狀態 */}
                   <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
                       <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center h-16">
                           <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
@@ -528,15 +562,16 @@
                           <button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
                       </div>
                   </div>
-                  <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-12 relative">
-                    <div className="flex-1 w-full min-w-0 pr-0 lg:pr-12">
+                  <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-12 relative items-start">
+                    
+                    <div className="flex-1 w-full min-w-0 pr-0 overflow-hidden">
                         <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
                         <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200">
                            <button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-red-700 border-b-2 border-red-700' : 'text-gray-500'}`}>行程介紹</button>
                            <button onClick={() => setTourDetailTab('notes')} className={`pb-2 font-bold ${tourDetailTab === 'notes' ? 'text-red-700 border-b-2 border-red-700' : 'text-gray-500'}`}>注意事項</button>
                         </div>
                         
-                        <div className="pb-10 w-full animate-fade-in">
+                        <div className="pb-10 w-full min-w-0 animate-fade-in break-words">
                           {tourDetailTab === 'itinerary' ? renderAgencyBlogDescription(tour.description) : (
                             <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide whitespace-pre-wrap font-medium">
                               {tour.notes || '目前此行程尚無特殊注意事項。'}
@@ -544,8 +579,9 @@
                           )}
                         </div>
                     </div>
-                    <div className="w-full lg:w-[400px] flex-shrink-0">
-                        <div className="sticky top-40 bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-xl">
+
+                    <div className="w-full lg:w-[400px] flex-shrink-0 sticky top-40">
+                        <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-xl">
                             <div className="bg-red-700 text-white p-8 text-center"><p className="text-sm font-bold tracking-widest mb-2 opacity-90">專案特惠價</p><p className="text-5xl font-black"><span className="text-xl font-medium mr-2">TWD</span>{Number(tour.price).toLocaleString()}</p></div>
                             <div className="p-8">
                                 <div className="space-y-6 mb-10 border-b border-gray-100 pb-8">
@@ -554,8 +590,8 @@
                                 </div>
                                 <button onClick={() => handleBookNow(tour)} className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-4 px-6 shadow-md transition-all text-xl mb-6 rounded-xl">立即報名保留名額</button>
                                 <p className="text-center text-gray-400 text-sm font-bold mb-3">—— 聯絡專屬旅遊顧問 ——</p>
-                                {currentDist?.phone && (<a href={`tel:${currentDist.phone}`} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center mb-3 rounded-xl">📞 聯絡電話</a>)}
-                                {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">💬 私訊 LINE</a>)}
+                                {currentDist?.phone && (<a href={`tel:${currentDist.phone}`} className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center mb-3 rounded-xl">📞 聯絡電話：{currentDist.name}</a>)}
+                                {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">💬 私訊顧問 LINE</a>)}
                                 {!currentDist?.phone && !currentDist?.lineLink && (<button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-3 px-6 shadow-md transition-all text-lg flex items-center justify-center rounded-xl mb-3">💬 聯絡官方客服</button>)}
                             </div>
                         </div>
