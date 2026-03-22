@@ -832,13 +832,41 @@
             <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-10">
               <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800">為您推薦的精選行程</h3><span className="text-sm font-medium text-gray-500 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">共 {filteredResults.length} 筆</span></div>
               {isLoading ? <div className="text-center py-32 text-gray-500 bg-white rounded-3xl shadow-sm border border-gray-100"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入中...</p></div> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8 lg:gap-10">
-                  {filteredResults.map(item => (
-                    <div key={item.id} onClick={() => { setSelectedTourId(item.id); window.history.pushState({}, '', '?t=' + item.id + (refUid ? '&r=' + refUid : '')); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5 cursor-pointer">
-                      <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" /><div className="absolute top-4 left-4"><span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg">{item.region}</span></div></div>
-                      <div className="p-6 md:p-8 flex flex-col flex-grow"><h4 className="font-bold text-xl lg:text-2xl mb-3 text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.title}</h4><p className="text-gray-500 text-base mb-6 line-clamp-3 flex-grow leading-relaxed">{item.description}</p><div className="flex justify-between items-end border-t border-gray-100 pt-5 mt-auto"><span className="text-base font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">{item.days} 天</span><span className="text-3xl font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span></div></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+                  {filteredResults.map(item => {
+                    // Extract keyword highlights from description (first 3 location words separated by | )
+                    const keywords = item.description
+                      ? item.description.replace(/【.*?】/g, '').split(/[，。！？\s　]+/).filter(w => w.length >= 2 && w.length <= 8).slice(0, 4)
+                      : [];
+                    return (
+                    <div key={item.id} onClick={() => { setSelectedTourId(item.id); window.history.pushState({}, '', '?t=' + item.id + (refUid ? '&r=' + refUid : '')); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="bg-white border border-gray-200 hover:border-[#b82337] hover:shadow-lg transition-all overflow-hidden group cursor-pointer flex flex-col" style={{borderRadius: '4px'}}>
+                      {/* Image */}
+                      <div className="h-52 overflow-hidden relative bg-gray-100 flex-shrink-0">
+                        <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500" />
+                      </div>
+                      {/* Info */}
+                      <div className="p-4 flex flex-col flex-grow">
+                        {/* Title */}
+                        <h4 className="font-bold text-[15px] text-gray-900 line-clamp-2 leading-snug mb-2 group-hover:text-[#b82337] transition-colors">{item.title}</h4>
+                        {/* Keywords */}
+                        {keywords.length > 0 && (
+                          <p className="text-[12px] text-[#b82337] mb-3 line-clamp-1">
+                            {keywords.map((kw, i) => <span key={i}>{kw}{i < keywords.length - 1 ? <span className="text-gray-300 mx-1">｜</span> : ''}</span>)}
+                          </p>
+                        )}
+                        {/* Date + Price row */}
+                        <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
+                          <div className="flex items-center text-gray-400 text-[12px]">
+                            <Calendar className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+                            <span>{item.startDate ? item.startDate.replace(/-/g, '/').substring(2) : `${item.days}天行程`}</span>
+                            {item.endDate && item.startDate && <span className="ml-0.5">{item.endDate.replace(/-/g, '/').substring(2)}...</span>}
+                          </div>
+                          <span className="text-[#b82337] font-extrabold text-base">${Number(item.price).toLocaleString()}<span className="text-[11px] font-normal ml-0.5">起</span></span>
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {filteredResults.length === 0 && (<div className="col-span-full text-center py-32 text-gray-500 bg-white rounded-3xl border border-dashed border-gray-300"><Search className="w-16 h-16 text-gray-300 mx-auto mb-4" /><p className="font-bold text-2xl text-gray-600">找不到行程</p></div>)}
                 </div>
               )}
