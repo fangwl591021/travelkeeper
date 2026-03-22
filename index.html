@@ -91,7 +91,7 @@
 
     // =========================================================================
     // ★ 巨匠級行程渲染器 (終極排版大師) ★
-    // 完全解除邊界，精準解析 Day 區塊與防盜鏈機制
+    // 解決 Sticky 失效與防盜鏈提示視覺
     // =========================================================================
     const renderAgencyBlogDescription = (text) => {
       if (!text) return null;
@@ -104,7 +104,7 @@
           let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
 
-          // 1. Day 標題判定 (巨匠風格：橫斷紅線置中大標)
+          // 1. Day 標題判定
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
               if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
@@ -122,12 +122,11 @@
 
           inMeal = false; inHotel = false;
 
-          // 3. 圖文交錯防呆解析 (自動斷行防爆版)
+          // 3. 圖文交錯防呆解析
           const parts = line.split(/(!\[.*?\]\(.*?\))/g);
           const parsedLine = parts.filter(p => p).map((part) => {
               const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
               if (mdMatch) return { type: 'image', alt: mdMatch[1], url: mdMatch[2] };
-              // 如果是直接貼網址，視為圖片
               if (part.startsWith('http') && !part.includes(' ') && parts.length === 1) return { type: 'image', alt: '圖片', url: part };
               return { type: 'text', text: part };
           });
@@ -153,7 +152,7 @@
                   </div>
               )}
               
-              {/* 內文渲染區 (完全不包框，徹底滿版) */}
+              {/* 內文渲染區 */}
               <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
@@ -164,7 +163,7 @@
                                       if (el.type === 'image') return (
                                           <span key={eIdx} className="block my-10 w-full relative group">
                                               {/* 暴力滿版圖片 */}
-                                              <img src={el.url} className="w-full h-auto object-cover rounded-xl shadow-sm max-h-[700px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                              <img src={el.url} className="w-full h-auto max-w-full object-cover rounded-none md:rounded-2xl max-h-[800px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
                                               {/* 防盜鏈提示：加上淺藍色背景與強烈提示字眼 */}
                                               <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words">
                                                 <span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>
@@ -557,7 +556,8 @@
             const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
 
             return (
-              <div className="w-full bg-white min-h-screen animate-fade-in pb-20 overflow-x-hidden">
+              // ⚠️ 重要修正：移除 overflow-x-hidden 解決 sticky 捲動失效問題
+              <div className="w-full bg-white min-h-screen animate-fade-in pb-20">
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
                       <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -579,6 +579,8 @@
                           <button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
                       </div>
                   </div>
+                  
+                  {/* ★ 佈局層：確保父層擁有 items-start 且無 overflow-hidden 封印 */}
                   <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-10 relative items-start">
                     
                     <div className="flex-1 w-full min-w-0 pr-0 lg:pr-8 overflow-hidden">
@@ -597,7 +599,8 @@
                         </div>
                     </div>
 
-                    <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 sticky top-24 self-start">
+                    {/* ★ 報名結帳列：精準定義 top-[150px] 避開上方導覽列，確實達成吸頂 (Sticky) 效果 */}
+                    <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 lg:sticky lg:top-[150px] self-start transition-all duration-300 z-10">
                         <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-2xl">
                             <div className="bg-[#b82337] text-white p-6 text-center"><p className="text-xs font-bold tracking-widest mb-1 opacity-90">專案特惠價</p><p className="text-4xl font-black"><span className="text-lg font-medium mr-1">TWD</span>{Number(tour.price).toLocaleString()}</p></div>
                             <div className="p-6">
@@ -736,7 +739,7 @@
                       <tbody className="divide-y divide-gray-100">
                         {crmUsers.filter(u => u.referredBy === editFormData.uid).length === 0 ? <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">該經銷商目前尚未帶來任何新註冊會員</td></tr> : 
                          crmUsers.filter(u => u.referredBy === editFormData.uid).map(u => (
-                          <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors"><td className="p-4 text-sm text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td><td className="p-4 font-medium text-gray-600">{u.phone}</td><td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td></tr>
+                          <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors"><td className="p-4 text-sm text-gray-500">{u.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td><td className="p-4 font-medium text-gray-600">{u.phone}</td><td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td></tr>
                         ))}
                       </tbody>
                    </table>
