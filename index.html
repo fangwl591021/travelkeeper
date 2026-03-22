@@ -406,11 +406,12 @@
       const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid || ''}`; };
       const loginAsMember      = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; };
 
-      // ★ 單張名片 Modal
-      const openFlexModal = (item) => {
-        setCardOptions({ phone:false, line:false, lineAt:false, fb:false, web:false, map:false });
-        setFlexModalItem(item);
+      // ★ 跳轉推廣工具 model.html
+      const openFlexModal = () => {
+        const uid = liffProfile?.userId || '';
+        window.open(MODEL_URL + '?r=' + uid, '_blank');
       };
+      const openModelTool = openFlexModal;
 
       const fallbackCopy = (text) => {
         const ta = document.createElement('textarea'); ta.value = text;
