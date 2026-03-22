@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 平台級智能業務系統 (v3.3)</title>
+  <title>旅遊管家 - 平台級智能業務系統 (v3.4)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -53,7 +53,6 @@
     const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
     const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
     const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
-    const MessageCircle = ({ className }) => <IconWrapper className={className}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></IconWrapper>;
     const ClipboardList = ({ className }) => <IconWrapper className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
     const CopyIcon = ({ className }) => <IconWrapper className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
     const LinkIcon = ({ className }) => <IconWrapper className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconWrapper>;
@@ -71,14 +70,10 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LOGIN_URL = 'login.html'; 
 
-    // ★ 終極修復：自動幫缺失的電話補上 0 的顯示機制
     const formatPhone = (phone) => {
         if (!phone) return '';
         const p = String(phone).trim();
-        // 台灣手機通常 10 碼 09xxxxxxxx，若被 Excel 吞掉 0 會變 9 開頭的 9 碼
-        if (p.length === 9 && p.startsWith('9')) {
-            return '0' + p;
-        }
+        if (p.length === 9 && p.startsWith('9')) return '0' + p;
         return p;
     };
 
@@ -90,15 +85,12 @@
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
             { "type": "button", "style": "primary", "color": "#b82337", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
         ];
-        
-        // ★ 套用 formatPhone 防止電話無法撥打
         if (options.phone && distributorData.phone) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${formatPhone(distributorData.phone)}` }});
         if (options.line && distributorData.lineLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "💬 私訊 LINE", "uri": distributorData.lineLink }});
         if (options.lineAt && distributorData.lineAtLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🟢 官方 LINE@", "uri": distributorData.lineAtLink }});
         if (options.fb && distributorData.fbLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "👍 FB 粉絲專頁", "uri": distributorData.fbLink }});
         if (options.web && distributorData.webLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🌐 官方網站", "uri": distributorData.webLink }});
         if (options.map && distributorData.mapLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📍 門市導航", "uri": distributorData.mapLink }});
-
         return {
           "type": "flex", "altText": `推薦行程：${tourItem.title}`,
           "contents": {
@@ -126,23 +118,17 @@
       for (let i = 0; i < lines.length; i++) {
           let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
-
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
-              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
-                  blocks.push(currentBlock);
-              }
+              if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') blocks.push(currentBlock);
               currentBlock = { type: 'day', dayText: dayMatch[1].replace(/\s+/g, ''), title: dayMatch[2].replace(/^[:：\-\s]+/, ''), content: [], meals: [], hotels: [] };
               inMeal = false; inHotel = false; continue;
           }
-
           if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
           if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
           if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
           if (inHotel && line.length < 40) { currentBlock.hotels.push(line); continue; }
-
           inMeal = false; inHotel = false;
-
           const parts = line.split(/(!\[.*?\]\(.*?\))/g);
           const parsedLine = parts.filter(p => p).map((part) => {
               const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
@@ -153,24 +139,14 @@
           currentBlock.content.push({ type: 'mixed', elements: parsedLine });
       }
       blocks.push(currentBlock);
-
       return blocks.map((block, bIdx) => (
           <div key={bIdx} className="mb-12 w-full max-w-full">
               {block.dayText !== '行程介紹' && (
                   <div className="mb-10 mt-16 w-full">
-                      <div className="text-center relative mb-8">
-                          <div className="absolute top-1/2 left-0 w-full border-t-[2px] border-dashed border-[#b82337] -z-10"></div>
-                          <h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2>
-                      </div>
-                      {block.title && (
-                          <div className="flex items-start mb-6 px-2">
-                              <span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span>
-                              <h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3>
-                          </div>
-                      )}
+                      <div className="text-center relative mb-8"><div className="absolute top-1/2 left-0 w-full border-t-[2px] border-dashed border-[#b82337] -z-10"></div><h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2></div>
+                      {block.title && (<div className="flex items-start mb-6 px-2"><span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span><h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3></div>)}
                   </div>
               )}
-              
               <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
@@ -181,10 +157,7 @@
                                       if (el.type === 'image') return (
                                           <span key={eIdx} className="block my-10 w-full relative group">
                                               <img src={el.url} className="w-full h-auto max-w-full object-cover rounded-none md:rounded-2xl max-h-[800px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words">
-                                                <span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>
-                                                原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a>
-                                              </span>
+                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words"><span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a></span>
                                           </span>
                                       );
                                       return <span key={eIdx}>{el.text}</span>;
@@ -195,39 +168,10 @@
                       return null;
                   })}
               </div>
-
               {(block.meals.length > 0 || block.hotels.length > 0) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
-                      {block.meals.length > 0 && (
-                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
-                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div>
-                              <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
-                                  <p className="font-bold text-gray-900 mb-2 text-lg">餐食</p>
-                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
-                                      {block.meals.map((m, mIdx) => {
-                                          const parts = m.split(/[:：](.+)/);
-                                          if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
-                                          return <p key={mIdx}>{m}</p>;
-                                      })}
-                                  </div>
-                              </div>
-                          </div>
-                      )}
-                      {block.hotels.length > 0 && (
-                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
-                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div>
-                              <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
-                                  <p className="font-bold text-gray-900 mb-2 text-lg">住宿</p>
-                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
-                                      {block.hotels.map((h, hIdx) => {
-                                          const parts = h.split(/[:：](.+)/);
-                                          if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
-                                          return <p key={hIdx}>{h}</p>;
-                                      })}
-                                  </div>
-                              </div>
-                          </div>
-                      )}
+                      {block.meals.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">餐食</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.meals.map((m, mIdx) => { const parts = m.split(/[:：](.+)/); if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={mIdx}>{m}</p>; })}</div></div></div>)}
+                      {block.hotels.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">住宿</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.hotels.map((h, hIdx) => { const parts = h.split(/[:：](.+)/); if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={hIdx}>{h}</p>; })}</div></div></div>)}
                   </div>
               )}
           </div>
@@ -300,7 +244,6 @@
              const rUid = urlParams.get('r') || urlParams.get('ref_uid');
              const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
              const tour = itineraries.find(i => String(i.id) === String(tourId));
-             
              if (!tour) { setShareStatusText('❌ 找不到該行程資訊'); setTimeout(() => window.location.replace(ENDPOINT_URL), 2000); return; }
 
              let targetDistData = {};
@@ -329,7 +272,6 @@
                  catch(e) { if (e.message && e.message.includes('not allowed')) { liff.logout(); window.location.reload(); } else { liff.closeWindow(); } }
              }
         };
-
         if (actionParam === 'share' || actionParam === 'send') processAutoAction();
       }, [isLiffReady, isLoading, liffProfile, isStatusChecked, actionParam]);
 
@@ -436,7 +378,7 @@
                   setBookingModalData(null); 
                   if (liffProfile) { fetchUserOrders(liffProfile.userId); if (distributorStatus === 'approved') fetchDistributorStats(liffProfile.userId); }
                   if (isAdmin) fetchFullCrmData();
-                  setTimeout(() => { changeTab('member'); setIsSubmitting(false); }, 800); 
+                  setTimeout(() => { changeTab('member'); setIsSubmitting(false); }, 500); 
               }
               else throw new Error(result.message || '報名失敗');
           } catch(err) { showToast('訂單送出失敗，請重試', 'error'); setIsSubmitting(false); }
@@ -494,7 +436,6 @@
               const driveResult = await driveRes.json();
               if (driveResult.success) uploadedUrl = driveResult.url;
             } catch (err) { console.warn('圖片上傳失敗', err); }
-
             const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
             const aiResult = await res.json();
             if (aiResult.success) {
@@ -527,7 +468,6 @@
       };
 
       const handleEditClick = (item) => { setUploadMode('manual'); setOcrStatus('done'); setDraftData(item); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-      
       const confirmDelete = async () => {
         if (!deleteModalId) return;
         try {
@@ -543,6 +483,19 @@
           const result = await res.json();
           if (result.success) { showToast('✅ 經銷商資料已更新！'); setEditingDistributor(null); fetchFullCrmData(); } else throw new Error('儲存失敗');
         } catch (e) { showToast('更新失敗', 'error'); }
+      };
+
+      // ★ 新增：經銷商自行儲存 TG 設定
+      const saveMyTgSettings = async () => {
+          try {
+              const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'updateDistributorInfo', uid: liffProfile.userId, tgToken: myDistributorData.tgToken, tgChatId: myDistributorData.tgChatId })
+              });
+              const result = await res.json();
+              if (result.success) showToast('✅ Telegram 推播設定已成功儲存！');
+              else throw new Error('儲存失敗');
+          } catch(e) { showToast('推播設定儲存失敗，請稍後再試', 'error'); }
       };
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
@@ -649,7 +602,7 @@
                                 </div>
                                 <button onClick={() => handleBookNow(tour)} className="w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-3 px-4 shadow-md transition-all text-lg mb-6 rounded-xl">立即報名保留名額</button>
                                 <p className="text-center text-gray-400 text-xs font-bold mb-4">—— 聯絡專屬旅遊顧問 ——</p>
-                                {currentDist?.phone && (<a href={`tel:${formatPhone(currentDist.phone)}`} className="w-full bg-[#2a303c] hover:bg-black text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center mb-3 rounded-lg"><span className="mr-2">📞</span> 聯絡電話：{formatPhone(currentDist.phone)}</a>)}
+                                {currentDist?.phone && (<a href={`tel:${formatPhone(currentDist.phone)}`} className="w-full bg-[#2a303c] hover:bg-black text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center mb-3 rounded-lg"><span className="mr-2">📞</span> 聯絡電話：{currentDist.name}</a>)}
                                 {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 私訊顧問 LINE</a>)}
                                 {!currentDist?.phone && !currentDist?.lineLink && (<button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 聯絡官方客服</button>)}
                             </div>
@@ -747,8 +700,32 @@
         const confirmedCommission = distributorStats.orders.filter(o => (o.orderStatus === '已完成' || o.orderStatus === '已出發') && o.paymentStatus === '已付款').reduce((sum, o) => sum + Number(o.commissionAmount || 0), 0);
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
+            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
+            
             {distributorStatus === 'approved' && (<>
+                {/* ★ 新增：Telegram 推播設定區塊 */}
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mt-8 mb-12">
+                    <div className="p-6 md:p-8 border-b border-gray-100 bg-blue-50 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold text-blue-800 flex items-center"><Send className="w-6 h-6 mr-3" /> Telegram 訂單自動推播設定</h2>
+                            <p className="text-blue-600 mt-2 text-sm">設定您的專屬機器人，當有客戶透過您的連結下單時，將即時發送訂單明細給您！</p>
+                        </div>
+                    </div>
+                    <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Bot Token (金鑰)</label>
+                            <input type="text" value={myDistributorData?.tgToken || ''} onChange={e => setMyDistributorData({...myDistributorData, tgToken: e.target.value})} className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 font-mono text-sm" placeholder="例如：123456789:ABCDefghIJKLmnop..." />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Chat ID (對話 ID)</label>
+                            <input type="text" value={myDistributorData?.tgChatId || ''} onChange={e => setMyDistributorData({...myDistributorData, tgChatId: e.target.value})} className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 font-mono text-sm" placeholder="例如：123456789" />
+                        </div>
+                        <div className="md:col-span-2 flex justify-end mt-2">
+                            <button onClick={saveMyTgSettings} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition text-lg flex items-center"><CheckCircle className="w-5 h-5 mr-2" /> 儲存推播設定</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center relative overflow-hidden"><div className="bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><BadgeDollarSign className="w-8 h-8 text-emerald-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積總銷售額</p><p className="text-3xl font-black text-gray-800">${totalSales.toLocaleString()}</p></div></div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 flex items-center relative overflow-hidden"><div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><FileCheck className="w-8 h-8 text-blue-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積預估分潤</p><p className="text-3xl font-black text-gray-800">${totalCommission.toLocaleString()}</p></div></div>
@@ -766,7 +743,7 @@
                 <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
                     <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-emerald-600" /> 我的經銷業績明細</h2><p className="text-gray-500 mt-2">追蹤專屬客戶與訂單進度，預估分潤金額將於訂單確認後生效。</p></div>
-                        <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="text-emerald-600 hover:text-emerald-800 font-bold flex items-center text-sm border border-emerald-200 bg-white px-4 py-2 rounded-lg"><RefreshCw className="w-4 h-4 mr-1"/> 更新業績</button>
+                        <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="text-emerald-600 hover:text-emerald-800 font-bold flex items-center text-sm border border-emerald-200 bg-white px-4 py-2 rounded-lg shadow-sm"><RefreshCw className="w-4 h-4 mr-1"/> 更新業績</button>
                     </div>
                     <div className="p-6 md:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
                         <div className="xl:col-span-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
@@ -804,10 +781,16 @@
                       </div>
                     </div>
                     <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                      <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">系統權限與分潤設定</h3>
+                      <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">系統權限與推播設定</h3>
                       <div><label className="block text-sm font-bold text-gray-700 mb-2">開通狀態</label><select value={editFormData.status || 'pending'} onChange={e=>setEditFormData({...editFormData, status: e.target.value})} className="w-full rounded-lg border-2 border-purple-300 p-3 outline-none font-bold"><option value="pending">待審核 (停權中)</option><option value="approved">✅ 已核准開通</option></select></div>
                       <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">專屬分潤比例 (%)</label><input type="number" value={editFormData.commission || ''} onChange={e=>setEditFormData({...editFormData, commission: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 outline-none text-lg font-bold text-red-500" placeholder="例如：10" /></div>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">內部審核備註</label><textarea rows="3" value={editFormData.note || ''} onChange={e=>setEditFormData({...editFormData, note: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 outline-none" placeholder="輸入備註事項..." /></div>
+                      {/* ★ CRM 管理員也可檢視或修改經銷商的 TG 金鑰 */}
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                        <label className="block text-xs font-bold text-blue-800 mb-1">Telegram Bot Token (推播金鑰)</label>
+                        <input type="text" value={editFormData.tgToken || ''} onChange={e=>setEditFormData({...editFormData, tgToken: e.target.value})} className="w-full rounded-lg border border-blue-200 bg-white p-2 mb-3 outline-none font-mono text-xs"/>
+                        <label className="block text-xs font-bold text-blue-800 mb-1">Telegram Chat ID</label>
+                        <input type="text" value={editFormData.tgChatId || ''} onChange={e=>setEditFormData({...editFormData, tgChatId: e.target.value})} className="w-full rounded-lg border border-blue-200 bg-white p-2 outline-none font-mono text-xs"/>
+                      </div>
                     </div>
                   </div>
               </div>
@@ -826,7 +809,7 @@
             <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
               <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center">
                   <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 訂單與客戶管理</h2><p className="text-gray-500 mt-2">檢視全站訂單並更新處理進度、一般會員名單，審核經銷商資格。</p></div>
-                  <button onClick={() => fetchFullCrmData()} className="text-purple-600 hover:text-purple-800 font-bold flex items-center text-sm bg-white px-4 py-2 border border-purple-200 rounded-lg"><RefreshCw className="w-4 h-4 mr-1"/> 重新整理</button>
+                  <button onClick={() => fetchFullCrmData()} className="text-purple-600 hover:text-purple-800 font-bold flex items-center text-sm bg-white px-4 py-2 border border-purple-200 rounded-lg shadow-sm"><RefreshCw className="w-4 h-4 mr-1"/> 重新整理</button>
               </div>
               <div className="flex border-b border-gray-200 px-6 pt-4 bg-gray-50 overflow-x-auto">
                 <button onClick={() => setCrmSubTab('orders')} className={`pb-3 px-6 font-bold text-lg transition-colors whitespace-nowrap ${crmSubTab === 'orders' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>全站訂單總覽</button>
