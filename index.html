@@ -107,7 +107,7 @@
         };
     };
 
-    // ★ 核心解析器：自動將文案中的圖片 URL 轉換為唯美的全版圖片 ★
+    // ★ 核心解析器：自動將文案中的圖片 URL 轉換為唯美的全版圖片，並解鎖所有版面限制 ★
     const renderBlogDescription = (text) => {
       if (!text) return null;
       return text.split('\n').map((line, idx) => {
@@ -117,22 +117,28 @@
         // 判斷是否為 Markdown 圖片 ![alt](url)
         const mdMatch = trimmedLine.match(/^!\[(.*?)\]\((.*?)\)$/);
         if (mdMatch) {
-            return <img key={idx} src={mdMatch[2]} alt={mdMatch[1]} className="w-full rounded-2xl my-8 shadow-md object-cover" />;
+            return (
+                <div key={idx} className="my-10 text-center w-full relative">
+                    {/* 防破圖機制：若載入失敗則隱藏圖片，顯示下方的 a 連結 */}
+                    <img src={mdMatch[2]} alt={mdMatch[1]} className="w-full rounded-3xl shadow-lg object-cover mx-auto" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'inline-block'; }} />
+                    <a href={mdMatch[2]} target="_blank" rel="noreferrer" className="text-blue-500 underline break-all hidden hover:text-blue-700 bg-white p-4 rounded-xl shadow-sm mx-auto">{mdMatch[2]}</a>
+                </div>
+            );
         }
 
-        // 判斷是否為獨立的圖片網址 (以 http 開頭，並確保沒有多餘的文字)
+        // 判斷是否為獨立的 URL (包含圖片網址或被誤貼的網頁網址)
         if (trimmedLine.startsWith('http') && !trimmedLine.includes(' ')) {
-            const isImage = trimmedLine.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || 
-                            trimmedLine.includes('googleusercontent.com/d/') ||
-                            trimmedLine.includes('unsplash.com') ||
-                            trimmedLine.includes('pollinations.ai');
-            if (isImage) {
-                return <img key={idx} src={trimmedLine} className="w-full rounded-3xl my-10 shadow-xl object-cover border border-gray-100" />;
-            }
+            return (
+                 <div key={idx} className="my-10 text-center w-full relative">
+                     {/* 防破圖機制：若是真實圖片就會滿版渲染，若是網頁 URL 則會優雅降級變成超連結 */}
+                     <img src={trimmedLine} alt="Blog Content" className="w-full rounded-3xl shadow-lg object-cover mx-auto" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'inline-block'; }} />
+                     <a href={trimmedLine} target="_blank" rel="noreferrer" className="text-blue-500 underline break-all hidden hover:text-blue-700 bg-white p-4 rounded-xl shadow-sm mx-auto">{trimmedLine}</a>
+                 </div>
+            );
         }
 
-        // 一般段落文字
-        return <p key={idx} className="mb-4 text-[1.1rem] leading-loose text-gray-700 tracking-wide">{trimmedLine}</p>;
+        // 一般段落文字：取消了原本的灰色背景與包框，改為大字體、高行距的雜誌風排版
+        return <p key={idx} className="mb-6 text-[1.15rem] md:text-[1.25rem] leading-relaxed text-gray-700 tracking-wide text-justify">{trimmedLine}</p>;
       });
     };
 
@@ -581,7 +587,7 @@
             {activeTab === 'home' && (
               <div className="w-full animate-fade-in pb-12">
                 
-                {/* ★ 升級版專屬網頁 (Blog Detail View) - 解放版面與支援圖片渲染 ★ */}
+                {/* ★ 終極解放版：專屬網頁 (Blog Detail View) ★ */}
                 {selectedTourId ? (() => {
                   const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
                   if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={() => {setSelectedTourId(null); window.history.pushState({}, '', '?tab=home');}} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
@@ -592,59 +598,54 @@
                         <ArrowLeft className="w-5 h-5 mr-2 transform group-hover:-translate-x-1 transition-transform" /> 返回所有行程
                       </button>
                       
-                      <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
-                        {/* 滿版超大主圖，沒有邊界 */}
-                        <div className="h-[400px] md:h-[500px] lg:h-[600px] relative bg-gray-100">
-                          <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
-                          <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-5 py-2 rounded-xl text-lg font-bold shadow-lg tracking-wider">
-                            {tour.region}
+                      {/* 滿版超大主圖，拔除多餘外框限制 */}
+                      <div className="h-[400px] md:h-[500px] lg:h-[600px] relative rounded-[2rem] overflow-hidden shadow-xl mb-10 border border-gray-100">
+                        <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
+                        <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-5 py-2 rounded-xl text-lg font-bold shadow-lg tracking-wider">
+                          {tour.region}
+                        </div>
+                      </div>
+                      
+                      <div className="max-w-[850px] mx-auto">
+                        <div className="flex flex-col lg:flex-row justify-between lg:items-end border-b border-gray-200 pb-8 mb-10 gap-6">
+                          <div className="flex-1">
+                            <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-6 leading-tight">{tour.title}</h1>
+                            <div className="flex flex-wrap items-center text-gray-600 font-bold text-lg gap-6">
+                              <span className="flex items-center"><Calendar className="w-6 h-6 mr-2 text-blue-500" /> {tour.days} 天精華行程</span>
+                              {tour.startDate && <span className="flex items-center"><Navigation className="w-6 h-6 mr-2 text-blue-500" /> 出發日：{tour.startDate}</span>}
+                              {tour.endDate && <span className="flex items-center text-gray-400">至 {tour.endDate}</span>}
+                            </div>
+                          </div>
+                          <div className="lg:text-right bg-white p-6 rounded-2xl shadow-sm border border-red-100 min-w-[250px]">
+                            <p className="text-sm text-red-800 font-black tracking-widest mb-1 uppercase">專案優惠價</p>
+                            <p className="text-4xl md:text-5xl font-black text-red-600">
+                              <span className="text-2xl mr-1">TWD</span>{Number(tour.price).toLocaleString()}
+                            </p>
                           </div>
                         </div>
                         
-                        <div className="p-6 md:p-10 lg:p-16">
-                          <div className="flex flex-col lg:flex-row justify-between lg:items-end border-b border-gray-100 pb-8 mb-10 gap-6">
-                            <div className="flex-1">
-                              <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-6 leading-tight">{tour.title}</h1>
-                              <div className="flex flex-wrap items-center text-gray-600 font-bold text-lg gap-6">
-                                <span className="flex items-center"><Calendar className="w-6 h-6 mr-2 text-blue-500" /> {tour.days} 天精華行程</span>
-                                {tour.startDate && <span className="flex items-center"><Navigation className="w-6 h-6 mr-2 text-blue-500" /> 出發日：{tour.startDate}</span>}
-                                {tour.endDate && <span className="flex items-center text-gray-400">至 {tour.endDate}</span>}
+                        {/* ★ 解放版面的部落格內文區：無灰色包框，享受極致閱讀體驗 ★ */}
+                        <div className="mb-16">
+                          <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-8 flex items-center border-b-2 border-blue-500 pb-4 inline-flex">
+                            <Sparkles className="w-8 h-8 mr-3 text-blue-500" /> 行程亮點與詳細介紹
+                          </h3>
+                          <div className="text-gray-800">
+                            {renderBlogDescription(tour.description)}
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl p-10 text-center text-white shadow-xl relative overflow-hidden mb-12">
+                          <div className="relative z-10">
+                              <h3 className="text-3xl font-black mb-4">準備好開始您的專屬旅程了嗎？</h3>
+                              <p className="text-blue-100 text-lg mb-8 font-medium">您的專屬旅遊顧問已準備好為您服務，點擊下方按鈕立即聯繫！</p>
+                              <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+                                  <button onClick={() => { window.location.href = LOGIN_URL + '?type=user&ref_uid=' + refUid; }} className="bg-white text-blue-700 hover:bg-gray-50 font-black py-4 px-10 rounded-2xl shadow-xl transition-all text-xl w-full sm:w-auto flex items-center justify-center">
+                                      <MessageCircle className="w-6 h-6 mr-3" /> 立即報名 / 聯絡專屬顧問
+                                  </button>
                               </div>
-                            </div>
-                            <div className="lg:text-right bg-red-50 p-6 rounded-2xl border border-red-100 min-w-[250px]">
-                              <p className="text-sm text-red-800 font-black tracking-widest mb-1 uppercase">專案優惠價</p>
-                              <p className="text-4xl md:text-5xl font-black text-red-600">
-                                <span className="text-2xl mr-1">TWD</span>{Number(tour.price).toLocaleString()}
-                              </p>
-                            </div>
                           </div>
-                          
-                          {/* ★ 解放版面的部落格內文區：無灰色包框、自動解析圖片、超大行距與字體 ★ */}
-                          <div className="max-w-4xl mx-auto mb-16">
-                            <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-8 flex items-center border-b-2 border-blue-500 pb-4 inline-flex">
-                              <Sparkles className="w-8 h-8 mr-3 text-blue-500" /> 行程亮點與詳細介紹
-                            </h3>
-                            <div className="text-gray-800 text-[1.1rem] leading-relaxed font-medium tracking-wide">
-                              {renderBlogDescription(tour.description)}
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl p-10 text-center text-white shadow-lg relative overflow-hidden">
-                            <div className="relative z-10">
-                                <h3 className="text-3xl font-black mb-4">準備好開始您的專屬旅程了嗎？</h3>
-                                <p className="text-blue-100 text-lg mb-8 font-medium">您的專屬旅遊顧問已準備好為您服務，點擊下方按鈕立即聯繫！</p>
-                                
-                                <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                                    <button onClick={() => {
-                                        window.location.href = LOGIN_URL + '?type=user&ref_uid=' + refUid;
-                                    }} className="bg-white text-blue-700 hover:bg-gray-50 font-black py-4 px-10 rounded-2xl shadow-xl transition-all text-xl w-full sm:w-auto flex items-center justify-center">
-                                        <MessageCircle className="w-6 h-6 mr-3" /> 立即報名 / 聯絡專屬顧問
-                                    </button>
-                                </div>
-                            </div>
-                            <Sparkles className="absolute top-10 left-10 w-24 h-24 text-white opacity-10 animate-pulse" />
-                            <Navigation className="absolute bottom-10 right-10 w-32 h-32 text-white opacity-10 transform rotate-45" />
-                          </div>
+                          <Sparkles className="absolute top-10 left-10 w-24 h-24 text-white opacity-10 animate-pulse" />
+                          <Navigation className="absolute bottom-10 right-10 w-32 h-32 text-white opacity-10 transform rotate-45" />
                         </div>
                       </div>
                     </div>
