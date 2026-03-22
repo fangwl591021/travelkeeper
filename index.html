@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 平台級智能業務系統 (v3.8 版面優化版)</title>
+  <title>旅遊管家 - 平台級智能業務系統 (v3.9 版面優化版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -28,7 +28,7 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
@@ -53,6 +53,7 @@
     const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
     const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
     const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
+    const ArrowUp = ({ className }) => <IconWrapper className={className}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></IconWrapper>;
     const ClipboardList = ({ className }) => <IconWrapper className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
     const CopyIcon = ({ className }) => <IconWrapper className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
     const LinkIcon = ({ className }) => <IconWrapper className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconWrapper>;
@@ -241,9 +242,10 @@
       const [editingDistributor, setEditingDistributor] = useState(null);
       const [editFormData, setEditFormData] = useState({});
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
-
-      // ★ 新增：經銷商個人資料設定彈窗狀態
       const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+      // Ref for scroll-to-top in article
+      const articleTopRef = useRef(null);
 
       const getTimestamp = () => new Date().getTime();
 
@@ -534,7 +536,6 @@
           } catch (err) { showToast('轉換失敗，請確認 Token 是否正確', 'error'); }
       };
 
-      // ★ 儲存經銷商自行設定的資料
       const saveMySettings = async () => {
           try {
               const res = await fetch(`${WORKER_URL}/api/itineraries`, { 
@@ -627,55 +628,145 @@
         </nav>
       );
 
+      // ★ Helper: scroll article area to top
+      const scrollArticleToTop = () => {
+        if (articleTopRef.current) {
+          articleTopRef.current.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      };
+
+      const goBackToList = () => {
+        setSelectedTourId(null);
+        setTourDetailTab('itinerary');
+        window.history.pushState({}, '', '?tab=home');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
       const renderHomeTab = () => {
         if (selectedTourId) {
             const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
-            if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={() => {setSelectedTourId(null); window.history.pushState({}, '', '?tab=home');}} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
+            if (!tour) return isLoading ? <div className="text-center py-32 text-gray-500"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入行程中...</p></div> : <div className="text-center py-32"><p className="text-2xl font-bold text-gray-600">找不到此行程</p><button onClick={goBackToList} className="mt-4 font-bold text-blue-500">返回首頁</button></div>;
             const currentDist = crmDistributors.find(d => String(d.uid) === String(refUid)) || myDistributorData;
+
+            // ★ Price card component (reused in mobile & desktop)
+            const PriceCard = () => (
+              <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-2xl">
+                <div className="bg-[#b82337] text-white p-6 text-center">
+                  <p className="text-xs font-bold tracking-widest mb-1 opacity-90">專案特惠價</p>
+                  <p className="text-4xl font-black"><span className="text-lg font-medium mr-1">TWD</span>{Number(tour.price).toLocaleString()}</p>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4 mb-6 border-b border-gray-100 pb-6">
+                    <div className="flex items-center text-gray-800 text-base font-bold"><div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center mr-3"><Calendar className="w-5 h-5 text-[#b82337]" /></div>{tour.days} 天精彩行程</div>
+                    {tour.startDate && (<div className="flex items-center text-gray-800 text-base font-bold"><div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center mr-3"><Navigation className="w-5 h-5 text-[#b82337]" /></div>出發日：{tour.startDate}</div>)}
+                  </div>
+                  <button onClick={() => handleBookNow(tour)} className="w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-3 px-4 shadow-md transition-all text-lg mb-6 rounded-xl">立即報名保留名額</button>
+                  <p className="text-center text-gray-400 text-xs font-bold mb-4">—— 聯絡專屬旅遊顧問 ——</p>
+                  {currentDist?.phone && (<a href={`tel:${formatPhone(currentDist.phone)}`} className="w-full bg-[#2a303c] hover:bg-black text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center mb-3 rounded-lg"><span className="mr-2">📞</span> 聯絡電話：{currentDist.name}</a>)}
+                  {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 私訊顧問 LINE</a>)}
+                  {!currentDist?.phone && !currentDist?.lineLink && (<button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 聯絡官方客服</button>)}
+                </div>
+              </div>
+            );
+
             return (
-              <div className="w-full bg-white min-h-screen animate-fade-in pb-20 overflow-x-hidden">
+              <div ref={articleTopRef} className="w-full bg-white min-h-screen animate-fade-in pb-20 overflow-x-hidden">
+                  {/* Hero Image */}
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
                       <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                      <div className="absolute bottom-0 left-0 w-full pb-16"><div className="max-w-[1400px] mx-auto px-6 lg:px-12"><div className="flex gap-3 mb-6"><span className="bg-[#b82337] text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.region}</span><span className="bg-black/50 backdrop-blur-sm text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.days} 天精華</span></div><h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-tight drop-shadow-2xl">{tour.title}</h1></div></div>
-                  </div>
-                  <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
-                      <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center h-16">
-                          <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
-                            <button onClick={() => setTourDetailTab('itinerary')} className={`h-full px-4 transition-colors ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-4 border-[#b82337]' : 'hover:text-[#b82337]'}`}>行程介紹與內容</button>
-                            <button onClick={() => setTourDetailTab('notes')} className={`h-full px-4 transition-colors ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-4 border-[#b82337]' : 'hover:text-[#b82337]'}`}>注意事項</button>
+                      <div className="absolute bottom-0 left-0 w-full pb-16">
+                        <div className="max-w-[1400px] mx-auto px-6 lg:px-16">
+                          <div className="flex gap-3 mb-6">
+                            <span className="bg-[#b82337] text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.region}</span>
+                            <span className="bg-black/50 backdrop-blur-sm text-white px-5 py-1.5 text-sm font-bold tracking-widest">{tour.days} 天精華</span>
                           </div>
-                          <button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
+                          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white leading-tight drop-shadow-2xl">{tour.title}</h1>
+                        </div>
                       </div>
                   </div>
-                  <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-10 relative items-start">
-                    <div className="flex-1 w-full min-w-0 pr-0 lg:pr-8 overflow-hidden">
-                        <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
-                        <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200"><button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>行程介紹</button><button onClick={() => setTourDetailTab('notes')} className={`pb-2 font-bold ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>注意事項</button></div>
-                        <div className="pb-10 w-full min-w-0 animate-fade-in break-words">
-                          {tourDetailTab === 'itinerary' ? renderAgencyBlogDescription(tour.description) : (<div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide whitespace-pre-wrap font-medium">{tour.notes || '目前此行程尚無特殊注意事項。'}</div>)}
-                        </div>
+
+                  {/* Desktop Tab Bar */}
+                  <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
+                    <div className="max-w-[1400px] mx-auto px-6 lg:px-16 flex justify-between items-center h-16">
+                      <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
+                        <button onClick={() => setTourDetailTab('itinerary')} className={`h-full px-4 transition-colors ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-4 border-[#b82337]' : 'hover:text-[#b82337]'}`}>行程介紹與內容</button>
+                        <button onClick={() => setTourDetailTab('notes')} className={`h-full px-4 transition-colors ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-4 border-[#b82337]' : 'hover:text-[#b82337]'}`}>注意事項</button>
+                      </div>
+                      <button onClick={goBackToList} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition">
+                        <ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽
+                      </button>
                     </div>
-                    <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 lg:sticky lg:top-[150px] self-start z-10">
-                        <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-2xl">
-                            <div className="bg-[#b82337] text-white p-6 text-center"><p className="text-xs font-bold tracking-widest mb-1 opacity-90">專案特惠價</p><p className="text-4xl font-black"><span className="text-lg font-medium mr-1">TWD</span>{Number(tour.price).toLocaleString()}</p></div>
-                            <div className="p-6">
-                                <div className="space-y-4 mb-6 border-b border-gray-100 pb-6">
-                                    <div className="flex items-center text-gray-800 text-base font-bold"><div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center mr-3"><Calendar className="w-5 h-5 text-[#b82337]" /></div>{tour.days} 天精彩行程</div>
-                                    {tour.startDate && (<div className="flex items-center text-gray-800 text-base font-bold"><div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center mr-3"><Navigation className="w-5 h-5 text-[#b82337]" /></div>出發日：{tour.startDate}</div>)}
-                                </div>
-                                <button onClick={() => handleBookNow(tour)} className="w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-3 px-4 shadow-md transition-all text-lg mb-6 rounded-xl">立即報名保留名額</button>
-                                <p className="text-center text-gray-400 text-xs font-bold mb-4">—— 聯絡專屬旅遊顧問 ——</p>
-                                {currentDist?.phone && (<a href={`tel:${formatPhone(currentDist.phone)}`} className="w-full bg-[#2a303c] hover:bg-black text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center mb-3 rounded-lg"><span className="mr-2">📞</span> 聯絡電話：{currentDist.name}</a>)}
-                                {currentDist?.lineLink && (<a href={currentDist.lineLink} target="_blank" className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 私訊顧問 LINE</a>)}
-                                {!currentDist?.phone && !currentDist?.lineLink && (<button onClick={() => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; }} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-2.5 px-4 shadow-md transition-all text-sm flex items-center justify-center rounded-lg mb-3"><span className="mr-2">💬</span> 聯絡官方客服</button>)}
-                            </div>
+                  </div>
+
+                  {/* ★ Mobile: Price card shown at top on small screens */}
+                  <div className="block lg:hidden px-4 pt-6">
+                    <PriceCard />
+                  </div>
+
+                  {/* ★ Main two-column layout — wider article, fixed sidebar */}
+                  <div className="max-w-[1400px] mx-auto px-6 md:px-10 lg:px-16 py-10 flex flex-col lg:flex-row gap-14 relative items-start">
+
+                    {/* ★ Article column — takes all remaining space */}
+                    <div className="flex-1 w-full min-w-0 overflow-hidden">
+                      {/* Mobile: back button + tab switcher */}
+                      <div className="md:hidden mb-8">
+                        <button onClick={goBackToList} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition">
+                          <ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽
+                        </button>
+                      </div>
+                      <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200">
+                        <button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>行程介紹</button>
+                        <button onClick={() => setTourDetailTab('notes')} className={`pb-2 font-bold ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>注意事項</button>
+                      </div>
+
+                      {/* Article content */}
+                      <div className="pb-10 w-full min-w-0 animate-fade-in break-words">
+                        {tourDetailTab === 'itinerary'
+                          ? renderAgencyBlogDescription(tour.description)
+                          : (<div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide whitespace-pre-wrap font-medium">{tour.notes || '目前此行程尚無特殊注意事項。'}</div>)
+                        }
+                      </div>
+
+                      {/* ★ Bottom navigation bar — scroll to top & back to list */}
+                      <div className="border-t-2 border-dashed border-gray-200 pt-10 pb-6 mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <button
+                          onClick={scrollArticleToTop}
+                          className="flex items-center gap-2 text-gray-500 hover:text-[#b82337] font-bold transition group bg-gray-50 hover:bg-red-50 border border-gray-200 hover:border-red-200 px-6 py-3 rounded-xl"
+                        >
+                          <ArrowUp className="w-5 h-5 group-hover:text-[#b82337] transition" />
+                          回到頁面頂端
+                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleBookNow(tour)}
+                            className="bg-[#b82337] hover:bg-red-800 text-white font-bold px-8 py-3 rounded-xl shadow-md transition-all"
+                          >
+                            立即報名
+                          </button>
+                          <button
+                            onClick={goBackToList}
+                            className="flex items-center gap-2 text-gray-500 hover:text-[#b82337] font-bold transition group bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 px-6 py-3 rounded-xl"
+                          >
+                            <ArrowLeft className="w-5 h-5" />
+                            返回行程列表
+                          </button>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* ★ Sidebar — sticky, only shown on desktop (lg+), price card hidden on mobile since shown above */}
+                    <div className="hidden lg:block w-[340px] xl:w-[370px] flex-shrink-0 sticky top-[130px] self-start z-10">
+                      <PriceCard />
                     </div>
                   </div>
               </div>
             );
         }
+
+        // Home listing view
         return (
           <div className="w-full animate-fade-in pb-12">
             <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
@@ -777,7 +868,6 @@
         
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            {/* ★ 更新版：右上角加入設定按鈕 */}
             <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}>
               <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 justify-between">
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
@@ -925,7 +1015,6 @@
                   </table></div>
                 ) : (
                   <div className="flex flex-col h-full">
-                      {/* ★ CRM 訂單搜尋區 */}
                       <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
                           <span className="font-bold text-gray-700 flex items-center">總覽篩選結果 <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs ml-3">{filteredCrmOrders.length} 筆</span></span>
                           <div className="flex gap-2 w-full md:w-auto">
@@ -1025,7 +1114,6 @@
         );
       };
 
-      // ★ 完整渲染 Modals (包含經銷商個人資料設定彈窗)
       const renderModals = () => (
           <>
             {showSettingsModal && (
@@ -1165,7 +1253,6 @@
             {activeTab === 'crm' && renderCrmTab()}
             {activeTab === 'admin' && renderAdminEditorTab()}
           </div>
-          {/* Modal / Toasts Layer */}
           {renderModals()}
           {toast && (<div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up"><div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div></div>)}
         </div>
