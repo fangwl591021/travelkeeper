@@ -242,6 +242,17 @@
       const [editFormData, setEditFormData] = useState({});
       const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+      // ★ 推廣名片功能
+      const [distCardMode, setDistCardMode] = useState('single'); // 'single' | 'multi'
+      const [distSelectedIds, setDistSelectedIds] = useState(new Set());
+      const [flexModalItem, setFlexModalItem] = useState(null);
+      const [cardOptions, setCardOptions] = useState({ phone:false, line:false, lineAt:false, fb:false, web:false, map:false });
+      const [multiFlexOpen, setMultiFlexOpen] = useState(false);
+      const [multiHeroUrl, setMultiHeroUrl] = useState('');
+      const [multiBtnColor, setMultiBtnColor] = useState('#00B900');
+      const [multiBtnTxt, setMultiBtnTxt] = useState('#FFFFFF');
+      const [multiSocOpts, setMultiSocOpts] = useState({ YT:false, FB:false, IG:false, LINE:false, MAP:false, TEL:false });
+
       const articleTopRef = useRef(null);
       const priceCardAnchorRef = useRef(null);
       const articleBodyRef = useRef(null);
@@ -395,10 +406,131 @@
       const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid || ''}`; };
       const loginAsMember      = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; };
 
-      // ★ 開啟推廣工具 (新分頁)
-      const openModelTool = () => {
+      // ★ 單張名片 Modal
+      const openFlexModal = (item) => {
+        setCardOptions({ phone:false, line:false, lineAt:false, fb:false, web:false, map:false });
+        setFlexModalItem(item);
+      };
+
+      const fallbackCopy = (text) => {
+        const ta = document.createElement('textarea'); ta.value = text;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); showToast('✅ 網址已成功複製！'); } catch { showToast('❌ 複製失敗','error'); }
+        document.body.removeChild(ta);
+      };
+
+      const handleCopyUrl = (type) => {
+        const optsStr = [cardOptions.phone,cardOptions.line,cardOptions.lineAt,cardOptions.fb,cardOptions.web,cardOptions.map].map(b=>b?'1':'0').join('');
         const uid = liffProfile?.userId || '';
-        window.open(`${MODEL_URL}?r=${uid}`, '_blank');
+        let url = '';
+        if (type==='share') url = `https://liff.line.me/${LIFF_ID}?action=share&t=${flexModalItem.id}&r=${uid}&o=${optsStr}`;
+        else if (type==='send') url = `https://liff.line.me/${LIFF_ID}?action=send&t=${flexModalItem.id}&r=${uid}&o=${optsStr}`;
+        else if (type==='web')  url = `${ENDPOINT_URL}?t=${flexModalItem.id}&r=${uid}`;
+        if (!navigator.clipboard) { fallbackCopy(url); return; }
+        navigator.clipboard.writeText(url).then(() => showToast('✅ 網址已成功複製！')).catch(() => fallbackCopy(url));
+      };
+
+      const triggerFlexSharing = async () => {
+        if (!flexModalItem || !liffProfile) return;
+        const optsStr = [cardOptions.phone,cardOptions.line,cardOptions.lineAt,cardOptions.fb,cardOptions.web,cardOptions.map].map(b=>b?'1':'0').join('');
+        const opts = { phone:optsStr[0]==='1',line:optsStr[1]==='1',lineAt:optsStr[2]==='1',fb:optsStr[3]==='1',web:optsStr[4]==='1',map:optsStr[5]==='1' };
+        const flexMsg = buildFlexMessage(flexModalItem, myDistributorData||{}, liffProfile.userId, opts);
+        try { await liff.shareTargetPicker([flexMsg]); }
+        catch(e) {
+          const url = `https://liff.line.me/${LIFF_ID}?action=share&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
+          if (!navigator.clipboard) { fallbackCopy(url); return; }
+          navigator.clipboard.writeText(url).then(()=>showToast('✅ 已複製分享連結！')).catch(()=>fallbackCopy(url));
+        }
+      };
+
+      // ★ 多頁名片 Flex 建立
+      const SOC_ICONS_MAP = {
+        YT:'https://aiwe.cc/wp-content/uploads/2026/02/87e6f8054bd3672f2885e38bddb112e2.png',
+        FB:'https://aiwe.cc/wp-content/uploads/2026/02/3986d1fd62384c8cdaa0e7c82f2740d1.png',
+        IG:'https://aiwe.cc/wp-content/uploads/2026/02/0089b4a4960e49eba9140544307711c6.png',
+        LINE:'https://aiwe.cc/wp-content/uploads/2026/02/b75a5831fd553c7130aeafbb9783cf79.png',
+        MAP:'https://aiwe.cc/wp-content/uploads/2026/02/5af1a3a285c2bdee4192223e31e1f833.png',
+        TEL:'https://aiwe.cc/wp-content/uploads/2026/02/7254567388850a6b4d77b75208ebd4b8.png',
+      };
+      const SOC_URLS_MAP = () => ({
+        YT: myDistributorData?.webLink||'https://youtube.com',
+        FB: myDistributorData?.fbLink||'https://facebook.com',
+        IG: myDistributorData?.webLink||'https://instagram.com',
+        LINE: myDistributorData?.lineAtLink||myDistributorData?.lineLink||'https://line.me',
+        MAP: myDistributorData?.mapLink||'https://maps.google.com',
+        TEL: myDistributorData?.phone ? `tel:${formatPhone(myDistributorData.phone)}` : 'https://line.me',
+      });
+
+      const buildV3Flex = (items) => {
+        const uid = liffProfile?.userId || '';
+        const heroUrl = multiHeroUrl || (items[0]?.image) || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80';
+        const btnColor = multiBtnColor || '#00B900';
+        const btnTxt   = multiBtnTxt   || '#FFFFFF';
+        const socUrls  = SOC_URLS_MAP();
+        const bodyContents = items.flatMap((item, i) => {
+          const trackingUrl = `${ENDPOINT_URL}?t=${item.id}&r=${uid}`;
+          const row = {
+            type:'box', layout:'horizontal', paddingAll:'5px',
+            contents:[
+              { type:'image', url:item.image||'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400&q=70', size:'sm', aspectMode:'cover', aspectRatio:'1:1', flex:1 },
+              { type:'box', layout:'vertical', flex:4, offsetStart:'8px', contents:[
+                { type:'text', text:item.title, size:'xs', wrap:true, color:'#111111', weight:'bold' },
+                { type:'text', text:`NT$ ${Number(item.price).toLocaleString()}`, weight:'bold', size:'xs', color:'#FF0000', margin:'xs' },
+              ]},
+              { type:'box', layout:'vertical', width:'36px', height:'36px', backgroundColor:btnColor, cornerRadius:'100px', justifyContent:'center', alignItems:'center', flex:0,
+                contents:[{ type:'text', text:'報名', color:btnTxt, size:'xxs', weight:'bold', align:'center' }],
+                action:{ type:'uri', uri:trackingUrl }
+              }
+            ]
+          };
+          return i < items.length-1 ? [row,{type:'separator',color:'#F0F0F0'}] : [row];
+        });
+        bodyContents.push({ type:'box', layout:'vertical', height:'8px', contents:[] });
+        const checkedSocs = Object.entries(multiSocOpts).filter(([,v])=>v).map(([k])=>k);
+        const footerContents = checkedSocs.length > 0
+          ? checkedSocs.map(k=>({ type:'image', url:SOC_ICONS_MAP[k]||'', size:'xs', aspectRatio:'1:1', animated:true, action:{ type:'uri', uri:socUrls[k]||'https://line.me' } }))
+          : [{ type:'text', text:'立即報名精選行程', size:'xs', color:'#aaaaaa', align:'center' }];
+        return {
+          type:'flex', altText:`精選 ${items.length} 個推薦行程`,
+          contents:{ type:'bubble', size:'giga',
+            hero:{ type:'box', layout:'vertical', paddingAll:'0px', contents:[{ type:'image', url:heroUrl, size:'full', aspectRatio:'12:5', aspectMode:'cover' }] },
+            body:{ type:'box', layout:'vertical', paddingAll:'0px', contents:bodyContents },
+            footer:{ type:'box', layout:'horizontal', paddingAll:'10px', contents:footerContents, justifyContent:'center', spacing:'lg' }
+          }
+        };
+      };
+
+      // ★ 多選操作
+      const toggleDistCard = (id) => {
+        const sid = String(id);
+        setDistSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(sid)) { next.delete(sid); } else { if (next.size < 8) next.add(sid); else { showToast('最多只能選 8 個行程'); } }
+          return next;
+        });
+      };
+
+      const openMultiModal = () => {
+        const items = [...distSelectedIds].map(id=>itineraries.find(t=>String(t.id)===id)).filter(Boolean);
+        if (!items.length) return;
+        if (!multiHeroUrl && items[0]?.image) setMultiHeroUrl(items[0].image);
+        setMultiFlexOpen(true);
+      };
+
+      const multiShareAction = async (type) => {
+        const items = [...distSelectedIds].map(id=>itineraries.find(t=>String(t.id)===id)).filter(Boolean);
+        if (!items.length) return;
+        const flex = buildV3Flex(items);
+        if (type==='copy') {
+          const txt = JSON.stringify(flex, null, 2);
+          if (!navigator.clipboard) { fallbackCopy(txt); return; }
+          navigator.clipboard.writeText(txt).then(()=>showToast('✅ Flex JSON 已複製！貼到 LINE OA 使用')).catch(()=>fallbackCopy(txt));
+        } else if (type==='picker') {
+          const msg = { type:'flex', altText:`精選 ${items.length} 個推薦行程`, contents: flex.contents };
+          try { await liff.shareTargetPicker([msg]); setMultiFlexOpen(false); setDistSelectedIds(new Set()); showToast('✅ 推廣卡片已成功發送！'); }
+          catch(e) { const txt = JSON.stringify(msg,null,2); if (!navigator.clipboard) { fallbackCopy(txt); return; } navigator.clipboard.writeText(txt).then(()=>showToast('✅ 已複製 JSON')).catch(()=>fallbackCopy(txt)); }
+        }
       };
 
       const handleBookNow = (tour) => {
@@ -820,49 +952,104 @@
         ];
 
         const renderPanel = () => {
-          // ★ TOURS PANEL — 改成跳轉 model.html
+          // ★ TOURS PANEL — 內嵌單張/多頁開關
           if (distPanel === 'tours') return (
             <div className="animate-fade-in">
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">✈️ 可推廣行程</h2>
-                <span className="text-sm text-gray-400 font-medium">{itineraries.length} 個行程</span>
-              </div>
-
-              {/* ★ 推廣工具入口卡 */}
-              <div className="mb-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
-                <div className="text-white">
-                  <p className="text-lg font-black mb-1">🚀 推廣工具 (model.html)</p>
-                  <p className="text-emerald-100 text-sm">支援單選 / 多選行程，一鍵產生單一或 V3 商品列表 Flex 名片</p>
-                </div>
-                <button
-                  onClick={openModelTool}
-                  className="bg-white text-emerald-600 font-black px-8 py-3 rounded-xl shadow-md hover:bg-emerald-50 transition-all flex items-center gap-2 whitespace-nowrap text-base"
-                >
-                  <Share2 className="w-5 h-5" /> 前往推廣工具
-                </button>
-              </div>
-
-              {/* 行程預覽卡（唯讀，點擊跳轉工具） */}
-              <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-                {itineraries.map(item => (
-                  <div key={item.id} className="bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-lg transition-all overflow-hidden cursor-pointer group" style={{borderRadius:'6px'}}
-                       onClick={openModelTool}>
-                    <div className="h-44 overflow-hidden relative bg-gray-100">
-                      <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <span className="absolute top-2 left-2 bg-emerald-500 text-white px-2.5 py-1 text-xs font-bold rounded shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</span>
-                    </div>
-                    <div className="p-4">
-                      <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug mb-2">{item.title}</p>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-gray-400">{item.days} 天</span>
-                        <span className="text-base font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span>
-                      </div>
-                      <div className="w-full bg-emerald-50 text-emerald-600 text-sm font-bold py-2 rounded-lg flex items-center justify-center gap-2 border border-emerald-200">
-                        <Share2 className="w-4 h-4" /> 點此前往推廣
-                      </div>
-                    </div>
+              {/* Header row */}
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 flex-wrap gap-3">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">✈️ 可推廣行程
+                  <span className="text-sm text-gray-400 font-medium">{itineraries.length} 個</span>
+                </h2>
+                {/* ★ 單張 / 多頁 切換 */}
+                <div className="flex items-center gap-3">
+                  {distCardMode === 'multi' && distSelectedIds.size > 0 && (
+                    <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                      已選 {distSelectedIds.size} 個
+                    </span>
+                  )}
+                  <div className="flex bg-gray-100 rounded-xl p-1 text-sm font-bold">
+                    <button
+                      onClick={() => { setDistCardMode('single'); setDistSelectedIds(new Set()); }}
+                      className={`px-4 py-2 rounded-lg transition-all ${distCardMode==='single' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >單張名片</button>
+                    <button
+                      onClick={() => setDistCardMode('multi')}
+                      className={`px-4 py-2 rounded-lg transition-all ${distCardMode==='multi' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >多頁名片</button>
                   </div>
-                ))}
+                  {distCardMode === 'multi' && (
+                    <button
+                      onClick={openMultiModal}
+                      disabled={distSelectedIds.size === 0}
+                      className={`px-5 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${distSelectedIds.size > 0 ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed'}`}
+                    >
+                      <Share2 className="w-4 h-4 inline mr-1.5" />發送推廣
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 多頁提示 */}
+              {distCardMode === 'multi' && (
+                <div className="mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+                  <span className="text-2xl">☑️</span>
+                  <div>
+                    <p className="text-sm font-bold text-emerald-700">多頁名片模式</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">勾選最多 8 個行程，合併成一張 V3 商品列表 Flex 名片一起發送</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Cards grid — 全寬無限制 */}
+              <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+                {itineraries.map(item => {
+                  const isSel = distSelectedIds.has(String(item.id));
+                  return (
+                    <div key={item.id}
+                      onClick={() => distCardMode==='single' ? openFlexModal(item) : toggleDistCard(item.id)}
+                      className={`bg-white overflow-hidden cursor-pointer group transition-all relative
+                        ${distCardMode==='multi' && isSel
+                          ? 'border-2 border-emerald-500 shadow-lg shadow-emerald-100 rounded-xl'
+                          : 'border border-gray-200 hover:border-emerald-400 hover:shadow-lg rounded-xl'
+                        }`}
+                    >
+                      {/* Multi-select checkbox overlay */}
+                      {distCardMode === 'multi' && (
+                        <div className={`absolute top-2.5 left-2.5 z-10 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all
+                          ${isSel ? 'bg-emerald-500 border-emerald-500' : 'bg-black/30 border-white/80'}`}>
+                          {isSel && (
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                          )}
+                        </div>
+                      )}
+                      {/* Commission badge */}
+                      <div className="h-48 overflow-hidden relative bg-gray-100">
+                        <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <span className="absolute top-2 right-2 bg-emerald-500 text-white px-2.5 py-1 text-xs font-bold rounded-lg shadow">分潤 {myDistributorData?.commission || 10}%</span>
+                        {distCardMode==='multi' && isSel && (
+                          <div className="absolute inset-0 bg-emerald-500/10 pointer-events-none" />
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug mb-2">{item.title}</p>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm text-gray-400">{item.days} 天</span>
+                          <span className="text-base font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span>
+                        </div>
+                        {distCardMode === 'single' ? (
+                          <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm">
+                            <Share2 className="w-4 h-4" /> 產生推廣連結
+                          </button>
+                        ) : (
+                          <div className={`w-full text-sm font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 border transition-all
+                            ${isSel ? 'bg-emerald-50 text-emerald-600 border-emerald-300' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                            {isSel ? '✓ 已加入名片' : '點擊勾選'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -1224,9 +1411,168 @@
         );
       };
 
-      // ── MODALS (Flex modal 已移除，由 model.html 負責) ────────────────────
-      const renderModals = () => (
-        <>
+      // ── MODALS ────────────────────────────────────────────────────────────
+      const renderModals = () => {
+        // Preview for single flex modal
+        const SinglePreview = () => {
+          if (!flexModalItem) return null;
+          const uid = liffProfile?.userId || '';
+          const trackingUrl = `${ENDPOINT_URL}?t=${flexModalItem.id}&r=${uid}`;
+          const contactLabels = { phone:'📞 聯絡電話', line:'💬 私訊 LINE', lineAt:'🟢 官方 LINE@', fb:'👍 FB 粉絲專頁', web:'🌐 官方網站', map:'📍 門市導航' };
+          const activeKeys = Object.entries(cardOptions).filter(([,v])=>v).map(([k])=>k);
+          return (
+            <div className="w-full max-w-[270px] bg-white rounded-[18px] overflow-hidden shadow-2xl border-[3px] border-slate-800">
+              <div className="relative" style={{aspectRatio:'20/13',overflow:'hidden',background:'#e2e8f0'}}>
+                <img src={flexModalItem.image||''} className="w-full h-full object-cover" onError={e=>e.target.style.display='none'} />
+              </div>
+              <div className="p-3">
+                <p className="font-bold text-gray-900 text-sm leading-snug mb-1 line-clamp-2">{flexModalItem.title}</p>
+                <p className="text-xs text-gray-400 mb-0.5">天數：{flexModalItem.days} 天</p>
+                <p className="text-sm font-black text-[#b82337] mb-3">TWD {Number(flexModalItem.price).toLocaleString()}</p>
+                <div className="space-y-1.5">
+                  <div className="bg-[#00B900] text-white text-center py-2 rounded-lg text-xs font-bold">查看行程 / 立即報名</div>
+                  <div className="bg-[#b82337] text-white text-center py-2 rounded-lg text-xs font-bold">📤 分享行程給好友</div>
+                  {activeKeys.map(k=>(
+                    <div key={k} className="bg-gray-100 text-gray-700 text-center py-2 rounded-lg text-xs font-bold">{contactLabels[k]}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // Preview for multi flex modal
+        const MultiPreview = () => {
+          const items = [...distSelectedIds].map(id=>itineraries.find(t=>String(t.id)===id)).filter(Boolean);
+          const heroUrl = multiHeroUrl || (items[0]?.image) || '';
+          const btnColor = multiBtnColor || '#00B900';
+          const btnTxt = multiBtnTxt || '#FFFFFF';
+          const checkedSocs = Object.entries(multiSocOpts).filter(([,v])=>v).map(([k])=>k);
+          return (
+            <div className="w-full max-w-[270px] bg-white rounded-[18px] overflow-hidden shadow-2xl border-[3px] border-slate-800">
+              <div style={{aspectRatio:'12/5',overflow:'hidden',background:'#e2e8f0'}}>
+                <img src={heroUrl} className="w-full h-full object-cover" onError={e=>e.target.style.display='none'} />
+              </div>
+              {items.map((item,i)=>(
+                <div key={item.id} className={`flex items-center px-3 py-2 gap-2 ${i<items.length-1?'border-b border-gray-100':''}`}>
+                  <img src={item.image||''} className="w-9 h-9 rounded object-cover flex-shrink-0" onError={e=>e.target.style.display='none'} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-gray-900 line-clamp-1">{item.title}</p>
+                    <p className="text-[10px] font-black text-[#b82337]">NT$ {Number(item.price).toLocaleString()}</p>
+                  </div>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black flex-shrink-0" style={{background:btnColor,color:btnTxt}}>報名</div>
+                </div>
+              ))}
+              {checkedSocs.length > 0 && (
+                <div className="px-3 py-2.5 flex justify-center gap-3 border-t border-gray-100">
+                  {checkedSocs.map(k=><img key={k} src={SOC_ICONS_MAP[k]||''} className="w-5 h-5 object-contain" />)}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        return (
+          <>
+          {/* ★ 單張名片 Modal */}
+          {flexModalItem && (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={e=>{if(e.target===e.currentTarget)setFlexModalItem(null);}}>
+              <div className="bg-white rounded-[20px] overflow-hidden max-w-[960px] w-full flex shadow-2xl animate-fade-in-up" style={{maxHeight:'92vh'}}>
+                {/* Left */}
+                <div className="flex-1 overflow-y-auto p-7 space-y-5">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                    <div className="w-9 h-9 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Share2 className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="font-black text-gray-800 text-base leading-none">準備推廣連結與名片</p>
+                      <p className="text-xs text-gray-400 mt-1 truncate max-w-xs">{flexModalItem.title}</p>
+                    </div>
+                    <button onClick={()=>setFlexModalItem(null)} className="ml-auto w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 transition"><X className="w-4 h-4"/></button>
+                  </div>
+                  {/* Contact checkboxes */}
+                  <div>
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">勾選名片聯絡按鈕（建議 1~3 項）</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[['phone','📞 聯絡電話',myDistributorData?.phone],['line','💬 個人 LINE',myDistributorData?.lineLink],['lineAt','🟢 官方 LINE@',myDistributorData?.lineAtLink],['fb','👍 FB 粉絲專頁',myDistributorData?.fbLink],['web','🌐 官方網站',myDistributorData?.webLink],['map','📍 門市導航',myDistributorData?.mapLink]].map(([key,label,val])=>(
+                        <label key={key} className={`flex items-center p-2.5 border rounded-xl cursor-pointer transition text-sm font-bold
+                          ${!val ? 'opacity-40 bg-gray-50 cursor-not-allowed' : cardOptions[key] ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'hover:bg-gray-50 border-gray-200 text-gray-600'}`}>
+                          <input type="checkbox" className="mr-2.5 w-4 h-4 accent-emerald-500" disabled={!val} checked={cardOptions[key]} onChange={e=>setCardOptions({...cardOptions,[key]:e.target.checked})} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Action buttons */}
+                  <div className="space-y-2.5 pt-2 border-t border-gray-100">
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">🚀 平台推廣神器</p>
+                    <button onClick={()=>handleCopyUrl('web')}   className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition">(1) 複製「純網頁版」連結（全場域通用）</button>
+                    <button onClick={()=>handleCopyUrl('send')}  className="w-full bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition">(2) 複製「LINE OA 原地傳送」連結</button>
+                    <button onClick={()=>handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition">(3) 複製「群發轉傳」連結</button>
+                    <button onClick={triggerFlexSharing}         className="w-full bg-[#00B900] hover:bg-[#009900] text-white text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition"><Share2 className="w-4 h-4" />(4) 立即分享給好友（喚起通訊錄）</button>
+                  </div>
+                </div>
+                {/* Right preview */}
+                <div className="w-[300px] flex-shrink-0 bg-[#749cbd] flex flex-col items-center justify-center gap-3 p-6">
+                  <p className="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full">名片預覽畫面</p>
+                  <SinglePreview />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ★ 多頁名片 Modal */}
+          {multiFlexOpen && (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={e=>{if(e.target===e.currentTarget)setMultiFlexOpen(false);}}>
+              <div className="bg-white rounded-[20px] overflow-hidden max-w-[780px] w-full flex shadow-2xl animate-fade-in-up" style={{maxHeight:'92vh'}}>
+                {/* Left */}
+                <div className="flex-1 overflow-y-auto p-7 space-y-5">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                    <div>
+                      <p className="font-black text-gray-800 text-base leading-none">多頁名片推廣 · V3 商品列表</p>
+                      <p className="text-xs text-gray-400 mt-1">已選 <span className="text-emerald-600 font-black">{distSelectedIds.size}</span> 個行程</p>
+                    </div>
+                    <button onClick={()=>setMultiFlexOpen(false)} className="ml-auto w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 transition"><X className="w-4 h-4"/></button>
+                  </div>
+                  {/* Hero image */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-1.5">主圖</p>
+                    <input type="text" value={multiHeroUrl} onChange={e=>setMultiHeroUrl(e.target.value)} placeholder="https://..." className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 outline-none focus:border-emerald-400 font-mono" />
+                  </div>
+                  {/* Button colors */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><p className="text-xs font-bold text-gray-500 mb-1.5">按鈕底色</p><input type="color" value={multiBtnColor} onChange={e=>setMultiBtnColor(e.target.value)} className="w-full h-10 rounded-lg border border-gray-200 cursor-pointer" /></div>
+                    <div><p className="text-xs font-bold text-gray-500 mb-1.5">按鈕文字色</p><input type="color" value={multiBtnTxt} onChange={e=>setMultiBtnTxt(e.target.value)} className="w-full h-10 rounded-lg border border-gray-200 cursor-pointer" /></div>
+                  </div>
+                  {/* Social icons */}
+                  <div>
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">底部社群 Icon</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {Object.entries({YT:'▶️ YouTube',FB:'👍 Facebook',IG:'📷 Instagram',LINE:'💬 LINE@',MAP:'📍 地圖導航',TEL:'📞 電話'}).map(([k,label])=>(
+                        <label key={k} className={`flex items-center p-2 border rounded-xl cursor-pointer transition text-xs font-bold
+                          ${multiSocOpts[k] ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'hover:bg-gray-50 border-gray-200 text-gray-600'}`}>
+                          <input type="checkbox" className="mr-2 w-3.5 h-3.5 accent-emerald-500" checked={multiSocOpts[k]||false} onChange={e=>setMultiSocOpts({...multiSocOpts,[k]:e.target.checked})} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div className="space-y-2.5 pt-2 border-t border-gray-100">
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">推廣方式</p>
+                    <button onClick={()=>multiShareAction('copy')}   className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition">📋 複製 Flex JSON（貼到 LINE OA）</button>
+                    <button onClick={()=>multiShareAction('picker')} className="w-full bg-[#00B900] hover:bg-[#009900] text-white text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition"><Share2 className="w-4 h-4" /> 立即分享給好友（喚起通訊錄）</button>
+                  </div>
+                </div>
+                {/* Right preview */}
+                <div className="w-[300px] flex-shrink-0 bg-[#749cbd] flex flex-col items-center justify-center gap-3 p-6">
+                  <p className="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full">名片預覽畫面</p>
+                  <MultiPreview />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Settings Modal */}
           {showSettingsModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
