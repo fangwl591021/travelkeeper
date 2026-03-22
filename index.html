@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 智能行程管理與經銷系統</title>
+  <title>旅遊管家 - 智能行程管理與經銷系統 (v2.0)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -63,7 +63,7 @@
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
         const buttons = [
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
-            { "type": "button", "style": "primary", "color": "#FF334B", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
+            { "type": "button", "style": "primary", "color": "#b82337", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
         ];
         if (options.phone && distributorData.phone) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${distributorData.phone}` }});
         if (options.line && distributorData.lineLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "💬 私訊 LINE", "uri": distributorData.lineLink }});
@@ -81,7 +81,7 @@
                 { "type": "text", "text": tourItem.title, "weight": "bold", "size": "xl", "wrap": true },
                 { "type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
                     { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "天數", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `${tourItem.days} 天`, "wrap": true, "color": "#666666", "size": "sm", "flex": 5 } ] },
-                    { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "價格", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `TWD ${Number(tourItem.price).toLocaleString()}`, "wrap": true, "color": "#ff334b", "size": "md", "weight": "bold", "flex": 5 } ] },
+                    { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "價格", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `TWD ${Number(tourItem.price).toLocaleString()}`, "wrap": true, "color": "#b82337", "size": "md", "weight": "bold", "flex": 5 } ] },
                     { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "介紹", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": tourItem.description ? tourItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！', "wrap": true, "maxLines": 5, "color": "#666666", "size": "sm", "flex": 5 } ] }
                   ] } ] },
             "footer": { "type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons, "flex": 0 }
@@ -90,7 +90,8 @@
     };
 
     // =========================================================================
-    // ★ 巨匠級行程渲染器：無邊界防呆解析引擎 (加入藍色色塊與排版優化)
+    // ★ 巨匠級行程渲染器 (終極排版大師) ★
+    // 完全解除邊界，精準解析 Day 區塊與防盜鏈機制
     // =========================================================================
     const renderAgencyBlogDescription = (text) => {
       if (!text) return null;
@@ -103,7 +104,7 @@
           let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
 
-          // Day 標題判定 (巨匠風格紅線置中大標)
+          // 1. Day 標題判定 (巨匠風格：橫斷紅線置中大標)
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
               if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
@@ -113,7 +114,7 @@
               inMeal = false; inHotel = false; continue;
           }
 
-          // 餐食與住宿判定
+          // 2. 餐食與住宿判定
           if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
           if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
           if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
@@ -121,11 +122,12 @@
 
           inMeal = false; inHotel = false;
 
-          // 圖片防呆解析 (支援 Inline Markdown 與直接貼上網址)
+          // 3. 圖文交錯防呆解析 (自動斷行防爆版)
           const parts = line.split(/(!\[.*?\]\(.*?\))/g);
           const parsedLine = parts.filter(p => p).map((part) => {
               const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
               if (mdMatch) return { type: 'image', alt: mdMatch[1], url: mdMatch[2] };
+              // 如果是直接貼網址，視為圖片
               if (part.startsWith('http') && !part.includes(' ') && parts.length === 1) return { type: 'image', alt: '圖片', url: part };
               return { type: 'text', text: part };
           });
@@ -134,23 +136,25 @@
       blocks.push(currentBlock);
 
       return blocks.map((block, bIdx) => (
-          <div key={bIdx} className="mb-16 w-full">
+          <div key={bIdx} className="mb-12 w-full max-w-full">
+              {/* Day 標題渲染 */}
               {block.dayText !== '行程介紹' && (
                   <div className="mb-10 mt-16 w-full">
                       <div className="text-center relative mb-8">
-                          <div className="absolute top-1/2 left-0 w-full border-t-[3px] border-dashed border-[#b82337] -z-10"></div>
-                          <h2 className="inline-block px-8 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2>
+                          <div className="absolute top-1/2 left-0 w-full border-t-[2px] border-dashed border-[#b82337] -z-10"></div>
+                          <h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2>
                       </div>
                       {block.title && (
-                          <div className="flex items-start mb-6">
-                              <span className="text-[#b82337] font-light text-3xl mr-4 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span>
-                              <h3 className="text-2xl md:text-3xl font-bold text-gray-800 leading-tight pt-1">{block.title}</h3>
+                          <div className="flex items-start mb-6 px-2">
+                              <span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span>
+                              <h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3>
                           </div>
                       )}
                   </div>
               )}
               
-              <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full overflow-hidden break-words">
+              {/* 內文渲染區 (完全不包框，徹底滿版) */}
+              <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
                       if (item.type === 'mixed') {
@@ -158,13 +162,13 @@
                               <p key={idx} className="mb-5 break-words whitespace-pre-wrap">
                                   {item.elements.map((el, eIdx) => {
                                       if (el.type === 'image') return (
-                                          <span key={eIdx} className="block my-10 w-full relative">
-                                              {/* 高畫質滿版圖片，移除邊框 */}
-                                              <img src={el.url} className="w-full h-auto object-cover rounded-none md:rounded-2xl max-h-[800px]" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                              {/* 藍色防破圖提示區塊 */}
-                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 block break-all shadow-sm font-medium tracking-wider">
-                                                <span className="font-extrabold mr-2">🔗 圖片網址 (若未自動顯示請點擊)：</span>
-                                                <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">{el.url}</a>
+                                          <span key={eIdx} className="block my-10 w-full relative group">
+                                              {/* 暴力滿版圖片 */}
+                                              <img src={el.url} className="w-full h-auto object-cover rounded-xl shadow-sm max-h-[700px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                                              {/* 防盜鏈提示：加上淺藍色背景與強烈提示字眼 */}
+                                              <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words">
+                                                <span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>
+                                                原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a>
                                               </span>
                                           </span>
                                       );
@@ -177,17 +181,18 @@
                   })}
               </div>
 
+              {/* 巨匠雙拼資訊卡片 */}
               {(block.meals.length > 0 || block.hotels.length > 0) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
                       {block.meals.length > 0 && (
-                          <div className="border border-gray-200 p-8 flex items-start bg-white w-full rounded-lg shadow-sm hover:shadow-md transition">
-                              <div className="text-3xl mr-5 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div>
+                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
+                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div>
                               <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
-                                  <p className="font-bold text-gray-900 mb-3 text-xl">餐食</p>
-                                  <div className="space-y-2 text-gray-600 font-medium text-base break-words">
+                                  <p className="font-bold text-gray-900 mb-2 text-lg">餐食</p>
+                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
                                       {block.meals.map((m, mIdx) => {
                                           const parts = m.split(/[:：](.+)/);
-                                          if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-16 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
+                                          if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
                                           return <p key={mIdx}>{m}</p>;
                                       })}
                                   </div>
@@ -195,14 +200,14 @@
                           </div>
                       )}
                       {block.hotels.length > 0 && (
-                          <div className="border border-gray-200 p-8 flex items-start bg-white w-full rounded-lg shadow-sm hover:shadow-md transition">
-                              <div className="text-3xl mr-5 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div>
+                          <div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition">
+                              <div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div>
                               <div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0">
-                                  <p className="font-bold text-gray-900 mb-3 text-xl">住宿</p>
-                                  <div className="space-y-2 text-gray-600 font-medium text-base break-words">
+                                  <p className="font-bold text-gray-900 mb-2 text-lg">住宿</p>
+                                  <div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">
                                       {block.hotels.map((h, hIdx) => {
                                           const parts = h.split(/[:：](.+)/);
-                                          if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-16 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
+                                          if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>);
                                           return <p key={hIdx}>{h}</p>;
                                       })}
                                   </div>
@@ -271,6 +276,9 @@
       const [approveData, setApproveData] = useState({ commission: 10, note: '' });
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
 
+      // ★ 加入時間戳防止 API 快取
+      const getTimestamp = () => new Date().getTime();
+
       useEffect(() => { initLiff(); fetchItineraries(); }, []);
 
       const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
@@ -321,7 +329,7 @@
 
       const checkMyStatus = async (uid) => {
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'checkUserStatus', uid: uid }) });
+          const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'checkUserStatus', uid: uid }) });
           const data = await res.json();
           if (data.success) {
              const info = data.data;
@@ -334,7 +342,7 @@
 
       const fetchUserOrders = async (uid) => {
           try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUserOrders', uid: uid }) });
+              const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUserOrders', uid: uid }) });
               const data = await res.json();
               if (data.success) setMyOrders(data.data);
           } catch(e) { console.error('Fetch Orders error', e); }
@@ -342,13 +350,12 @@
 
       const fetchFullCrmData = async () => {
         try {
-          const currentTimestamp = new Date().getTime();
-          const resD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors', timestamp: currentTimestamp }) });
+          const resD = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors' }) });
           setCrmDistributors(Array.isArray(await resD.json()) ? await resD.json() : []);
-          const resU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers', timestamp: currentTimestamp }) });
+          const resU = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers' }) });
           setCrmUsers(Array.isArray(await resU.json()) ? await resU.json() : []);
           if (isAdmin) {
-              const resO = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getAllOrders', timestamp: currentTimestamp }) });
+              const resO = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getAllOrders' }) });
               const dataO = await resO.json();
               if (dataO.success) setCrmOrders(dataO.data);
           }
@@ -358,7 +365,7 @@
       const fetchItineraries = async () => {
         setIsLoading(true);
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?timestamp=${new Date().getTime()}`);
+          const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`);
           const data = await res.json();
           if (data && Array.isArray(data)) { setItineraries(data); setFilteredResults(data); }
         } catch (error) { console.error('Fetch error', error); } finally { setIsLoading(false); }
@@ -636,7 +643,7 @@
                   {filteredResults.map(item => (
                     <div key={item.id} onClick={() => { setSelectedTourId(item.id); window.history.pushState({}, '', '?t=' + item.id + (refUid ? '&r=' + refUid : '')); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5 cursor-pointer">
                       <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" /><div className="absolute top-4 left-4 flex flex-col gap-2"><span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span></div></div>
-                      <div className="p-6 md:p-8 flex flex-col flex-grow"><h4 className="font-bold text-xl lg:text-2xl mb-3 text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.title}</h4><p className="text-gray-500 text-base mb-6 line-clamp-3 flex-grow leading-relaxed">{item.description}</p><div className="flex justify-between items-end border-t border-gray-100 pt-5 mt-auto"><span className="text-base font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">{item.days} 天</span><span className="text-3xl font-extrabold text-red-500">${Number(item.price).toLocaleString()}</span></div></div>
+                      <div className="p-6 md:p-8 flex flex-col flex-grow"><h4 className="font-bold text-xl lg:text-2xl mb-3 text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.title}</h4><p className="text-gray-500 text-base mb-6 line-clamp-3 flex-grow leading-relaxed">{item.description}</p><div className="flex justify-between items-end border-t border-gray-100 pt-5 mt-auto"><span className="text-base font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">{item.days} 天</span><span className="text-3xl font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span></div></div>
                     </div>
                   ))}
                   {filteredResults.length === 0 && (<div className="col-span-full text-center py-32 text-gray-500 bg-white rounded-3xl border border-dashed border-gray-300"><Search className="w-16 h-16 text-gray-300 mx-auto mb-4" /><p className="font-bold text-2xl text-gray-600">找不到行程</p></div>)}
@@ -648,22 +655,22 @@
       };
 
       const renderMemberTab = () => {
-        if (!isGeneralMember) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Users className="w-20 h-20 text-orange-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">一般會員登入</h2><p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p><button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button></div></div>);
+        if (!isGeneralMember) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Users className="w-20 h-20 text-[#b82337] mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">一般會員登入</h2><p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p><button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button></div></div>);
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-              <div className="bg-orange-500 rounded-3xl p-8 md:p-12 text-white shadow-xl overflow-hidden relative">
-                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2><p className="text-orange-100 text-lg max-w-2xl">您已成功登入一般會員。下方為您的專屬預約紀錄，如有疑問可隨時聯絡顧問。</p>{crmUsers.find(u => u.uid === liffProfile?.userId)?.referredBy && (<div className="mt-4 inline-block bg-white/20 px-3 py-1 rounded-md text-sm font-bold border border-white/30">✨ 您是由專屬旅遊顧問推薦的 VIP 會員</div>)}</div></div>
+              <div className="bg-[#b82337] rounded-3xl p-8 md:p-12 text-white shadow-xl overflow-hidden relative">
+                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2><p className="text-red-100 text-lg max-w-2xl">您已成功登入一般會員。下方為您的專屬預約紀錄，如有疑問可隨時聯絡顧問。</p>{crmUsers.find(u => u.uid === liffProfile?.userId)?.referredBy && (<div className="mt-4 inline-block bg-white/20 px-3 py-1 rounded-md text-sm font-bold border border-white/30">✨ 您是由專屬旅遊顧問推薦的 VIP 會員</div>)}</div></div>
               </div>
               <div className="mt-12 max-w-6xl mx-auto">
-                <h3 className="text-2xl md:text-3xl font-black text-gray-800 mb-6 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-orange-500" /> 我的預約訂單</h3>
+                <h3 className="text-2xl md:text-3xl font-black text-gray-800 mb-6 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-[#b82337]" /> 我的預約訂單</h3>
                 {myOrders.length === 0 ? (
-                   <div className="bg-white rounded-3xl p-16 text-center shadow-sm border border-gray-100 flex flex-col items-center"><Calendar className="w-16 h-16 text-gray-300 mb-4" /><p className="text-gray-500 text-xl font-bold mb-6">您目前還沒有任何預約紀錄喔！</p><button onClick={() => changeTab('home')} className="bg-orange-100 text-orange-600 font-bold px-8 py-3 rounded-xl hover:bg-orange-200 transition text-lg">去逛逛精選行程</button></div>
+                   <div className="bg-white rounded-3xl p-16 text-center shadow-sm border border-gray-100 flex flex-col items-center"><Calendar className="w-16 h-16 text-gray-300 mb-4" /><p className="text-gray-500 text-xl font-bold mb-6">您目前還沒有任何預約紀錄喔！</p><button onClick={() => changeTab('home')} className="bg-red-50 text-[#b82337] font-bold px-8 py-3 rounded-xl hover:bg-red-100 transition text-lg">去逛逛精選行程</button></div>
                 ) : (
                    <div className="grid gap-6">
                      {myOrders.map(order => (
                         <div key={order.orderId} className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-lg transition">
                            <div><div className="flex items-center gap-3 mb-3"><span className={`px-3 py-1 rounded-full text-sm font-bold ${order.status === '已確認' ? 'bg-green-100 text-green-700' : order.status === '已取消' ? 'bg-gray-100 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{order.status || '處理中'}</span><span className="text-sm font-bold text-gray-400">訂單編號 #{order.orderId}</span></div><h4 className="text-xl md:text-2xl font-bold text-gray-900 mb-3">{order.tourTitle}</h4><div className="text-gray-500 text-base space-y-1"><p>👤 報名人：<span className="font-medium text-gray-700">{order.contactName}</span></p><p>📞 聯絡電話：<span className="font-medium text-gray-700">{order.contactPhone}</span></p><p>👥 報名人數：<span className="font-medium text-gray-700">{order.pax} 人</span></p><p className="text-sm mt-2 text-gray-400">建立時間：{order.orderDate}</p></div></div>
-                           <div className="md:text-right bg-orange-50 p-6 rounded-2xl border border-orange-100 min-w-[200px]"><p className="text-sm text-orange-800 font-bold tracking-widest mb-1">訂單總額</p><p className="text-3xl font-black text-red-600">TWD {Number(order.totalAmount).toLocaleString()}</p></div>
+                           <div className="md:text-right bg-red-50 p-6 rounded-2xl border border-red-100 min-w-[200px]"><p className="text-sm text-red-800 font-bold tracking-widest mb-1">訂單總額</p><p className="text-3xl font-black text-[#b82337]">TWD {Number(order.totalAmount).toLocaleString()}</p></div>
                         </div>
                      ))}
                    </div>
@@ -684,7 +691,7 @@
                   {itineraries.map(item => (
                     <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                       <div className="h-56 overflow-hidden relative bg-gray-100"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /><div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</div></div>
-                      <div className="p-6 flex flex-col flex-grow"><h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4><div className="flex justify-between items-end mt-auto pt-4"><span className="text-2xl font-extrabold text-red-500">${Number(item.price).toLocaleString()}</span></div><button onClick={() => openFlexModal(item)} className="mt-5 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow transition-colors flex justify-center items-center"><Share2 className="w-5 h-5 mr-2" /> 產生推廣名片</button></div>
+                      <div className="p-6 flex flex-col flex-grow"><h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4><div className="flex justify-between items-end mt-auto pt-4"><span className="text-2xl font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span></div><button onClick={() => openFlexModal(item)} className="mt-5 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow transition-colors flex justify-center items-center"><Share2 className="w-5 h-5 mr-2" /> 產生推廣名片</button></div>
                     </div>
                   ))}
                 </div>
@@ -776,7 +783,7 @@
                       {crmOrders.length === 0 ? <tr><td colSpan="6" className="p-8 text-center text-gray-400">尚無訂單資料</td></tr> : 
                        crmOrders.map(order => {
                         const refDist = crmDistributors.find(d => d.uid === order.ref_uid);
-                        return (<tr key={order.orderId} className="hover:bg-purple-50/30 transition-colors"><td className="p-4"><p className="text-sm text-gray-500">{order.orderDate}</p><p className="font-mono text-xs text-gray-400 mt-1">#{order.orderId}</p></td><td className="p-4 font-bold text-gray-800">{order.tourTitle}</td><td className="p-4"><p className="font-bold text-gray-800">{order.contactName} <span className="text-sm font-normal text-gray-500">({order.pax}人)</span></p><p className="text-sm text-gray-600 mt-1">{order.contactPhone}</p></td><td className="p-4">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">{refDist.name}</span> : <span className="text-xs text-gray-400">自然流量</span>}</td><td className="p-4 text-right font-black text-red-600 text-lg">${Number(order.totalAmount).toLocaleString()}</td><td className="p-4 text-center"><span className={`px-3 py-1 rounded-full text-xs font-bold ${order.status === '已確認' ? 'bg-green-100 text-green-700' : order.status === '已取消' ? 'bg-gray-100 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{order.status || '處理中'}</span></td></tr>)
+                        return (<tr key={order.orderId} className="hover:bg-purple-50/30 transition-colors"><td className="p-4"><p className="text-sm text-gray-500">{order.orderDate}</p><p className="font-mono text-xs text-gray-400 mt-1">#{order.orderId}</p></td><td className="p-4 font-bold text-gray-800">{order.tourTitle}</td><td className="p-4"><p className="font-bold text-gray-800">{order.contactName} <span className="text-sm font-normal text-gray-500">({order.pax}人)</span></p><p className="text-sm text-gray-600 mt-1">{order.contactPhone}</p></td><td className="p-4">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">{refDist.name}</span> : <span className="text-xs text-gray-400">自然流量</span>}</td><td className="p-4 text-right font-black text-[#b82337] text-lg">${Number(order.totalAmount).toLocaleString()}</td><td className="p-4 text-center"><span className={`px-3 py-1 rounded-full text-xs font-bold ${order.status === '已確認' ? 'bg-green-100 text-green-700' : order.status === '已取消' ? 'bg-gray-100 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{order.status || '處理中'}</span></td></tr>)
                       })}
                     </tbody>
                   </table>
@@ -850,7 +857,7 @@
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
                 {itineraries.map(item => (
                   <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                    <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
+                    <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-[#b82337] text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
                     <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4"><button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button><button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button></div>
                   </div>
                 ))}
@@ -889,9 +896,9 @@
                   <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
                      <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
                      <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
-                       <div className="relative"><div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div><div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div></div>
+                       <div className="relative"><div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div><div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#b82337] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div></div>
                        <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div><div className="w-full bg-[#ff334b] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
+                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div><div className="w-full bg-[#b82337] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
                           {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
                           {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
                           {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
@@ -908,22 +915,22 @@
             {bookingModalData && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
                 <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl animate-fade-in-up overflow-hidden">
-                  <div className="bg-red-700 p-6 text-white flex justify-between items-center"><h3 className="text-xl font-bold flex items-center"><ClipboardList className="w-6 h-6 mr-2" /> 填寫報名資料</h3><button onClick={() => setBookingModalData(null)} className="text-white hover:text-red-200 transition"><X className="w-6 h-6" /></button></div>
+                  <div className="bg-[#b82337] p-6 text-white flex justify-between items-center"><h3 className="text-xl font-bold flex items-center"><ClipboardList className="w-6 h-6 mr-2" /> 填寫報名資料</h3><button onClick={() => setBookingModalData(null)} className="text-white hover:text-red-200 transition"><X className="w-6 h-6" /></button></div>
                   <form onSubmit={submitBooking} className="p-6 md:p-8">
                       <div className="mb-6 pb-6 border-b border-gray-100">
                           <p className="text-sm font-bold text-gray-400 mb-1">預約行程</p>
                           <p className="text-xl font-black text-gray-800 leading-tight mb-2">{bookingModalData.tourTitle}</p>
                           <div className="flex justify-between items-end">
-                              <div><label className="block text-sm font-bold text-gray-500 mb-1">報名人數</label><input type="number" min="1" required value={bookingModalData.pax} onChange={(e) => setBookingModalData({...bookingModalData, pax: parseInt(e.target.value)||1, totalAmount: (parseInt(e.target.value)||1) * bookingModalData.price})} className="w-24 rounded-lg border-gray-300 border p-2 focus:ring-red-500 outline-none text-center font-bold text-lg"/></div>
-                              <div className="text-right"><p className="text-xs text-gray-400 font-bold mb-1">總金額</p><p className="text-2xl font-black text-red-600">TWD {Number(bookingModalData.totalAmount).toLocaleString()}</p></div>
+                              <div><label className="block text-sm font-bold text-gray-500 mb-1">報名人數</label><input type="number" min="1" required value={bookingModalData.pax} onChange={(e) => setBookingModalData({...bookingModalData, pax: parseInt(e.target.value)||1, totalAmount: (parseInt(e.target.value)||1) * bookingModalData.price})} className="w-24 rounded-lg border-gray-300 border p-2 focus:ring-[#b82337] outline-none text-center font-bold text-lg"/></div>
+                              <div className="text-right"><p className="text-xs text-gray-400 font-bold mb-1">總金額</p><p className="text-2xl font-black text-[#b82337]">TWD {Number(bookingModalData.totalAmount).toLocaleString()}</p></div>
                           </div>
                       </div>
                       <div className="space-y-4 mb-8">
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">主要聯絡人姓名</label><input type="text" required value={bookingModalData.contactName} onChange={(e) => setBookingModalData({...bookingModalData, contactName: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-red-500 outline-none text-base"/></div>
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡電話</label><input type="tel" required value={bookingModalData.contactPhone} onChange={(e) => setBookingModalData({...bookingModalData, contactPhone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-red-500 outline-none text-base"/></div>
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">特殊需求備註 (選填)</label><textarea rows="2" value={bookingModalData.note} onChange={(e) => setBookingModalData({...bookingModalData, note: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-red-500 outline-none text-base" placeholder="例如：素食、嬰兒車需求等"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">主要聯絡人姓名</label><input type="text" required value={bookingModalData.contactName} onChange={(e) => setBookingModalData({...bookingModalData, contactName: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-[#b82337] outline-none text-base"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡電話</label><input type="tel" required value={bookingModalData.contactPhone} onChange={(e) => setBookingModalData({...bookingModalData, contactPhone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-[#b82337] outline-none text-base"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">特殊需求備註 (選填)</label><textarea rows="2" value={bookingModalData.note} onChange={(e) => setBookingModalData({...bookingModalData, note: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-[#b82337] outline-none text-base" placeholder="例如：素食、嬰兒車需求等"/></div>
                       </div>
-                      <button type="submit" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg">確認送出訂單</button>
+                      <button type="submit" className="w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg">確認送出訂單</button>
                   </form>
                 </div>
               </div>
