@@ -35,7 +35,8 @@
       const [statusMsg, setStatusMsg] = useState('正在連接 LINE 授權服務...');
       const [error, setError] = useState(null);
       const [applyType, setApplyType] = useState('user'); 
-      const [refUid, setRefUid] = useState(''); // 推薦人 UID
+      const [refUid, setRefUid] = useState(''); 
+      const [targetTourId, setTargetTourId] = useState(''); // 儲存預計跳轉的行程 ID
       
       const [profile, setProfile] = useState(null);
       const [formData, setFormData] = useState({ 
@@ -50,9 +51,12 @@
         try {
           const urlParams = new URLSearchParams(window.location.search);
           const type = urlParams.get('type') || 'user';
-          const ref = urlParams.get('ref_uid') || '';
+          const ref = urlParams.get('ref_uid') || urlParams.get('r') || localStorage.getItem('tracking_ref_uid') || '';
+          const targetTour = urlParams.get('t'); // 抓取原本在哪個行程
+          
           setApplyType(type);
           setRefUid(ref);
+          setTargetTourId(targetTour);
           
           await liff.init({ liffId: LIFF_ID });
 
@@ -71,17 +75,25 @@
             lineLink: `https://line.me/ti/p/~${userProfile.userId}` 
           }));
 
-          const checkRes = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: type === 'distributor' ? 'getDistributors' : 'getUsers' })
-          });
-          const usersList = await checkRes.json();
-          const existingUser = usersList.find(u => u.uid === userProfile.userId);
+          const checkResU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers' }) });
+          const usersList = await checkResU.json();
+          
+          const checkResD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors' }) });
+          const distList = await checkResD.json();
 
-          if (existingUser) {
+          const existingUser = usersList.find(u => u.uid === userProfile.userId) || distList.find(u => u.uid === userProfile.userId);
+
+          if (existingUser && existingUser.phone) {
             setStep('success');
             setStatusMsg('歡迎回來！正在為您導向專屬頁面...');
-            setTimeout(() => { window.location.href = `${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`; }, 1000);
+            setTimeout(() => { 
+                // ★ 自動跳轉回原本的行程報名頁
+                if (targetTour) {
+                    window.location.href = `${MAIN_APP_URL}?tab=home&t=${targetTour}`;
+                } else {
+                    window.location.href = `${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`; 
+                }
+            }, 1000);
           } else {
             setStep('form');
           }
@@ -106,7 +118,7 @@
         }
 
         setStep('submitting');
-        setStatusMsg('正在建立您的專屬帳號...');
+        setStatusMsg('正在儲存您的專屬資料...');
 
         try {
           const actionType = applyType === 'distributor' ? 'registerDistributor' : 'registerUser';
@@ -115,7 +127,7 @@
             body: JSON.stringify({ 
               action: actionType, 
               uid: profile.userId, 
-              ref_uid: refUid,          // 【核心】將推薦人 UID 送入資料庫綁定
+              ref_uid: refUid,          
               name: formData.name,      
               phone: formData.phone,
               companyName: formData.companyName,
@@ -130,9 +142,23 @@
 
           const result = await res.json();
           if (result.success) {
+            if (!result.isNew) {
+                const updateAction = applyType === 'distributor' ? 'updateDistributorInfo' : 'updateUserInfo';
+                await fetch(`${WORKER_URL}/api/itineraries`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: updateAction, uid: profile.userId, name: formData.name, phone: formData.phone, companyName: formData.companyName, taxId: formData.taxId, lineLink: formData.lineLink, lineAtLink: formData.lineAtLink, fbLink: formData.fbLink, webLink: formData.webLink, mapLink: finalMapLink })
+                });
+            }
             setStep('success');
             setStatusMsg('註冊成功！正在前往系統...');
-            setTimeout(() => { window.location.href = `${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`; }, 1500);
+            setTimeout(() => { 
+                // ★ 註冊完成後自動跳轉回行程頁
+                if (targetTourId) {
+                    window.location.href = `${MAIN_APP_URL}?tab=home&t=${targetTourId}`;
+                } else {
+                    window.location.href = `${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`; 
+                }
+            }, 1500);
           } else throw new Error(result.message || '資料寫入失敗');
         } catch(err) {
           setStep('error'); setError('註冊失敗，請檢查網路連線或聯絡客服');
