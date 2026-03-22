@@ -213,7 +213,7 @@
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
-      const actionParam = urlParams.get('action'); // 支援 'share' (喚起通訊錄) 與 'send' (原地傳送)
+      const actionParam = urlParams.get('action'); 
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
       const [tourDetailTab, setTourDetailTab] = useState('itinerary'); 
       const [shareStatusText, setShareStatusText] = useState('系統安全驗證中...');
@@ -227,7 +227,7 @@
       const [crmSubTab, setCrmSubTab] = useState('distributors'); 
       const [itineraries, setItineraries] = useState([]);
       const [toast, setToast] = useState(null);
-      const [isLoading, setIsLoading] = useState(false);
+      const [isLoading, setIsLoading] = useState(true); // 預設 true 以利攔截檢查
       const [isUploadingImage, setIsUploadingImage] = useState(false); 
       const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); 
       
@@ -272,68 +272,79 @@
       useEffect(() => { initLiff(); fetchItineraries(); }, []);
 
       // =========================================================================
-      // ★ 核心黑科技：原地傳送與通訊錄群發引擎
+      // ★ 終極修正版：精準攔截動作、拔除對 crmDistributors 的無限等待
       // =========================================================================
       useEffect(() => {
         const processAutoAction = async () => {
-           if ((actionParam === 'share' || actionParam === 'send') && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
-              const tourId = urlParams.get('t') || urlParams.get('tour_id');
-              const rUid = urlParams.get('r') || urlParams.get('ref_uid');
-              const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
-              const tour = itineraries.find(i => String(i.id) === String(tourId));
-              
-              let targetDistData = {};
-              if (rUid === liffProfile.userId) { targetDistData = myDistributorData || {}; } 
-              else { targetDistData = crmDistributors.find(d => d.uid === rUid) || {}; }
-              
-              if (!tour) { setShareStatusText('找不到該行程資訊'); return; }
-              const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
-              
-              const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+             // 必須等待 liffReady、權限狀態與行程清單載入完畢 (isLoading=false) 才進行判斷
+             if (!isLiffReady || isLoading || !liffProfile || !isStatusChecked) return;
+             
+             const tourId = urlParams.get('t') || urlParams.get('tour_id');
+             const rUid = urlParams.get('r') || urlParams.get('ref_uid');
+             const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
+             const tour = itineraries.find(i => String(i.id) === String(tourId));
+             
+             if (!tour) { 
+                 setShareStatusText('❌ 找不到該行程資訊，即將為您返回首頁...'); 
+                 setTimeout(() => window.location.replace(ENDPOINT_URL), 2000);
+                 return; 
+             }
 
-              if (actionParam === 'send') {
-                  // ★ 原地傳送模式 (liff.sendMessages)
-                  setShareStatusText("正在傳送名片至聊天室...");
-                  try {
-                      const context = liff.getContext();
-                      // 確認使用者是在 LINE 聊天室內開啟 (非外部瀏覽器)
-                      if (context && context.type !== 'none' && context.type !== 'external') {
-                          await liff.sendMessages([flexMsg]);
-                          setShareStatusText('✅ 傳送成功！視窗即將關閉...');
-                          setTimeout(() => liff.closeWindow(), 1000);
-                      } else {
-                          // 若在非聊天室環境開啟，自動退為展開純網頁版 (Fallback)
-                          window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`);
-                      }
-                  } catch (e) {
-                      console.error('SendMessages Error:', e);
-                      alert('傳送失敗，請確認已在 LINE Developers Console 打開 chat_message.write 權限。');
-                      window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`);
-                  }
-              } else if (actionParam === 'share') {
-                  // ★ 喚起通訊錄模式 (liff.shareTargetPicker)
-                  setShareStatusText("正在喚起 LINE 通訊錄...");
-                  try {
-                      await liff.shareTargetPicker([flexMsg]);
-                      setShareStatusText('✅ 分享成功！視窗即將關閉...');
-                      setTimeout(() => liff.closeWindow(), 1000);
-                  } catch(e) {
-                      console.error("LIFF SDK Share Error:", e);
-                      if (e.message && e.message.includes('not allowed')) { 
-                          alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n即將為您重新登入以換發新 Token。"); 
-                          liff.logout(); window.location.reload(); 
-                      } else { 
-                          setShareStatusText('⚠️ 分享動作已取消或發生錯誤。'); 
-                          setTimeout(() => liff.closeWindow(), 2000); 
-                      }
-                  }
-              }
-           }
+             // 主動單點獲取推薦人資料，避免無限迴圈等待整個資料庫下載
+             let targetDistData = {};
+             if (rUid === liffProfile.userId && myDistributorData) { 
+                 targetDistData = myDistributorData; 
+             } else if (rUid) {
+                 try {
+                     const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${getTimestamp()}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors' }) });
+                     const distList = await res.json();
+                     targetDistData = distList.find(d => d.uid === rUid) || {};
+                 } catch(e) {}
+             }
+
+             const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
+             const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+
+             if (actionParam === 'send') {
+                 setShareStatusText("正在傳送名片至聊天室...");
+                 try {
+                     const context = liff.getContext();
+                     if (context && context.type !== 'none' && context.type !== 'external') {
+                         await liff.sendMessages([flexMsg]);
+                         setShareStatusText('✅ 傳送成功！視窗即將關閉...');
+                         setTimeout(() => liff.closeWindow(), 1500);
+                     } else {
+                         setShareStatusText('⚠️ 電腦版無聊天室可傳，為您展開專屬網頁...');
+                         setTimeout(() => window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`), 1500);
+                     }
+                 } catch (e) {
+                     console.error('SendMessages Error:', e);
+                     setShareStatusText('❌ 傳送失敗，請確認已於後台開啟權限。');
+                     setTimeout(() => window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`), 2000);
+                 }
+             } else if (actionParam === 'share') {
+                 setShareStatusText("正在喚起 LINE 通訊錄...");
+                 try {
+                     await liff.shareTargetPicker([flexMsg]);
+                     setShareStatusText('✅ 分享成功！視窗即將關閉...');
+                     setTimeout(() => liff.closeWindow(), 1500);
+                 } catch(e) {
+                     console.error("LIFF SDK Share Error:", e);
+                     if (e.message && e.message.includes('not allowed')) { 
+                         alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n即將為您重新登入以換發新 Token。"); 
+                         liff.logout(); window.location.reload(); 
+                     } else { 
+                         setShareStatusText('⚠️ 分享動作已取消或發生錯誤。'); 
+                         setTimeout(() => liff.closeWindow(), 2000); 
+                     }
+                 }
+             }
         };
-        // 確保依賴資料皆已就緒才執行動作
-        if (crmDistributors.length > 0) { processAutoAction(); } 
-        else if ((actionParam === 'share' || actionParam === 'send') && isLiffReady && isStatusChecked) { fetchFullCrmData(); }
-      }, [isLiffReady, itineraries, isStatusChecked, crmDistributors, actionParam]);
+
+        if (actionParam === 'share' || actionParam === 'send') {
+            processAutoAction();
+        }
+      }, [isLiffReady, isLoading, liffProfile, isStatusChecked, actionParam]);
 
       const initLiff = async () => {
         try {
@@ -528,7 +539,19 @@
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
-      // ★ 新增：平台多場域推廣網址複製機制
+      // ★ 執行：在此裝置喚起通訊錄傳送名片 (恢復的按鈕機制)
+      const triggerFlexSharing = async () => {
+        if (!isLiffReady || !liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
+        try {
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+          const res = await liff.shareTargetPicker([flexMsg]);
+          if (res) { showToast('✅ 名片已成功發送！'); setFlexModalItem(null); }
+        } catch (error) { 
+          if (error.message && error.message.includes('not allowed')) { alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。"); liff.logout(); window.location.reload(); } 
+          else { showToast('發送取消或發生錯誤: ' + error.message, 'error'); }
+        }
+      };
+
       const fallbackCopyTextToClipboard = (text) => {
         var textArea = document.createElement("textarea");
         textArea.value = text;
@@ -625,7 +648,6 @@
                       </div>
                   </div>
                   
-                  {/* ★ 佈局修正：移除 overflow-hidden，確保 Sticky 可正常運作 */}
                   <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-10 relative items-start">
                     
                     <div className="flex-1 w-full min-w-0 pr-0 lg:pr-8">
@@ -644,7 +666,6 @@
                         </div>
                     </div>
 
-                    {/* ★ 報名結帳側邊欄：黃金比例寬度，並精準卡在兩個導航列的下方 (top-150px) */}
                     <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 lg:sticky lg:top-[150px] self-start transition-all duration-300 z-10">
                         <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-2xl">
                             <div className="bg-[#b82337] text-white p-6 text-center"><p className="text-xs font-bold tracking-widest mb-1 opacity-90">專案特惠價</p><p className="text-4xl font-black"><span className="text-lg font-medium mr-1">TWD</span>{Number(tour.price).toLocaleString()}</p></div>
@@ -924,7 +945,7 @@
                   <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
                   <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
                     <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備推廣連結與名片</h3></div>
-                    <p className="text-gray-500 mb-8 font-medium">勾選想顯示在名片上的聯絡方式，然後選擇複製推廣連結。</p>
+                    <p className="text-gray-500 mb-8 font-medium">勾選想顯示在名片上的聯絡方式，然後選擇發送或複製連結。</p>
                     <div className="space-y-6">
                       <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
                         <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
@@ -939,15 +960,18 @@
                       </div>
                       
                       <div className="pt-6 border-t border-gray-200 mt-4 space-y-3">
-                        <p className="text-gray-500 text-sm font-bold mb-2">🚀 平台免串接推廣神器</p>
+                        <p className="text-gray-500 text-sm font-bold mb-2">🚀 平台推廣神器</p>
                         <button onClick={() => handleCopyUrl('web')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg">
                           <LinkIcon className="w-5 h-5 mr-2" /> (1) 複製「純網頁版」連結 (全場域通用)
                         </button>
                         <button onClick={() => handleCopyUrl('send')} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
-                          <Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (聊天室點擊即發)
+                          <Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (供 LINE OA 使用)
                         </button>
                         <button onClick={() => handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
                           <CopyIcon className="w-5 h-5 mr-2" /> (3) 複製「轉傳名片」連結 (用來群發客群)
+                        </button>
+                        <button onClick={() => triggerFlexSharing()} className="w-full bg-white text-[#00B900] border-2 border-[#00B900] hover:bg-green-50 font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
+                          <Share2 className="w-5 h-5 mr-2" /> (4) 在此裝置直接發送名片 (喚起通訊錄)
                         </button>
                       </div>
                     </div>
