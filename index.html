@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 平台級智能業務系統 (v3.7 篩選升級版)</title>
+  <title>旅遊管家 - 平台級智能業務系統 (v3.8 版面優化版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -60,7 +60,8 @@
     const BadgeDollarSign = ({ className }) => <IconWrapper className={className}><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></IconWrapper>;
     const FileCheck = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></IconWrapper>;
     const SendIcon = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
-    const FilterIcon = ({ className }) => <IconWrapper className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></IconWrapper>;
+    const Settings = ({ className }) => <IconWrapper className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
+    
     const RunningMan = ({ className }) => (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <circle cx="16" cy="5" r="2"/><path d="M12 9l3-2 1.5 2.5"/><path d="M10.5 16.5L8 11h3l2.5 4 4.5-1.5"/><path d="M14.5 22l-2-6-3.5 2.5"/><path d="M5.5 22L8 17"/>
@@ -72,11 +73,9 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LOGIN_URL = 'login.html'; 
 
-    // ★ 核心修復：防止電話掉 0 的顯示與送單轉型
     const formatPhone = (phone) => {
         if (!phone) return '';
         const p = String(phone).trim();
-        // 台灣手機若被 Excel 吞掉 0 會變 9 開頭的 9 碼數字
         if (p.length === 9 && p.startsWith('9')) return '0' + p;
         return p;
     };
@@ -219,7 +218,6 @@
       const [crmOrders, setCrmOrders] = useState([]); 
       const [myOrders, setMyOrders] = useState([]); 
 
-      // ★ 搜尋與過濾條件 State
       const [searchRegion, setSearchRegion] = useState('');
       const [searchStartDate, setSearchStartDate] = useState('');
       const [searchEndDate, setSearchEndDate] = useState('');
@@ -243,6 +241,9 @@
       const [editingDistributor, setEditingDistributor] = useState(null);
       const [editFormData, setEditFormData] = useState({});
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
+
+      // ★ 新增：經銷商個人資料設定彈窗狀態
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
 
       const getTimestamp = () => new Date().getTime();
 
@@ -388,7 +389,6 @@
 
       const handleBookNow = (tour) => {
           if (!isGeneralMember) { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}&t=${tour.id}`; return; }
-          // ★ 套用 formatPhone 防止空號
           setBookingModalData({ 
               tourId: tour.id, tourTitle: tour.title, price: tour.price, pax: 1, totalAmount: tour.price, 
               contactName: liffProfile?.displayName || '', 
@@ -534,12 +534,32 @@
           } catch (err) { showToast('轉換失敗，請確認 Token 是否正確', 'error'); }
       };
 
-      const saveMyTgSettings = async () => {
+      // ★ 儲存經銷商自行設定的資料
+      const saveMySettings = async () => {
           try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorInfo', uid: liffProfile.userId, tgToken: myDistributorData.tgToken, tgChatId: myDistributorData.tgChatId }) });
+              const res = await fetch(`${WORKER_URL}/api/itineraries`, { 
+                  method: 'POST', 
+                  headers: { 'Content-Type': 'application/json' }, 
+                  body: JSON.stringify({ 
+                      action: 'updateDistributorInfo', 
+                      uid: liffProfile.userId, 
+                      phone: myDistributorData.phone,
+                      lineLink: myDistributorData.lineLink,
+                      lineAtLink: myDistributorData.lineAtLink,
+                      fbLink: myDistributorData.fbLink,
+                      webLink: myDistributorData.webLink,
+                      mapLink: myDistributorData.mapLink,
+                      tgToken: myDistributorData.tgToken, 
+                      tgChatId: myDistributorData.tgChatId 
+                  }) 
+              });
               const result = await res.json();
-              if (result.success) showToast('✅ Telegram 推播設定已成功儲存！'); else throw new Error('儲存失敗');
-          } catch(e) { showToast('推播設定儲存失敗，請稍後再試', 'error'); }
+              if (result.success) {
+                  showToast('✅ 設定已成功儲存！');
+                  setShowSettingsModal(false);
+                  checkMyStatus(liffProfile.userId); 
+              } else throw new Error('儲存失敗');
+          } catch(e) { showToast('設定儲存失敗，請稍後再試', 'error'); }
       };
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
@@ -584,92 +604,6 @@
       if (actionParam === 'share' || actionParam === 'send') {
           return (<div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center"><div className="text-blue-600 mb-6"><RunningMan className="w-20 h-20 animate-run" /></div><p className="text-gray-600 font-bold text-2xl tracking-widest animate-pulse">{shareStatusText}</p></div>);
       }
-
-      // ★ 完整渲染 Modals 區塊
-      const renderModals = () => (
-          <>
-            {flexModalItem && (
-              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
-                  <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
-                  <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
-                    <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備推廣連結與名片</h3></div>
-                    <p className="text-gray-500 mb-8 font-medium">勾選想顯示在名片上的聯絡方式，然後選擇複製推廣連結。</p>
-                    <div className="space-y-6">
-                      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-                        <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
-                        <div className="grid grid-cols-2 gap-3">
-                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話</label>
-                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE</label>
-                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@</label>
-                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專</label>
-                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站</label>
-                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
-                        </div>
-                      </div>
-                      <div className="pt-6 border-t border-gray-200 mt-4 space-y-3">
-                        <p className="text-gray-500 text-sm font-bold mb-2">🚀 平台推廣神器</p>
-                        <button onClick={() => handleCopyUrl('web')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg"><LinkIcon className="w-5 h-5 mr-2" /> (1) 複製「純網頁版」連結 (全場域通用)</button>
-                        <button onClick={() => handleCopyUrl('send')} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (供 LINE OA 使用)</button>
-                        <button onClick={() => handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><CopyIcon className="w-5 h-5 mr-2" /> (3) 複製「轉傳名片」連結 (用來群發客群)</button>
-                        <button onClick={triggerFlexSharing} className="w-full bg-white text-[#00B900] border-2 border-[#00B900] hover:bg-green-50 font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><Share2 className="w-5 h-5 mr-2" /> (4) 在此裝置直接發送名片 (喚起通訊錄)</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
-                     <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">名片預覽畫面</p>
-                     <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top flex flex-col">
-                       <div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div>
-                       <div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#b82337] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div>
-                       <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm">查看行程 / 立即報名</div>
-                          <div className="w-full bg-[#b82337] text-white text-center py-2.5 rounded-xl font-bold text-sm">📤 分享此行程給好友</div>
-                          {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
-                          {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
-                          {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
-                          {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
-                          {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
-                          {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
-                       </div>
-                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {bookingModalData && (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl animate-fade-in-up overflow-hidden">
-                  <div className="bg-[#b82337] p-6 text-white flex justify-between items-center"><h3 className="text-xl font-bold flex items-center"><ClipboardList className="w-6 h-6 mr-2" /> 填寫報名資料</h3><button onClick={() => setBookingModalData(null)} className="text-white hover:text-red-200 transition"><X className="w-6 h-6" /></button></div>
-                  <form onSubmit={submitBooking} className="p-6 md:p-8">
-                      <div className="mb-6 pb-6 border-b border-gray-100">
-                          <p className="text-sm font-bold text-gray-400 mb-1">預約行程</p>
-                          <p className="text-xl font-black text-gray-800 leading-tight mb-2">{bookingModalData.tourTitle}</p>
-                          <div className="flex justify-between items-end">
-                              <div><label className="block text-sm font-bold text-gray-500 mb-1">報名人數</label><input type="number" min="1" required value={bookingModalData.pax} onChange={(e) => setBookingModalData({...bookingModalData, pax: parseInt(e.target.value)||1, totalAmount: (parseInt(e.target.value)||1) * bookingModalData.price})} className="w-24 rounded-lg border-gray-300 border p-2 outline-none text-center font-bold text-lg"/></div>
-                              <div className="text-right"><p className="text-xs text-gray-400 font-bold mb-1">總金額</p><p className="text-2xl font-black text-[#b82337]">TWD {Number(bookingModalData.totalAmount).toLocaleString()}</p></div>
-                          </div>
-                      </div>
-                      <div className="space-y-4 mb-8">
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">主要聯絡人姓名</label><input type="text" required value={bookingModalData.contactName} onChange={(e) => setBookingModalData({...bookingModalData, contactName: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base"/></div>
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡電話</label><input type="tel" required value={bookingModalData.contactPhone} onChange={(e) => setBookingModalData({...bookingModalData, contactPhone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base"/></div>
-                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">特殊需求備註 (選填)</label><textarea rows="2" value={bookingModalData.note} onChange={(e) => setBookingModalData({...bookingModalData, note: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base" placeholder="例如：素食、嬰兒車需求等"/></div>
-                      </div>
-                      <button type="submit" disabled={isSubmitting} className={`w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}>{isSubmitting ? '訂單處理中...' : '確認送出訂單'}</button>
-                  </form>
-                </div>
-              </div>
-            )}
-            {deleteModalId && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
-                  <div className="flex items-center text-red-600 mb-5"><AlertCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-bold">確認下架此行程？</h3></div>
-                  <p className="text-gray-600 mb-8 text-lg leading-relaxed">下架後該行程將從前台及資料庫移除，確定要繼續嗎？</p>
-                  <div className="flex justify-end space-x-4"><button onClick={() => setDeleteModalId(null)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-lg">取消</button><button onClick={confirmDelete} className="px-6 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 text-lg">確定下架</button></div>
-                </div>
-              </div>
-            )}
-          </>
-      );
 
       const renderNavBar = () => (
         <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -829,7 +763,6 @@
       const renderDistributorTab = () => {
         if (!distributorStatus) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2><p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p><button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button></div></div>);
         
-        // ★ 篩選經銷商訂單
         let filteredDistOrders = distributorStats.orders;
         if (distOrderSearchMonth) filteredDistOrders = filteredDistOrders.filter(o => o.orderDate && o.orderDate.startsWith(distOrderSearchMonth));
         if (distOrderSearchKeyword) {
@@ -844,34 +777,26 @@
         
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
-            
-            {distributorStatus === 'approved' && (<>
-                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mt-8 mb-12">
-                    <div className="p-6 md:p-8 border-b border-gray-100 bg-blue-50 flex justify-between items-center">
-                        <div>
-                            <h2 className="text-2xl font-bold text-blue-800 flex items-center"><Send className="w-6 h-6 mr-3" /> Telegram 訂單自動推播設定</h2>
-                            <p className="text-blue-600 mt-2 text-sm">設定您的專屬機器人，當有客戶透過您的連結下單時，將即時發送訂單明細給您！</p>
-                        </div>
-                    </div>
-                    <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Bot Token (金鑰)</label>
-                            <input type="text" value={myDistributorData?.tgToken || ''} onChange={e => setMyDistributorData({...myDistributorData, tgToken: e.target.value})} className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 font-mono text-sm" placeholder="例如：123456789:ABCDefghIJKLmnop..." />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2 flex justify-between items-center">
-                                <span>Chat ID (對話 ID)</span>
-                                <button onClick={autoFetchTgChatId} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition font-bold shadow-sm">自動獲取 ID</button>
-                            </label>
-                            <input type="text" value={myDistributorData?.tgChatId || ''} onChange={e => setMyDistributorData({...myDistributorData, tgChatId: e.target.value})} className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 font-mono text-sm" placeholder="例如：-5248604938" />
-                        </div>
-                        <div className="md:col-span-2 flex justify-end mt-2">
-                            <button onClick={saveMyTgSettings} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition text-lg flex items-center"><CheckCircle className="w-5 h-5 mr-2" /> 儲存推播設定</button>
-                        </div>
+            {/* ★ 更新版：右上角加入設定按鈕 */}
+            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}>
+              <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 justify-between">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+                    <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
+                    <div>
+                        <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>
+                        {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣連結」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
                     </div>
                 </div>
-
+                {distributorStatus === 'approved' && (
+                    <button onClick={() => setShowSettingsModal(true)} className="bg-white/20 hover:bg-white/30 text-white border border-white/50 px-5 py-2.5 rounded-xl font-bold flex items-center transition backdrop-blur-sm shadow-sm whitespace-nowrap">
+                        <Settings className="w-5 h-5 mr-2" /> 帳號設定與推播
+                    </button>
+                )}
+              </div>
+              <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div>
+            </div>
+            
+            {distributorStatus === 'approved' && (<>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center relative overflow-hidden"><div className="bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><BadgeDollarSign className="w-8 h-8 text-emerald-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積總銷售額</p><p className="text-3xl font-black text-gray-800">${totalSales.toLocaleString()}</p></div></div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 flex items-center relative overflow-hidden"><div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mr-5 flex-shrink-0"><FileCheck className="w-8 h-8 text-blue-600" /></div><div><p className="text-gray-500 font-bold text-sm mb-1">累積預估分潤</p><p className="text-3xl font-black text-gray-800">${totalCommission.toLocaleString()}</p></div></div>
@@ -886,15 +811,15 @@
                     </div>
                   ))}
                 </div>
-                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden flex flex-col">
                     <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><ClipboardList className="w-8 h-8 mr-3 text-emerald-600" /> 我的經銷業績明細</h2><p className="text-gray-500 mt-2">追蹤專屬客戶與訂單進度，預估分潤金額將於訂單確認後生效。</p></div>
                         <button onClick={() => fetchDistributorStats(liffProfile.userId)} className="text-emerald-600 hover:text-emerald-800 font-bold flex items-center text-sm border border-emerald-200 bg-white px-4 py-2 rounded-lg shadow-sm"><RefreshCw className="w-4 h-4 mr-1"/> 更新業績</button>
                     </div>
                     <div className="p-6 md:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
-                        <div className="xl:col-span-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                        <div className="xl:col-span-1 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm flex flex-col">
                              <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center"><span className="flex items-center"><Users className="w-5 h-5 mr-2 text-blue-500"/> 專屬推薦會員</span><span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">{distributorStats.users.length} 人</span></div>
-                             <div className="p-0 max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-gray-50"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">加入日期</th><th className="p-4 font-bold text-gray-500">姓名</th><th className="p-4 font-bold text-gray-500">電話</th></tr></thead><tbody className="divide-y divide-gray-100">{distributorStats.users.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚未有推薦會員</td></tr> : distributorStats.users.map(u => (<tr key={u.uid} className="hover:bg-gray-50 transition"><td className="p-4 text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800">{u.name}</td><td className="p-4 text-gray-600 font-mono">{formatPhone(u.phone)}</td></tr>))}</tbody></table></div>
+                             <div className="p-0 flex-1 overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-gray-50"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">加入日期</th><th className="p-4 font-bold text-gray-500">姓名</th><th className="p-4 font-bold text-gray-500">電話</th></tr></thead><tbody className="divide-y divide-gray-100">{distributorStats.users.length === 0 ? <tr><td colSpan="3" className="p-8 text-center text-gray-400">尚未有推薦會員</td></tr> : distributorStats.users.map(u => (<tr key={u.uid} className="hover:bg-gray-50 transition"><td className="p-4 text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800">{u.name}</td><td className="p-4 text-gray-600 font-mono">{formatPhone(u.phone)}</td></tr>))}</tbody></table></div>
                         </div>
                         <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm flex flex-col">
                              <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 font-bold text-gray-700 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -904,7 +829,7 @@
                                      <input type="text" value={distOrderSearchKeyword} onChange={e=>setDistOrderSearchKeyword(e.target.value)} placeholder="搜尋單號/行程/客戶..." className="rounded-lg border-gray-300 border p-2 text-sm outline-none flex-1 min-w-[150px]" />
                                  </div>
                              </div>
-                             <div className="p-0 overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar flex-1"><table className="w-full text-left text-sm min-w-[600px]"><thead className="sticky top-0 bg-gray-50 shadow-sm"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">訂單編號 / 日期</th><th className="p-4 font-bold text-gray-500">行程與報名人</th><th className="p-4 font-bold text-gray-500 text-right">銷售金額</th><th className="p-4 font-bold text-gray-500 text-right">預估分潤</th><th className="p-4 font-bold text-gray-500 text-center">狀態</th></tr></thead><tbody className="divide-y divide-gray-100">{filteredDistOrders.length === 0 ? <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold text-lg">查無符合的訂單</td></tr> : filteredDistOrders.map(o => (<tr key={o.orderId} className="hover:bg-gray-50 transition"><td className="p-4"><p className="text-gray-800 font-mono font-bold">#{o.orderId}</p><p className="text-xs text-gray-400 mt-1">{o.orderDate ? String(o.orderDate).substring(0, 10) : ''}</p></td><td className="p-4"><p className="font-bold text-[#b82337] line-clamp-1">{o.tourTitle}</p><p className="text-sm text-gray-600 mt-1">{o.contactName} ({o.pax}人)</p></td><td className="p-4 text-right font-bold text-gray-800">${Number(o.totalAmount).toLocaleString()}</td><td className="p-4 text-right font-black text-emerald-600 bg-emerald-50/50">${Number(o.commissionAmount).toLocaleString()}</td><td className="p-4 text-center"><div className="flex flex-col items-center gap-1"><span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.paymentStatus === '已付款' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{o.paymentStatus || '未付款'}</span><span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.orderStatus === '已確認' || o.orderStatus === '已出發' ? 'bg-blue-100 text-blue-700' : o.orderStatus === '已取消' ? 'bg-gray-200 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{o.orderStatus || '處理中'}</span></div></td></tr>))}</tbody></table></div>
+                             <div className="p-0 overflow-x-auto flex-1 max-h-[500px] overflow-y-auto custom-scrollbar"><table className="w-full text-left text-sm min-w-[600px]"><thead className="sticky top-0 bg-gray-50 shadow-sm"><tr className="border-b border-gray-200"><th className="p-4 font-bold text-gray-500">訂單編號 / 日期</th><th className="p-4 font-bold text-gray-500">行程與報名人</th><th className="p-4 font-bold text-gray-500 text-right">銷售金額</th><th className="p-4 font-bold text-gray-500 text-right">預估分潤</th><th className="p-4 font-bold text-gray-500 text-center">狀態</th></tr></thead><tbody className="divide-y divide-gray-100">{filteredDistOrders.length === 0 ? <tr><td colSpan="5" className="p-10 text-center text-gray-400 font-bold text-lg">查無符合的訂單</td></tr> : filteredDistOrders.map(o => (<tr key={o.orderId} className="hover:bg-gray-50 transition"><td className="p-4"><p className="text-gray-800 font-mono font-bold">#{o.orderId}</p><p className="text-xs text-gray-400 mt-1">{o.orderDate ? String(o.orderDate).substring(0, 10) : ''}</p></td><td className="p-4"><p className="font-bold text-[#b82337] line-clamp-1">{o.tourTitle}</p><p className="text-sm text-gray-600 mt-1">{o.contactName} ({o.pax}人)</p></td><td className="p-4 text-right font-bold text-gray-800">${Number(o.totalAmount).toLocaleString()}</td><td className="p-4 text-right font-black text-emerald-600 bg-emerald-50/50">${Number(o.commissionAmount).toLocaleString()}</td><td className="p-4 text-center"><div className="flex flex-col items-center gap-1"><span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.paymentStatus === '已付款' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{o.paymentStatus || '未付款'}</span><span className={`px-2 py-1 rounded text-[10px] font-bold w-full ${o.orderStatus === '已確認' || o.orderStatus === '已出發' ? 'bg-blue-100 text-blue-700' : o.orderStatus === '已取消' ? 'bg-gray-200 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{o.orderStatus || '處理中'}</span></div></td></tr>))}</tbody></table></div>
                         </div>
                     </div>
                 </div>
@@ -948,7 +873,6 @@
             </div>
         );
         
-        // ★ 篩選 CRM 訂單
         let filteredCrmOrders = crmOrders;
         if (crmOrderSearchMonth) filteredCrmOrders = filteredCrmOrders.filter(o => o.orderDate && o.orderDate.startsWith(crmOrderSearchMonth));
         if (crmOrderSearchKeyword) {
@@ -1100,6 +1024,136 @@
           </div>
         );
       };
+
+      // ★ 完整渲染 Modals (包含經銷商個人資料設定彈窗)
+      const renderModals = () => (
+          <>
+            {showSettingsModal && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl animate-fade-in-up overflow-hidden max-h-[90vh] flex flex-col">
+                  <div className="bg-gray-50 p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
+                    <h3 className="text-xl font-bold flex items-center text-gray-800"><Settings className="w-6 h-6 mr-2 text-emerald-600" /> 經銷商名片與推播設定</h3>
+                    <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-gray-600 transition"><X className="w-6 h-6" /></button>
+                  </div>
+                  <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
+                    <div>
+                      <h4 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2 flex items-center"><UserIcon className="w-5 h-5 mr-2 text-blue-500"/> 名片聯絡按鈕設定</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-xs font-bold text-gray-500 mb-1">聯絡電話</label><input type="text" value={myDistributorData?.phone || ''} onChange={e=>setMyDistributorData({...myDistributorData, phone: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-blue-500"/></div>
+                        <div><label className="block text-xs font-bold text-gray-500 mb-1">個人 LINE 網址</label><input type="text" value={myDistributorData?.lineLink || ''} onChange={e=>setMyDistributorData({...myDistributorData, lineLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-blue-500" placeholder="https://line.me/..."/></div>
+                        <div><label className="block text-xs font-bold text-gray-500 mb-1">官方 LINE@ 網址</label><input type="text" value={myDistributorData?.lineAtLink || ''} onChange={e=>setMyDistributorData({...myDistributorData, lineAtLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-blue-500" placeholder="https://lin.ee/..."/></div>
+                        <div><label className="block text-xs font-bold text-gray-500 mb-1">FB 粉絲專頁網址</label><input type="text" value={myDistributorData?.fbLink || ''} onChange={e=>setMyDistributorData({...myDistributorData, fbLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-blue-500"/></div>
+                        <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">實體店面導航 (Map)</label><input type="text" value={myDistributorData?.mapLink || ''} onChange={e=>setMyDistributorData({...myDistributorData, mapLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-blue-500"/></div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-lg text-gray-800 mb-2 border-b pb-2 flex items-center"><Send className="w-5 h-5 mr-2 text-blue-500"/> Telegram 訂單自動推播</h4>
+                      <p className="text-gray-500 text-xs mb-4">設定您的專屬機器人，當有客戶透過您的連結下單時，將即時發送通知給您。</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-blue-800 mb-1">Bot Token (機器人金鑰)</label>
+                            <input type="text" value={myDistributorData?.tgToken || ''} onChange={e => setMyDistributorData({...myDistributorData, tgToken: e.target.value})} className="w-full rounded-lg border border-blue-200 p-2.5 outline-none focus:border-blue-500 font-mono text-sm bg-white" placeholder="123456789:ABCDefghIJKLmnop..." />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-blue-800 mb-1 flex justify-between items-center">
+                                <span>Chat ID (對話 ID)</span>
+                                <button onClick={autoFetchTgChatId} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition font-bold shadow-sm">轉換自動獲取 ID</button>
+                            </label>
+                            <input type="text" value={myDistributorData?.tgChatId || ''} onChange={e => setMyDistributorData({...myDistributorData, tgChatId: e.target.value})} className="w-full rounded-lg border border-blue-200 p-2.5 outline-none focus:border-blue-500 font-mono text-sm bg-white" placeholder="-5248604938" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                    <button onClick={() => setShowSettingsModal(false)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-white border border-gray-300 hover:bg-gray-100 transition">取消</button>
+                    <button onClick={saveMySettings} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-8 rounded-xl shadow-md transition flex items-center">儲存設定</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {flexModalItem && (
+              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
+                  <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
+                  <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
+                    <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備推廣連結與名片</h3></div>
+                    <p className="text-gray-500 mb-8 font-medium">勾選想顯示在名片上的聯絡方式，然後選擇複製推廣連結。</p>
+                    <div className="space-y-6">
+                      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                        <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
+                        <div className="grid grid-cols-2 gap-3">
+                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話</label>
+                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE</label>
+                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@</label>
+                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專</label>
+                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站</label>
+                           <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
+                        </div>
+                      </div>
+                      <div className="pt-6 border-t border-gray-200 mt-4 space-y-3">
+                        <p className="text-gray-500 text-sm font-bold mb-2">🚀 平台推廣神器</p>
+                        <button onClick={() => handleCopyUrl('web')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg"><LinkIcon className="w-5 h-5 mr-2" /> (1) 複製「純網頁版」連結 (全場域通用)</button>
+                        <button onClick={() => handleCopyUrl('send')} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (供 LINE OA 使用)</button>
+                        <button onClick={() => handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><CopyIcon className="w-5 h-5 mr-2" /> (3) 複製「轉傳名片」連結 (用來群發客群)</button>
+                        <button onClick={triggerFlexSharing} className="w-full bg-white text-[#00B900] border-2 border-[#00B900] hover:bg-green-50 font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2"><Share2 className="w-5 h-5 mr-2" /> (4) 在此裝置直接發送名片 (喚起通訊錄)</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
+                     <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">名片預覽畫面</p>
+                     <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top flex flex-col">
+                       <div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div>
+                       <div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#b82337] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div>
+                       <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
+                          <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm">查看行程 / 立即報名</div>
+                          <div className="w-full bg-[#b82337] text-white text-center py-2.5 rounded-xl font-bold text-sm">📤 分享此行程給好友</div>
+                          {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
+                          {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
+                          {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
+                          {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
+                          {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
+                          {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
+                       </div>
+                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {bookingModalData && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl animate-fade-in-up overflow-hidden">
+                  <div className="bg-[#b82337] p-6 text-white flex justify-between items-center"><h3 className="text-xl font-bold flex items-center"><ClipboardList className="w-6 h-6 mr-2" /> 填寫報名資料</h3><button onClick={() => setBookingModalData(null)} className="text-white hover:text-red-200 transition"><X className="w-6 h-6" /></button></div>
+                  <form onSubmit={submitBooking} className="p-6 md:p-8">
+                      <div className="mb-6 pb-6 border-b border-gray-100">
+                          <p className="text-sm font-bold text-gray-400 mb-1">預約行程</p>
+                          <p className="text-xl font-black text-gray-800 leading-tight mb-2">{bookingModalData.tourTitle}</p>
+                          <div className="flex justify-between items-end">
+                              <div><label className="block text-sm font-bold text-gray-500 mb-1">報名人數</label><input type="number" min="1" required value={bookingModalData.pax} onChange={(e) => setBookingModalData({...bookingModalData, pax: parseInt(e.target.value)||1, totalAmount: (parseInt(e.target.value)||1) * bookingModalData.price})} className="w-24 rounded-lg border-gray-300 border p-2 outline-none text-center font-bold text-lg"/></div>
+                              <div className="text-right"><p className="text-xs text-gray-400 font-bold mb-1">總金額</p><p className="text-2xl font-black text-[#b82337]">TWD {Number(bookingModalData.totalAmount).toLocaleString()}</p></div>
+                          </div>
+                      </div>
+                      <div className="space-y-4 mb-8">
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">主要聯絡人姓名</label><input type="text" required value={bookingModalData.contactName} onChange={(e) => setBookingModalData({...bookingModalData, contactName: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡電話</label><input type="tel" required value={bookingModalData.contactPhone} onChange={(e) => setBookingModalData({...bookingModalData, contactPhone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base"/></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-1.5">特殊需求備註 (選填)</label><textarea rows="2" value={bookingModalData.note} onChange={(e) => setBookingModalData({...bookingModalData, note: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 outline-none text-base" placeholder="例如：素食、嬰兒車需求等"/></div>
+                      </div>
+                      <button type="submit" disabled={isSubmitting} className={`w-full bg-[#b82337] hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}>{isSubmitting ? '訂單處理中...' : '確認送出訂單'}</button>
+                  </form>
+                </div>
+              </div>
+            )}
+            {deleteModalId && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
+                  <div className="flex items-center text-red-600 mb-5"><AlertCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-bold">確認下架此行程？</h3></div>
+                  <p className="text-gray-600 mb-8 text-lg leading-relaxed">下架後該行程將從前台及資料庫移除，確定要繼續嗎？</p>
+                  <div className="flex justify-end space-x-4"><button onClick={() => setDeleteModalId(null)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-lg">取消</button><button onClick={confirmDelete} className="px-6 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 text-lg">確定下架</button></div>
+                </div>
+              </div>
+            )}
+          </>
+      );
 
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
