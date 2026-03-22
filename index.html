@@ -61,7 +61,6 @@
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
-
         const buttons = [
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
             { "type": "button", "style": "primary", "color": "#FF334B", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
@@ -90,144 +89,92 @@
         };
     };
 
-    // =========================================================================
-    // ★ 巨匠級行程渲染器：智慧狀態機解析
-    // =========================================================================
     const renderAgencyBlogDescription = (text) => {
-        if (!text) return null;
-        const lines = text.split('\n');
-        const blocks = [];
-        let currentBlock = { type: 'intro', content: [], meals: [], hotels: [] };
-        
-        let inMeal = false;
-        let inHotel = false;
+      if (!text) return null;
+      const lines = text.split('\n');
+      const blocks = [];
+      let currentBlock = { type: 'intro', content: [], meals: [], hotels: [] };
+      let inMeal = false; let inHotel = false;
 
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) {
-                currentBlock.content.push({ type: 'space' });
-                continue;
-            }
+      for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
 
-            // 處理圖片 (Markdown 或 Http)
-            const mdMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
-            const isHttp = line.startsWith('http') && !line.includes(' ');
-            if (mdMatch || isHttp) {
-                const imgUrl = mdMatch ? mdMatch[2] : line;
-                currentBlock.content.push({ type: 'image', url: imgUrl });
-                inMeal = false; inHotel = false;
-                continue;
-            }
+          const mdMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
+          const isHttp = line.startsWith('http') && !line.includes(' ');
+          if (mdMatch || isHttp) {
+              const imgUrl = mdMatch ? mdMatch[2] : line;
+              currentBlock.content.push({ type: 'image', url: imgUrl });
+              inMeal = false; inHotel = false; continue;
+          }
 
-            // 處理 Day 標題
-            const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
-            if (dayMatch) {
-                blocks.push(currentBlock);
-                currentBlock = { 
-                    type: 'day', 
-                    dayText: dayMatch[1].replace(/\s+/g, ''), 
-                    title: dayMatch[2].replace(/^[:：\-\s]+/, ''),
-                    content: [], meals: [], hotels: [] 
-                };
-                inMeal = false; inHotel = false;
-                continue;
-            }
+          const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
+          if (dayMatch) {
+              blocks.push(currentBlock);
+              currentBlock = { type: 'day', dayText: dayMatch[1].replace(/\s+/g, ''), title: dayMatch[2].replace(/^[:：\-\s]+/, ''), content: [], meals: [], hotels: [] };
+              inMeal = false; inHotel = false; continue;
+          }
 
-            // 處理餐食與住宿
-            if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) {
-                inMeal = true; inHotel = false;
-                currentBlock.meals.push(line);
-                continue;
-            }
-            if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) {
-                inHotel = true; inMeal = false;
-                currentBlock.hotels.push(line);
-                continue;
-            }
-            if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) {
-                currentBlock.meals.push(line);
-                continue;
-            }
-            if (inHotel && !line.startsWith('Day')) {
-                 if (line.length > 40) { // 太長表示回到內文了
-                     inHotel = false;
-                     currentBlock.content.push({ type: 'text', text: line });
-                 } else {
-                     currentBlock.hotels.push(line);
-                 }
-                 continue;
-            }
+          if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
+          if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
+          if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
+          if (inHotel && !line.startsWith('Day')) {
+               if (line.length > 40) { inHotel = false; currentBlock.content.push({ type: 'text', text: line }); } 
+               else { currentBlock.hotels.push(line); }
+               continue;
+          }
 
-            // 一般內文
-            inMeal = false; inHotel = false;
-            currentBlock.content.push({ type: 'text', text: line });
-        }
-        blocks.push(currentBlock);
+          inMeal = false; inHotel = false;
+          currentBlock.content.push({ type: 'text', text: line });
+      }
+      blocks.push(currentBlock);
 
-        return blocks.map((block, bIdx) => (
-            <div key={bIdx} className="mb-16 w-full">
-                {block.type === 'day' && (
-                    <div className="mb-10 mt-12">
-                        <div className="text-center mb-6">
-                            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-3">{block.dayText}</h2>
-                            <div className="flex justify-center"><div className="w-24 border-b-4 border-dashed border-red-700"></div></div>
-                        </div>
-                        {block.title && (
-                            <h3 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center justify-center lg:justify-start">
-                                <span className="text-red-600 mr-3 text-xl">— {block.dayText.replace(/\D/g, '') || '*'}</span> {block.title}
-                            </h3>
-                        )}
-                    </div>
-                )}
-                
-                <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify px-2">
-                    {block.content.map((item, idx) => {
-                        if (item.type === 'space') return <div key={idx} className="h-6"></div>;
-                        if (item.type === 'image') return (
-                            <div key={idx} className="my-10 -mx-4 lg:-mx-8">
-                                <img src={item.url} className="w-full h-auto object-cover max-h-[800px] shadow-sm rounded-lg" alt="行程景點" />
-                                <div className="text-center text-sm text-gray-400 mt-2">
-                                   若圖片無法顯示，表示該圖庫禁止外部連接 (<a href={item.url} target="_blank" rel="noreferrer" className="underline">點此查看原圖</a>)
-                                </div>
-                            </div>
-                        );
-                        return <p key={idx} className="mb-5">{item.text}</p>;
-                    })}
-                </div>
+      return blocks.map((block, bIdx) => (
+          <div key={bIdx} className="mb-16 w-full">
+              {block.type === 'day' && (
+                  <div className="mb-10 mt-12">
+                      <div className="text-center mb-6"><h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-3">{block.dayText}</h2><div className="flex justify-center"><div className="w-24 border-b-4 border-dashed border-red-700"></div></div></div>
+                      {block.title && (<h3 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center justify-center lg:justify-start"><span className="text-red-600 mr-3 text-xl">— {block.dayText.replace(/\D/g, '') || '*'}</span> {block.title}</h3>)}
+                  </div>
+              )}
+              
+              <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify px-2">
+                  {block.content.map((item, idx) => {
+                      if (item.type === 'space') return <div key={idx} className="h-6"></div>;
+                      if (item.type === 'image') return (
+                          <div key={idx} className="my-10 -mx-4 lg:-mx-8">
+                              <img src={item.url} className="w-full h-auto object-cover max-h-[800px] shadow-sm rounded-lg" alt="行程景點" />
+                              <div className="text-center text-sm text-gray-400 mt-2">若圖片無法顯示，表示該圖庫禁止外部連接 (<a href={item.url} target="_blank" rel="noreferrer" className="underline">點此查看原圖</a>)</div>
+                          </div>
+                      );
+                      return <p key={idx} className="mb-5">{item.text}</p>;
+                  })}
+              </div>
 
-                {(block.meals.length > 0 || block.hotels.length > 0) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
-                        {block.meals.length > 0 && (
-                            <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
-                                <div className="text-4xl mr-5 opacity-80">🍽️</div>
-                                <div className="w-full">
-                                    <p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">餐食</p>
-                                    <div className="space-y-3 text-gray-600 font-medium">
-                                        {block.meals.map((m, mIdx) => <p key={mIdx}>{m}</p>)}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {block.hotels.length > 0 && (
-                            <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
-                                <div className="text-4xl mr-5 opacity-80">🏨</div>
-                                <div className="w-full">
-                                    <p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">住宿</p>
-                                    <div className="space-y-3 text-gray-600 font-medium">
-                                        {block.hotels.map((h, hIdx) => <p key={hIdx}>{h}</p>)}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        ));
+              {(block.meals.length > 0 || block.hotels.length > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+                      {block.meals.length > 0 && (
+                          <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
+                              <div className="text-4xl mr-5 opacity-80">🍽️</div>
+                              <div className="w-full"><p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">餐食</p><div className="space-y-3 text-gray-600 font-medium">{block.meals.map((m, mIdx) => <p key={mIdx}>{m}</p>)}</div></div>
+                          </div>
+                      )}
+                      {block.hotels.length > 0 && (
+                          <div className="border border-gray-200 p-8 flex items-start bg-white shadow-sm">
+                              <div className="text-4xl mr-5 opacity-80">🏨</div>
+                              <div className="w-full"><p className="font-bold text-gray-900 mb-4 border-l-4 border-red-700 pl-3 text-lg">住宿</p><div className="space-y-3 text-gray-600 font-medium">{block.hotels.map((h, hIdx) => <p key={hIdx}>{h}</p>)}</div></div>
+                          </div>
+                      )}
+                  </div>
+              )}
+          </div>
+      ));
     };
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
+      const [tourDetailTab, setTourDetailTab] = useState('itinerary'); // ★ 專屬網頁頁籤狀態 (itinerary | notes)
       const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
       const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
       const [selectedTourId, setSelectedTourId] = useState(() => { return urlParams.get('t') || urlParams.get('tour_id') || null; });
@@ -268,7 +215,9 @@
       const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
       const [uploadMode, setUploadMode] = useState('dm');
       const [ocrStatus, setOcrStatus] = useState('idle');
-      const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' });
+      
+      // ★ DraftData 加入 notes 屬性
+      const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' });
       
       const [deleteModalId, setDeleteModalId] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
@@ -372,7 +321,7 @@
         } catch (error) { console.error('Fetch error', error); } finally { setIsLoading(false); }
       };
 
-      const changeTab = (newTab) => { setActiveTab(newTab); setSelectedTourId(null); window.history.replaceState({}, '', `?tab=${newTab}`); if (newTab === 'crm' || newTab === 'distributor') fetchFullCrmData(); };
+      const changeTab = (newTab) => { setActiveTab(newTab); setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.replaceState({}, '', `?tab=${newTab}`); if (newTab === 'crm' || newTab === 'distributor') fetchFullCrmData(); };
       const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
       const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid || ''}`; };
       const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid || ''}`; };
@@ -457,7 +406,7 @@
               try {
                 const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newItinerary) });
                 const dbResult = await dbRes.json();
-                if (dbResult.success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
+                if (dbResult.success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
               } catch (dbErr) { setOcrStatus('done'); showToast('寫入失敗，請手動點擊「儲存」', 'error'); }
             } else throw new Error(aiResult.error || '解析失敗');
             setIsUploadingImage(false);
@@ -472,7 +421,7 @@
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submitData) });
           const result = await res.json();
-          if (result.success) { showToast(isEditing ? '修改成功！' : '新增成功！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); setUploadMode('dm'); fetchItineraries(); } else throw new Error('操作失敗');
+          if (result.success) { showToast(isEditing ? '修改成功！' : '新增成功！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); setOcrStatus('idle'); setUploadMode('dm'); fetchItineraries(); } else throw new Error('操作失敗');
         } catch (error) { showToast('寫入資料庫錯誤', 'error'); }
       };
 
@@ -495,15 +444,37 @@
         } catch (e) { showToast('更新失敗，請檢查資料', 'error'); }
       };
 
-      // 權限徽章
+      const handleApproveSubmit = async () => {
+        if (!approveModalUser) return;
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorStatus', uid: approveModalUser.uid, status: 'approved', commission: approveData.commission, note: approveData.note }) });
+          const result = await res.json();
+          if (result.success) { showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); setApproveModalUser(null); fetchFullCrmData(); }
+        } catch (e) { showToast('審核失敗', 'error'); }
+      };
+
+      const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
+
+      const triggerFlexSharing = async () => {
+        if (!isLiffReady || !liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
+        try {
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+          const res = await liff.shareTargetPicker([flexMsg]);
+          if (res) { showToast('✅ 名片已成功發送！'); setFlexModalItem(null); }
+        } catch (error) { 
+          if (error.message && error.message.includes('not allowed')) { alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。"); liff.logout(); window.location.reload(); } 
+          else { showToast('發送取消或發生錯誤: ' + error.message, 'error'); }
+        }
+      };
+
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
-      if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 管理員</span>;
+      if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 系統管理員</span>;
       else if (distributorStatus === 'approved') roleBadge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 金牌經銷商</span>;
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
 
       // =========================================================================
-      // ★ 模組拆分：獨立 Render 區塊
+      // ★ 畫面渲染區 (Render Sections)
       // =========================================================================
 
       const renderNavBar = () => (
@@ -546,16 +517,32 @@
                           </div>
                       </div>
                   </div>
+                  
+                  {/* ★ 加入前端切換頁籤狀態 */}
                   <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
                       <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center h-16">
-                          <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full"><button className="text-red-700 border-b-4 border-red-700 h-full px-4">行程介紹與內容</button><button className="hover:text-red-700 h-full px-4 transition-colors">注意事項</button></div>
-                          <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
+                          <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
+                            <button onClick={() => setTourDetailTab('itinerary')} className={`h-full px-4 transition-colors ${tourDetailTab === 'itinerary' ? 'text-red-700 border-b-4 border-red-700' : 'hover:text-red-700'}`}>行程介紹與內容</button>
+                            <button onClick={() => setTourDetailTab('notes')} className={`h-full px-4 transition-colors ${tourDetailTab === 'notes' ? 'text-red-700 border-b-4 border-red-700' : 'hover:text-red-700'}`}>注意事項</button>
+                          </div>
+                          <button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button>
                       </div>
                   </div>
                   <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-12 relative">
                     <div className="flex-1 w-full min-w-0 pr-0 lg:pr-12">
-                        <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
-                        <div className="pb-10 w-full">{renderAgencyBlogDescription(tour.description)}</div>
+                        <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-red-700 font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
+                        <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200">
+                           <button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-red-700 border-b-2 border-red-700' : 'text-gray-500'}`}>行程介紹</button>
+                           <button onClick={() => setTourDetailTab('notes')} className={`pb-2 font-bold ${tourDetailTab === 'notes' ? 'text-red-700 border-b-2 border-red-700' : 'text-gray-500'}`}>注意事項</button>
+                        </div>
+                        
+                        <div className="pb-10 w-full animate-fade-in">
+                          {tourDetailTab === 'itinerary' ? renderAgencyBlogDescription(tour.description) : (
+                            <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-[1.1rem] leading-[2.2] text-gray-700 tracking-wide whitespace-pre-wrap font-medium">
+                              {tour.notes || '目前此行程尚無特殊注意事項。'}
+                            </div>
+                          )}
+                        </div>
                     </div>
                     <div className="w-full lg:w-[400px] flex-shrink-0">
                         <div className="sticky top-40 bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-xl">
@@ -761,14 +748,14 @@
             <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
               <div className="flex justify-between items-center border-b pb-4 mb-6"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統</h2><button onClick={handleUpdateContent} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm"><RefreshCw className="w-4 h-4 mr-2" /> {draftData.id ? '儲存修改' : '手動新增上架'}</button></div>
               {!draftData.id && (
-                <div className="flex space-x-4 mb-8 max-w-2xl"><button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button><button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button></div>
+                <div className="flex space-x-4 mb-8 max-w-2xl"><button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button><button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button></div>
               )}
               {uploadMode === 'dm' && !draftData.id && (
                 <div className="mb-8 w-full max-w-4xl"><div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative"><div className="space-y-2 text-center"><ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" /><label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 border shadow-sm px-4 py-2"><span>選擇 DM 圖片</span><input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} /></label></div>{ocrStatus === 'processing' && <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm"><RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" /><p className="text-blue-700 font-bold text-2xl">ChatGPT 解析中...</p></div>}</div></div>
               )}
               {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
                 <div className="bg-gray-50/80 p-6 lg:p-8 rounded-2xl border border-gray-200 relative">
-                  {draftData.id && <button onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setUploadMode('dm'); setOcrStatus('idle'); }} className="absolute top-6 right-6 text-gray-400 bg-white rounded-full p-1.5 border shadow-sm"><X className="w-6 h-6" /></button>}
+                  {draftData.id && <button onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); setUploadMode('dm'); setOcrStatus('idle'); }} className="absolute top-6 right-6 text-gray-400 bg-white rounded-full p-1.5 border shadow-sm"><X className="w-6 h-6" /></button>}
                   <div className="flex items-center mb-8"><h3 className="text-2xl font-bold">{draftData.id ? '✏️ 修改行程' : '📝 行程內容草稿'}</h3></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
                     <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
@@ -802,6 +789,13 @@
                     </div>
                     <textarea rows={15} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed" placeholder="輸入詳細內容... 點擊右上角「插入內文圖片」即可上傳圖片並自動插入版面中！"/>
                   </div>
+
+                  {/* ★ 新增：注意事項編輯區 */}
+                  <div className="mt-8">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">注意事項 / 報名須知</label>
+                    <textarea rows={8} value={draftData.notes || ''} onChange={(e) => setDraftData({...draftData, notes: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed" placeholder="輸入退費規定、航班行李限制、簽證須知等..."/>
+                  </div>
+
                 </div>
               )}
             </div>
