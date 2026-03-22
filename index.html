@@ -1630,8 +1630,8 @@
         );
 
         return (
-          <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-stretch justify-center animate-fade-in">
-            <div className="bg-white w-full flex flex-col" style={{maxWidth:'1400px',margin:'0 auto'}}>
+          <div className="fixed inset-0 z-[90] bg-white flex flex-col animate-fade-in">
+            <div className="bg-white w-full flex flex-col" style={{height:'100%'}}>
               {/* Header */}
               <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -1656,7 +1656,7 @@
                     <span className="text-xs bg-emerald-100 text-emerald-700 font-black px-2.5 py-1 rounded-full">已選 {distSelectedIds.size} 個</span>
                   )}
                   <button onClick={() => { setPromoToolOpen(false); setFlexModalItem(null); setDistSelectedIds(new Set()); }}
-                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
+                    className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white transition shadow-sm">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
