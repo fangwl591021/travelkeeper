@@ -51,6 +51,9 @@
     const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
     const MessageCircle = ({ className }) => <IconWrapper className={className}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></IconWrapper>;
     const ClipboardList = ({ className }) => <IconWrapper className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
+    const CopyIcon = ({ className }) => <IconWrapper className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
+    const LinkIcon = ({ className }) => <IconWrapper className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconWrapper>;
+    const Smartphone = ({ className }) => <IconWrapper className={className}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></IconWrapper>;
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
@@ -61,6 +64,7 @@
         const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
         const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
         const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
+
         const buttons = [
             { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
             { "type": "button", "style": "primary", "color": "#b82337", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
@@ -89,10 +93,6 @@
         };
     };
 
-    // =========================================================================
-    // ★ 巨匠級行程渲染器 (終極排版大師) ★
-    // 解決 Sticky 失效與防盜鏈提示視覺
-    // =========================================================================
     const renderAgencyBlogDescription = (text) => {
       if (!text) return null;
       const lines = text.split('\n');
@@ -104,7 +104,6 @@
           let line = lines[i].trim();
           if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
 
-          // 1. Day 標題判定
           const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
           if (dayMatch) {
               if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') {
@@ -114,7 +113,6 @@
               inMeal = false; inHotel = false; continue;
           }
 
-          // 2. 餐食與住宿判定
           if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
           if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
           if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
@@ -122,7 +120,6 @@
 
           inMeal = false; inHotel = false;
 
-          // 3. 圖文交錯防呆解析
           const parts = line.split(/(!\[.*?\]\(.*?\))/g);
           const parsedLine = parts.filter(p => p).map((part) => {
               const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
@@ -136,7 +133,6 @@
 
       return blocks.map((block, bIdx) => (
           <div key={bIdx} className="mb-12 w-full max-w-full">
-              {/* Day 標題渲染 */}
               {block.dayText !== '行程介紹' && (
                   <div className="mb-10 mt-16 w-full">
                       <div className="text-center relative mb-8">
@@ -152,7 +148,6 @@
                   </div>
               )}
               
-              {/* 內文渲染區 */}
               <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
                   {block.content.map((item, idx) => {
                       if (item.type === 'space') return <div key={idx} className="h-6"></div>;
@@ -162,9 +157,7 @@
                                   {item.elements.map((el, eIdx) => {
                                       if (el.type === 'image') return (
                                           <span key={eIdx} className="block my-10 w-full relative group">
-                                              {/* 暴力滿版圖片 */}
                                               <img src={el.url} className="w-full h-auto max-w-full object-cover rounded-none md:rounded-2xl max-h-[800px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                                              {/* 防盜鏈提示：加上淺藍色背景與強烈提示字眼 */}
                                               <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words">
                                                 <span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>
                                                 原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a>
@@ -180,7 +173,6 @@
                   })}
               </div>
 
-              {/* 巨匠雙拼資訊卡片 */}
               {(block.meals.length > 0 || block.hotels.length > 0) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
                       {block.meals.length > 0 && (
@@ -221,10 +213,10 @@
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
+      const actionParam = urlParams.get('action'); // 支援 'share' (喚起通訊錄) 與 'send' (原地傳送)
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
       const [tourDetailTab, setTourDetailTab] = useState('itinerary'); 
-      const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
-      const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
+      const [shareStatusText, setShareStatusText] = useState('系統安全驗證中...');
       const [selectedTourId, setSelectedTourId] = useState(() => { return urlParams.get('t') || urlParams.get('tour_id') || null; });
       const [refUid, setRefUid] = useState(() => {
         const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
@@ -275,41 +267,73 @@
       const [approveData, setApproveData] = useState({ commission: 10, note: '' });
       const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
 
-      // ★ 加入時間戳防止 API 快取
       const getTimestamp = () => new Date().getTime();
 
       useEffect(() => { initLiff(); fetchItineraries(); }, []);
 
-      const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
-          try {
-            const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-            await liff.shareTargetPicker([flexMsg]);
-            if (isAutoMode) { setShareStatusText('✅ 成功發送名片！正在關閉視窗...'); setTimeout(() => liff.closeWindow(), 1500); } 
-            else { showToast('✅ 名片已成功發送！'); setFlexModalItem(null); }
-          } catch(e) {
-            console.error("LIFF SDK Share Error:", e);
-            if (e.message && e.message.includes('not allowed')) { alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。"); liff.logout(); window.location.reload(); } 
-            else { if (isAutoMode) { setShareStatusText('⚠️ 轉傳取消或發生錯誤。'); setTimeout(() => liff.closeWindow(), 2000); } else { showToast('已取消發送或發生未知的錯誤', 'error'); } }
-          }
-      };
-
+      // =========================================================================
+      // ★ 核心黑科技：原地傳送與通訊錄群發引擎
+      // =========================================================================
       useEffect(() => {
-        const processAutoShare = async () => {
-           if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
+        const processAutoAction = async () => {
+           if ((actionParam === 'share' || actionParam === 'send') && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
               const tourId = urlParams.get('t') || urlParams.get('tour_id');
               const rUid = urlParams.get('r') || urlParams.get('ref_uid');
               const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
               const tour = itineraries.find(i => String(i.id) === String(tourId));
+              
               let targetDistData = {};
-              if (rUid === liffProfile.userId) { targetDistData = myDistributorData || {}; } else { targetDistData = crmDistributors.find(d => d.uid === rUid) || {}; }
+              if (rUid === liffProfile.userId) { targetDistData = myDistributorData || {}; } 
+              else { targetDistData = crmDistributors.find(d => d.uid === rUid) || {}; }
+              
               if (!tour) { setShareStatusText('找不到該行程資訊'); return; }
               const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
-              setShareStatusText("正在喚起 LINE 通訊錄...");
-              await executeShare(tour, targetDistData, rUid, cOptions, true);
+              
+              const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
+
+              if (actionParam === 'send') {
+                  // ★ 原地傳送模式 (liff.sendMessages)
+                  setShareStatusText("正在傳送名片至聊天室...");
+                  try {
+                      const context = liff.getContext();
+                      // 確認使用者是在 LINE 聊天室內開啟 (非外部瀏覽器)
+                      if (context && context.type !== 'none' && context.type !== 'external') {
+                          await liff.sendMessages([flexMsg]);
+                          setShareStatusText('✅ 傳送成功！視窗即將關閉...');
+                          setTimeout(() => liff.closeWindow(), 1000);
+                      } else {
+                          // 若在非聊天室環境開啟，自動退為展開純網頁版 (Fallback)
+                          window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`);
+                      }
+                  } catch (e) {
+                      console.error('SendMessages Error:', e);
+                      alert('傳送失敗，請確認已在 LINE Developers Console 打開 chat_message.write 權限。');
+                      window.location.replace(`${ENDPOINT_URL}?t=${tourId}&r=${rUid}`);
+                  }
+              } else if (actionParam === 'share') {
+                  // ★ 喚起通訊錄模式 (liff.shareTargetPicker)
+                  setShareStatusText("正在喚起 LINE 通訊錄...");
+                  try {
+                      await liff.shareTargetPicker([flexMsg]);
+                      setShareStatusText('✅ 分享成功！視窗即將關閉...');
+                      setTimeout(() => liff.closeWindow(), 1000);
+                  } catch(e) {
+                      console.error("LIFF SDK Share Error:", e);
+                      if (e.message && e.message.includes('not allowed')) { 
+                          alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n即將為您重新登入以換發新 Token。"); 
+                          liff.logout(); window.location.reload(); 
+                      } else { 
+                          setShareStatusText('⚠️ 分享動作已取消或發生錯誤。'); 
+                          setTimeout(() => liff.closeWindow(), 2000); 
+                      }
+                  }
+              }
            }
         };
-        if (crmDistributors.length > 0) { processAutoShare(); } else if (isAutoSharing && isLiffReady && isStatusChecked) { fetchFullCrmData(); }
-      }, [isLiffReady, itineraries, isStatusChecked, crmDistributors, isAutoSharing]);
+        // 確保依賴資料皆已就緒才執行動作
+        if (crmDistributors.length > 0) { processAutoAction(); } 
+        else if ((actionParam === 'share' || actionParam === 'send') && isLiffReady && isStatusChecked) { fetchFullCrmData(); }
+      }, [isLiffReady, itineraries, isStatusChecked, crmDistributors, actionParam]);
 
       const initLiff = async () => {
         try {
@@ -504,24 +528,47 @@
 
       const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
-      const triggerFlexSharing = async () => {
-        if (!isLiffReady || !liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
-        try {
-          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
-          const res = await liff.shareTargetPicker([flexMsg]);
-          if (res) { showToast('✅ 名片已成功發送！'); setFlexModalItem(null); }
-        } catch (error) { 
-          if (error.message && error.message.includes('not allowed')) { alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。"); liff.logout(); window.location.reload(); } 
-          else { showToast('發送取消或發生錯誤: ' + error.message, 'error'); }
-        }
+      // ★ 新增：平台多場域推廣網址複製機制
+      const fallbackCopyTextToClipboard = (text) => {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.top = "0"; textArea.style.left = "0"; textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus(); textArea.select();
+        try { document.execCommand('copy'); showToast('✅ 網址已成功複製！快去貼在您的 LINE OA 吧！'); } 
+        catch (err) { showToast('❌ 複製失敗，請手動選取複製', 'error'); }
+        document.body.removeChild(textArea);
+      }
+
+      const handleCopyUrl = (type) => {
+         const optsStr = [cardOptions.phone, cardOptions.line, cardOptions.lineAt, cardOptions.fb, cardOptions.web, cardOptions.map].map(b=>b?'1':'0').join('');
+         let urlToCopy = '';
+         if (type === 'share') {
+             urlToCopy = `https://liff.line.me/${LIFF_ID}?action=share&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
+         } else if (type === 'send') {
+             urlToCopy = `https://liff.line.me/${LIFF_ID}?action=send&t=${flexModalItem.id}&r=${liffProfile.userId}&o=${optsStr}`;
+         } else if (type === 'web') {
+             urlToCopy = `${ENDPOINT_URL}?t=${flexModalItem.id}&r=${liffProfile.userId}`;
+         }
+         if (!navigator.clipboard) { fallbackCopyTextToClipboard(urlToCopy); return; }
+         navigator.clipboard.writeText(urlToCopy).then(function() { showToast('✅ 網址已成功複製！快去貼在您的 LINE OA 吧！'); }, function(err) { fallbackCopyTextToClipboard(urlToCopy); });
       };
 
-      // 權限徽章
       let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
       if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 系統管理員</span>;
       else if (distributorStatus === 'approved') roleBadge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 金牌經銷商</span>;
       else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
       else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
+
+      // 如果正在執行自動動作 (分享/傳送)，蓋上滿版提示畫面
+      if (actionParam === 'share' || actionParam === 'send') {
+          return (
+             <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center">
+                 <div className="text-[#00B900] text-5xl mb-4 animate-bounce"><Send className="w-12 h-12 inline-block" /></div>
+                 <p className="text-gray-500 font-bold text-lg tracking-widest">{shareStatusText}</p>
+             </div>
+          );
+      }
 
       // =========================================================================
       // ★ 畫面渲染區 (Render Sections)
@@ -556,7 +603,6 @@
             const currentDist = crmDistributors.find(d => d.uid === refUid) || myDistributorData;
 
             return (
-              // ⚠️ 重要修正：移除 overflow-x-hidden 解決 sticky 捲動失效問題
               <div className="w-full bg-white min-h-screen animate-fade-in pb-20">
                   <div className="w-full h-[50vh] md:h-[65vh] relative">
                       <img src={tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1920&q=80'} className="w-full h-full object-cover" />
@@ -569,7 +615,6 @@
                       </div>
                   </div>
                   
-                  {/* ★ 加入前端切換頁籤狀態 */}
                   <div className="w-full border-b border-gray-200 bg-white sticky top-16 z-30 shadow-sm hidden md:block">
                       <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center h-16">
                           <div className="flex space-x-8 text-lg font-bold text-gray-500 h-full">
@@ -580,10 +625,10 @@
                       </div>
                   </div>
                   
-                  {/* ★ 佈局層：確保父層擁有 items-start 且無 overflow-hidden 封印 */}
+                  {/* ★ 佈局修正：移除 overflow-hidden，確保 Sticky 可正常運作 */}
                   <div className="max-w-[1400px] mx-auto px-4 md:px-6 lg:px-12 py-12 flex flex-col lg:flex-row gap-10 relative items-start">
                     
-                    <div className="flex-1 w-full min-w-0 pr-0 lg:pr-8 overflow-hidden">
+                    <div className="flex-1 w-full min-w-0 pr-0 lg:pr-8">
                         <div className="md:hidden mb-8"><button onClick={() => { setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.pushState({}, '', '?tab=home'); }} className="flex items-center text-gray-500 hover:text-[#b82337] font-bold transition"><ArrowLeft className="w-5 h-5 mr-2" /> 返回行程總覽</button></div>
                         <div className="md:hidden flex space-x-4 mb-6 border-b border-gray-200">
                            <button onClick={() => setTourDetailTab('itinerary')} className={`pb-2 font-bold ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-2 border-[#b82337]' : 'text-gray-500'}`}>行程介紹</button>
@@ -599,7 +644,7 @@
                         </div>
                     </div>
 
-                    {/* ★ 報名結帳列：精準定義 top-[150px] 避開上方導覽列，確實達成吸頂 (Sticky) 效果 */}
+                    {/* ★ 報名結帳側邊欄：黃金比例寬度，並精準卡在兩個導航列的下方 (top-150px) */}
                     <div className="w-full lg:w-[320px] xl:w-[350px] flex-shrink-0 lg:sticky lg:top-[150px] self-start transition-all duration-300 z-10">
                         <div className="bg-white shadow-2xl border border-gray-100 overflow-hidden rounded-2xl">
                             <div className="bg-[#b82337] text-white p-6 text-center"><p className="text-xs font-bold tracking-widest mb-1 opacity-90">專案特惠價</p><p className="text-4xl font-black"><span className="text-lg font-medium mr-1">TWD</span>{Number(tour.price).toLocaleString()}</p></div>
@@ -687,14 +732,14 @@
         if (!distributorStatus) return (<div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20"><div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10"><Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" /><h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2><p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p><button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button></div></div>);
         return (
           <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
+            <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}><div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6"><img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" /><div><h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>{distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，取得專屬網址後即可放進您自己的 LINE OA 圖文選單中！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}</div></div><div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div></div>
             {distributorStatus === 'approved' && (
               <><div className="flex justify-between items-end mb-6 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800">可推廣的優質行程</h3></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8">
                   {itineraries.map(item => (
                     <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
                       <div className="h-56 overflow-hidden relative bg-gray-100"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /><div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</div></div>
-                      <div className="p-6 flex flex-col flex-grow"><h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4><div className="flex justify-between items-end mt-auto pt-4"><span className="text-2xl font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span></div><button onClick={() => openFlexModal(item)} className="mt-5 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow transition-colors flex justify-center items-center"><Share2 className="w-5 h-5 mr-2" /> 產生推廣名片</button></div>
+                      <div className="p-6 flex flex-col flex-grow"><h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4><div className="flex justify-between items-end mt-auto pt-4"><span className="text-2xl font-extrabold text-[#b82337]">${Number(item.price).toLocaleString()}</span></div><button onClick={() => openFlexModal(item)} className="mt-5 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow transition-colors flex justify-center items-center"><Share2 className="w-5 h-5 mr-2" /> 產生推廣連結</button></div>
                     </div>
                   ))}
                 </div>
@@ -878,8 +923,8 @@
                 <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
                   <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
                   <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
-                    <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
-                    <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
+                    <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備推廣連結與名片</h3></div>
+                    <p className="text-gray-500 mb-8 font-medium">勾選想顯示在名片上的聯絡方式，然後選擇複製推廣連結。</p>
                     <div className="space-y-6">
                       <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
                         <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
@@ -891,13 +936,24 @@
                            <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站</label>
                            <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
                         </div>
-                        <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
                       </div>
-                      <div className="pt-4"><button onClick={() => triggerFlexSharing()} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg"><Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友</button></div>
+                      
+                      <div className="pt-6 border-t border-gray-200 mt-4 space-y-3">
+                        <p className="text-gray-500 text-sm font-bold mb-2">🚀 平台免串接推廣神器</p>
+                        <button onClick={() => handleCopyUrl('web')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg">
+                          <LinkIcon className="w-5 h-5 mr-2" /> (1) 複製「純網頁版」連結 (全場域通用)
+                        </button>
+                        <button onClick={() => handleCopyUrl('send')} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
+                          <Send className="w-5 h-5 mr-2" /> (2) 複製「原地傳送」連結 (聊天室點擊即發)
+                        </button>
+                        <button onClick={() => handleCopyUrl('share')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all flex justify-center items-center text-lg mt-2">
+                          <CopyIcon className="w-5 h-5 mr-2" /> (3) 複製「轉傳名片」連結 (用來群發客群)
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
-                     <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
+                     <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">名片預覽畫面</p>
                      <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
                        <div className="relative"><div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div><div className="p-4 flex flex-col items-center text-center"><h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4><p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p><div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#b82337] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div></div></div>
                        <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
