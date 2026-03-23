@@ -24,7 +24,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    // 圖示組件 - 已修復相鄰元素語法錯誤
+    // 圖示組件 - 已修正相鄰 JSX 元素錯誤
     const Icon = ({ name, className = "w-6 h-6" }) => {
       const icons = {
         home: (
@@ -101,7 +101,7 @@
       useEffect(() => {
         const init = async () => {
           try {
-            // 抓取旅行社專屬設定
+            // 抓取旅行社專屬設定 (LIFF ID, Banner 等)
             const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
             const configData = await configRes.json();
             
@@ -119,10 +119,10 @@
               // 抓取該旅行社的行程
               fetchTours();
             } else {
-              console.error("找不到旅行社帳號");
+              console.error("找不到該租戶的配置");
             }
           } catch (e) {
-            console.error("Init Error", e);
+            console.error("初始化錯誤", e);
           } finally {
             setIsLoading(false);
           }
@@ -136,7 +136,7 @@
           const data = await res.json();
           setItineraries(Array.isArray(data) ? data : []);
         } catch (e) {
-          console.error("Fetch tours error", e);
+          console.error("獲取行程錯誤", e);
         }
       };
 
@@ -146,7 +146,7 @@
           const result = await res.json();
           if (result.success) setMyStatus(result.data);
         } catch (e) {
-          console.error("Check status error", e);
+          console.error("檢查狀態錯誤", e);
         }
       };
 
