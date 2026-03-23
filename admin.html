@@ -3,296 +3,508 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 總管理後台 (全開部落格版)</title>
+  <title>旅遊管家 Admin</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-    body { font-family: 'Noto Sans TC', sans-serif; }
-    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-    .blog-preview h3 { font-size: 1.85rem; font-weight: 900; margin: 3.5rem 0 1.25rem; color: #0f172a; border-left: 10px solid #4f46e5; padding-left: 1.5rem; line-height: 1.2; }
-    .blog-preview img { width: 100%; border-radius: 2.5rem; margin: 2rem 0 3rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.12); object-fit: cover; max-height: 550px; }
-    .blog-preview p { font-size: 1.2rem; line-height: 2.1; margin-bottom: 2rem; color: #334155; white-space: pre-wrap; }
-    .clean-input:focus { outline: none; border-bottom: 2px solid #4f46e5; }
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #f7f6f3;
+      --surface: #ffffff;
+      --border: #e8e6e1;
+      --text: #1a1917;
+      --muted: #8c8a84;
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --radius: 12px;
+      --radius-lg: 20px;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── 捲軸 ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── 編輯器排版 ── */
+    .editor-wrap {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      height: calc(100vh - 56px);
+    }
+    .editor-sidebar {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      background: var(--surface);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .editor-preview {
+      overflow-y: auto;
+      background: var(--bg);
+      padding: 40px 48px;
+    }
+
+    /* ── 表單元件 ── */
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .field-input {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .field-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    .field-textarea {
+      resize: none;
+      min-height: 280px;
+      line-height: 1.65;
+      font-size: 13px;
+    }
+
+    /* ── 按鈕 ── */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+    .btn-ai { background: var(--accent-light); color: var(--accent); border: 1px solid #bfdbfe; }
+    .btn-ai:hover { background: #dbeafe; }
+    .btn-ai:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-icon { padding: 7px; border-radius: 8px; background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: all .15s; display: inline-flex; }
+    .btn-icon:hover { background: var(--bg); color: var(--text); }
+    .btn-icon.danger:hover { background: var(--danger-light); color: var(--danger); border-color: #fca5a5; }
+
+    /* ── Topbar ── */
+    .topbar {
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .topbar-logo { font-family: 'DM Serif Display', serif; font-size: 17px; color: var(--text); }
+    .topbar-logo span { color: var(--accent); }
+
+    /* ── 卡片列表 ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      padding: 24px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: box-shadow .2s, transform .2s;
+    }
+    .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .card-img { width: 100%; height: 160px; object-fit: cover; display: block; background: var(--bg); }
+    .card-body { padding: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; margin: 0 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-meta { display: flex; justify-content: space-between; align-items: center; }
+    .card-price { font-size: 15px; font-weight: 700; color: var(--danger); }
+    .card-actions { display: flex; gap: 6px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--accent-light); color: var(--accent); }
+
+    /* ── 預覽部落格 ── */
+    .preview-article { max-width: 640px; margin: 0 auto; }
+    .preview-article h3 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.4rem;
+      margin: 2rem 0 .6rem;
+      color: var(--text);
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+    }
+    .preview-article img {
+      width: 100%;
+      border-radius: var(--radius-lg);
+      margin: .5rem 0 1.25rem;
+      object-fit: cover;
+      max-height: 360px;
+      border: 1px solid var(--border);
+    }
+    .preview-article p {
+      font-size: .93rem;
+      line-height: 1.85;
+      color: #44433e;
+      margin-bottom: 1rem;
+      white-space: pre-wrap;
+    }
+    .preview-cover { width: 100%; height: 200px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: 20px; border: 1px solid var(--border); }
+    .preview-title { font-family: 'DM Serif Display', serif; font-size: 1.7rem; margin: 0 0 16px; line-height: 1.25; }
+    .preview-stats { display: flex; gap: 20px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .preview-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px; }
+    .preview-stat-value { font-size: 15px; font-weight: 700; }
+    .preview-placeholder { color: #ccc; font-size: 13px; text-align: center; padding: 60px 0; }
+
+    /* ── 封面預覽縮圖 ── */
+    .cover-thumb { width: 100%; height: 100px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border); margin-top: 8px; }
+
+    /* ── 分隔線 ── */
+    .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+    /* ── 載入動畫 ── */
+    .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 空狀態 ── */
+    .empty-state { text-align: center; padding: 80px 24px; color: var(--muted); }
+    .empty-state p { font-size: 14px; margin: 8px 0 0; }
+
+    /* ── Access Denied ── */
+    .denied-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px; max-width: 400px; width: 100%; text-align: center; }
+    .denied-card h1 { font-size: 18px; font-weight: 700; margin: 16px 0 8px; }
+    .denied-card p { font-size: 13px; color: var(--muted); margin: 0 0 20px; }
+    .uid-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; }
+    .uid-box code { font-size: 11px; color: var(--accent); word-break: break-all; display: block; }
+
+    /* ── 分組標題 ── */
+    .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   </style>
 </head>
-<body class="bg-white">
+<body>
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    const Icon = ({ name, className = "w-6 h-6" }) => {
-      const icons = {
-        plus: (<React.Fragment><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></React.Fragment>),
-        edit: (<React.Fragment><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></React.Fragment>),
-        trash: (<React.Fragment><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></React.Fragment>),
-        sparkles: (<React.Fragment><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707"/></React.Fragment>),
-        arrowLeft: (<React.Fragment><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></React.Fragment>),
-        save: (<React.Fragment><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></React.Fragment>),
-        copy: (<React.Fragment><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></React.Fragment>)
+    /* ── 小圖示元件 ── */
+    const Ico = ({ n, s = 16 }) => {
+      const paths = {
+        plus:      <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+        edit:      <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+        trash:     <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>,
+        sparkles:  <><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707"/></>,
+        back:      <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
+        save:      <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></>,
+        eye:       <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
       };
-      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {paths[n]}
+        </svg>
+      );
     };
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+    const J = { 'Content-Type': 'application/json' };
 
-    const MarkdownContent = ({ content }) => {
-      if (!content) return <div className="text-slate-200 font-black text-4xl opacity-30 mt-20 italic">WAITING FOR AI CONTENT...</div>;
-      const paragraphs = content.split('\n');
-      const elements = paragraphs.map((p, i) => {
-        const line = p.trim();
-        if (line.startsWith('###')) return <h3 key={i}>{line.replace('###', '').trim()}</h3>;
-        if (line.includes('![Image](')) {
-          const match = line.match(/\!\[.*?\]\((.*?)\)/);
-          return match ? <img key={i} src={match[1]} alt="景點圖片" /> : null;
+    /* ── 部落格預覽渲染 ── */
+    const BlogPreview = ({ form }) => {
+      if (!form.title && !form.description) return (
+        <div className="preview-placeholder">尚無內容，請在左側填寫或使用 AI 擴寫</div>
+      );
+      const lines = (form.description || '').split('\n');
+      const blocks = lines.map((p, i) => {
+        const l = p.trim();
+        if (l.startsWith('###')) return <h3 key={i}>{l.replace('###','').trim()}</h3>;
+        if (l.includes('![Image](')) {
+          const m = l.match(/\!\[.*?\]\((.*?)\)/);
+          return m ? <img key={i} src={m[1]} alt="" /> : null;
         }
-        if (line === '') return null;
-        return <p key={i}>{line}</p>;
+        if (!l) return null;
+        return <p key={i}>{l}</p>;
       });
-      return <div className="blog-preview animate-fade-in">{elements}</div>;
+      return (
+        <div className="preview-article">
+          {form.image && <img src={form.image} className="preview-cover" alt="cover" />}
+          <h1 className="preview-title">{form.title || '未命名行程'}</h1>
+          <div className="preview-stats">
+            <div><div className="preview-stat-label">售價</div><div className="preview-stat-value" style={{color:'var(--danger)'}}>TWD {Number(form.price||0).toLocaleString()}</div></div>
+            <div><div className="preview-stat-label">天數</div><div className="preview-stat-value">{form.days} 天</div></div>
+            <div><div className="preview-stat-label">地區</div><div className="preview-stat-value">{form.region}</div></div>
+          </div>
+          {blocks}
+        </div>
+      );
     };
 
-    const JSON_HEADERS = { 'Content-Type': 'application/json' };
+    const EMPTY = { id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' };
 
     function App() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const agencySlug = urlParams.get('a') || 'demo';
-      const fileInputRef = useRef(null);
+      const slug = new URLSearchParams(window.location.search).get('a') || 'demo';
+      const fileRef = useRef(null);
 
-      // [修正] 用三態來區分：loading / admin / denied
-      // 避免 setState 非同步導致 isAdmin 尚未更新就判斷為無權限
-      const [authState, setAuthState] = useState('loading'); // 'loading' | 'admin' | 'denied'
-      const [myUid, setMyUid] = useState('');
-      const [itineraries, setItineraries] = useState([]);
-      const [view, setView] = useState('list');
-      const [formData, setFormData] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' });
-      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [auth, setAuth]           = useState('loading');
+      const [myUid, setMyUid]         = useState('');
+      const [items, setItems]         = useState([]);
+      const [view, setView]           = useState('list');   // list | edit
+      const [form, setForm]           = useState(EMPTY);
+      const [saving, setSaving]       = useState(false);
       const [aiLoading, setAiLoading] = useState(false);
+      const [tab, setTab]             = useState('fields'); // fields | preview  (mobile friendly)
+
+      const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
       const fetchList = async () => {
-        const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
-        const data = await res.json();
-        setItineraries(Array.isArray(data) ? data : []);
+        const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`);
+        const d = await r.json();
+        setItems(Array.isArray(d) ? d : []);
       };
 
       useEffect(() => {
-        const init = async () => {
+        (async () => {
           try {
-            const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
-            const configData = await configRes.json();
-            if (!configData.success) { setAuthState('denied'); return; }
-
-            await liff.init({ liffId: configData.data.liff_id });
-
-            if (!liff.isLoggedIn()) {
-              liff.login({ redirectUri: window.location.href });
-              return;
-            }
-
-            const profile = await liff.getProfile();
-            setMyUid(profile.userId);
-
-            const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
-            const statusData = await statusRes.json();
-
-            // [關鍵修正] 先 fetchList，再 setAuthState('admin')
-            // 確保資料準備好後才切換畫面，不會出現空列表閃一下的狀況
-            if (statusData.success && statusData.data.isAdmin) {
+            const cr = await fetch(`${WORKER_URL}/api/config?a=${slug}`);
+            const cd = await cr.json();
+            if (!cd.success) { setAuth('denied'); return; }
+            await liff.init({ liffId: cd.data.liff_id });
+            if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+            const prof = await liff.getProfile();
+            setMyUid(prof.userId);
+            const sr = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${prof.userId}&a=${slug}`);
+            const sd = await sr.json();
+            if (sd.success && sd.data.isAdmin) {
               await fetchList();
-              setAuthState('admin');
-            } else {
-              setAuthState('denied');
-            }
-          } catch (e) {
-            console.error(e);
-            setAuthState('denied');
-          }
-        };
-        init();
-      }, [agencySlug]);
+              setAuth('admin');
+            } else { setAuth('denied'); }
+          } catch(e) { console.error(e); setAuth('denied'); }
+        })();
+      }, [slug]);
 
-      const handleAiExpand = async (e) => {
+      const handleAI = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onloadend = async () => {
           setAiLoading(true);
           try {
-            const res = await fetch(`${WORKER_URL}/api/upload-dm?a=${agencySlug}`, {
-              method: 'POST',
-              headers: JSON_HEADERS,
-              body: JSON.stringify({ image: reader.result })
+            const r = await fetch(`${WORKER_URL}/api/upload-dm?a=${slug}`, {
+              method: 'POST', headers: J, body: JSON.stringify({ image: reader.result })
             });
-            const result = await res.json();
-            if (result.success) setFormData(prev => ({ ...prev, ...result.data }));
-            else alert('AI 回傳錯誤：' + result.error);
-          } catch (e) { alert('AI 連線失敗'); }
+            const d = await r.json();
+            if (d.success) setForm(p => ({ ...p, ...d.data }));
+            else alert('AI 錯誤：' + d.error);
+          } catch(e) { alert('AI 連線失敗'); }
           setAiLoading(false);
         };
         reader.readAsDataURL(file);
       };
 
       const handleSave = async () => {
-        setIsSubmitting(true);
-        const action = formData.id ? 'updateItinerary' : 'addItinerary';
+        setSaving(true);
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
-            method: 'POST',
-            headers: JSON_HEADERS,
-            body: JSON.stringify({ action, ...formData })
+          const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`, {
+            method: 'POST', headers: J,
+            body: JSON.stringify({ action: form.id ? 'updateItinerary' : 'addItinerary', ...form })
           });
-          if ((await res.json()).success) { setView('list'); fetchList(); }
-          else alert('儲存失敗，請再試一次');
-        } catch (e) { alert('儲存失敗'); }
-        setIsSubmitting(false);
+          const d = await r.json();
+          if (d.success) { setView('list'); fetchList(); }
+          else alert('儲存失敗');
+        } catch(e) { alert('儲存失敗'); }
+        setSaving(false);
       };
 
       const handleDelete = async (id) => {
-        if (!confirm('確定刪除？')) return;
-        // [修正] 補上 Content-Type header，否則 Worker 無法解析 body
-        await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
-          method: 'POST',
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ action: 'deleteItinerary', id })
+        if (!confirm('確定刪除此行程？')) return;
+        await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`, {
+          method: 'POST', headers: J, body: JSON.stringify({ action: 'deleteItinerary', id })
         });
         fetchList();
       };
 
-      // --- 三態渲染 ---
-      if (authState === 'loading') {
-        return <div className="h-screen flex items-center justify-center font-black text-slate-100 text-6xl uppercase tracking-tighter italic">Initializing...</div>;
-      }
-
-      if (authState === 'denied') {
-        return (
-          <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-6 text-center">
-            <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-red-100 max-w-md animate-fade-in">
-              <div className="text-red-500 mb-6 text-8xl">⛔</div>
-              <h1 className="text-3xl font-black text-slate-800 mb-4">ACCESS DENIED</h1>
-              <p className="text-slate-500 font-bold mb-8">您的 LINE 帳號未獲得管理權限</p>
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">您的專屬 UID</p>
-                <code
-                  className="text-xs font-mono font-bold text-indigo-600 break-all select-all cursor-pointer"
-                  onClick={() => { navigator.clipboard.writeText(myUid).then(() => alert('UID 已複製')); }}
-                >{myUid || '載入中...'}</code>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                請將此 UID 複製並在 D1 資料庫的 <br/>
-                <span className="font-bold text-slate-600 italic">tenants.admin_uids</span> 欄位中補上，<br/>
-                方可進入後台管理。
-              </p>
-            </div>
-          </div>
-        );
-      }
-
-      // authState === 'admin'
-      if (view === 'list') return (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
-          <header className="bg-white border-b px-10 py-6 flex justify-between items-center sticky top-0 z-50">
-            <h1 className="text-xl font-black italic tracking-tight">SaaS Admin <span className="text-indigo-600">Panel</span></h1>
-            <button
-              onClick={() => { setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' }); setView('edit'); }}
-              className="bg-indigo-600 text-white px-8 py-3 rounded-full font-black flex items-center gap-2 hover:scale-105 transition shadow-lg shadow-indigo-100"
-            ><Icon name="plus" /> 新增行程</button>
-          </header>
-          <main className="p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {itineraries.map(item => (
-              <div key={item.id} className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 hover:shadow-2xl transition-all group">
-                <div className="h-56 overflow-hidden bg-slate-100">
-                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                </div>
-                <div className="p-8">
-                  <h2 className="text-xl font-black mb-4 line-clamp-1">{item.title}</h2>
-                  <div className="flex justify-between items-center">
-                    <p className="text-red-600 font-black text-xl">${Number(item.price).toLocaleString()}</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => { setFormData(item); setView('edit'); }} className="p-3 bg-slate-50 rounded-full hover:bg-indigo-600 hover:text-white transition"><Icon name="edit" /></button>
-                      <button onClick={() => handleDelete(item.id)} className="p-3 bg-slate-50 rounded-full hover:bg-red-600 hover:text-white transition"><Icon name="trash" /></button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </main>
+      /* ── Loading ── */
+      if (auth === 'loading') return (
+        <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', gap:10, color:'var(--muted)', fontSize:14 }}>
+          <div className="spinner" style={{width:18,height:18}}></div> 初始化中...
         </div>
       );
 
-      return (
-        <div className="h-screen w-screen flex flex-col animate-fade-in bg-white overflow-hidden">
-          <nav className="h-20 border-b flex justify-between items-center px-8 shrink-0 bg-white z-50 shadow-sm">
-            <div className="flex items-center gap-6">
-              <button onClick={() => setView('list')} className="p-3 hover:bg-slate-100 rounded-full transition"><Icon name="arrowLeft" /></button>
-              <h2 className="text-lg font-black uppercase tracking-widest text-slate-400 italic">Blog Editor</h2>
+      /* ── Access Denied ── */
+      if (auth === 'denied') return (
+        <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'var(--bg)' }}>
+          <div className="denied-card">
+            <div style={{ fontSize:36 }}>⛔</div>
+            <h1>存取被拒</h1>
+            <p>您的 LINE 帳號尚無管理權限</p>
+            <div className="uid-box" onClick={() => navigator.clipboard.writeText(myUid).then(()=>alert('已複製'))}>
+              <div style={{fontSize:10,fontWeight:600,color:'var(--muted)',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>點擊複製您的 UID</div>
+              <code>{myUid || '取得中...'}</code>
             </div>
-            <div className="flex items-center gap-4">
-              {!formData.id && (
-                <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-700 px-8 py-3 rounded-full font-black flex items-center gap-2 hover:bg-indigo-100 transition disabled:opacity-50">
-                  {aiLoading ? <div className="w-5 h-5 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div> : <Icon name="sparkles" />}
-                  {aiLoading ? 'AI 繁體中文撰寫中...' : 'AI 視覺擴寫'}
-                </button>
-              )}
-              <input type="file" ref={fileInputRef} onChange={handleAiExpand} accept="image/*" className="hidden" />
-              <button onClick={handleSave} disabled={isSubmitting} className="bg-indigo-600 text-white px-10 py-3 rounded-full font-black shadow-xl hover:bg-indigo-700 transition flex items-center gap-2">
-                <Icon name="save" /> 儲存並發佈文章
-              </button>
-            </div>
-          </nav>
-
-          <div className="flex-grow flex w-full overflow-hidden">
-            <div className="w-[45%] h-full flex flex-col border-r bg-slate-50/10 overflow-y-auto custom-scrollbar p-10">
-              <div className="space-y-10">
-                <input type="text" value={formData.title} onChange={e=>setFormData(prev=>({...prev, title:e.target.value}))} className="w-full text-3xl font-black bg-transparent border-b-2 border-transparent focus:border-indigo-600 outline-none pb-4 transition placeholder-slate-200" placeholder="在此輸入文章標題..." />
-                <div className="grid grid-cols-3 gap-6">
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">旅遊地區</label><select value={formData.region} onChange={e=>setFormData(prev=>({...prev, region:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition"><option>亞洲</option><option>歐洲</option><option>美洲</option><option>國旅</option></select></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">天數</label><input type="number" value={formData.days} onChange={e=>setFormData(prev=>({...prev, days:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">售價 (TWD)</label><input type="number" value={formData.price} onChange={e=>setFormData(prev=>({...prev, price:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition" /></div>
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase block mb-3">封面主圖網址</label>
-                  <input type="url" value={formData.image} onChange={e=>setFormData(prev=>({...prev, image:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-4 px-6 text-sm shadow-sm outline-none mb-4" placeholder="貼上 Unsplash 或 Google Drive 連結..." />
-                  {formData.image && <img src={formData.image} className="w-full h-52 object-cover rounded-[2rem] shadow-lg border-4 border-white" alt="Cover Preview" />}
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase block mb-3">文章正文內容 (Markdown 語法可編輯)</label>
-                  <textarea rows="30" value={formData.description} onChange={e=>setFormData(prev=>({...prev, description:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-[2.5rem] py-10 px-12 text-lg leading-relaxed shadow-sm outline-none focus:ring-8 ring-indigo-500/5 transition custom-scrollbar" placeholder="在這裡盡情揮灑您的旅遊故事..."></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div className="w-[55%] h-full overflow-y-auto bg-white p-16 md:p-24 custom-scrollbar">
-              <div className="max-w-3xl mx-auto">
-                <div className="flex items-center gap-4 mb-10">
-                  <span className="bg-indigo-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">{formData.region}</span>
-                  <span className="text-slate-400 font-bold text-sm uppercase tracking-widest">{formData.days} Days Tour</span>
-                </div>
-                <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-16 tracking-tight">{formData.title || '文章標題預覽'}</h1>
-                <div className="flex items-center gap-12 mb-16 py-8 border-y border-slate-50">
-                  <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Total Amount</p><p className="text-3xl font-black text-red-600">TWD {Number(formData.price).toLocaleString()}</p></div>
-                  <div className="w-px h-10 bg-slate-100"></div>
-                  <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Tour Duration</p><p className="text-3xl font-black text-slate-800">{formData.days} 天行程</p></div>
-                </div>
-                <MarkdownContent content={formData.description} />
-                <div className="mt-20 pt-10 border-t border-slate-100 text-center">
-                  <p className="text-slate-300 font-black text-xs uppercase tracking-[0.5em]">End of Itinerary</p>
-                </div>
-              </div>
-            </div>
+            <p style={{marginTop:14,fontSize:12}}>請將 UID 加入 D1 → <code style={{color:'var(--accent)'}}>tenants.admin_uids</code></p>
           </div>
         </div>
+      );
+
+      /* ── 行程列表 ── */
+      if (view === 'list') return (
+        <>
+          <div className="topbar">
+            <span className="topbar-logo">Travel<span>Admin</span></span>
+            <button className="btn btn-primary" onClick={() => { setForm(EMPTY); setView('edit'); }}>
+              <Ico n="plus" /> 新增行程
+            </button>
+          </div>
+          {items.length === 0
+            ? <div className="empty-state"><div style={{fontSize:32}}>🗺️</div><p>尚無行程，點擊「新增行程」開始</p></div>
+            : <div className="card-grid">
+                {items.map(it => (
+                  <div key={it.id} className="card">
+                    <img src={it.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'} className="card-img" alt="" />
+                    <div className="card-body">
+                      <div style={{marginBottom:6, display:'flex', gap:6, alignItems:'center'}}>
+                        <span className="badge">{it.region}</span>
+                        <span style={{fontSize:11,color:'var(--muted)'}}>{it.days}天</span>
+                      </div>
+                      <div className="card-title">{it.title}</div>
+                      <div className="card-meta">
+                        <span className="card-price">NT${Number(it.price).toLocaleString()}</span>
+                        <div className="card-actions">
+                          <button className="btn-icon" title="編輯" onClick={() => { setForm(it); setView('edit'); }}><Ico n="edit" s={14}/></button>
+                          <button className="btn-icon danger" title="刪除" onClick={() => handleDelete(it.id)}><Ico n="trash" s={14}/></button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+          }
+        </>
+      );
+
+      /* ── 編輯畫面 ── */
+      return (
+        <>
+          {/* Topbar */}
+          <div className="topbar">
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <button className="btn-icon" onClick={() => setView('list')}><Ico n="back" s={15}/></button>
+              <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>
+                {form.id ? '編輯行程' : '新增行程'}
+              </span>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              {!form.id && (
+                <>
+                  <button className="btn btn-ai" disabled={aiLoading} onClick={() => fileRef.current.click()}>
+                    {aiLoading ? <><div className="spinner"/>AI 分析中…</> : <><Ico n="sparkles" s={14}/>AI 視覺擴寫</>}
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAI} />
+                </>
+              )}
+              <button className="btn btn-primary" disabled={saving} onClick={handleSave}>
+                {saving ? <><div className="spinner"/>儲存中…</> : <><Ico n="save" s={14}/>儲存發佈</>}
+              </button>
+            </div>
+          </div>
+
+          {/* 主體：左欄表單 + 右欄預覽 */}
+          <div className="editor-wrap">
+
+            {/* 左欄：表單 */}
+            <div className="editor-sidebar">
+
+              {/* 標題 */}
+              <div>
+                <label className="field-label">行程標題</label>
+                <input className="field-input" value={form.title} onChange={e=>setF('title',e.target.value)} placeholder="輸入行程標題…" />
+              </div>
+
+              {/* 三欄小格 */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+                <div>
+                  <label className="field-label">地區</label>
+                  <select className="field-input" value={form.region} onChange={e=>setF('region',e.target.value)} style={{padding:'9px 8px'}}>
+                    {['亞洲','歐洲','美洲','國旅'].map(r=><option key={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">天數</label>
+                  <input type="number" className="field-input" value={form.days} onChange={e=>setF('days',e.target.value)} min={1} />
+                </div>
+                <div>
+                  <label className="field-label">售價 TWD</label>
+                  <input type="number" className="field-input" value={form.price} onChange={e=>setF('price',e.target.value)} min={0} />
+                </div>
+              </div>
+
+              <div className="divider" />
+
+              {/* 封面圖 */}
+              <div>
+                <label className="field-label">封面圖網址</label>
+                <input type="url" className="field-input" value={form.image} onChange={e=>setF('image',e.target.value)} placeholder="https://…" />
+                {form.image && <img src={form.image} className="cover-thumb" alt="cover preview" />}
+              </div>
+
+              <div className="divider" />
+
+              {/* 文章正文 */}
+              <div style={{flex:1, display:'flex', flexDirection:'column'}}>
+                <label className="field-label">文章正文（支援 Markdown）</label>
+                <textarea
+                  className="field-input field-textarea"
+                  style={{flex:1, minHeight:260}}
+                  value={form.description}
+                  onChange={e=>setF('description',e.target.value)}
+                  placeholder={`### 第 1 天\n![Image](圖片網址)\n行程內容…`}
+                />
+              </div>
+
+              {/* 備註 */}
+              <div>
+                <label className="field-label">備註</label>
+                <textarea className="field-input" rows={3} value={form.notes||''} onChange={e=>setF('notes',e.target.value)} placeholder="注意事項、集合地點…" style={{resize:'none'}} />
+              </div>
+
+            </div>
+
+            {/* 右欄：即時預覽 */}
+            <div className="editor-preview">
+              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:20, color:'var(--muted)', fontSize:12, fontWeight:600, textTransform:'uppercase', letterSpacing:'.06em'}}>
+                <Ico n="eye" s={13}/> 即時預覽
+              </div>
+              <BlogPreview form={form} />
+            </div>
+
+          </div>
+        </>
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
