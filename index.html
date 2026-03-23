@@ -12,12 +12,10 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-    .blog-content h3 { font-size: 1.5rem; font-weight: 900; margin-top: 2.5rem; border-left: 5px solid #2563eb; padding-left: 12px; }
-    .blog-content img { width: 100%; border-radius: 20px; margin: 1.5rem 0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
-    .blog-content p { font-size: 1.05rem; line-height: 1.85; color: #4b5563; margin-bottom: 1.5rem; white-space: pre-wrap; }
-    .tour-card-selectable { border: 2.5px solid #f1f5f9; transition: all 0.2s; position: relative; cursor: pointer; }
+    .blog-content h3 { font-size: 1.5rem; font-weight: 900; margin-top: 2rem; border-left: 6px solid #2563eb; padding-left: 14px; }
+    .blog-content img { width: 100%; border-radius: 24px; margin: 1.5rem 0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1); }
+    .blog-content p { font-size: 1.05rem; line-height: 2; color: #475569; margin-bottom: 1.5rem; white-space: pre-wrap; }
+    .tour-card-selectable { border: 2.5px solid #f1f5f9; transition: all 0.2s; position: relative; }
     .tour-card-selectable.selected { border-color: #10b981; background: #f0fdf4; }
   </style>
 </head>
@@ -44,7 +42,7 @@
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const agencySlug = urlParams.get('a') || 'demo';
-      const refUid = urlParams.get('r') || ''; // 獲取推薦人 UID (分銷用)
+      const refUid = urlParams.get('r') || '';
       
       const [tenant, setTenant] = useState(null);
       const [itineraries, setItineraries] = useState([]);
@@ -55,8 +53,8 @@
       const [myStatus, setMyStatus] = useState({ role: 'guest' });
       const [selectedIds, setSelectedIds] = useState([]);
 
-      // 註冊表單狀態
-      const [regForm, setRegForm] = useState({ name: '', phone: '', company_name: '', tax_id: '' });
+      // 註冊表單
+      const [regForm, setRegForm] = useState({ name: '', phone: '', company_name: '', type: 'distributor' });
       const [regLoading, setRegLoading] = useState(false);
 
       useEffect(() => {
@@ -71,9 +69,7 @@
                 const profile = await liff.getProfile();
                 setLiffProfile(profile);
                 setRegForm(p => ({ ...p, name: profile.displayName }));
-                const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
-                const statusData = await statusRes.json();
-                if (statusData.success) setMyStatus(statusData.data);
+                checkStatus(profile.userId);
               } else { liff.login(); }
               fetchTours();
             }
@@ -88,7 +84,13 @@
         setItineraries(Array.isArray(data) ? data : []);
       };
 
-      const handleRegisterPartner = async (e) => {
+      const checkStatus = async (uid) => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&a=${agencySlug}`);
+        const result = await res.json();
+        if (result.success) setMyStatus(result.data);
+      };
+
+      const handleRegister = async (e) => {
         e.preventDefault();
         setRegLoading(true);
         try {
@@ -98,9 +100,9 @@
             body: JSON.stringify({ ...regForm, uid: liffProfile.userId, ref_uid: refUid })
           });
           const result = await res.json();
-          if (result.success) { alert('申請已送出，請等待管理員審核。'); window.location.reload(); }
-          else { alert(result.error); }
-        } catch (e) { alert('連線失敗'); }
+          if (result.success) { alert('申請已提交！請等待審核。'); window.location.reload(); }
+          else alert(result.error);
+        } catch (e) { alert('註冊失敗'); }
         setRegLoading(false);
       };
 
@@ -114,22 +116,22 @@
             { "type": "text", "text": `NT$ ${Number(tour.price).toLocaleString()}`, "color": "#b82337", "weight": "bold", "size": "lg", "margin": "md" }
           ]},
           "footer": { "type": "box", "layout": "vertical", "contents": [
-            { "type": "button", "style": "primary", "color": "#00B900", "action": { "type": "uri", "label": "查看行程", "uri": `https://fangwl591021.github.io/travelkeeper/index.html?a=${agencySlug}&t=${tour.id}&r=${liffProfile.userId}` } }
+            { "type": "button", "style": "primary", "color": "#00B900", "action": { "type": "uri", "label": "查看行程", "uri": `${window.location.origin}${window.location.pathname}?a=${agencySlug}&t=${tour.id}&r=${liffProfile.userId}` } }
           ]}
         });
         const flexContent = items.length === 1 ? bubble(items[0]) : { "type": "carousel", "contents": items.map(bubble) };
-        try { await liff.shareTargetPicker([{ "type": "flex", "altText": `精選行程推薦`, "contents": flexContent }]); setSelectedIds([]); } catch (e) {}
+        try { await liff.shareTargetPicker([{ "type": "flex", "altText": `推薦行程`, "contents": flexContent }]); setSelectedIds([]); } catch (e) {}
       };
 
-      if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
+      if (isLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-200 text-4xl italic">TK SaaS</div>;
 
       const renderContent = () => {
         if (selectedTour) return (
-          <div className="animate-fade-in bg-white min-h-screen pb-20">
-            <div className="relative h-[40vh]"><img src={selectedTour.image} className="w-full h-full object-cover" /><button onClick={()=>setSelectedTour(null)} className="absolute top-6 left-6 bg-black/40 text-white p-3 rounded-full backdrop-blur-md"><Icon name="arrowLeft"/></button></div>
+          <div className="animate-fade-in bg-white min-h-screen pb-24">
+            <div className="relative h-[45vh] shadow-xl overflow-hidden"><img src={selectedTour.image} className="w-full h-full object-cover" /><button onClick={()=>setSelectedTour(null)} className="absolute top-8 left-8 bg-white/20 backdrop-blur-xl text-white p-4 rounded-3xl"><Icon name="arrowLeft"/></button></div>
             <div className="p-8 max-w-2xl mx-auto">
-              <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-xs font-black mb-4 inline-block">{selectedTour.region}</span>
-              <h1 className="text-4xl font-black mb-8 leading-tight">{selectedTour.title}</h1>
+              <span className="bg-blue-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 inline-block shadow-lg shadow-blue-100">{selectedTour.region}</span>
+              <h1 className="text-5xl font-black mb-10 leading-tight tracking-tighter">{selectedTour.title}</h1>
               <div className="blog-content">
                 {(selectedTour.description || '').split('\n').map((line, i) => {
                   if (line.trim().startsWith('###')) return <h3 key={i}>{line.replace('###','').trim()}</h3>;
@@ -137,7 +139,7 @@
                   return line.trim() ? <p key={i}>{line}</p> : null;
                 })}
               </div>
-              <button className="fixed bottom-6 left-6 right-6 bg-[#b82337] text-white py-5 rounded-2xl font-black text-xl shadow-2xl z-50">立即報名參團</button>
+              <button className="fixed bottom-8 left-8 right-8 bg-[#b82337] text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-red-200 active:scale-95 transition z-50">立即預約報名</button>
             </div>
           </div>
         );
@@ -145,73 +147,79 @@
         switch (activeTab) {
           case 'home':
             return (
-              <div className="animate-fade-in p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+              <div className="animate-fade-in p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
                 {itineraries.map(it => (
-                  <div key={it.id} onClick={()=>setSelectedTour(it)} className="bg-white rounded-3xl overflow-hidden border hover:shadow-xl transition-all cursor-pointer">
-                    <div className="h-56 overflow-hidden"><img src={it.image} className="w-full h-full object-cover" /></div>
-                    <div className="p-5"><h4 className="font-black text-lg mb-4 line-clamp-2">{it.title}</h4><div className="flex justify-between items-center pt-2 border-t"><span className="text-xs text-gray-400 font-bold">{it.days} 天</span><span className="text-red-600 font-black text-2xl">${Number(it.price).toLocaleString()}</span></div></div>
+                  <div key={it.id} onClick={()=>setSelectedTour(it)} className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 shadow-sm hover:shadow-2xl transition-all cursor-pointer group">
+                    <div className="h-64 overflow-hidden"><img src={it.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-1000" /></div>
+                    <div className="p-8"><h4 className="font-black text-xl mb-4 line-clamp-1">{it.title}</h4><div className="flex justify-between items-center"><span className="text-xs text-slate-400 font-bold uppercase tracking-widest">{it.days} 天之旅</span><span className="text-red-600 font-black text-2xl">${Number(it.price).toLocaleString()}</span></div></div>
                   </div>
                 ))}
               </div>
             );
           case 'dist':
-            // 審核狀態判斷
-            if (!myStatus.distributorData || myStatus.distributorData.status === 'rejected') {
+            // 經銷申請畫面
+            if (myStatus.role === 'guest' || (myStatus.role === 'distributor' && myStatus.distributorData?.status === 'rejected')) {
               return (
-                <div className="p-8 max-w-md mx-auto animate-fade-in">
-                  <div className="text-center mb-10">
-                    <div className="bg-emerald-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"><Icon name="briefcase" className="w-10 h-10 text-emerald-600" /></div>
-                    <h2 className="text-3xl font-black mb-2">經銷夥伴申請</h2>
-                    <p className="text-slate-400 font-medium">申請通過後即可獲得專屬推薦連結</p>
+                <div className="p-8 max-w-md mx-auto animate-fade-in pb-32">
+                  <div className="text-center mb-12">
+                    <div className="bg-emerald-100 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-50"><Icon name="briefcase" className="w-12 h-12 text-emerald-600" /></div>
+                    <h2 className="text-4xl font-black mb-3 tracking-tighter">經銷夥伴申請</h2>
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Join our partner network</p>
                   </div>
-                  <form onSubmit={handleRegisterPartner} className="space-y-5">
-                    <div><label className="text-xs font-black text-slate-400 uppercase ml-2">真實姓名</label><input required className="w-full bg-white border p-4 rounded-2xl font-bold" value={regForm.name} onChange={e=>setRegForm({...regForm, name:e.target.value})} /></div>
-                    <div><label className="text-xs font-black text-slate-400 uppercase ml-2">聯絡電話</label><input required className="w-full bg-white border p-4 rounded-2xl font-bold" value={regForm.phone} onChange={e=>setRegForm({...regForm, phone:e.target.value})} /></div>
-                    <div><label className="text-xs font-black text-slate-400 uppercase ml-2">公司名稱 (選填)</label><input className="w-full bg-white border p-4 rounded-2xl font-bold" value={regForm.company_name} onChange={e=>setRegForm({...regForm, company_name:e.target.value})} /></div>
-                    {refUid && <div className="bg-blue-50 p-4 rounded-2xl text-blue-600 text-xs font-bold">推薦人 UID: {refUid}</div>}
-                    <button disabled={regLoading} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-xl shadow-lg">提交申請</button>
+                  <form onSubmit={handleRegister} className="space-y-6">
+                    <div className="flex bg-slate-100 p-1 rounded-2xl mb-4">
+                        <button type="button" onClick={()=>setRegForm({...regForm, type:'distributor'})} className={`flex-1 py-3 rounded-xl font-black text-xs transition ${regForm.type==='distributor'?'bg-white shadow-sm text-emerald-600':'text-slate-400'}`}>申請經銷</button>
+                        <button type="button" onClick={()=>setRegForm({...regForm, type:'user'})} className={`flex-1 py-3 rounded-xl font-black text-xs transition ${regForm.type==='user'?'bg-white shadow-sm text-blue-600':'text-slate-400'}`}>註冊會員</button>
+                    </div>
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2">真實姓名</label><input required className="w-full bg-white border border-slate-100 p-5 rounded-3xl font-black text-lg focus:ring-4 ring-emerald-500/10 outline-none" value={regForm.name} onChange={e=>setRegForm({...regForm, name:e.target.value})} /></div>
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2">聯絡電話</label><input required className="w-full bg-white border border-slate-100 p-5 rounded-3xl font-black text-lg" value={regForm.phone} onChange={e=>setRegForm({...regForm, phone:e.target.value})} /></div>
+                    {regForm.type === 'distributor' && (
+                        <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block mb-2">公司名稱 / 門市</label><input className="w-full bg-white border border-slate-100 p-5 rounded-3xl font-black text-lg" value={regForm.company_name} onChange={e=>setRegForm({...regForm, company_name:e.target.value})} placeholder="例如：個人/某某工作室"/></div>
+                    )}
+                    {refUid && <div className="bg-indigo-50 p-5 rounded-3xl border border-indigo-100"><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">推薦代碼 (已自動帶入)</p><p className="font-mono text-xs font-bold text-indigo-700 break-all">{refUid}</p></div>}
+                    <button disabled={regLoading} className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-2xl transition active:scale-95 ${regForm.type==='distributor'?'bg-emerald-600 shadow-emerald-200 text-white':'bg-blue-600 shadow-blue-200 text-white'}`}>{regLoading ? '處理中...' : '確認並提交'}</button>
                   </form>
                 </div>
               );
             }
-            if (myStatus.distributorData.status === 'pending') {
-              return (
-                <div className="p-20 text-center animate-fade-in">
-                  <div className="text-6xl mb-6">⏳</div>
-                  <h3 className="text-2xl font-black mb-4">審核中</h3>
-                  <p className="text-slate-400">管理員正在審核您的申請，請稍後再試。</p>
-                </div>
-              );
+            if (myStatus.distributorData?.status === 'pending') {
+              return <div className="p-24 text-center animate-fade-in"><div className="text-8xl mb-8">⏳</div><h3 className="text-3xl font-black mb-4">申請審核中</h3><p className="text-slate-400 font-bold">小編正快馬加鞭審核您的身分，請稍後再試！</p></div>;
             }
-            // 已通過：顯示推廣工具
+            // 經銷商工具
             return (
-              <div className="p-6 max-w-6xl mx-auto pb-40 animate-fade-in">
-                <div className="flex justify-between items-end mb-8">
-                  <div><h2 className="text-3xl font-black">夥伴工具箱</h2><p className="text-slate-400 text-sm font-bold">勾選下方行程，一次分享至 LINE 群組</p></div>
-                  <div className="bg-emerald-100 text-emerald-700 px-4 py-1 rounded-full font-black text-xs">已選 {selectedIds.length}</div>
+              <div className="p-6 max-w-6xl mx-auto pb-48 animate-fade-in">
+                <div className="flex justify-between items-end mb-10">
+                  <div><h2 className="text-4xl font-black tracking-tighter">經銷推廣工具</h2><p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Selection & Share</p></div>
+                  <div className="bg-emerald-100 text-emerald-700 px-5 py-2 rounded-2xl font-black text-xs">已選 {selectedIds.length} 個</div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {itineraries.map(it => (
                     <div key={it.id} onClick={() => selectedIds.includes(it.id) ? setSelectedIds(selectedIds.filter(id=>id!==it.id)) : setSelectedIds([...selectedIds, it.id])} 
-                      className={`tour-card-selectable rounded-3xl overflow-hidden bg-white shadow-sm ${selectedIds.includes(it.id) ? 'selected' : ''}`}>
-                      <div className="h-32 overflow-hidden"><img src={it.image} className="w-full h-full object-cover" /></div>
-                      <div className="p-3"><p className="text-xs font-black line-clamp-2">{it.title}</p></div>
-                      {selectedIds.includes(it.id) && <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full"><Icon name="check" className="w-4 h-4" /></div>}
+                      className={`tour-card-selectable rounded-[2rem] overflow-hidden bg-white shadow-sm active:scale-95 transition ${selectedIds.includes(it.id) ? 'selected' : ''}`}>
+                      <div className="h-40 overflow-hidden"><img src={it.image} className="w-full h-full object-cover" /></div>
+                      <div className="p-4"><p className="text-xs font-black line-clamp-2 leading-tight">{it.title}</p></div>
+                      {selectedIds.includes(it.id) && <div className="absolute top-3 right-3 bg-emerald-500 text-white p-1.5 rounded-full shadow-lg"><Icon name="check" className="w-4 h-4" /></div>}
                     </div>
                   ))}
                 </div>
-                <button onClick={handleShareFlex} disabled={selectedIds.length===0} className={`fixed bottom-24 right-6 left-6 py-5 rounded-2xl shadow-2xl flex items-center justify-center gap-3 transition-all ${selectedIds.length > 0 ? 'bg-[#00B900] text-white' : 'bg-slate-200 text-slate-400'}`}>
-                  <Icon name="share" /><span className="font-black text-lg">產生推廣卡片並分享</span>
+                <button onClick={handleShareFlex} disabled={selectedIds.length===0} className={`fixed bottom-28 left-8 right-8 py-6 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center justify-center gap-3 transition-all z-50 ${selectedIds.length > 0 ? 'bg-[#00B900] text-white scale-105' : 'bg-slate-200 text-slate-400 opacity-50'}`}>
+                  <Icon name="share" /><span className="font-black text-xl">發送推廣 Flex 名片</span>
                 </button>
               </div>
             );
           case 'member':
             return (
-              <div className="p-10 text-center animate-fade-in">
-                <img src={liffProfile?.pictureUrl} className="w-24 h-24 rounded-full mx-auto mb-6 border-4 border-white shadow-lg" />
-                <h3 className="text-2xl font-black mb-2">{liffProfile?.displayName}</h3>
-                <p className="text-indigo-600 font-black text-xs uppercase tracking-widest">{myStatus.role === 'distributor' ? (myStatus.distributorData.status === 'active' ? '專業經銷商' : '申請待審核') : '一般會員'}</p>
-                {myStatus.distributorData?.referred_by && <p className="mt-4 text-[10px] text-slate-400">所屬上級 UID: {myStatus.distributorData.referred_by}</p>}
+              <div className="p-12 text-center animate-fade-in">
+                <div className="relative inline-block mb-10">
+                    <img src={liffProfile?.pictureUrl} className="w-32 h-32 rounded-[3rem] border-8 border-white shadow-2xl" />
+                    <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-3 rounded-2xl shadow-xl"><Icon name="user" className="w-5 h-5"/></div>
+                </div>
+                <h3 className="text-3xl font-black mb-2 tracking-tight">{liffProfile?.displayName}</h3>
+                <p className="bg-slate-100 text-slate-500 inline-block px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{myStatus.role === 'distributor' ? '專業經銷夥伴' : '一般認證會員'}</p>
+                <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto mt-12">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">我的訂單</p><p className="text-3xl font-black text-slate-800 tracking-tighter">0</p></div>
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">紅利積點</p><p className="text-3xl font-black text-blue-600 tracking-tighter">0</p></div>
+                </div>
               </div>
             );
           default: return null;
@@ -220,17 +228,17 @@
 
       return (
         <div className="min-h-screen flex flex-col">
-          <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex justify-between items-center border-b">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={()=>{setActiveTab('home');setSelectedTour(null);}}>
-              <div className="bg-blue-600 p-1.5 rounded-lg text-white font-black text-xs shadow-lg">TK</div>
-              <span className="font-black text-xl tracking-tighter text-blue-900">{tenant?.name}</span>
+          <nav className="bg-white/80 backdrop-blur-2xl sticky top-0 z-50 px-8 py-5 flex justify-between items-center border-b border-slate-50">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={()=>{setActiveTab('home');setSelectedTour(null);}}>
+              <div className="bg-blue-600 p-2 rounded-2xl text-white font-black text-xs shadow-xl shadow-blue-100 italic">TK</div>
+              <span className="font-black text-2xl tracking-tighter text-slate-900 uppercase italic">{tenant?.name}</span>
             </div>
           </nav>
           <main className="flex-grow">{renderContent()}</main>
-          <footer className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t px-6 py-3 flex justify-around items-center md:hidden shadow-lg z-50">
-            <button onClick={()=>{setActiveTab('home');setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='home'&&!selectedTour?'text-blue-600':'text-slate-400'}`}><Icon name="home" /><span className="text-[10px] font-black uppercase">Home</span></button>
-            <button onClick={()=>{setActiveTab('dist');setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='dist'&&!selectedTour?'text-emerald-600':'text-slate-400'}`}><Icon name="briefcase" /><span className="text-[10px] font-black uppercase">Partner</span></button>
-            <button onClick={()=>{setActiveTab('member');setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='member'&&!selectedTour?'text-blue-600':'text-slate-400'}`}><Icon name="user" /><span className="text-[10px] font-black uppercase">Me</span></button>
+          <footer className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-8 py-5 flex justify-around items-center md:hidden shadow-[0_-20px_50px_rgba(0,0,0,0.05)] z-40">
+            <button onClick={()=>{setActiveTab('home');setSelectedTour(null);}} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab==='home'&&!selectedTour?'text-blue-600 scale-110':'text-slate-300'}`}><Icon name="home" /><span className="text-[9px] font-black uppercase tracking-widest">Explore</span></button>
+            <button onClick={()=>{setActiveTab('dist');setSelectedTour(null);}} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab==='dist'&&!selectedTour?'text-emerald-600 scale-110':'text-slate-300'}`}><Icon name="briefcase" /><span className="text-[9px] font-black uppercase tracking-widest">Partner</span></button>
+            <button onClick={()=>{setActiveTab('member');setSelectedTour(null);}} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab==='member'&&!selectedTour?'text-blue-600 scale-110':'text-slate-300'}`}><Icon name="user" /><span className="text-[9px] font-black uppercase tracking-widest">Me</span></button>
           </footer>
         </div>
       );
