@@ -36,240 +36,138 @@
       const [error, setError] = useState(null);
       const [applyType, setApplyType] = useState('user'); 
       const [refUid, setRefUid] = useState(''); 
-      const [targetTourId, setTargetTourId] = useState(''); // 儲存預計跳轉的行程 ID
+      const [targetTourId, setTargetTourId] = useState(''); 
       
       const [profile, setProfile] = useState(null);
-      const [formData, setFormData] = useState({ 
-        name: '', phone: '', companyName: '', taxId: '', lineLink: '', lineAtLink: '', fbLink: '', webLink: '', mapLink: '' 
-      });
+      const [formData, setFormData] = useState({ name: '', phone: '', companyName: '', taxId: '', lineLink: '', lineAtLink: '', fbLink: '', webLink: '', mapLink: '' });
 
-      useEffect(() => {
-        initLogic();
-      }, []);
+      useEffect(() => { initLogic(); }, []);
 
       const initLogic = async () => {
         try {
           const urlParams = new URLSearchParams(window.location.search);
           const type = urlParams.get('type') || 'user';
-          const ref = urlParams.get('ref_uid') || urlParams.get('r') || localStorage.getItem('tracking_ref_uid') || '';
-          const targetTour = urlParams.get('t'); // 抓取原本在哪個行程
+          let ref = urlParams.get('ref_uid') || urlParams.get('r') || '';
+          if (!ref) { try { ref = localStorage.getItem('tracking_ref_uid') || ''; } catch(e){} }
+          const targetTour = urlParams.get('t'); 
           
-          setApplyType(type);
-          setRefUid(ref);
-          setTargetTourId(targetTour);
+          setApplyType(type); setRefUid(ref); setTargetTourId(targetTour);
           
-          await liff.init({ liffId: LIFF_ID });
-
-          if (!liff.isLoggedIn()) {
-            liff.login({ redirectUri: window.location.href });
-            return; 
-          }
+          // ★ 加入 withLoginOnExternalBrowser 防止手機外部瀏覽器無限迴圈
+          await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+          if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
 
           setStatusMsg('授權成功！正在檢查會員狀態...');
           const userProfile = await liff.getProfile();
           setProfile(userProfile);
-          
-          setFormData(prev => ({ 
-            ...prev, 
-            name: userProfile.displayName,
-            lineLink: `https://line.me/ti/p/~${userProfile.userId}` 
-          }));
+          setFormData(prev => ({ ...prev, name: userProfile.displayName, lineLink: `https://line.me/ti/p/~${userProfile.userId}` }));
 
-          const checkResU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers' }) });
+          const checkResU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers', t: Date.now() }) });
           const usersList = await checkResU.json();
           
-          const checkResD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors' }) });
+          const checkResD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors', t: Date.now() }) });
           const distList = await checkResD.json();
 
-          const existingUser = usersList.find(u => u.uid === userProfile.userId) || distList.find(u => u.uid === userProfile.userId);
+          // ★ 強化陣列防呆，避免後端異常時前端崩潰
+          const uArray = Array.isArray(usersList) ? usersList : (usersList.data || []);
+          const dArray = Array.isArray(distList) ? distList : (distList.data || []);
+          const existingUser = uArray.find(u => u.uid === userProfile.userId) || dArray.find(u => u.uid === userProfile.userId);
 
           if (existingUser && existingUser.phone) {
-            setStep('success');
-            setStatusMsg('歡迎回來！正在為您導向專屬頁面...');
+            setStep('success'); setStatusMsg('歡迎回來！正在為您導向專屬頁面...');
             setTimeout(() => { 
-                // ★ 自動跳轉回原本的行程報名頁
-                if (targetTour) {
-                    window.location.href = `${MAIN_APP_URL}?tab=home&t=${targetTour}`;
-                } else {
-                    window.location.href = `${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`; 
-                }
+                // ★ 改用 location.replace 防止手機上一頁歷史紀錄卡住
+                if (targetTour) window.location.replace(`${MAIN_APP_URL}?tab=home&t=${targetTour}`);
+                else window.location.replace(`${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`); 
             }, 1000);
           } else {
             setStep('form');
           }
-
-        } catch (err) {
-          console.error(err);
-          setStep('error'); setError('登入流程發生錯誤，請嘗試重新載入');
+        } catch (err) { 
+            console.error(err); 
+            setStep('error'); 
+            // ★ 顯示真實錯誤訊息，方便除錯
+            setError(`登入失敗: ${err.message || '請確認 LINE 授權或網路連線'}`); 
         }
       };
 
       const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (applyType === 'distributor' && (!formData.companyName || !formData.taxId)) {
-          alert('經銷商申請必須填寫「公司名稱」與「統一編號」，以利後台審核。');
-          return;
-        }
+        if (applyType === 'distributor' && (!formData.companyName || !formData.taxId)) { alert('經銷商申請必須填寫「公司名稱」與「統一編號」。'); return; }
 
         let finalMapLink = formData.mapLink.trim();
-        if (finalMapLink && !finalMapLink.startsWith('http')) {
-           finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
-        }
+        if (finalMapLink && !finalMapLink.startsWith('http')) finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
 
-        setStep('submitting');
-        setStatusMsg('正在儲存您的專屬資料...');
-
+        setStep('submitting'); setStatusMsg('正在儲存您的專屬資料...');
         try {
           const actionType = applyType === 'distributor' ? 'registerDistributor' : 'registerUser';
           const res = await fetch(`${WORKER_URL}/api/itineraries`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              action: actionType, 
-              uid: profile.userId, 
-              ref_uid: refUid,          
-              name: formData.name,      
-              phone: formData.phone,
-              companyName: formData.companyName,
-              taxId: formData.taxId,
-              lineLink: formData.lineLink,
-              lineAtLink: formData.lineAtLink,
-              fbLink: formData.fbLink,
-              webLink: formData.webLink,
-              mapLink: finalMapLink
-            })
+            body: JSON.stringify({ action: actionType, uid: profile.userId, ref_uid: refUid, ...formData, mapLink: finalMapLink })
           });
-
           const result = await res.json();
           if (result.success) {
             if (!result.isNew) {
                 const updateAction = applyType === 'distributor' ? 'updateDistributorInfo' : 'updateUserInfo';
-                await fetch(`${WORKER_URL}/api/itineraries`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: updateAction, uid: profile.userId, name: formData.name, phone: formData.phone, companyName: formData.companyName, taxId: formData.taxId, lineLink: formData.lineLink, lineAtLink: formData.lineAtLink, fbLink: formData.fbLink, webLink: formData.webLink, mapLink: finalMapLink })
-                });
+                await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: updateAction, uid: profile.userId, ...formData, mapLink: finalMapLink }) });
             }
-            setStep('success');
-            setStatusMsg('註冊成功！正在前往系統...');
+            setStep('success'); setStatusMsg('註冊成功！正在前往系統...');
             setTimeout(() => { 
-                // ★ 註冊完成後自動跳轉回行程頁
-                if (targetTourId) {
-                    window.location.href = `${MAIN_APP_URL}?tab=home&t=${targetTourId}`;
-                } else {
-                    window.location.href = `${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`; 
-                }
+                if (targetTourId) window.location.replace(`${MAIN_APP_URL}?tab=home&t=${targetTourId}`);
+                else window.location.replace(`${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`); 
             }, 1500);
           } else throw new Error(result.message || '資料寫入失敗');
-        } catch(err) {
-          setStep('error'); setError('註冊失敗，請檢查網路連線或聯絡客服');
-        }
+        } catch(err) { setStep('error'); setError(`註冊失敗: ${err.message || '請檢查網路連線或聯絡客服'}`); }
       };
 
       return (
         <div className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl w-full border border-gray-100 animate-fade-in">
           {(step === 'checking' || step === 'submitting') && (
             <div className="text-center py-12">
-              <div className="relative mb-8 w-24 h-24 mx-auto">
-                 <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div>
-                 <div className="relative bg-gradient-to-tr from-blue-600 to-blue-400 w-full h-full rounded-full flex items-center justify-center shadow-lg text-white font-bold text-2xl">Travel</div>
-              </div>
+              <div className="relative mb-8 w-24 h-24 mx-auto"><div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div><div className="relative bg-gradient-to-tr from-blue-600 to-blue-400 w-full h-full rounded-full flex items-center justify-center shadow-lg text-white font-bold text-2xl">Travel</div></div>
               <h2 className="text-2xl font-bold text-gray-800 mb-4">系統安全驗證中</h2>
-              <div className="flex flex-col items-center">
-                 <svg className="animate-spin-slow w-8 h-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                 <p className="text-gray-500 font-medium">{statusMsg}</p>
-              </div>
+              <div className="flex flex-col items-center"><svg className="animate-spin-slow w-8 h-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p className="text-gray-500 font-medium">{statusMsg}</p></div>
             </div>
           )}
 
           {step === 'form' && profile && (
             <div className="animate-fade-in">
-              <div className="flex justify-center mb-4">
-                 <div className={`p-4 rounded-2xl ${applyType === 'distributor' ? 'bg-emerald-50' : 'bg-orange-50'}`}>
-                    {applyType === 'distributor' ? <Briefcase /> : <UserIcon />}
-                 </div>
-              </div>
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
-                {applyType === 'distributor' ? '經銷商合作申請' : '一般會員註冊'}
-              </h2>
+              <div className="flex justify-center mb-4"><div className={`p-4 rounded-2xl ${applyType === 'distributor' ? 'bg-emerald-50' : 'bg-orange-50'}`}>{applyType === 'distributor' ? <Briefcase /> : <UserIcon />}</div></div>
+              <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">{applyType === 'distributor' ? '經銷商合作申請' : '一般會員註冊'}</h2>
               <p className="text-center text-gray-500 mb-8 text-sm">請核對並補全您的聯絡資訊以完成開通</p>
               
               <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-4 mb-6 border border-gray-100 relative overflow-hidden">
                 {refUid && <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">推薦開通</div>}
-                <img src={profile.pictureUrl || 'https://via.placeholder.com/150'} alt="LINE Avatar" className="w-16 h-16 rounded-full shadow-sm object-cover border-2 border-white"/>
-                <div>
-                  <p className="text-xs text-gray-400 font-bold tracking-wider mb-1">LINE 授權身分</p>
-                  <p className="font-bold text-gray-800 text-lg leading-none">{profile.displayName}</p>
-                </div>
+                <img src={profile.pictureUrl || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full shadow-sm object-cover border-2 border-white"/>
+                <div><p className="text-xs text-gray-400 font-bold tracking-wider mb-1">LINE 授權身分</p><p className="font-bold text-gray-800 text-lg leading-none">{profile.displayName}</p></div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
-                  {/* 基本必填 */}
-                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 flex items-center mt-2">
-                    <span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs mr-2">必填</span> 基本資訊
-                  </div>
+                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 flex items-center mt-2"><span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs mr-2">必填</span> 基本資訊</div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">真實姓名 / 顯示名稱</label><input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="請輸入姓名"/></div>
+                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡手機</label><input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="例如：0912345678"/></div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">真實姓名 / 顯示名稱</label>
-                    <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="請輸入姓名"/>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡手機</label>
-                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="例如：0912345678"/>
-                  </div>
-
-                  {/* 經銷商專屬審核欄位 */}
                   {applyType === 'distributor' && (
-                    <>
-                      <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center">
-                        <span className="bg-purple-500 text-white px-2 py-0.5 rounded text-xs mr-2">審核必填</span> 經銷商審核資料
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5">公司或門市名稱</label>
-                        <input type="text" required value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="例如：東南旅行社 信義分公司"/>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5">統一編號 / 交觀編號</label>
-                        <input type="text" required value={formData.taxId} onChange={(e) => setFormData({...formData, taxId: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="審核身分用"/>
-                      </div>
-                    </>
+                    <><div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center"><span className="bg-purple-500 text-white px-2 py-0.5 rounded text-xs mr-2">審核必填</span> 經銷商審核資料</div>
+                      <div><label className="block text-sm font-bold text-gray-700 mb-1.5">公司或門市名稱</label><input type="text" required value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="例如：東南旅行社 信義分公司"/></div>
+                      <div><label className="block text-sm font-bold text-gray-700 mb-1.5">統一編號 / 交觀編號</label><input type="text" required value={formData.taxId} onChange={(e) => setFormData({...formData, taxId: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="審核身分用"/></div></>
                   )}
 
-                  {/* 選填區塊 (產生名片用) */}
-                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center">
-                    <span className="bg-gray-300 text-white px-2 py-0.5 rounded text-xs mr-2">選填</span> 更多聯絡管道 (未來可自動放入推廣名片按鈕)
-                  </div>
-
+                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center"><span className="bg-gray-300 text-white px-2 py-0.5 rounded text-xs mr-2">選填</span> 更多聯絡管道 (未來可自動放入推廣名片按鈕)</div>
                   <div><label className="block text-sm font-bold text-gray-700 mb-1.5">個人 LINE 網址</label><input type="url" value={formData.lineLink} onChange={(e) => setFormData({...formData, lineLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://line.me/..."/></div>
                   <div><label className="block text-sm font-bold text-gray-700 mb-1.5">官方 LINE@ 網址</label><input type="url" value={formData.lineAtLink} onChange={(e) => setFormData({...formData, lineAtLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://lin.ee/..."/></div>
                   <div><label className="block text-sm font-bold text-gray-700 mb-1.5">FB 粉絲專頁網址</label><input type="url" value={formData.fbLink} onChange={(e) => setFormData({...formData, fbLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://facebook.com/..."/></div>
                   <div><label className="block text-sm font-bold text-gray-700 mb-1.5">個人/公司網站網址</label><input type="url" value={formData.webLink} onChange={(e) => setFormData({...formData, webLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://..."/></div>
                   <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-1.5">實體店面導航 (輸入完整地址或 Google Map 網址)</label><input type="text" value={formData.mapLink} onChange={(e) => setFormData({...formData, mapLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="例如：台北市信義區信義路五段7號 (系統將自動轉為導航網址)"/></div>
                 </div>
-
-                <button type="submit" className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg mt-6 text-white ${applyType === 'distributor' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
-                  確認資料並開通
-                </button>
+                <button type="submit" className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg mt-6 text-white ${applyType === 'distributor' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}>確認資料並開通</button>
               </form>
             </div>
           )}
 
-          {step === 'success' && (
-            <div className="text-center py-12 animate-fade-in">
-              <div className="flex justify-center"><CheckCircle /></div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-3">{statusMsg}</h2>
-              <p className="text-gray-500">畫面即將自動跳轉...</p>
-            </div>
-          )}
-
-          {step === 'error' && (
-            <div className="text-center py-12 animate-fade-in">
-              <div className="bg-red-50 text-red-600 p-6 rounded-2xl text-base font-bold border border-red-200 inline-block w-full">❌ {error}</div>
-              <button onClick={() => window.location.reload()} className="mt-6 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-700 transition">重新整理頁面</button>
-            </div>
-          )}
-
+          {step === 'success' && (<div className="text-center py-12 animate-fade-in"><div className="flex justify-center"><CheckCircle /></div><h2 className="text-2xl font-bold text-gray-800 mb-3">{statusMsg}</h2><p className="text-gray-500">畫面即將自動跳轉...</p></div>)}
+          {step === 'error' && (<div className="text-center py-12 animate-fade-in"><div className="bg-red-50 text-red-600 p-6 rounded-2xl text-base font-bold border border-red-200 inline-block w-full text-left break-words">❌ {error}</div><button onClick={() => window.location.replace(window.location.href)} className="mt-6 w-full bg-gray-800 text-white px-6 py-4 rounded-xl font-bold hover:bg-gray-700 transition text-lg">重新整理頁面</button></div>)}
         </div>
       );
     }
