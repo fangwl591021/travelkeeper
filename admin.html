@@ -16,13 +16,9 @@
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .custom-scrollbar::-webkit-scrollbar { width: 5px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-    
-    /* 部落格專業渲染 */
     .blog-preview h3 { font-size: 1.85rem; font-weight: 900; margin: 3.5rem 0 1.25rem; color: #0f172a; border-left: 10px solid #4f46e5; padding-left: 1.5rem; line-height: 1.2; }
     .blog-preview img { width: 100%; border-radius: 2.5rem; margin: 2rem 0 3rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.12); object-fit: cover; max-height: 550px; }
     .blog-preview p { font-size: 1.2rem; line-height: 2.1; margin-bottom: 2rem; color: #334155; white-space: pre-wrap; }
-    
-    /* 修正輸入框 focus */
     .clean-input:focus { outline: none; border-bottom: 2px solid #4f46e5; }
   </style>
 </head>
@@ -47,10 +43,8 @@
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
-    // 渲染 Markdown 圖文
     const MarkdownContent = ({ content }) => {
       if (!content) return <div className="text-slate-200 font-black text-4xl opacity-30 mt-20 italic">WAITING FOR AI CONTENT...</div>;
-      
       const paragraphs = content.split('\n');
       const elements = paragraphs.map((p, i) => {
         const line = p.trim();
@@ -65,50 +59,64 @@
       return <div className="blog-preview animate-fade-in">{elements}</div>;
     };
 
+    const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const agencySlug = urlParams.get('a') || 'demo';
       const fileInputRef = useRef(null);
-      
-      const [tenant, setTenant] = useState(null);
-      const [isAdmin, setIsAdmin] = useState(false);
-      const [isLoading, setIsLoading] = useState(true);
-      const [view, setView] = useState('list'); 
+
+      // [修正] 用三態來區分：loading / admin / denied
+      // 避免 setState 非同步導致 isAdmin 尚未更新就判斷為無權限
+      const [authState, setAuthState] = useState('loading'); // 'loading' | 'admin' | 'denied'
+      const [myUid, setMyUid] = useState('');
       const [itineraries, setItineraries] = useState([]);
+      const [view, setView] = useState('list');
       const [formData, setFormData] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' });
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [aiLoading, setAiLoading] = useState(false);
-      const [myUid, setMyUid] = useState('');
-
-      useEffect(() => {
-        const init = async () => {
-          try {
-            const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
-            const configData = await configRes.json();
-            if (configData.success) {
-              setTenant(configData.data);
-              await liff.init({ liffId: configData.data.liff_id });
-              if (liff.isLoggedIn()) {
-                const profile = await liff.getProfile();
-                setMyUid(profile.userId);
-                const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
-                const statusData = await statusRes.json();
-                if (statusData.success && statusData.data.isAdmin) {
-                  setIsAdmin(true);
-                  fetchList();
-                }
-              } else { liff.login({ redirectUri: window.location.href }); }
-            }
-          } catch (e) { console.error(e); } finally { setIsLoading(false); }
-        };
-        init();
-      }, [agencySlug]);
 
       const fetchList = async () => {
         const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
         const data = await res.json();
         setItineraries(Array.isArray(data) ? data : []);
       };
+
+      useEffect(() => {
+        const init = async () => {
+          try {
+            const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
+            const configData = await configRes.json();
+            if (!configData.success) { setAuthState('denied'); return; }
+
+            await liff.init({ liffId: configData.data.liff_id });
+
+            if (!liff.isLoggedIn()) {
+              liff.login({ redirectUri: window.location.href });
+              return;
+            }
+
+            const profile = await liff.getProfile();
+            setMyUid(profile.userId);
+
+            const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
+            const statusData = await statusRes.json();
+
+            // [關鍵修正] 先 fetchList，再 setAuthState('admin')
+            // 確保資料準備好後才切換畫面，不會出現空列表閃一下的狀況
+            if (statusData.success && statusData.data.isAdmin) {
+              await fetchList();
+              setAuthState('admin');
+            } else {
+              setAuthState('denied');
+            }
+          } catch (e) {
+            console.error(e);
+            setAuthState('denied');
+          }
+        };
+        init();
+      }, [agencySlug]);
 
       const handleAiExpand = async (e) => {
         const file = e.target.files[0];
@@ -119,11 +127,12 @@
           try {
             const res = await fetch(`${WORKER_URL}/api/upload-dm?a=${agencySlug}`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: JSON_HEADERS,
               body: JSON.stringify({ image: reader.result })
             });
             const result = await res.json();
-            if (result.success) setFormData({...formData, ...result.data});
+            if (result.success) setFormData(prev => ({ ...prev, ...result.data }));
+            else alert('AI 回傳錯誤：' + result.error);
           } catch (e) { alert('AI 連線失敗'); }
           setAiLoading(false);
         };
@@ -136,51 +145,78 @@
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: JSON_HEADERS,
             body: JSON.stringify({ action, ...formData })
           });
           if ((await res.json()).success) { setView('list'); fetchList(); }
+          else alert('儲存失敗，請再試一次');
         } catch (e) { alert('儲存失敗'); }
         setIsSubmitting(false);
       };
 
-      if (isLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-100 text-6xl uppercase tracking-tighter italic">Initializing...</div>;
-      
-      // --- 權限不足顯示畫面 ---
-      if (!isAdmin) return (
-        <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-6 text-center">
-          <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-red-100 max-w-md animate-fade-in">
-            <div className="text-red-500 mb-6 text-8xl">⛔</div>
-            <h1 className="text-3xl font-black text-slate-800 mb-4">ACCESS DENIED</h1>
-            <p className="text-slate-500 font-bold mb-8">您的 LINE 帳號未獲得管理權限</p>
-            
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">您的專屬 UID</p>
-              <code className="text-xs font-mono font-bold text-indigo-600 break-all select-all cursor-pointer" onClick={() => { document.execCommand('copy'); alert('UID 已複製'); }}>{myUid}</code>
-            </div>
-            
-            <p className="text-xs text-slate-400 leading-relaxed">請將此 UID 複製並在 D1 資料庫的 <br/> <span className="font-bold text-slate-600 italic">tenants.admin_uids</span> 欄位中補上，<br/>方可進入後台管理。</p>
-          </div>
-        </div>
-      );
+      const handleDelete = async (id) => {
+        if (!confirm('確定刪除？')) return;
+        // [修正] 補上 Content-Type header，否則 Worker 無法解析 body
+        await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
+          method: 'POST',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ action: 'deleteItinerary', id })
+        });
+        fetchList();
+      };
 
+      // --- 三態渲染 ---
+      if (authState === 'loading') {
+        return <div className="h-screen flex items-center justify-center font-black text-slate-100 text-6xl uppercase tracking-tighter italic">Initializing...</div>;
+      }
+
+      if (authState === 'denied') {
+        return (
+          <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-6 text-center">
+            <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-red-100 max-w-md animate-fade-in">
+              <div className="text-red-500 mb-6 text-8xl">⛔</div>
+              <h1 className="text-3xl font-black text-slate-800 mb-4">ACCESS DENIED</h1>
+              <p className="text-slate-500 font-bold mb-8">您的 LINE 帳號未獲得管理權限</p>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">您的專屬 UID</p>
+                <code
+                  className="text-xs font-mono font-bold text-indigo-600 break-all select-all cursor-pointer"
+                  onClick={() => { navigator.clipboard.writeText(myUid).then(() => alert('UID 已複製')); }}
+                >{myUid || '載入中...'}</code>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                請將此 UID 複製並在 D1 資料庫的 <br/>
+                <span className="font-bold text-slate-600 italic">tenants.admin_uids</span> 欄位中補上，<br/>
+                方可進入後台管理。
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      // authState === 'admin'
       if (view === 'list') return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
           <header className="bg-white border-b px-10 py-6 flex justify-between items-center sticky top-0 z-50">
             <h1 className="text-xl font-black italic tracking-tight">SaaS Admin <span className="text-indigo-600">Panel</span></h1>
-            <button onClick={() => { setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' }); setView('edit'); }} className="bg-indigo-600 text-white px-8 py-3 rounded-full font-black flex items-center gap-2 hover:scale-105 transition shadow-lg shadow-indigo-100"><Icon name="plus" /> 新增行程</button>
+            <button
+              onClick={() => { setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' }); setView('edit'); }}
+              className="bg-indigo-600 text-white px-8 py-3 rounded-full font-black flex items-center gap-2 hover:scale-105 transition shadow-lg shadow-indigo-100"
+            ><Icon name="plus" /> 新增行程</button>
           </header>
           <main className="p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {itineraries.map(item => (
               <div key={item.id} className="bg-white rounded-[2.5rem] overflow-hidden border border-slate-100 hover:shadow-2xl transition-all group">
-                <div className="h-56 overflow-hidden bg-slate-100"><img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div>
+                <div className="h-56 overflow-hidden bg-slate-100">
+                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                </div>
                 <div className="p-8">
                   <h2 className="text-xl font-black mb-4 line-clamp-1">{item.title}</h2>
                   <div className="flex justify-between items-center">
                     <p className="text-red-600 font-black text-xl">${Number(item.price).toLocaleString()}</p>
                     <div className="flex gap-2">
                       <button onClick={() => { setFormData(item); setView('edit'); }} className="p-3 bg-slate-50 rounded-full hover:bg-indigo-600 hover:text-white transition"><Icon name="edit" /></button>
-                      <button onClick={async () => { if(confirm('確定刪除？')){ await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, { method:'POST', body:JSON.stringify({action:'deleteItinerary', id:item.id}) }); fetchList(); } }} className="p-3 bg-slate-50 rounded-full hover:bg-red-600 hover:text-white transition"><Icon name="trash" /></button>
+                      <button onClick={() => handleDelete(item.id)} className="p-3 bg-slate-50 rounded-full hover:bg-red-600 hover:text-white transition"><Icon name="trash" /></button>
                     </div>
                   </div>
                 </div>
@@ -190,7 +226,6 @@
         </div>
       );
 
-      // --- 全開部落格編輯模式 ---
       return (
         <div className="h-screen w-screen flex flex-col animate-fade-in bg-white overflow-hidden">
           <nav className="h-20 border-b flex justify-between items-center px-8 shrink-0 bg-white z-50 shadow-sm">
@@ -201,7 +236,7 @@
             <div className="flex items-center gap-4">
               {!formData.id && (
                 <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-700 px-8 py-3 rounded-full font-black flex items-center gap-2 hover:bg-indigo-100 transition disabled:opacity-50">
-                  {aiLoading ? <div className="w-5 h-5 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div> : <Icon name="sparkles" />} 
+                  {aiLoading ? <div className="w-5 h-5 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div> : <Icon name="sparkles" />}
                   {aiLoading ? 'AI 繁體中文撰寫中...' : 'AI 視覺擴寫'}
                 </button>
               )}
@@ -213,31 +248,26 @@
           </nav>
 
           <div className="flex-grow flex w-full overflow-hidden">
-            {/* 左側：編輯區 */}
             <div className="w-[45%] h-full flex flex-col border-r bg-slate-50/10 overflow-y-auto custom-scrollbar p-10">
               <div className="space-y-10">
-                <input type="text" value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full text-3xl font-black bg-transparent border-b-2 border-transparent focus:border-indigo-600 outline-none pb-4 transition placeholder-slate-200" placeholder="在此輸入文章標題..." />
-                
+                <input type="text" value={formData.title} onChange={e=>setFormData(prev=>({...prev, title:e.target.value}))} className="w-full text-3xl font-black bg-transparent border-b-2 border-transparent focus:border-indigo-600 outline-none pb-4 transition placeholder-slate-200" placeholder="在此輸入文章標題..." />
                 <div className="grid grid-cols-3 gap-6">
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">旅遊地區</label><select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition"><option>亞洲</option><option>歐洲</option><option>美洲</option><option>國旅</option></select></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">天數</label><input type="number" value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">售價 (TWD)</label><input type="number" value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">旅遊地區</label><select value={formData.region} onChange={e=>setFormData(prev=>({...prev, region:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition"><option>亞洲</option><option>歐洲</option><option>美洲</option><option>國旅</option></select></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">天數</label><input type="number" value={formData.days} onChange={e=>setFormData(prev=>({...prev, days:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">售價 (TWD)</label><input type="number" value={formData.price} onChange={e=>setFormData(prev=>({...prev, price:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-3 px-5 font-bold shadow-sm outline-none focus:ring-4 ring-indigo-500/10 transition" /></div>
                 </div>
-
                 <div>
                   <label className="text-xs font-black text-slate-400 uppercase block mb-3">封面主圖網址</label>
-                  <input type="url" value={formData.image} onChange={e=>setFormData({...formData, image:e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl py-4 px-6 text-sm shadow-sm outline-none mb-4" placeholder="貼上 Unsplash 或 Google Drive 連結..." />
+                  <input type="url" value={formData.image} onChange={e=>setFormData(prev=>({...prev, image:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-xl py-4 px-6 text-sm shadow-sm outline-none mb-4" placeholder="貼上 Unsplash 或 Google Drive 連結..." />
                   {formData.image && <img src={formData.image} className="w-full h-52 object-cover rounded-[2rem] shadow-lg border-4 border-white" alt="Cover Preview" />}
                 </div>
-
                 <div>
                   <label className="text-xs font-black text-slate-400 uppercase block mb-3">文章正文內容 (Markdown 語法可編輯)</label>
-                  <textarea rows="30" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2.5rem] py-10 px-12 text-lg leading-relaxed shadow-sm outline-none focus:ring-8 ring-indigo-500/5 transition custom-scrollbar" placeholder="在這裡盡情揮灑您的旅遊故事..."></textarea>
+                  <textarea rows="30" value={formData.description} onChange={e=>setFormData(prev=>({...prev, description:e.target.value}))} className="w-full bg-white border border-slate-200 rounded-[2.5rem] py-10 px-12 text-lg leading-relaxed shadow-sm outline-none focus:ring-8 ring-indigo-500/5 transition custom-scrollbar" placeholder="在這裡盡情揮灑您的旅遊故事..."></textarea>
                 </div>
               </div>
             </div>
 
-            {/* 右側：預覽區 */}
             <div className="w-[55%] h-full overflow-y-auto bg-white p-16 md:p-24 custom-scrollbar">
               <div className="max-w-3xl mx-auto">
                 <div className="flex items-center gap-4 mb-10">
@@ -245,15 +275,12 @@
                   <span className="text-slate-400 font-bold text-sm uppercase tracking-widest">{formData.days} Days Tour</span>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-16 tracking-tight">{formData.title || '文章標題預覽'}</h1>
-                
                 <div className="flex items-center gap-12 mb-16 py-8 border-y border-slate-50">
                   <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Total Amount</p><p className="text-3xl font-black text-red-600">TWD {Number(formData.price).toLocaleString()}</p></div>
                   <div className="w-px h-10 bg-slate-100"></div>
                   <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Tour Duration</p><p className="text-3xl font-black text-slate-800">{formData.days} 天行程</p></div>
                 </div>
-
                 <MarkdownContent content={formData.description} />
-                
                 <div className="mt-20 pt-10 border-t border-slate-100 text-center">
                   <p className="text-slate-300 font-black text-xs uppercase tracking-[0.5em]">End of Itinerary</p>
                 </div>
