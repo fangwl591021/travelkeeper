@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>經銷商申請 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: #f0f4ff;
+      min-height: 100vh;
+      margin: 0;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 15% 0%, rgba(16,185,129,0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 90%, rgba(37,99,235,0.07) 0%, transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.5s cubic-bezier(.22,1,.36,1) forwards; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.7s linear infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react,env">
+    const { useState, useEffect } = React;
+
+    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+    /* ─── Icons ─── */
+    const CheckIcon = () => (
+      <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{width:48,height:48}}>
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+    );
+
+    /* ─── Field wrapper ─── */
+    function Field({ label, hint, children }) {
+      return (
+        <div style={{marginBottom:22}}>
+          <label style={{display:'block',fontSize:10,fontWeight:900,color:'#94a3b8',
+            textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:8}}>
+            {label}
+          </label>
+          {children}
+          {hint && <p style={{fontSize:11,color:'#94a3b8',marginTop:6,fontWeight:500}}>{hint}</p>}
+        </div>
+      );
+    }
+
+    const baseInput = {
+      width:'100%', background:'#f8fafc', border:'2px solid #f1f5f9',
+      borderRadius:14, padding:'15px 18px', fontSize:16, fontWeight:700,
+      fontFamily:'Noto Sans TC, sans-serif', color:'#0f172a',
+      outline:'none', boxSizing:'border-box', transition:'border-color .2s, box-shadow .2s, background .2s',
+    };
+    const focusOn  = e => { e.target.style.borderColor='#10b981'; e.target.style.background='#fff'; e.target.style.boxShadow='0 0 0 4px rgba(16,185,129,.09)'; };
+    const focusOff = e => { e.target.style.borderColor='#f1f5f9'; e.target.style.background='#f8fafc'; e.target.style.boxShadow='none'; };
+
+    /* ─── Shell ─── */
+    function Shell({ tenant, children }) {
+      return (
+        <div style={{position:'relative',zIndex:1,minHeight:'100vh',display:'flex',
+          alignItems:'flex-start',justifyContent:'center',padding:'40px 16px 64px'}}>
+          <div style={{background:'#fff',borderRadius:36,width:'100%',maxWidth:520,
+            boxShadow:'0 32px 80px rgba(16,185,129,.09), 0 2px 8px rgba(0,0,0,.04)',
+            border:'1px solid rgba(16,185,129,.08)',overflow:'hidden'}}>
+
+            {/* Header */}
+            <div style={{background:'linear-gradient(135deg,#065f46 0%,#10b981 60%,#2563eb 100%)',
+              padding:'32px 40px 28px',position:'relative',overflow:'hidden'}}>
+              <div style={{position:'absolute',top:-40,right:-30,width:140,height:140,
+                borderRadius:'50%',background:'rgba(255,255,255,.05)'}}/>
+              <div style={{position:'absolute',bottom:-30,left:-20,width:100,height:100,
+                borderRadius:'50%',background:'rgba(255,255,255,.04)'}}/>
+              <div style={{position:'relative',zIndex:1}}>
+                <span style={{display:'inline-block',background:'rgba(255,255,255,.18)',
+                  color:'rgba(255,255,255,.9)',fontSize:10,fontWeight:900,
+                  letterSpacing:'0.15em',textTransform:'uppercase',
+                  padding:'5px 14px',borderRadius:999,marginBottom:14}}>
+                  經銷夥伴計畫
+                </span>
+                <h1 style={{color:'#fff',fontSize:26,fontWeight:900,margin:0,lineHeight:1.3}}>
+                  {tenant?.name || '旅遊管家'}
+                </h1>
+                <p style={{color:'rgba(255,255,255,.75)',fontSize:13,fontWeight:600,marginTop:6}}>
+                  Distributor Partner Program
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{padding:'36px 40px 44px'}}>{children}</div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─── Main App ─── */
+    function App() {
+      const p          = new URLSearchParams(window.location.search);
+      const agencySlug = p.get('a') || 'demo';
+      const refUid     = p.get('r') || '';
+
+      // step: loading | form | submitting | success | pending | already | error
+      const [step,    setStep]   = useState('loading');
+      const [tenant,  setTenant] = useState(null);
+      const [profile, setProf]   = useState(null);
+      const [form,    setForm]   = useState({ name:'', phone:'', company_name:'' });
+      const [errMsg,  setErr]    = useState('');
+
+      useEffect(() => {
+        (async () => {
+          try {
+            // 1. 抓旅行社設定 (包含 liff_id)
+            const cfgRes  = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
+            const cfgData = await cfgRes.json();
+            if (!cfgData.success) { setStep('error'); return; }
+            setTenant(cfgData.data);
+
+            // 2. LIFF 初始化 & 登入
+            await liff.init({ liffId: cfgData.data.liff_id });
+            if (!liff.isLoggedIn()) {
+              liff.login({ redirectUri: window.location.href });
+              return;
+            }
+
+            // 3. 取得 LINE 用戶資料
+            const prof = await liff.getProfile();
+            setProf(prof);
+            setForm(f => ({ ...f, name: prof.displayName }));
+
+            // 4. 確認是否已申請過
+            const stRes  = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${prof.userId}&a=${agencySlug}`);
+            const stData = await stRes.json();
+            if (stData.success) {
+              const { role, distributorData } = stData.data;
+              if (role === 'distributor') {
+                if (distributorData?.status === 'active')  { setStep('already');  return; }
+                if (distributorData?.status === 'pending') { setStep('pending');  return; }
+                // rejected → 允許重新申請，直接顯示表單
+              }
+            }
+            setStep('form');
+          } catch (e) {
+            console.error(e);
+            setStep('error');
+          }
+        })();
+      }, [agencySlug]);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!form.phone.trim()) { setErr('請填寫聯絡電話'); return; }
+        setErr(''); setStep('submitting');
+        try {
+          const res = await fetch(`${WORKER_URL}/api/partner/register?a=${agencySlug}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...form, type:'distributor', uid: profile.userId, ref_uid: refUid })
+          });
+          const result = await res.json();
+          if (result.success) { setStep('success'); }
+          else { setErr(result.error || '提交失敗，請稍後重試'); setStep('form'); }
+        } catch {
+          setErr('網路連線失敗，請稍後重試');
+          setStep('form');
+        }
+      };
+
+      /* ── Loading ── */
+      if (step === 'loading') return (
+        <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}>
+          <div className="spin" style={{width:44,height:44,border:'4px solid #e2e8f0',borderTopColor:'#10b981',borderRadius:'50%'}}/>
+          <p style={{color:'#94a3b8',fontWeight:700,fontFamily:'Noto Sans TC,sans-serif'}}>身份驗證中…</p>
+        </div>
+      );
+
+      /* ── Error ── */
+      if (step === 'error') return (
+        <Shell tenant={null}>
+          <div style={{textAlign:'center',padding:'40px 0'}}>
+            <div style={{fontSize:64,marginBottom:16}}>⛔</div>
+            <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:8}}>系統配置錯誤</h2>
+            <p style={{color:'#94a3b8',fontWeight:600}}>請確認連結是否正確，或聯絡管理員。</p>
+          </div>
+        </Shell>
+      );
+
+      /* ── Already active ── */
+      if (step === 'already') return (
+        <Shell tenant={tenant}>
+          <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
+            <div style={{width:80,height:80,background:'linear-gradient(135deg,#d1fae5,#a7f3d0)',borderRadius:'50%',
+              display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',
+              boxShadow:'0 8px 24px rgba(16,185,129,.15)'}}>
+              <CheckIcon />
+            </div>
+            <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>您已是授權經銷商 ✅</h2>
+            <p style={{color:'#64748b',fontWeight:600,marginBottom:28,lineHeight:1.7}}>
+              您的帳號已通過核准。<br/>請前往業務後台開始推廣行程。
+            </p>
+            <a href={`login.html?a=${agencySlug}`}
+              style={{display:'inline-block',background:'linear-gradient(135deg,#10b981,#059669)',
+                color:'#fff',padding:'16px 36px',borderRadius:14,fontWeight:900,fontSize:15,
+                textDecoration:'none',boxShadow:'0 10px 24px rgba(16,185,129,.25)'}}>
+              前往業務後台 →
+            </a>
+          </div>
+        </Shell>
+      );
+
+      /* ── Pending ── */
+      if (step === 'pending') return (
+        <Shell tenant={tenant}>
+          <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
+            <div style={{fontSize:72,marginBottom:20}}>⏳</div>
+            <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>申請審核中</h2>
+            <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8}}>
+              總部正在核對您的資料。<br/>審核通過後會透過 LINE 通知您，請耐心等候。
+            </p>
+          </div>
+        </Shell>
+      );
+
+      /* ── Success ── */
+      if (step === 'success') return (
+        <Shell tenant={tenant}>
+          <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
+            <div style={{width:88,height:88,background:'linear-gradient(135deg,#d1fae5,#a7f3d0)',borderRadius:'50%',
+              display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px',
+              boxShadow:'0 8px 24px rgba(16,185,129,.2)'}}>
+              <CheckIcon />
+            </div>
+            <h2 style={{fontSize:26,fontWeight:900,color:'#0f172a',marginBottom:10}}>申請已送出！🎉</h2>
+            <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8}}>
+              感謝您申請成為經銷夥伴。<br/>
+              審核通過後，您即可登入業務系統開始推廣。
+            </p>
+          </div>
+        </Shell>
+      );
+
+      /* ── Form (+ submitting) ── */
+      const isSubmitting = step === 'submitting';
+      return (
+        <Shell tenant={tenant}>
+          <form onSubmit={handleSubmit} className="fade-up">
+
+            {/* 說明 */}
+            <div style={{textAlign:'center',marginBottom:28}}>
+              <div style={{width:64,height:64,background:'#ecfdf5',borderRadius:18,
+                display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',
+                boxShadow:'inset 0 2px 8px rgba(16,185,129,.1)'}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:32,height:32}}>
+                  <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                </svg>
+              </div>
+              <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:6}}>申請成為經銷夥伴</h2>
+              <p style={{color:'#64748b',fontWeight:600,fontSize:13,lineHeight:1.7}}>
+                填寫以下資料，提交後由後台審核。<br/>
+                通過即可獲得專屬推廣連結與分潤機制。
+              </p>
+            </div>
+
+            <hr style={{border:'none',borderTop:'1.5px solid #f1f5f9',margin:'0 0 26px'}}/>
+
+            {/* LINE 帳號區塊 */}
+            {profile && (
+              <div style={{display:'flex',alignItems:'center',gap:14,background:'#f8fafc',
+                borderRadius:14,padding:'12px 16px',marginBottom:26,border:'2px solid #f1f5f9'}}>
+                <img src={profile.pictureUrl} style={{width:44,height:44,borderRadius:'50%',border:'2px solid #e2e8f0'}}/>
+                <div>
+                  <p style={{fontSize:10,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',
+                    letterSpacing:'0.12em',marginBottom:2}}>LINE 帳號</p>
+                  <p style={{fontWeight:900,color:'#0f172a',fontSize:15}}>{profile.displayName}</p>
+                </div>
+                <div style={{marginLeft:'auto',background:'#dcfce7',color:'#16a34a',
+                  padding:'4px 12px',borderRadius:999,fontSize:10,fontWeight:900,whiteSpace:'nowrap'}}>
+                  ✅ 已驗證
+                </div>
+              </div>
+            )}
+
+            {/* 表單欄位 */}
+            <Field label="真實姓名" hint="將用於合約與發票">
+              <input required style={baseInput} value={form.name}
+                onChange={e => setForm({...form, name:e.target.value})}
+                placeholder="請輸入真實姓名"
+                onFocus={focusOn} onBlur={focusOff}/>
+            </Field>
+
+            <Field label="聯絡電話" hint="用於後台聯繫，不對外公開">
+              <input required type="tel" style={baseInput} value={form.phone}
+                onChange={e => setForm({...form, phone:e.target.value})}
+                placeholder="0912-345-678"
+                onFocus={focusOn} onBlur={focusOff}/>
+            </Field>
+
+            <Field label="公司 / 門市 / 品牌名稱" hint="個人業務請填本名即可，非必填">
+              <input style={baseInput} value={form.company_name}
+                onChange={e => setForm({...form, company_name:e.target.value})}
+                placeholder="非必填"
+                onFocus={focusOn} onBlur={focusOff}/>
+            </Field>
+
+            {/* 推薦人 */}
+            {refUid && (
+              <div style={{background:'#f0fdf4',border:'2px solid #bbf7d0',borderRadius:14,
+                padding:'12px 18px',marginBottom:22}}>
+                <p style={{fontSize:10,fontWeight:900,color:'#16a34a',textTransform:'uppercase',
+                  letterSpacing:'0.12em',marginBottom:4}}>✅ 已綁定推薦人</p>
+                <p style={{fontFamily:'monospace',fontSize:11,fontWeight:700,color:'#15803d',wordBreak:'break-all'}}>{refUid}</p>
+              </div>
+            )}
+
+            {/* 錯誤訊息 */}
+            {errMsg && (
+              <div style={{background:'#fef2f2',border:'2px solid #fecaca',borderRadius:14,
+                padding:'12px 18px',marginBottom:18,color:'#dc2626',fontSize:13,fontWeight:700}}>
+                ⚠️ {errMsg}
+              </div>
+            )}
+
+            {/* 送出按鈕 */}
+            <button type="submit" disabled={isSubmitting} style={{
+              width:'100%', border:'none',
+              background: isSubmitting ? '#94a3b8' : 'linear-gradient(135deg,#10b981,#059669)',
+              color:'#fff', padding:'20px', borderRadius:16,
+              fontSize:17, fontWeight:900, fontFamily:'Noto Sans TC,sans-serif',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              boxShadow: isSubmitting ? 'none' : '0 12px 32px rgba(16,185,129,.28)',
+              transition:'transform .15s, box-shadow .15s', letterSpacing:'0.04em',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:10
+            }}>
+              {isSubmitting
+                ? <><div className="spin" style={{width:20,height:20,border:'3px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>提交中…</>
+                : '送出審核申請 →'
+              }
+            </button>
+
+            <p style={{textAlign:'center',color:'#cbd5e1',fontSize:11,fontWeight:600,marginTop:14}}>
+              提交即代表同意成為本平台之合作夥伴
+            </p>
+          </form>
+        </Shell>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
