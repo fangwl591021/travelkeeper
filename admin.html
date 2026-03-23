@@ -3,24 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 總管理後台 (SaaS 版)</title>
+  <title>旅遊管家 - 總管理後台 (全開版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    textarea { font-family: 'Noto Sans TC', sans-serif; line-height: 1.8; }
-    .blog-preview h3 { font-size: 1.5rem; font-weight: 900; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; }
-    .blog-preview img { width: 100%; border-radius: 1rem; margin: 1rem 0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-    .blog-preview p { margin-bottom: 1rem; color: #475569; }
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    
+    /* 部落格渲染樣式 */
+    .blog-preview h3 { font-size: 1.8rem; font-weight: 900; margin-top: 3rem; margin-bottom: 1rem; color: #0f172a; border-left: 6px solid #4f46e5; padding-left: 1rem; }
+    .blog-preview img { width: 100%; border-radius: 1.5rem; margin: 2rem 0; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); }
+    .blog-preview p { font-size: 1.125rem; line-height: 2; margin-bottom: 1.5rem; color: #334155; }
   </style>
 </head>
-<body class="bg-white font-sans text-slate-800">
+<body class="bg-white text-slate-900">
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
@@ -28,48 +31,48 @@
 
     const Icon = ({ name, className = "w-6 h-6" }) => {
       const icons = {
-        box: (<React.Fragment><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></React.Fragment>),
-        fileText: (<React.Fragment><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></React.Fragment>),
         plus: (<React.Fragment><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></React.Fragment>),
-        edit: (<React.Fragment><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></React.Fragment>),
+        edit: (<React.Fragment><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></React.Fragment>),
         trash: (<React.Fragment><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></React.Fragment>),
         sparkles: (<React.Fragment><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></React.Fragment>),
-        upload: (<React.Fragment><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></React.Fragment>),
-        link: (<React.Fragment><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></React.Fragment>),
         arrowLeft: (<React.Fragment><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></React.Fragment>),
-        check: (<React.Fragment><polyline points="20 6 9 17 4 12"/></React.Fragment>)
+        save: (<React.Fragment><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></React.Fragment>)
       };
-      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
+      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
     };
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
-    // Markdown 渲染輔助組件
+    // 關鍵修正：Markdown 渲染組件
     const MarkdownContent = ({ content }) => {
-      if (!content) return null;
-      // 簡單的正則替換
-      let html = content
-        .replace(/### (.*)/g, '<h3>$1</h3>')
-        .replace(/!\[.*?\]\((.*?)\)/g, '<img src="$1" alt="image" />')
-        .replace(/\n/g, '<p></p>'); // 換行轉段落
+      if (!content) return <div className="text-slate-300 italic">等待內容產出...</div>;
+      
+      const paragraphs = content.split('\n');
+      const elements = paragraphs.map((p, i) => {
+        if (p.startsWith('###')) {
+          return <h3 key={i}>{p.replace('###', '').trim()}</h3>;
+        }
+        if (p.includes('![Image](')) {
+          const url = p.match(/\((.*?)\)/)?.[1];
+          return url ? <img key={i} src={url} alt="day-img" /> : null;
+        }
+        if (p.trim() === '') return <br key={i}/>;
+        return <p key={i}>{p}</p>;
+      });
 
-      return <div className="blog-preview" dangerouslySetInnerHTML={{ __html: html }} />;
+      return <div className="blog-preview">{elements}</div>;
     };
 
-    function AdminApp() {
+    function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const agencySlug = urlParams.get('a') || 'demo';
 
       const fileInputRef = useRef(null);
       const [tenant, setTenant] = useState(null);
-      const [liffProfile, setLiffProfile] = useState(null);
       const [isAdmin, setIsAdmin] = useState(false);
       const [isLoading, setIsLoading] = useState(true);
       const [view, setView] = useState('list'); // 'list', 'edit'
-      const [activeTab, setActiveTab] = useState('itineraries'); 
       const [itineraries, setItineraries] = useState([]);
-      const [orders, setOrders] = useState([]);
-      
       const [formData, setFormData] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' });
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [aiLoading, setAiLoading] = useState(false);
@@ -84,73 +87,26 @@
               await liff.init({ liffId: configData.data.liff_id });
               if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
-                setLiffProfile(profile);
                 const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
                 const statusData = await statusRes.json();
                 if (statusData.success && statusData.data.isAdmin) {
                   setIsAdmin(true);
-                  fetchData('itineraries');
-                  fetchData('orders');
+                  fetchList();
                 }
-              } else { liff.login({ redirectUri: window.location.href }); }
+              } else { liff.login(); }
             }
           } catch (e) { console.error(e); } finally { setIsLoading(false); }
         };
         init();
       }, [agencySlug]);
 
-      const fetchData = async (type) => {
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}${type === 'orders' ? '&action=getAllOrders' : ''}`);
-          const data = await res.json();
-          if (type === 'itineraries') setItineraries(Array.isArray(data) ? data : []);
-          else if (type === 'orders') setOrders(data.success ? data.data : []);
-        } catch (e) { console.error(e); }
+      const fetchList = async () => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
+        const data = await res.json();
+        setItineraries(Array.isArray(data) ? data : []);
       };
 
-      const convertGoogleDriveUrl = (url) => {
-        if (!url) return "";
-        const googleDriveRegex = /\/file\/d\/([^\/]+)\//;
-        const googleDriveIdOnlyRegex = /id=([^\&]+)/;
-        let fileId = "";
-        if (url.match(googleDriveRegex)) fileId = url.match(googleDriveRegex)[1];
-        else if (url.match(googleDriveIdOnlyRegex)) fileId = url.match(googleDriveIdOnlyRegex)[1];
-        if (fileId) return `https://lh3.googleusercontent.com/u/0/d/${fileId}`;
-        return url;
-      };
-
-      const handleSave = async (e) => {
-        if(e) e.preventDefault();
-        setIsSubmitting(true);
-        const action = formData.id ? 'updateItinerary' : 'addItinerary';
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, ...formData })
-          });
-          const result = await res.json();
-          if (result.success) {
-            setView('list');
-            fetchData('itineraries');
-          } else { alert('儲存失敗'); }
-        } catch (err) { alert('連線錯誤'); }
-        setIsSubmitting(false);
-      };
-
-      const handleDelete = async (id) => {
-        if (!confirm('下架此行程？')) return;
-        try {
-          await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'deleteItinerary', id })
-          });
-          fetchData('itineraries');
-        } catch (err) { alert('刪除失敗'); }
-      };
-
-      const handleFileChange = async (e) => {
+      const handleAiExpand = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
@@ -163,158 +119,121 @@
               body: JSON.stringify({ image: reader.result })
             });
             const result = await res.json();
-            if (result.success) {
-              setFormData({...formData, ...result.data});
-            }
-          } catch (e) { alert('AI 連線失敗'); }
+            if (result.success) setFormData({...formData, ...result.data});
+          } catch (e) { alert('AI 解析失敗'); }
           setAiLoading(false);
         };
         reader.readAsDataURL(file);
       };
 
-      if (isLoading) return <div className="h-screen flex items-center justify-center font-bold text-slate-400">系統初始化中...</div>;
-      if (!isAdmin) return <div className="p-20 text-center font-black text-red-500">權限不足 ⛔</div>;
+      const handleSave = async () => {
+        setIsSubmitting(true);
+        const action = formData.id ? 'updateItinerary' : 'addItinerary';
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ...formData })
+          });
+          if ((await res.json()).success) { setView('list'); fetchList(); }
+        } catch (e) { alert('儲存失敗'); }
+        setIsSubmitting(false);
+      };
 
-      // 1. 列表畫面
-      if (view === 'list') {
-        return (
-          <div className="min-h-screen flex flex-col md:flex-row">
-            <aside className="w-full md:w-64 bg-slate-900 text-white p-6 shrink-0">
-              <div className="flex items-center gap-3 mb-10">
-                <div className="bg-indigo-500 p-2 rounded-lg"><Icon name="box" className="w-5 h-5" /></div>
-                <div><h1 className="font-black text-lg">旅遊管家</h1><p className="text-[10px] text-slate-400">ADMIN</p></div>
-              </div>
-              <nav className="space-y-2">
-                <button onClick={() => setActiveTab('itineraries')} className={`w-full text-left px-4 py-3 rounded-xl font-bold ${activeTab==='itineraries'?'bg-indigo-600 shadow-lg shadow-indigo-900/50':'text-slate-400 hover:text-white'}`}>行程管理</button>
-                <button onClick={() => setActiveTab('orders')} className={`w-full text-left px-4 py-3 rounded-xl font-bold ${activeTab==='orders'?'bg-indigo-600 shadow-lg shadow-indigo-900/50':'text-slate-400 hover:text-white'}`}>訂單管理</button>
-              </nav>
-            </aside>
-            <main className="flex-1 p-6 md:p-12 animate-fade-in">
-              <div className="flex justify-between items-center mb-10">
-                <h2 className="text-4xl font-black">{activeTab==='itineraries'?'行程庫':'訂單'}</h2>
-                {activeTab==='itineraries' && (
-                  <button onClick={() => { setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' }); setView('edit'); }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center gap-2 hover:bg-indigo-700 transition"><Icon name="plus" /> 新增行程</button>
-                )}
-              </div>
-              
-              {activeTab==='itineraries' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {itineraries.map(item => (
-                    <div key={item.id} className="bg-slate-50 border border-slate-100 rounded-3xl p-5 flex gap-5 items-center hover:bg-white hover:shadow-2xl hover:shadow-slate-200/50 transition-all group">
-                      <img src={item.image} className="w-32 h-24 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-xl truncate mb-1">{item.title}</p>
-                        <p className="text-red-600 font-bold text-lg">${Number(item.price).toLocaleString()}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setFormData(item); setView('edit'); }} className="bg-white p-3 rounded-xl shadow-sm hover:text-indigo-600 transition-colors"><Icon name="edit" /></button>
-                        <button onClick={() => handleDelete(item.id)} className="bg-white p-3 rounded-xl shadow-sm hover:text-red-600 transition-colors"><Icon name="trash" /></button>
-                      </div>
+      if (isLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-300 text-3xl">LOADING...</div>;
+      if (!isAdmin) return <div className="p-20 text-center font-black text-red-500 text-4xl uppercase">Access Denied ⛔</div>;
+
+      if (view === 'list') return (
+        <div className="min-h-screen bg-slate-50">
+          <header className="bg-white border-b px-10 py-6 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+            <h1 className="text-3xl font-black tracking-tighter">旅遊管家 <span className="text-indigo-600">ADMIN</span></h1>
+            <button onClick={() => { setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' }); setView('edit'); }} className="bg-indigo-600 text-white px-8 py-3 rounded-full font-black flex items-center gap-2 hover:scale-105 transition"><Icon name="plus" /> 新增行程</button>
+          </header>
+          <main className="p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-in">
+            {itineraries.map(item => (
+              <div key={item.id} className="bg-white rounded-[2.5rem] overflow-hidden border hover:shadow-2xl transition-all group">
+                <div className="h-64 overflow-hidden"><img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" /></div>
+                <div className="p-8">
+                  <h2 className="text-2xl font-black mb-4 line-clamp-1">{item.title}</h2>
+                  <div className="flex justify-between items-center">
+                    <p className="text-red-600 font-black text-2xl">${Number(item.price).toLocaleString()}</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setFormData(item); setView('edit'); }} className="p-3 bg-slate-100 rounded-full hover:bg-indigo-600 hover:text-white transition"><Icon name="edit" /></button>
+                      <button onClick={async () => { if(confirm('刪除？')){ await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, { method:'POST', body:JSON.stringify({action:'deleteItinerary', id:item.id}) }); fetchList(); } }} className="p-3 bg-slate-100 rounded-full hover:bg-red-600 hover:text-white transition"><Icon name="trash" /></button>
                     </div>
-                  ))}
+                  </div>
                 </div>
-              ) : (
-                <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-100">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-100 text-slate-500 font-bold"><tr><th className="p-5">訂單資訊</th><th className="p-5">行程</th><th className="p-5">金額</th><th className="p-5">狀態</th></tr></thead>
-                    <tbody>
-                      {orders.map(o => (
-                        <tr key={o.order_id} className="border-b border-slate-200 hover:bg-white transition-colors">
-                          <td className="p-5"><p className="font-black">{o.contact_name}</p><p className="text-xs text-slate-400">{o.order_id}</p></td>
-                          <td className="p-5 text-slate-500 font-bold">#{o.tour_id}</td>
-                          <td className="p-5 font-black text-red-600">${Number(o.total_amount).toLocaleString()}</td>
-                          <td className="p-5"><span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-black">{o.order_status}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </main>
-          </div>
-        );
-      }
-
-      // 2. 全開編輯畫面
-      return (
-        <div className="min-h-screen flex flex-col animate-fade-in bg-white">
-          {/* Header 導航區 */}
-          <header className="px-6 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur z-50">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setView('list')} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><Icon name="arrowLeft" /></button>
-              <div>
-                <h3 className="text-2xl font-black text-slate-800">{formData.id ? '編輯行程文章' : '打造全新行程部落格'}</h3>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{tenant?.name}</p>
               </div>
+            ))}
+          </main>
+        </div>
+      );
+
+      // 全開編輯模式
+      return (
+        <div className="h-screen flex flex-col animate-fade-in bg-white overflow-hidden">
+          <nav className="h-20 border-b flex justify-between items-center px-8 shrink-0 bg-white z-50">
+            <div className="flex items-center gap-6">
+              <button onClick={() => setView('list')} className="p-3 hover:bg-slate-100 rounded-full transition"><Icon name="arrowLeft" /></button>
+              <h2 className="text-2xl font-black tracking-tight">{formData.id ? '編輯行程' : '全新行程擴寫'}</h2>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               {!formData.id && (
-                <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-700 px-6 py-2.5 rounded-2xl font-black flex items-center gap-2 hover:bg-indigo-100 transition disabled:opacity-50">
-                  {aiLoading ? <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div> : <Icon name="sparkles" className="w-5 h-5"/>}
-                  AI 視覺擴寫
+                <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-700 px-8 py-3 rounded-full font-black flex items-center gap-2 hover:bg-indigo-100 transition disabled:opacity-50">
+                  {aiLoading ? <div className="w-5 h-5 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div> : <Icon name="sparkles" />} 
+                  {aiLoading ? 'AI 深度擴寫中...' : '開始 AI 視覺擴寫'}
                 </button>
               )}
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-              <button onClick={handleSave} disabled={isSubmitting} className="bg-indigo-600 text-white px-8 py-2.5 rounded-2xl font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition flex items-center gap-2">
-                <Icon name="check" className="w-5 h-5" /> 儲存並發佈
+              <input type="file" ref={fileInputRef} onChange={handleAiExpand} accept="image/*" className="hidden" />
+              <button onClick={handleSave} disabled={isSubmitting} className="bg-indigo-600 text-white px-10 py-3 rounded-full font-black shadow-xl hover:bg-indigo-700 transition flex items-center gap-2">
+                <Icon name="save" /> {isSubmitting ? '儲存中...' : '發佈文章'}
               </button>
             </div>
-          </header>
+          </nav>
 
           <div className="flex-grow flex overflow-hidden">
-            {/* 左側：編輯區 */}
-            <div className="w-full lg:w-1/2 p-6 md:p-10 overflow-y-auto custom-scrollbar border-r border-slate-50 bg-slate-50/30">
-              <div className="max-w-3xl mx-auto space-y-8">
-                <div>
-                  <label className="block text-sm font-black text-slate-400 uppercase mb-2">文章標題</label>
-                  <input type="text" value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full text-4xl font-black bg-transparent border-none focus:ring-0 placeholder-slate-200 p-0" placeholder="在此輸入令人心動的標題..." />
-                </div>
-
-                <div className="grid grid-cols-3 gap-6">
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">旅遊地區</label>
-                    <select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-white border-slate-100 rounded-xl font-bold py-3 px-4 shadow-sm focus:border-indigo-400 outline-none transition">
-                      <option>亞洲</option><option>歐洲</option><option>美洲</option><option>國旅</option>
-                    </select>
+            {/* 左側：極簡編輯區 (不限寬) */}
+            <div className="w-1/2 flex flex-col border-r bg-slate-50/20">
+              <div className="p-12 overflow-y-auto custom-scrollbar">
+                <div className="space-y-12">
+                  <input type="text" value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full text-5xl font-black bg-transparent border-none focus:ring-0 placeholder-slate-200" placeholder="文章標題..." />
+                  
+                  <div className="grid grid-cols-3 gap-10">
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">地區</label><select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-white border rounded-2xl py-4 px-6 font-bold shadow-sm outline-none focus:ring-2 ring-indigo-500/20 transition"><option>亞洲</option><option>歐洲</option><option>美洲</option><option>國旅</option></select></div>
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">天數</label><input type="number" value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-white border rounded-2xl py-4 px-6 font-bold shadow-sm outline-none" /></div>
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">售價</label><input type="number" value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} className="w-full bg-white border rounded-2xl py-4 px-6 font-bold shadow-sm outline-none" /></div>
                   </div>
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">天數</label>
-                    <input type="number" value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-white border-slate-100 rounded-xl font-bold py-3 px-4 shadow-sm focus:border-indigo-400 outline-none transition" />
-                  </div>
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">售價</label>
-                    <input type="number" value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} className="w-full bg-white border-slate-100 rounded-xl font-bold py-3 px-4 shadow-sm focus:border-indigo-400 outline-none transition" />
-                  </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-black text-slate-400 uppercase mb-2 flex items-center gap-2"><Icon name="link" className="w-4 h-4"/> 封面圖片網址 (Google Drive 支援)</label>
-                  <input type="url" value={formData.image} onChange={e=>setFormData({...formData, image:convertGoogleDriveUrl(e.target.value)})} className="w-full bg-white border-slate-100 rounded-2xl py-4 px-6 shadow-sm mb-4 outline-none focus:border-indigo-400 transition" placeholder="貼上 Google Drive 分享連結或 Unsplash 連結" />
-                  {formData.image && <img src={formData.image} className="w-full h-64 object-cover rounded-[2rem] shadow-2xl shadow-indigo-100 border-4 border-white" />}
-                </div>
+                  <div>
+                    <label className="text-sm font-black text-slate-400 uppercase block mb-4">封面圖片網址</label>
+                    <input type="url" value={formData.image} onChange={e=>setFormData({...formData, image:e.target.value})} className="w-full bg-white border rounded-3xl py-5 px-8 shadow-sm outline-none mb-6" placeholder="https://..." />
+                    {formData.image && <img src={formData.image} className="w-full h-80 object-cover rounded-[3rem] shadow-2xl border-4 border-white" />}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-black text-slate-400 uppercase mb-2 flex justify-between">
-                    <span>行程圖文故事內容 (Markdown 模式)</span>
-                    <span className="text-[10px] text-indigo-400">支援 ### 標題 與 ![Image](網址) 語法</span>
-                  </label>
-                  <textarea rows="20" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-white border-slate-100 rounded-3xl py-6 px-8 shadow-sm outline-none focus:border-indigo-400 transition text-lg leading-relaxed" placeholder="在這裡編織您的旅遊故事..."></textarea>
+                  <div>
+                    <label className="text-sm font-black text-slate-400 uppercase block mb-4">部落格長文內容 (MARKDOWN)</label>
+                    <textarea rows="30" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-white border rounded-[3rem] py-10 px-12 shadow-sm outline-none focus:ring-2 ring-indigo-500/20 transition text-xl leading-relaxed custom-scrollbar" placeholder="在這裡編輯您的旅遊故事..."></textarea>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 右側：即時預覽區 (全開呈現) */}
-            <div className="hidden lg:block lg:w-1/2 overflow-y-auto bg-white custom-scrollbar p-6 md:p-16">
-              <div className="max-w-2xl mx-auto">
-                <p className="text-indigo-600 font-black tracking-widest text-sm mb-2">LIVE PREVIEW</p>
-                <span className="bg-red-50 text-red-600 px-4 py-1 rounded-full text-xs font-black uppercase mb-6 inline-block">{formData.region} · {formData.days} DAYS</span>
-                <h1 className="text-5xl font-black text-slate-900 leading-tight mb-8">{formData.title || '標題預覽'}</h1>
+            {/* 右側：高感度預覽區 (全開呈現) */}
+            <div className="w-1/2 overflow-y-auto bg-white p-20 custom-scrollbar">
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="bg-indigo-600 text-white px-4 py-1 rounded-full text-xs font-black uppercase">{formData.region}</span>
+                  <span className="text-slate-400 font-bold">{formData.days} DAYS</span>
+                </div>
+                <h1 className="text-6xl font-black text-slate-900 leading-tight mb-12">{formData.title || '標題預覽'}</h1>
                 
-                <div className="flex items-center gap-10 mb-12 py-6 border-y border-slate-50">
-                  <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">團費價格</p><p className="text-3xl font-black text-red-600">TWD {Number(formData.price).toLocaleString()}</p></div>
-                  <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">行程天數</p><p className="text-2xl font-black text-slate-800">{formData.days} 天</p></div>
+                <div className="flex items-center gap-16 mb-16 py-10 border-y border-slate-100">
+                  <div><p className="text-xs font-black text-slate-400 uppercase mb-2">TOUR PRICE</p><p className="text-5xl font-black text-red-600">TWD {Number(formData.price).toLocaleString()}</p></div>
+                  <div className="w-px h-16 bg-slate-100"></div>
+                  <div><p className="text-xs font-black text-slate-400 uppercase mb-2">DURATION</p><p className="text-4xl font-black text-slate-800">{formData.days} 天</p></div>
                 </div>
 
-                <div className="prose prose-slate max-w-none">
-                  <MarkdownContent content={formData.description} />
-                </div>
+                <MarkdownContent content={formData.description} />
               </div>
             </div>
           </div>
@@ -323,7 +242,7 @@
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<AdminApp />);
+    root.render(<App />);
   </script>
 </body>
 </html>
