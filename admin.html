@@ -27,7 +27,7 @@
       --radius-lg: 20px;
     }
     body {
-      font-family: 'DM Sans', sans-serif;
+      font-family: 'DM Sans', 'Noto Sans TC', sans-serif;
       background: var(--bg);
       color: var(--text);
       margin: 0;
@@ -39,20 +39,21 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-    /* ── 編輯器排版 ── */
+    /* ── 編輯器排版 修正為 6:4 ── */
     .editor-wrap {
       display: grid;
-      grid-template-columns: 380px 1fr;
+      grid-template-columns: 6fr 4fr;
       height: calc(100vh - 56px);
+      width: 100vw;
     }
     .editor-sidebar {
       border-right: 1px solid var(--border);
       overflow-y: auto;
       background: var(--surface);
-      padding: 24px;
+      padding: 32px 48px; /* 加大內距，適合長文編輯 */
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 24px;
     }
     .editor-preview {
       overflow-y: auto;
@@ -72,7 +73,7 @@
     }
     .field-input {
       width: 100%;
-      padding: 9px 12px;
+      padding: 10px 14px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
       font-family: 'DM Sans', sans-serif;
@@ -88,9 +89,9 @@
     }
     .field-textarea {
       resize: none;
-      min-height: 280px;
+      min-height: 400px;
       line-height: 1.65;
-      font-size: 13px;
+      font-size: 14px;
     }
 
     /* ── 按鈕 ── */
@@ -149,58 +150,48 @@
     /* ── 預覽部落格 ── */
     .preview-article { max-width: 640px; margin: 0 auto; }
     .preview-article h3 {
-      font-family: 'DM Serif Display', serif;
+      font-family: 'DM Serif Display', 'Noto Sans TC', serif;
       font-size: 1.4rem;
       margin: 2rem 0 .6rem;
       color: var(--text);
-      border-left: 3px solid var(--accent);
-      padding-left: 12px;
+      border-left: 4px solid var(--accent);
+      padding-left: 14px;
     }
     .preview-article img {
       width: 100%;
       border-radius: var(--radius-lg);
-      margin: .5rem 0 1.25rem;
+      margin: .5rem 0 1.5rem;
       object-fit: cover;
-      max-height: 360px;
+      max-height: 400px;
       border: 1px solid var(--border);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
     .preview-article p {
-      font-size: .93rem;
+      font-size: 1rem;
       line-height: 1.85;
       color: #44433e;
-      margin-bottom: 1rem;
+      margin-bottom: 1.25rem;
       white-space: pre-wrap;
     }
-    .preview-cover { width: 100%; height: 200px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: 20px; border: 1px solid var(--border); }
-    .preview-title { font-family: 'DM Serif Display', serif; font-size: 1.7rem; margin: 0 0 16px; line-height: 1.25; }
-    .preview-stats { display: flex; gap: 20px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 24px; }
-    .preview-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px; }
-    .preview-stat-value { font-size: 15px; font-weight: 700; }
-    .preview-placeholder { color: #ccc; font-size: 13px; text-align: center; padding: 60px 0; }
+    .preview-cover { width: 100%; height: 240px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: 24px; border: 1px solid var(--border); }
+    .preview-title { font-family: 'DM Serif Display', 'Noto Sans TC', serif; font-size: 2.2rem; margin: 0 0 20px; line-height: 1.2; font-weight: 900; }
+    .preview-stats { display: flex; gap: 24px; padding: 18px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+    .preview-stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 4px; }
+    .preview-stat-value { font-size: 17px; font-weight: 700; }
+    .preview-placeholder { color: #ccc; font-size: 14px; text-align: center; padding: 80px 0; font-weight: 600; }
 
     /* ── 封面預覽縮圖 ── */
-    .cover-thumb { width: 100%; height: 100px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border); margin-top: 8px; }
+    .cover-thumb { width: 100%; height: 120px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border); margin-top: 12px; }
 
     /* ── 分隔線 ── */
-    .divider { height: 1px; background: var(--border); margin: 4px 0; }
+    .divider { height: 1px; background: var(--border); margin: 8px 0; }
 
     /* ── 載入動畫 ── */
     .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── 空狀態 ── */
-    .empty-state { text-align: center; padding: 80px 24px; color: var(--muted); }
-    .empty-state p { font-size: 14px; margin: 8px 0 0; }
-
     /* ── Access Denied ── */
-    .denied-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px; max-width: 400px; width: 100%; text-align: center; }
-    .denied-card h1 { font-size: 18px; font-weight: 700; margin: 16px 0 8px; }
-    .denied-card p { font-size: 13px; color: var(--muted); margin: 0 0 20px; }
-    .uid-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; }
-    .uid-box code { font-size: 11px; color: var(--accent); word-break: break-all; display: block; }
-
-    /* ── 分組標題 ── */
-    .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .denied-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 48px; max-width: 440px; width: 100%; text-align: center; }
   </style>
 </head>
 <body>
@@ -209,7 +200,6 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    /* ── 小圖示元件 ── */
     const Ico = ({ n, s = 16 }) => {
       const paths = {
         plus:      <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
@@ -217,12 +207,12 @@
         trash:     <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>,
         sparkles:  <><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707"/></>,
         back:      <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
-        save:      <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></>,
+        save:      <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
         eye:       <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
       };
       return (
         <svg width={s} height={s} viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           {paths[n]}
         </svg>
       );
@@ -231,10 +221,9 @@
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const J = { 'Content-Type': 'application/json' };
 
-    /* ── 部落格預覽渲染 ── */
     const BlogPreview = ({ form }) => {
       if (!form.title && !form.description) return (
-        <div className="preview-placeholder">尚無內容，請在左側填寫或使用 AI 擴寫</div>
+        <div className="preview-placeholder">尚未輸入內容</div>
       );
       const lines = (form.description || '').split('\n');
       const blocks = lines.map((p, i) => {
@@ -248,7 +237,7 @@
         return <p key={i}>{l}</p>;
       });
       return (
-        <div className="preview-article">
+        <div className="preview-article animate-fade-in">
           {form.image && <img src={form.image} className="preview-cover" alt="cover" />}
           <h1 className="preview-title">{form.title || '未命名行程'}</h1>
           <div className="preview-stats">
@@ -270,18 +259,19 @@
       const [auth, setAuth]           = useState('loading');
       const [myUid, setMyUid]         = useState('');
       const [items, setItems]         = useState([]);
-      const [view, setView]           = useState('list');   // list | edit
+      const [view, setView]           = useState('list');
       const [form, setForm]           = useState(EMPTY);
       const [saving, setSaving]       = useState(false);
       const [aiLoading, setAiLoading] = useState(false);
-      const [tab, setTab]             = useState('fields'); // fields | preview  (mobile friendly)
 
       const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
       const fetchList = async () => {
-        const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`);
-        const d = await r.json();
-        setItems(Array.isArray(d) ? d : []);
+        try {
+          const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`);
+          const d = await r.json();
+          setItems(Array.isArray(d) ? d : []);
+        } catch(e) { console.error("Fetch error", e); }
       };
 
       useEffect(() => {
@@ -300,7 +290,7 @@
               await fetchList();
               setAuth('admin');
             } else { setAuth('denied'); }
-          } catch(e) { console.error(e); setAuth('denied'); }
+          } catch(e) { setAuth('denied'); }
         })();
       }, [slug]);
 
@@ -321,9 +311,11 @@
           setAiLoading(false);
         };
         reader.readAsDataURL(file);
+        e.target.value = "";
       };
 
       const handleSave = async () => {
+        if (!form.title) { alert("請填寫標題"); return; }
         setSaving(true);
         try {
           const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`, {
@@ -338,169 +330,144 @@
       };
 
       const handleDelete = async (id) => {
-        if (!confirm('確定刪除此行程？')) return;
+        if (!confirm('確定刪除？')) return;
         await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`, {
           method: 'POST', headers: J, body: JSON.stringify({ action: 'deleteItinerary', id })
         });
         fetchList();
       };
 
-      /* ── Loading ── */
       if (auth === 'loading') return (
-        <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', gap:10, color:'var(--muted)', fontSize:14 }}>
-          <div className="spinner" style={{width:18,height:18}}></div> 初始化中...
+        <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', gap:12, color:'var(--muted)' }}>
+          <div className="spinner" style={{width:20,height:20}}></div> 啟動中...
         </div>
       );
 
-      /* ── Access Denied ── */
       if (auth === 'denied') return (
         <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'var(--bg)' }}>
-          <div className="denied-card">
-            <div style={{ fontSize:36 }}>⛔</div>
-            <h1>存取被拒</h1>
-            <p>您的 LINE 帳號尚無管理權限</p>
-            <div className="uid-box" onClick={() => navigator.clipboard.writeText(myUid).then(()=>alert('已複製'))}>
-              <div style={{fontSize:10,fontWeight:600,color:'var(--muted)',marginBottom:4,textTransform:'uppercase',letterSpacing:'.06em'}}>點擊複製您的 UID</div>
-              <code>{myUid || '取得中...'}</code>
+          <div className="denied-card shadow-lg">
+            <div style={{ fontSize:42 }}>⛔</div>
+            <h1 className="font-bold text-xl mt-4">存取被拒</h1>
+            <p className="text-gray-500 mb-6">您的 LINE 帳號目前無權限</p>
+            <div className="uid-box p-4 bg-gray-100 rounded-lg" onClick={() => navigator.clipboard.writeText(myUid).then(()=>alert('UID 已複製'))}>
+              <code className="text-xs break-all">{myUid}</code>
             </div>
-            <p style={{marginTop:14,fontSize:12}}>請將 UID 加入 D1 → <code style={{color:'var(--accent)'}}>tenants.admin_uids</code></p>
           </div>
         </div>
       );
 
-      /* ── 行程列表 ── */
       if (view === 'list') return (
-        <>
-          <div className="topbar">
-            <span className="topbar-logo">Travel<span>Admin</span></span>
+        <div className="animate-fade-in">
+          <div className="topbar px-6">
+            <span className="topbar-logo font-black">Travel<span>Admin</span></span>
             <button className="btn btn-primary" onClick={() => { setForm(EMPTY); setView('edit'); }}>
               <Ico n="plus" /> 新增行程
             </button>
           </div>
-          {items.length === 0
-            ? <div className="empty-state"><div style={{fontSize:32}}>🗺️</div><p>尚無行程，點擊「新增行程」開始</p></div>
-            : <div className="card-grid">
-                {items.map(it => (
-                  <div key={it.id} className="card">
-                    <img src={it.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'} className="card-img" alt="" />
-                    <div className="card-body">
-                      <div style={{marginBottom:6, display:'flex', gap:6, alignItems:'center'}}>
-                        <span className="badge">{it.region}</span>
-                        <span style={{fontSize:11,color:'var(--muted)'}}>{it.days}天</span>
-                      </div>
-                      <div className="card-title">{it.title}</div>
-                      <div className="card-meta">
-                        <span className="card-price">NT${Number(it.price).toLocaleString()}</span>
-                        <div className="card-actions">
-                          <button className="btn-icon" title="編輯" onClick={() => { setForm(it); setView('edit'); }}><Ico n="edit" s={14}/></button>
-                          <button className="btn-icon danger" title="刪除" onClick={() => handleDelete(it.id)}><Ico n="trash" s={14}/></button>
-                        </div>
-                      </div>
+          <div className="card-grid">
+            {items.map(it => (
+              <div key={it.id} className="card shadow-sm">
+                <img src={it.image || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400'} className="card-img" alt="" />
+                <div className="card-body">
+                  <div className="flex gap-2 mb-2">
+                    <span className="badge">{it.region}</span>
+                    <span className="text-[11px] font-bold text-gray-400">{it.days} 天</span>
+                  </div>
+                  <div className="card-title">{it.title}</div>
+                  <div className="card-meta">
+                    <span className="card-price">NT${Number(it.price).toLocaleString()}</span>
+                    <div className="card-actions">
+                      <button className="btn-icon" onClick={() => { setForm(it); setView('edit'); }}><Ico n="edit" s={14}/></button>
+                      <button className="btn-icon danger" onClick={() => handleDelete(it.id)}><Ico n="trash" s={14}/></button>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
-          }
-        </>
+            ))}
+          </div>
+        </div>
       );
 
-      /* ── 編輯畫面 ── */
       return (
-        <>
-          {/* Topbar */}
-          <div className="topbar">
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <div className="animate-fade-in">
+          <div className="topbar px-6">
+            <div className="flex items-center gap-4">
               <button className="btn-icon" onClick={() => setView('list')}><Ico n="back" s={15}/></button>
-              <span style={{fontSize:13,fontWeight:600,color:'var(--muted)'}}>
-                {form.id ? '編輯行程' : '新增行程'}
-              </span>
+              <span className="font-bold text-sm text-gray-500">{form.id ? '編輯行程' : '新增行程部落格'}</span>
             </div>
-            <div style={{ display:'flex', gap:8 }}>
+            <div className="flex gap-3">
               {!form.id && (
                 <>
                   <button className="btn btn-ai" disabled={aiLoading} onClick={() => fileRef.current.click()}>
-                    {aiLoading ? <><div className="spinner"/>AI 分析中…</> : <><Ico n="sparkles" s={14}/>AI 視覺擴寫</>}
+                    {aiLoading ? <><div className="spinner"/>AI 處理中…</> : <><Ico n="sparkles" s={14}/>AI 視覺擴寫</>}
                   </button>
                   <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAI} />
                 </>
               )}
-              <button className="btn btn-primary" disabled={saving} onClick={handleSave}>
+              <button className="btn btn-primary shadow-lg" disabled={saving} onClick={handleSave}>
                 {saving ? <><div className="spinner"/>儲存中…</> : <><Ico n="save" s={14}/>儲存發佈</>}
               </button>
             </div>
           </div>
 
-          {/* 主體：左欄表單 + 右欄預覽 */}
           <div className="editor-wrap">
-
-            {/* 左欄：表單 */}
-            <div className="editor-sidebar">
-
-              {/* 標題 */}
+            <div className="editor-sidebar custom-scrollbar">
               <div>
                 <label className="field-label">行程標題</label>
-                <input className="field-input" value={form.title} onChange={e=>setF('title',e.target.value)} placeholder="輸入行程標題…" />
+                <input className="field-input font-bold text-lg" value={form.title} onChange={e=>setF('title',e.target.value)} placeholder="輸入行程標題…" />
               </div>
 
-              {/* 三欄小格 */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="field-label">地區</label>
-                  <select className="field-input" value={form.region} onChange={e=>setF('region',e.target.value)} style={{padding:'9px 8px'}}>
+                  <select className="field-input font-bold" value={form.region} onChange={e=>setF('region',e.target.value)}>
                     {['亞洲','歐洲','美洲','國旅'].map(r=><option key={r}>{r}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="field-label">天數</label>
-                  <input type="number" className="field-input" value={form.days} onChange={e=>setF('days',e.target.value)} min={1} />
+                  <input type="number" className="field-input font-bold" value={form.days} onChange={e=>setF('days',e.target.value)} />
                 </div>
                 <div>
                   <label className="field-label">售價 TWD</label>
-                  <input type="number" className="field-input" value={form.price} onChange={e=>setF('price',e.target.value)} min={0} />
+                  <input type="number" className="field-input font-bold" value={form.price} onChange={e=>setF('price',e.target.value)} />
                 </div>
               </div>
 
               <div className="divider" />
 
-              {/* 封面圖 */}
               <div>
                 <label className="field-label">封面圖網址</label>
-                <input type="url" className="field-input" value={form.image} onChange={e=>setF('image',e.target.value)} placeholder="https://…" />
-                {form.image && <img src={form.image} className="cover-thumb" alt="cover preview" />}
+                <input type="url" className="field-input text-xs" value={form.image} onChange={e=>setF('image',e.target.value)} placeholder="貼上 Unsplash 連結…" />
+                {form.image && <img src={form.image} className="cover-thumb shadow-md" alt="preview" />}
               </div>
 
               <div className="divider" />
 
-              {/* 文章正文 */}
               <div style={{flex:1, display:'flex', flexDirection:'column'}}>
-                <label className="field-label">文章正文（支援 Markdown）</label>
+                <label className="field-label">文章長文內容 (支援 Markdown 圖文)</label>
                 <textarea
-                  className="field-input field-textarea"
-                  style={{flex:1, minHeight:260}}
+                  className="field-input field-textarea custom-scrollbar"
                   value={form.description}
                   onChange={e=>setF('description',e.target.value)}
-                  placeholder={`### 第 1 天\n![Image](圖片網址)\n行程內容…`}
+                  placeholder={`### 第 1 天\n![Image](圖片網址)\n詳細內容…`}
                 />
               </div>
 
-              {/* 備註 */}
               <div>
-                <label className="field-label">備註</label>
-                <textarea className="field-input" rows={3} value={form.notes||''} onChange={e=>setF('notes',e.target.value)} placeholder="注意事項、集合地點…" style={{resize:'none'}} />
+                <label className="field-label">備註 (不顯示在前台)</label>
+                <textarea className="field-input text-xs" rows={2} value={form.notes||''} onChange={e=>setF('notes',e.target.value)} style={{resize:'none'}} />
               </div>
-
             </div>
 
-            {/* 右欄：即時預覽 */}
-            <div className="editor-preview">
-              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:20, color:'var(--muted)', fontSize:12, fontWeight:600, textTransform:'uppercase', letterSpacing:'.06em'}}>
-                <Ico n="eye" s={13}/> 即時預覽
+            <div className="editor-preview custom-scrollbar">
+              <div className="flex items-center gap-3 mb-8 text-[11px] font-black uppercase tracking-widest text-gray-300">
+                <Ico n="eye" s={13}/> Live Preview
               </div>
               <BlogPreview form={form} />
             </div>
-
           </div>
-        </>
+        </div>
       );
     }
 
