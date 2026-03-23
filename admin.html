@@ -13,13 +13,15 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
   </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-800">
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const Icon = ({ name, className = "w-6 h-6" }) => {
       const icons = {
@@ -61,6 +63,19 @@
           <React.Fragment>
             <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
           </React.Fragment>
+        ),
+        upload: (
+          <React.Fragment>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </React.Fragment>
+        ),
+        link: (
+          <React.Fragment>
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </React.Fragment>
         )
       };
       return (
@@ -70,18 +85,18 @@
       );
     };
 
-    // ★ 設定 Worker URL (需與 index.html 相同)
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
     function AdminApp() {
       const urlParams = new URLSearchParams(window.location.search);
       const agencySlug = urlParams.get('a') || 'demo';
 
+      const fileInputRef = useRef(null);
       const [tenant, setTenant] = useState(null);
       const [liffProfile, setLiffProfile] = useState(null);
       const [isAdmin, setIsAdmin] = useState(false);
       const [isLoading, setIsLoading] = useState(true);
-      const [activeTab, setActiveTab] = useState('itineraries'); // itineraries, orders
+      const [activeTab, setActiveTab] = useState('itineraries'); 
       
       const [itineraries, setItineraries] = useState([]);
       const [orders, setOrders] = useState([]);
@@ -105,7 +120,6 @@
                 const profile = await liff.getProfile();
                 setLiffProfile(profile);
                 
-                // 檢查權限
                 const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
                 const statusData = await statusRes.json();
                 
@@ -143,6 +157,31 @@
         } catch (e) { console.error("Fetch Data Error", e); }
       };
 
+      // 核心工具：自動轉換 Google Drive 分享連結為直接顯示連結
+      const convertGoogleDriveUrl = (url) => {
+        if (!url) return "";
+        const googleDriveRegex = /\/file\/d\/([^\/]+)\//;
+        const googleDriveIdOnlyRegex = /id=([^\&]+)/;
+        
+        let fileId = "";
+        if (url.match(googleDriveRegex)) {
+          fileId = url.match(googleDriveRegex)[1];
+        } else if (url.match(googleDriveIdOnlyRegex)) {
+          fileId = url.match(googleDriveIdOnlyRegex)[1];
+        }
+
+        if (fileId) {
+          // 使用 lh3 或 uc 介面作為直接連結，這在 <img> 標籤中最穩定
+          return `https://lh3.googleusercontent.com/u/0/d/${fileId}`;
+        }
+        return url;
+      };
+
+      const handleImageChange = (val) => {
+        const converted = convertGoogleDriveUrl(val);
+        setFormData({...formData, image: converted});
+      };
+
       const handleSaveItinerary = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -177,16 +216,34 @@
         } catch (err) { alert('刪除失敗'); }
       };
 
-      const handleAiParse = async () => {
-        const imageUrl = prompt("請貼上旅遊 DM 的圖片網址 (URL)：\n(若無網址，可先上傳至 Imgur 等圖床)");
-        if (!imageUrl) return;
-        
+      const triggerFileSelect = () => {
+        fileInputRef.current.click();
+      };
+
+      const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 4 * 1024 * 1024) {
+          alert("檔案太大囉！請選擇 4MB 以內的圖片。");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Data = reader.result;
+          await processAiParse(base64Data);
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const processAiParse = async (imageData) => {
         setAiLoading(true);
         try {
           const res = await fetch(`${WORKER_URL}/api/upload-dm?a=${agencySlug}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: imageUrl })
+            body: JSON.stringify({ image: imageData })
           });
           const result = await res.json();
           if (result.success) {
@@ -196,16 +253,17 @@
               region: result.data.region || prev.region,
               price: result.data.price || prev.price,
               days: result.data.days || prev.days,
-              image: result.data.image || imageUrl,
+              image: (result.data.image && result.data.image.startsWith('http')) ? result.data.image : 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800',
               description: result.data.description || prev.description,
               notes: result.data.notes || prev.notes
             }));
-            alert('AI 解析完成！已自動填入欄位。');
+            alert('✨ AI 解析完成！資料已填入。請記得在 Google Drive 上傳主圖並貼上連結。');
           } else {
-            alert('AI 解析失敗');
+            alert('AI 解析失敗，請確認圖片內容清晰。');
           }
-        } catch (e) { alert('AI 解析發生錯誤'); }
+        } catch (e) { alert('AI 連線發生錯誤'); }
         setAiLoading(false);
+        fileInputRef.current.value = "";
       };
 
       const openModalWith = (tour = null) => {
@@ -217,10 +275,10 @@
       if (isLoading) return <div className="flex h-screen items-center justify-center"><div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>;
       
       if (!isAdmin) return (
-        <div className="flex flex-col items-center justify-center h-screen bg-slate-100">
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center border-t-4 border-red-500">
+        <div className="flex flex-col items-center justify-center h-screen bg-slate-100 p-6">
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center border-t-4 border-red-500 max-w-sm">
             <h1 className="text-2xl font-black text-slate-800 mb-2">權限不足 ⛔</h1>
-            <p className="text-slate-500">此為旅行社管理員專屬後台。<br/>您的 LINE 帳號未被授權存取 {tenant?.name} 的資料。</p>
+            <p className="text-slate-500">此為旅行社管理員專屬後台。<br/>您的 LINE 帳號未被授權存取 {tenant?.name} 的管理權限。</p>
           </div>
         </div>
       );
@@ -241,40 +299,42 @@
               <div className="p-4 flex items-center gap-3 border-b border-slate-800">
                 <img src={liffProfile?.pictureUrl} className="w-10 h-10 rounded-full border-2 border-slate-700" />
                 <div>
-                  <p className="text-xs text-slate-400">目前租戶</p>
+                  <p className="text-xs text-slate-400">管理員身分</p>
                   <p className="text-sm font-bold text-indigo-300">{tenant?.name}</p>
                 </div>
               </div>
 
               <nav className="flex-1 p-4 space-y-2">
                 <button onClick={() => setActiveTab('itineraries')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='itineraries' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                  <Icon name="box" className="w-5 h-5" /> 行程管理庫
+                  <Icon name="box" className="w-5 h-5" /> 行程管理
                 </button>
                 <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='orders' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                   <Icon name="fileText" className="w-5 h-5" /> 訂單管理
                 </button>
-                <button onClick={() => window.location.href=`index.html?a=${agencySlug}`} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white mt-auto">
-                  <Icon name="arrowLeft" className="w-5 h-5" /> 返回前台首頁
-                </button>
+                <div className="pt-4 mt-4 border-t border-slate-800">
+                  <button onClick={() => window.location.href=`index.html?a=${agencySlug}`} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white">
+                    <Icon name="arrowLeft" className="w-5 h-5" /> 返回首頁
+                  </button>
+                </div>
               </nav>
             </aside>
 
             {/* 主內容區 */}
-            <main className="flex-1 p-6 md:p-10 overflow-y-auto">
+            <main className="flex-1 p-4 md:p-10 overflow-y-auto">
               {activeTab === 'itineraries' && (
                 <div className="animate-fade-in max-w-6xl mx-auto">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                       <h2 className="text-3xl font-black text-slate-800">行程管理庫</h2>
-                      <p className="text-slate-500 font-medium mt-1">管理您要在前台與推廣工具中顯示的所有行程</p>
+                      <p className="text-slate-500 font-medium">您可以手動新增或使用 AI 辨識 DM 自動上稿</p>
                     </div>
-                    <button onClick={() => openModalWith()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 flex items-center gap-2 transition-transform hover:scale-105">
+                    <button onClick={() => openModalWith()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 flex items-center gap-2 transition-transform active:scale-95">
                       <Icon name="plus" /> 新增行程
                     </button>
                   </div>
 
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <table className="w-full text-left border-collapse">
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
                           <th className="p-4 font-bold">圖片 / 名稱</th>
@@ -290,14 +350,14 @@
                         ) : itineraries.map(item => (
                           <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                             <td className="p-4 flex items-center gap-4">
-                              <img src={item.image} className="w-16 h-12 rounded-lg object-cover bg-slate-200" />
-                              <p className="font-bold text-slate-800 max-w-xs truncate">{item.title}</p>
+                              <img src={item.image} className="w-16 h-12 rounded-lg object-cover bg-slate-200 flex-shrink-0 shadow-sm" />
+                              <p className="font-bold text-slate-800 line-clamp-1">{item.title}</p>
                             </td>
                             <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold">{item.region}</span></td>
                             <td className="p-4 font-bold text-slate-600">{item.days} 天</td>
                             <td className="p-4 font-black text-red-600">${Number(item.price).toLocaleString()}</td>
-                            <td className="p-4 text-right">
-                              <button onClick={() => openModalWith(item)} className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors mr-2"><Icon name="edit" className="w-5 h-5"/></button>
+                            <td className="p-4 text-right whitespace-nowrap">
+                              <button onClick={() => openModalWith(item)} className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors mr-1"><Icon name="edit" className="w-5 h-5"/></button>
                               <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"><Icon name="trash" className="w-5 h-5"/></button>
                             </td>
                           </tr>
@@ -312,14 +372,14 @@
                 <div className="animate-fade-in max-w-6xl mx-auto">
                   <div className="mb-8">
                     <h2 className="text-3xl font-black text-slate-800">訂單管理</h2>
-                    <p className="text-slate-500 font-medium mt-1">檢視所有來自前台與分銷商的訂單紀錄</p>
+                    <p className="text-slate-500 font-medium mt-1">檢視所有來自前台與分銷商的報名紀錄</p>
                   </div>
                   
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <table className="w-full text-left border-collapse">
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
-                          <th className="p-4 font-bold">訂單編號 / 日期</th>
+                          <th className="p-4 font-bold">編號 / 日期</th>
                           <th className="p-4 font-bold">聯絡人</th>
                           <th className="p-4 font-bold">行程 ID</th>
                           <th className="p-4 font-bold">人數 / 總額</th>
@@ -357,56 +417,85 @@
 
           {/* 新增/編輯行程 Modal */}
           {isModalOpen && (
-            <div className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-fade-in flex flex-col">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur z-10">
-                  <h3 className="text-2xl font-black text-slate-800">{formData.id ? '編輯行程' : '新增行程'}</h3>
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={handleAiParse} disabled={aiLoading} className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition flex items-center gap-2">
-                      {aiLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Icon name="sparkles" className="w-4 h-4"/>} 
-                      {aiLoading ? 'AI 正在讀取...' : '上傳 DM 讓 AI 幫我填寫'}
-                    </button>
-                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">✕</button>
-                  </div>
+            <div className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-2 sm:p-4">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-fade-in flex flex-col">
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white/95 backdrop-blur shrink-0">
+                  <h3 className="text-xl font-black text-slate-800">{formData.id ? '編輯行程' : '新增行程'}</h3>
+                  <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">✕</button>
                 </div>
                 
-                <form onSubmit={handleSaveItinerary} className="p-6 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">行程標題</label>
-                      <input type="text" required value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition" placeholder="例如：日本東京 5 日櫻花之旅"/>
+                <div className="flex-grow overflow-y-auto p-5 custom-scrollbar">
+                  {/* AI 上稿區塊 */}
+                  {!formData.id && (
+                    <div className="mb-6 p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="text-center sm:text-left">
+                        <p className="text-indigo-800 font-bold flex items-center justify-center sm:justify-start gap-2">
+                          <Icon name="sparkles" className="w-5 h-5"/> AI 智慧快速建檔
+                        </p>
+                        <p className="text-indigo-600 text-xs mt-1">選取手機相簿內的 DM 圖片，AI 將自動拆解文案</p>
+                      </div>
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+                      <button type="button" onClick={triggerFileSelect} disabled={aiLoading} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-md hover:bg-indigo-700 disabled:opacity-50 transition active:scale-95 shrink-0">
+                        {aiLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Icon name="upload" className="w-4 h-4"/>}
+                        {aiLoading ? '正在讀取圖片...' : '選擇 DM 檔案'}
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">旅遊地區</label>
-                      <select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition">
-                        <option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option>
-                      </select>
+                  )}
+
+                  <form id="tourForm" onSubmit={handleSaveItinerary} className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">行程標題</label>
+                        <input type="text" required value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition" placeholder="例如：日本東京 5 日櫻花之旅"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">旅遊地區</label>
+                        <select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition">
+                          <option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">天數</label>
+                        <input type="number" min="1" required value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition"/>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">售價 (TWD)</label>
+                        <input type="number" min="0" required value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition"/>
+                      </div>
+                      <div className="md:col-span-2 p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                        <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                          <Icon name="link" className="w-4 h-4 text-blue-500"/> 主視覺圖片網址 (支援 Google Drive 分享連結)
+                        </label>
+                        <input 
+                          type="url" 
+                          value={formData.image} 
+                          onChange={e=>handleImageChange(e.target.value)} 
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition text-sm mb-3" 
+                          placeholder="請將 Google Drive 圖片設為「知道連結的人皆可查看」並貼上連結"
+                        />
+                        {formData.image && (
+                          <div className="relative group">
+                             <img src={formData.image} className="w-full h-40 object-cover rounded-lg shadow-sm" onerror="this.src='https://via.placeholder.com/800x400?text=Invalid+Image+URL'"/>
+                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                               <p className="text-white text-xs font-bold">預覽成功</p>
+                             </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">行程特色與文案 (支援換行)</label>
+                        <textarea rows="6" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition custom-scrollbar" placeholder="請輸入每日行程或特色介紹..."></textarea>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">天數</label>
-                      <input type="number" min="1" required value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition"/>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">售價 (TWD)</label>
-                      <input type="number" min="0" required value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition"/>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">主視覺圖片網址</label>
-                      <input type="url" value={formData.image} onChange={e=>setFormData({...formData, image:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition" placeholder="https://..."/>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">行程特色與文案 (支援換行)</label>
-                      <textarea rows="6" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:bg-white transition custom-scrollbar" placeholder="請輸入每日行程或特色介紹..."></textarea>
-                    </div>
-                  </div>
-                  
-                  <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition">取消</button>
-                    <button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg disabled:opacity-50 transition">
-                      {isSubmitting ? '儲存中...' : '確認儲存'}
-                    </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
+
+                <div className="p-5 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition">取消</button>
+                  <button type="submit" form="tourForm" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg disabled:opacity-50 transition active:scale-95">
+                    {isSubmitting ? '儲存中...' : '確認儲存'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
