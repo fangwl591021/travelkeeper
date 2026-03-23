@@ -168,26 +168,20 @@
 
   <!-- ── TOP NAV ── -->
   <nav class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200 shadow-sm">
-    <div class="px-6 lg:px-10 h-14 flex items-center justify-between">
-      <div class="flex items-center gap-3">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
         <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
         <span class="font-black text-lg text-slate-800 tracking-wide">推廣工具</span>
-        <span class="mode-badge bg-emerald-100 text-emerald-700 ml-1">Model</span>
-        <!-- Mode toggle — inline, no new page -->
-        <div class="flex bg-slate-100 rounded-lg p-0.5 ml-4">
-          <button id="mode-single" onclick="setMode('single')" class="tab-btn active px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-            單張名片
-          </button>
-          <button id="mode-multi" onclick="setMode('multi')" class="tab-btn px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="2" y="7" width="14" height="14" rx="1.5"/><path d="M6 4h14a1 1 0 0 1 1 1v14"/></svg>
-            多頁列表
-          </button>
-        </div>
-        <!-- mode hint -->
-        <span id="mode-hint" class="text-xs text-slate-400 hidden sm:block"></span>
+        <span class="mode-badge bg-emerald-100 text-emerald-700 ml-2 hidden sm:inline-block">Model</span>
       </div>
       <div class="flex items-center gap-3">
+        <!-- Mode toggle -->
+        <div class="flex bg-white border border-slate-200 shadow-inner rounded-lg p-1 text-xs font-bold overflow-x-auto custom-scrollbar max-w-[240px] sm:max-w-none">
+          <button id="mode-single" onclick="setMode('single')" class="tab-btn active px-3 py-1.5 rounded-md transition-all flex-shrink-0">單張名片</button>
+          <button id="mode-carousel" onclick="setMode('carousel')" class="tab-btn px-3 py-1.5 rounded-md transition-all text-slate-500 flex-shrink-0">橫式多頁</button>
+          <button id="mode-multi"  onclick="setMode('multi')"  class="tab-btn px-3 py-1.5 rounded-md transition-all text-slate-500 flex-shrink-0">列表多頁</button>
+        </div>
+        <!-- Profile -->
         <img id="nav-avatar" src="" class="w-8 h-8 rounded-full object-cover border-2 border-slate-200 hidden">
       </div>
     </div>
@@ -195,7 +189,7 @@
 
   <!-- ── SEARCH BAR ── -->
   <div class="sticky top-14 z-30 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
-    <div class="px-6 lg:px-10 py-3 flex gap-2">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex gap-2">
       <div class="relative flex-1">
         <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="search-input" type="text" placeholder="搜尋行程名稱…" oninput="filterCards()" class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-400 transition">
@@ -213,14 +207,17 @@
   </div>
 
   <!-- ── MAIN GRID ── -->
-  <main class="px-6 lg:px-10 pt-5">
-    <!-- count + select all -->
+  <main class="max-w-5xl mx-auto px-4 pt-5">
+    <!-- count -->
     <div class="flex items-center justify-between mb-4">
       <p id="count-label" class="text-xs font-bold text-slate-400 tracking-wide"></p>
-      <button id="select-all-btn" onclick="toggleSelectAll()" class="text-xs font-bold text-emerald-600 hidden underline underline-offset-2">全選</button>
+      <div class="flex items-center gap-3">
+        <span id="mode-hint" class="text-[11px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded hidden sm:block">點擊卡片 → 立即產生單張推廣名片</span>
+        <button id="select-all-btn" onclick="toggleSelectAll()" class="text-xs font-bold text-emerald-600 hidden underline underline-offset-2 hover:text-emerald-700">全部選取</button>
+      </div>
     </div>
-    <!-- grid — more columns on wide screens since no max-width -->
-    <div id="cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 anim-fade-up"></div>
+    <!-- grid -->
+    <div id="cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 anim-fade-up"></div>
     <!-- empty state -->
     <div id="empty-state" class="hidden py-24 text-center">
       <div class="text-5xl mb-4">🔍</div>
@@ -228,9 +225,9 @@
     </div>
   </main>
 
-  <!-- ── BOTTOM BAR (multi select) ── -->
+  <!-- ── BOTTOM BAR (multi / carousel select) ── -->
   <div id="bottom-bar">
-    <div class="px-6 lg:px-10 flex items-center gap-3">
+    <div class="max-w-5xl mx-auto flex items-center gap-3">
       <div class="flex-1">
         <p class="text-white text-sm font-bold leading-none">已選 <span id="selected-count" class="text-emerald-400 text-lg font-black">0</span> 個行程</p>
         <p class="text-slate-400 text-xs mt-0.5">最多可選 8 個</p>
@@ -252,7 +249,7 @@
             <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
           </div>
           <div>
-            <p class="font-black text-slate-800 text-base leading-none">準備推廣連結與名片</p>
+            <p class="font-black text-slate-800 text-base leading-none">準備單張名片推廣連結</p>
             <p id="single-modal-title" class="text-xs text-slate-400 mt-1 truncate max-w-xs"></p>
           </div>
         </div>
@@ -283,19 +280,67 @@
 
         <!-- RIGHT: LINE Preview -->
         <div class="single-modal-right">
-          <p class="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full">名片預覽畫面</p>
+          <p class="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full mb-3">名片預覽畫面</p>
           <div id="single-preview-bubble" class="w-full max-w-[260px] bg-white rounded-[18px] overflow-hidden shadow-2xl border-[3px] border-slate-800"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── MULTI SHARE MODAL ── -->
+  <!-- ── CAROUSEL SHARE MODAL (橫式多頁) ── -->
+  <div id="carousel-modal" class="modal-overlay" onclick="closeCarouselModal(event)">
+    <div class="modal-sheet anim-pop-in">
+      <!-- Header -->
+      <div class="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-t-[20px]">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 5v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2z"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <div>
+            <p class="font-black text-slate-800 text-base leading-none">準備橫式多頁推廣連結</p>
+            <p class="text-xs text-slate-400 mt-1">已選 <span id="carousel-modal-count" class="text-emerald-600 font-black">0</span> 個行程</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('carousel-modal').classList.remove('open')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="single-modal-body">
+        <!-- LEFT: Settings -->
+        <div class="single-modal-left space-y-5">
+          <!-- Contact options -->
+          <div>
+            <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">勾選聯絡按鈕（將套用至輪播的所有名片）</p>
+            <div id="carousel-soc-options" class="grid grid-cols-2 gap-2 soc-check" onchange="renderCarouselPreview()"></div>
+          </div>
+          <!-- Actions -->
+          <div class="space-y-2.5 pt-3 border-t border-slate-100">
+            <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">🚀 平台推廣神器</p>
+            <button onclick="carouselAction('copy')"   class="w-full btn-ghost text-sm py-3 flex items-center justify-center gap-2">📋 複製 Flex JSON（貼到 LINE OA）</button>
+            <button onclick="carouselAction('picker')" class="w-full btn-green text-sm py-3 flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              立即分享給好友（喚起通訊錄）
+            </button>
+          </div>
+        </div>
+
+        <!-- RIGHT: LINE Carousel Preview -->
+        <div class="single-modal-right w-[360px] max-w-full">
+          <p class="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full mb-3">預覽畫面 (可左右滑動)</p>
+          <div id="carousel-preview-container" class="flex gap-3 overflow-x-auto w-full pb-2 custom-scrollbar" style="scroll-snap-type: x mandatory;">
+            <!-- Javascript will populate bubbles here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MULTI SHARE MODAL (列表多頁) ── -->
   <div id="multi-modal" class="modal-overlay" onclick="closeMultiModal(event)">
     <div class="modal-sheet" style="max-width:780px;">
       <div class="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-t-[20px]">
         <div>
-          <p class="font-black text-slate-800 text-base">多選推廣 · V3 商品列表卡片</p>
+          <p class="font-black text-slate-800 text-base">列表多頁推廣 · V3 商品清單版型</p>
           <p class="text-xs text-slate-400 mt-0.5">已選 <span id="modal-count" class="text-emerald-600 font-black">0</span> 個行程</p>
         </div>
         <button onclick="document.getElementById('multi-modal').classList.remove('open')" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition">✕</button>
@@ -342,7 +387,7 @@
 
         <!-- RIGHT preview -->
         <div class="single-modal-right">
-          <p class="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full">名片預覽畫面</p>
+          <p class="text-white/70 text-[10px] font-bold tracking-widest uppercase bg-black/20 px-3 py-1 rounded-full mb-3">名片預覽畫面</p>
           <div id="multi-preview" class="preview-bubble w-full max-w-[260px] bg-white"></div>
         </div>
       </div>
@@ -376,7 +421,7 @@ const SOC_ICONS = {
 let allItineraries  = [];
 let filtered        = [];
 let selectedIds     = new Set();
-let mode            = 'single'; // 'single' | 'multi'
+let mode            = 'single'; // 'single' | 'carousel' | 'multi'
 let liffProfile     = null;
 let distData        = null;
 let currentTourId   = null; // for single modal
@@ -400,9 +445,7 @@ const refUid    = urlParams.get('r') || localStorage.getItem('tracking_ref_uid')
 
   await fetchItineraries();
   buildSocOptions();
-  // init hint
-  const hint = document.getElementById('mode-hint');
-  if (hint) hint.textContent = '點擊卡片 → 立即產生推廣連結';
+  setMode('single'); // Initialize hints
 })();
 
 async function loadDistData(uid) {
@@ -434,7 +477,7 @@ async function fetchItineraries() {
 ========================================================= */
 function renderSkeletons() {
   const grid = document.getElementById('cards-grid');
-  grid.innerHTML = Array.from({length:14}).map(() => `
+  grid.innerHTML = Array.from({length:8}).map(() => `
     <div class="bg-white rounded-xl overflow-hidden border-2 border-slate-100">
       <div class="skeleton h-36 w-full"></div>
       <div class="p-3 space-y-2">
@@ -464,7 +507,7 @@ function renderCards() {
          style="animation-delay:${Math.min(i * 30, 300)}ms"
          data-id="${item.id}"
          onclick="onCardClick('${item.id}')">
-      <!-- check badge (multi mode only) -->
+      <!-- check badge (multi/carousel mode only) -->
       <div class="card-check" style="${mode==='single'?'display:none':''}">
         <svg width="12" height="12" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
@@ -497,7 +540,7 @@ function onCardClick(id) {
     openSingleModal(id);
     return;
   }
-  // multi
+  // multi or carousel
   const sid = String(id);
   if (selectedIds.has(sid)) {
     selectedIds.delete(sid);
@@ -536,9 +579,16 @@ function updateMultiUI() {
 function setMode(m) {
   mode = m;
   document.getElementById('mode-single').classList.toggle('active', m==='single');
+  document.getElementById('mode-carousel').classList.toggle('active', m==='carousel');
   document.getElementById('mode-multi').classList.toggle('active',  m==='multi');
+  
   const hint = document.getElementById('mode-hint');
-  if (hint) hint.textContent = m === 'single' ? '點擊卡片 → 立即產生推廣連結' : '勾選多張行程 → 合併成一張名片發送';
+  if (hint) {
+    if (m === 'single') hint.textContent = '點擊卡片 → 立即產生單張推廣名片';
+    else if (m === 'carousel') hint.textContent = '勾選多個行程 → 合併成左右滑動的橫式名片';
+    else hint.textContent = '勾選多個行程 → 合併成垂直列表式的名片';
+  }
+  
   document.getElementById('select-all-btn').classList.toggle('hidden', m==='single');
   if (m==='single') { clearSelection(); }
   renderCards();
@@ -578,6 +628,57 @@ function filterCards() {
 }
 
 /* =========================================================
+   SHARED BUBBLE GENERATOR
+========================================================= */
+function buildBubbleContent(tour, optsStr) {
+  const uid         = liffProfile?.userId || '';
+  const trackingUrl = `${ENDPOINT_URL}?t=${tour.id}&r=${uid}`;
+  const shareLiff   = `https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`;
+  const opts        = parseOptsStr(optsStr);
+  const buttons     = [
+    { type:'button', style:'primary', color:'#00B900', height:'sm', action:{ type:'uri', label:'查看行程 / 立即報名', uri:trackingUrl } },
+    { type:'button', style:'primary', color:'#b82337', height:'sm', margin:'sm', action:{ type:'uri', label:'分享行程給好友', uri:shareLiff } },
+  ];
+  
+  if (opts.phone && distData?.phone)     buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'📞 聯絡電話', uri:`tel:${distData.phone}` } });
+  if (opts.line  && distData?.lineLink)  buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'💬 私訊 LINE', uri:distData.lineLink } });
+  if (opts.lineAt&& distData?.lineAtLink)buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'🟢 官方 LINE@', uri:distData.lineAtLink } });
+  if (opts.fb    && distData?.fbLink)    buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'👍 FB 粉絲專頁', uri:distData.fbLink } });
+  if (opts.map   && distData?.mapLink)   buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'📍 門市導航', uri:distData.mapLink } });
+
+  return {
+    type:'bubble',
+    hero:{ type:'image', url:tour.image||'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80', size:'full', aspectRatio:'20:13', aspectMode:'cover', action:{ type:'uri', uri:trackingUrl } },
+    body:{ type:'box', layout:'vertical', contents:[
+      { type:'text', text:tour.title, weight:'bold', size:'xl', wrap:true },
+      { type:'box', layout:'vertical', margin:'lg', spacing:'sm', contents:[
+        { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'天數',color:'#aaa',size:'sm',flex:1}, {type:'text',text:`${tour.days} 天`,color:'#666',size:'sm',flex:5} ]},
+        { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'價格',color:'#aaa',size:'sm',flex:1}, {type:'text',text:`TWD ${Number(tour.price).toLocaleString()}`,color:'#b82337',size:'md',weight:'bold',flex:5} ]},
+        { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'介紹',color:'#aaa',size:'sm',flex:1}, {type:'text',text:(tour.description||'').substring(0,120)+'…',wrap:true,maxLines:4,color:'#666',size:'sm',flex:5} ]},
+      ]},
+    ]},
+    footer:{ type:'box', layout:'vertical', spacing:'sm', contents:buttons },
+  };
+}
+
+function buildSingleFlex(tour, optsStr) {
+  return {
+    type: 'flex', altText: `推薦行程：${tour.title}`,
+    contents: buildBubbleContent(tour, optsStr)
+  };
+}
+
+function buildCarouselFlex(items, optsStr) {
+  return {
+    type: 'flex', altText: `精選 ${items.length} 個推薦行程`,
+    contents: {
+      type: "carousel",
+      contents: items.map(item => buildBubbleContent(item, optsStr))
+    }
+  };
+}
+
+/* =========================================================
    SINGLE MODAL
 ========================================================= */
 function openSingleModal(id) {
@@ -586,7 +687,6 @@ function openSingleModal(id) {
   if (!tour) return;
   document.getElementById('single-modal-title').textContent = tour.title;
   document.getElementById('single-modal').classList.add('open');
-  // render preview after a tick so DOM is ready
   setTimeout(() => renderSinglePreview(), 50);
 }
 
@@ -595,15 +695,7 @@ function renderSinglePreview() {
   const bubble = document.getElementById('single-preview-bubble');
   if (!tour || !bubble) return;
 
-  const uid = liffProfile?.userId || '';
-  const trackingUrl = `${ENDPOINT_URL}?t=${tour.id}&r=${uid}`;
-
-  // collect checked contact buttons
-  const checkedKeys = ['phone','line','lineAt','fb','map'].filter(k => {
-    const el = document.getElementById(`soc-s-${k}`);
-    return el && el.checked;
-  });
-
+  const checkedKeys = ['phone','line','lineAt','fb','map'].filter(k => document.getElementById(`soc-s-${k}`)?.checked);
   let btnHtml = `
     <div style="background:#00B900;color:#fff;text-align:center;padding:9px;border-radius:10px;font-size:11px;font-weight:900;margin-bottom:6px;">查看行程 / 立即報名</div>
     <div style="background:#b82337;color:#fff;text-align:center;padding:9px;border-radius:10px;font-size:11px;font-weight:900;margin-bottom:6px;">📤 分享行程給好友</div>
@@ -633,7 +725,6 @@ function closeSingleModal(e) {
 function singleAction(type) {
   const tour = allItineraries.find(t => String(t.id) === String(currentTourId));
   if (!tour) return;
-
   const optsStr = buildOptsStr('single');
   const uid = liffProfile?.userId || '';
 
@@ -649,16 +740,87 @@ function singleAction(type) {
       document.getElementById('single-modal').classList.remove('open');
       showToast('✅ 已成功分享！');
     }).catch(e => {
-      const url = `https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`;
-      copyText(url, '✅ 已複製分享連結（通訊錄喚起失敗）');
+      copyText(`https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`, '✅ 已複製分享連結（通訊錄喚起失敗）');
     });
   }
 }
 
 /* =========================================================
-   MULTI MODAL
+   CAROUSEL MODAL (橫式多頁)
+========================================================= */
+function openCarouselModal() {
+  const items = getSelectedItems();
+  if (!items.length) return;
+  document.getElementById('carousel-modal-count').textContent = items.length;
+  document.getElementById('carousel-modal').classList.add('open');
+  setTimeout(() => renderCarouselPreview(), 50);
+}
+
+function closeCarouselModal(e) {
+  if (e.target.id === 'carousel-modal') document.getElementById('carousel-modal').classList.remove('open');
+}
+
+function renderCarouselPreview() {
+  const items = getSelectedItems();
+  const container = document.getElementById('carousel-preview-container');
+  if (!container) return;
+
+  const checkedKeys = ['phone','line','lineAt','fb','map'].filter(k => document.getElementById(`soc-c-${k}`)?.checked);
+  let btnHtml = `
+    <div style="background:#00B900;color:#fff;text-align:center;padding:9px;border-radius:10px;font-size:11px;font-weight:900;margin-bottom:6px;">查看行程 / 立即報名</div>
+    <div style="background:#b82337;color:#fff;text-align:center;padding:9px;border-radius:10px;font-size:11px;font-weight:900;margin-bottom:6px;">📤 分享行程給好友</div>
+  `;
+  const contactLabels = { phone:'📞 聯絡電話', line:'💬 私訊 LINE', lineAt:'🟢 官方 LINE@', fb:'👍 FB 粉絲專頁', map:'📍 門市導航' };
+  checkedKeys.forEach(k => {
+    btnHtml += `<div style="background:#f1f5f9;color:#334155;text-align:center;padding:8px;border-radius:10px;font-size:11px;font-weight:700;margin-bottom:6px;">${contactLabels[k]}</div>`;
+  });
+
+  container.innerHTML = items.map(tour => `
+    <div style="flex: 0 0 85%; scroll-snap-align: center;" class="bg-white rounded-[18px] overflow-hidden shadow-xl border-[3px] border-slate-800 flex flex-col">
+      <div style="aspect-ratio:20/13;overflow:hidden;background:#e2e8f0;flex-shrink:0;">
+        <img src="${tour.image||''}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
+      </div>
+      <div style="padding:12px;flex:1;display:flex;flex-direction:column;">
+        <p style="font-size:13px;font-weight:900;color:#111;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${tour.title}</p>
+        <div style="margin-bottom:4px;font-size:10px;color:#666;"><span style="color:#aaa;margin-right:6px;">天數</span>${tour.days} 天</div>
+        <div style="margin-bottom:12px;font-size:12px;font-weight:900;color:#b82337;"><span style="color:#aaa;font-size:10px;font-weight:400;margin-right:6px;">價格</span>TWD ${Number(tour.price).toLocaleString()}</div>
+        <div style="margin-top:auto;">
+          ${btnHtml}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function carouselAction(type) {
+  const items = getSelectedItems();
+  if (!items.length) return;
+  const optsStr = buildOptsStr('carousel');
+  const flex = buildCarouselFlex(items, optsStr);
+
+  if (type === 'copy') {
+    copyText(JSON.stringify(flex, null, 2), '✅ Flex JSON 已複製！貼到 LINE OA 使用');
+  } else if (type === 'picker') {
+    const msg = { type: 'flex', altText: `精選 ${items.length} 個推薦行程`, contents: flex.contents };
+    liff.shareTargetPicker([msg]).then(() => {
+      document.getElementById('carousel-modal').classList.remove('open');
+      clearSelection();
+      showToast('✅ 橫式多頁名片已成功發送！');
+    }).catch(e => {
+      copyText(JSON.stringify(msg, null, 2), '✅ 已複製 JSON（通訊錄喚起失敗）');
+    });
+  }
+}
+
+/* =========================================================
+   MULTI MODAL (列表多頁)
 ========================================================= */
 function openShareModal() {
+  if (mode === 'carousel') {
+    openCarouselModal();
+    return;
+  }
+  
   const items = getSelectedItems();
   if (!items.length) return;
   document.getElementById('modal-count').textContent = items.length;
@@ -726,49 +888,11 @@ function multiAction(type) {
     liff.shareTargetPicker([msg]).then(() => {
       document.getElementById('multi-modal').classList.remove('open');
       clearSelection();
-      showToast('✅ 推廣卡片已成功發送！');
+      showToast('✅ 列表名片已成功發送！');
     }).catch(e => {
       copyText(JSON.stringify(msg, null, 2), '✅ 已複製 JSON（通訊錄喚起失敗）');
     });
   }
-}
-
-/* =========================================================
-   BUILD FLEX MESSAGES
-========================================================= */
-
-// Single bubble (original format)
-function buildSingleFlex(tour, optsStr) {
-  const uid         = liffProfile?.userId || '';
-  const trackingUrl = `${ENDPOINT_URL}?t=${tour.id}&r=${uid}`;
-  const shareLiff   = `https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${uid}&o=${optsStr}`;
-  const opts        = parseOptsStr(optsStr);
-  const buttons     = [
-    { type:'button', style:'primary', color:'#00B900', height:'sm', action:{ type:'uri', label:'查看行程 / 立即報名', uri:trackingUrl } },
-    { type:'button', style:'primary', color:'#b82337', height:'sm', margin:'sm', action:{ type:'uri', label:'分享行程給好友', uri:shareLiff } },
-  ];
-  if (opts.phone && distData?.phone)     buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'📞 聯絡電話', uri:`tel:${distData.phone}` } });
-  if (opts.line  && distData?.lineLink)  buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'💬 私訊 LINE', uri:distData.lineLink } });
-  if (opts.lineAt&& distData?.lineAtLink)buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'🟢 官方 LINE@', uri:distData.lineAtLink } });
-  if (opts.fb    && distData?.fbLink)    buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'👍 FB 粉絲專頁', uri:distData.fbLink } });
-  if (opts.map   && distData?.mapLink)   buttons.push({ type:'button', style:'secondary', height:'sm', margin:'sm', action:{ type:'uri', label:'📍 門市導航', uri:distData.mapLink } });
-
-  return {
-    type:'flex', altText:`推薦行程：${tour.title}`,
-    contents: {
-      type:'bubble',
-      hero:{ type:'image', url:tour.image||'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&q=80', size:'full', aspectRatio:'20:13', aspectMode:'cover', action:{ type:'uri', uri:trackingUrl } },
-      body:{ type:'box', layout:'vertical', contents:[
-        { type:'text', text:tour.title, weight:'bold', size:'xl', wrap:true },
-        { type:'box', layout:'vertical', margin:'lg', spacing:'sm', contents:[
-          { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'天數',color:'#aaa',size:'sm',flex:1}, {type:'text',text:`${tour.days} 天`,color:'#666',size:'sm',flex:5} ]},
-          { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'價格',color:'#aaa',size:'sm',flex:1}, {type:'text',text:`TWD ${Number(tour.price).toLocaleString()}`,color:'#b82337',size:'md',weight:'bold',flex:5} ]},
-          { type:'box', layout:'baseline', spacing:'sm', contents:[ {type:'text',text:'介紹',color:'#aaa',size:'sm',flex:1}, {type:'text',text:(tour.description||'').substring(0,120)+'…',wrap:true,maxLines:4,color:'#666',size:'sm',flex:5} ]},
-        ]},
-      ]},
-      footer:{ type:'box', layout:'vertical', spacing:'sm', contents:buttons },
-    }
-  };
 }
 
 // V3 product list bubble
@@ -856,6 +980,18 @@ function buildSocOptions() {
       </div>`;
     }).join('');
   }
+  
+  // Carousel modal
+  const carouselCont = document.getElementById('carousel-soc-options');
+  if (carouselCont) {
+    carouselCont.innerHTML = SOC_DEFS.filter(s => ['phone','line','lineAt','fb','map'].includes(s.key)).map(s => {
+      const hasData = getSocUrl(s.key);
+      return `<div class="soc-check">
+        <input type="checkbox" id="soc-c-${s.key}" onchange="renderCarouselPreview()" ${!hasData?'disabled':''}>
+        <label for="soc-c-${s.key}" class="${!hasData?'opacity-40 cursor-not-allowed':''}">${s.label}</label>
+      </div>`;
+    }).join('');
+  }
 
   // Multi modal
   const multiCont = document.getElementById('multi-soc-options');
@@ -878,7 +1014,8 @@ function getSocUrl(key) {
 
 function buildOptsStr(prefix) {
   return ['phone','line','lineAt','fb','web','map'].map(k => {
-    const el = document.getElementById(`soc-s-${k}`);
+    let idPrefix = prefix === 'single' ? 's' : 'c';
+    const el = document.getElementById(`soc-${idPrefix}-${k}`);
     return (el && el.checked) ? '1' : '0';
   }).join('');
 }
