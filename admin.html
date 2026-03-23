@@ -9,126 +9,98 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    :root {
-      --bg: #f7f6f3;
-      --surface: #ffffff;
-      --border: #e8e6e1;
-      --text: #1a1917;
-      --muted: #8c8a84;
-      --accent: #2563eb;
-      --accent-light: #eff6ff;
-      --danger: #dc2626;
-      --radius: 12px;
-      --radius-lg: 20px;
-    }
-    body { font-family: 'DM Sans', 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); margin: 0; }
-    .editor-wrap { display: grid; grid-template-columns: 6fr 4fr; height: calc(100vh - 56px); width: 100vw; }
-    .editor-sidebar { border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface); padding: 32px 48px; display: flex; flex-direction: column; gap: 24px; }
-    .editor-preview { overflow-y: auto; background: var(--bg); padding: 40px 48px; }
-    .field-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: block; }
-    .field-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; outline: none; background: var(--bg); }
-    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-ai { background: var(--accent-light); color: var(--accent); border: 1px solid #bfdbfe; }
-    .topbar { height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; position: sticky; top: 0; z-index: 50; }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; padding: 32px; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: all .2s; }
-    .card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-    .preview-article h3 { font-family: 'DM Serif Display', serif; font-size: 1.6rem; margin: 2rem 0 .8rem; border-left: 5px solid var(--accent); padding-left: 14px; }
-    .preview-article img { width: 100%; border-radius: var(--radius-lg); margin: 1rem 0; object-fit: cover; }
-    .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .editor-wrap { display: grid; grid-template-columns: 6fr 4fr; height: calc(100vh - 64px); width: 100vw; }
+    .editor-sidebar { border-right: 1px solid #e2e8f0; overflow-y: auto; background: #fff; padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+    .editor-preview { overflow-y: auto; background: #f8fafc; padding: 40px; }
+    .blog-preview h3 { font-size: 1.8rem; font-weight: 900; margin: 3rem 0 1rem; border-left: 6px solid #2563eb; padding-left: 1rem; }
+    .blog-preview img { width: 100%; border-radius: 2rem; margin: 1rem 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .blog-preview p { font-size: 1.15rem; line-height: 2; color: #475569; margin-bottom: 1.5rem; }
   </style>
 </head>
-<body>
+<body class="text-slate-800">
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    const Ico = ({ n, s = 16, c }) => {
-      const paths = {
+    const Icon = ({ name, className = "w-5 h-5" }) => {
+      const icons = {
         plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
         edit: <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
         trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>,
-        sparkles: <><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707"/></>,
-        back: <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
-        send: <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>
+        sparkles: <><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707"/></>,
+        check: <><polyline points="20 6 9 17 4 12"/></>,
+        x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+        users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+        package: <><line x1="16.5" y1="9.4" x2="7.5" y2="4.28"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></>
       };
-      return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c||"currentColor"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">{paths[n]}</svg>;
+      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
     };
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
-    const BlogPreview = ({ form }) => {
-      if (!form.title && !form.description) return <div className="text-gray-300 text-center py-40 font-bold uppercase tracking-widest">Live Preview</div>;
-      const lines = (form.description || '').split('\n');
-      return (
-        <div className="preview-article animate-fade-in">
-          {form.image && <img src={form.image} className="w-full h-64 object-cover rounded-3xl mb-8 shadow-lg" alt="cover" />}
-          <h1 className="text-4xl font-black mb-6 leading-tight">{form.title || '未命名行程'}</h1>
-          <div className="flex gap-6 py-6 border-y border-gray-200 mb-10">
-            <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">售價</p><p className="text-xl font-black text-red-600">TWD {Number(form.price||0).toLocaleString()}</p></div>
-            <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">天數</p><p className="text-xl font-bold">{form.days} 天</p></div>
-            <div><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">地區</p><p className="text-xl font-bold">{form.region}</p></div>
-          </div>
-          {lines.map((p, i) => {
-            const l = p.trim();
-            if (l.startsWith('###')) return <h3 key={i}>{l.replace('###','').trim()}</h3>;
-            if (l.includes('![Image](')) {
-              const m = l.match(/\!\[.*?\]\((.*?)\)/);
-              return m ? <img key={i} src={m[1]} className="shadow-xl" alt="" /> : null;
-            }
-            if (!l) return null;
-            return <p key={i} className="text-gray-600 leading-relaxed text-lg mb-6">{l}</p>;
-          })}
-        </div>
-      );
-    };
-
-    const EMPTY = { id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' };
-
     function App() {
-      const slug = new URLSearchParams(window.location.search).get('a') || 'demo';
+      const urlParams = new URLSearchParams(window.location.search);
+      const agencySlug = urlParams.get('a') || 'demo';
       const fileRef = useRef(null);
+      
       const [auth, setAuth] = useState('loading');
       const [myUid, setMyUid] = useState('');
-      const [items, setItems] = useState([]);
-      const [view, setView] = useState('list');
-      const [form, setForm] = useState(EMPTY);
-      const [saving, setSaving] = useState(false);
+      const [view, setView] = useState('list'); // list | edit | distributors
+      const [itineraries, setItineraries] = useState([]);
+      const [distributors, setDistributors] = useState([]);
+      const [form, setForm] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' });
       const [aiLoading, setAiLoading] = useState(false);
-      const [pushingId, setPushingId] = useState(null);
-
-      const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-      const fetchList = async () => {
-        try {
-          const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`);
-          setItems(await r.json());
-        } catch(e) {}
-      };
 
       useEffect(() => {
-        (async () => {
+        const init = async () => {
           try {
-            const cr = await fetch(`${WORKER_URL}/api/config?a=${slug}`);
-            const cd = await cr.json();
-            if (!cd.success) { setAuth('denied'); return; }
-            await liff.init({ liffId: cd.data.liff_id });
-            if (!liff.isLoggedIn()) { liff.login(); return; }
-            const prof = await liff.getProfile();
-            setMyUid(prof.userId);
-            const sr = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${prof.userId}&a=${slug}`);
-            const sd = await sr.json();
-            if (sd.success && sd.data.isAdmin) { fetchList(); setAuth('admin'); } else { setAuth('denied'); }
-          } catch(e) { setAuth('denied'); }
-        })();
-      }, [slug]);
+            const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
+            const configData = await configRes.json();
+            if (configData.success) {
+              await liff.init({ liffId: configData.data.liff_id });
+              if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                setMyUid(profile.userId);
+                const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
+                const statusData = await statusRes.json();
+                if (statusData.success && statusData.data.isAdmin) {
+                  setAuth('admin');
+                  fetchList();
+                } else { setAuth('denied'); }
+              } else { liff.login(); }
+            }
+          } catch (e) { setAuth('denied'); }
+        };
+        init();
+      }, [agencySlug]);
+
+      const fetchList = async () => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
+        setItineraries(await res.json());
+      };
+
+      const fetchDistributors = async () => {
+        const res = await fetch(`${WORKER_URL}/api/admin/distributors?a=${agencySlug}&uid=${myUid}`);
+        const data = await res.json();
+        setDistributors(data);
+      };
+
+      const handleApprovePartner = async (id, status) => {
+        await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${agencySlug}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status, adminUid: myUid })
+        });
+        fetchDistributors();
+      };
 
       const handleAI = (e) => {
         const file = e.target.files[0];
@@ -137,119 +109,137 @@
         reader.onloadend = async () => {
           setAiLoading(true);
           try {
-            const r = await fetch(`${WORKER_URL}/api/upload-dm?a=${slug}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({image:reader.result}) });
+            const r = await fetch(`${WORKER_URL}/api/upload-dm?a=${agencySlug}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: reader.result })
+            });
             const d = await r.json();
-            if (d.success) setForm(p => ({ ...p, ...d.data }));
-            else alert('AI 錯誤：' + d.error);
+            if (d.success) setForm(prev => ({ ...prev, ...d.data }));
           } catch(e) { alert('AI 連線失敗'); }
           setAiLoading(false);
         };
         reader.readAsDataURL(file);
-        e.target.value = "";
       };
 
-      const handleSave = async () => {
-        setSaving(true);
-        try {
-          const r = await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action: form.id ? 'updateItinerary' : 'addItinerary', ...form }) });
-          if ((await r.json()).success) { setView('list'); fetchList(); }
-        } catch(e) {}
-        setSaving(false);
-      };
-
-      const handleBroadcast = async (itineraryId) => {
-        if (!confirm('確定要將此行程推播給所有會員嗎？')) return;
-        setPushingId(itineraryId);
-        try {
-          const r = await fetch(`${WORKER_URL}/api/admin/broadcast?a=${slug}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ itineraryId, adminUid: myUid })
-          });
-          const d = await r.json();
-          if (d.success) alert(`推播成功！已發送給 ${d.count} 位用戶。`);
-          else alert('推播失敗：' + d.error);
-        } catch(e) { alert('連線失敗'); }
-        setPushingId(null);
-      };
-
-      if (auth === 'loading') return <div className="h-screen flex items-center justify-center font-bold text-gray-400">Loading Admin...</div>;
-      if (auth === 'denied') return <div className="h-screen flex flex-col items-center justify-center p-10 text-center"><h1 className="text-6xl mb-4">⛔</h1><p className="font-bold text-xl mb-4">存取被拒</p><code className="bg-gray-100 p-4 rounded-xl text-xs break-all">{myUid}</code></div>;
-
-      if (view === 'list') return (
-        <div>
-          <div className="topbar px-8">
-            <span className="font-black text-xl italic tracking-tighter">SaaS <span className="text-blue-600">Admin</span></span>
-            <button className="btn btn-primary shadow-xl shadow-blue-200" onClick={() => { setForm(EMPTY); setView('edit'); }}><Ico n="plus" /> 新增行程</button>
-          </div>
-          <div className="card-grid">
-            {items.map(it => (
-              <div key={it.id} className="card shadow-sm group">
-                <div className="h-48 overflow-hidden"><img src={it.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" alt="" /></div>
-                <div className="p-6">
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">{it.region} · {it.days}天</p>
-                  <h4 className="font-bold text-lg mb-4 line-clamp-1">{it.title}</h4>
-                  <div className="flex justify-between items-center border-t pt-4">
-                    <span className="text-red-600 font-black text-xl">${Number(it.price).toLocaleString()}</span>
-                    <div className="flex gap-2">
-                      <button className="p-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition" title="推播給會員" onClick={() => handleBroadcast(it.id)}>
-                        {pushingId === it.id ? <div className="spinner"/> : <Ico n="send" s={14}/>}
-                      </button>
-                      <button className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:bg-blue-600 hover:text-white transition" onClick={() => { setForm(it); setView('edit'); }}><Ico n="edit" s={14}/></button>
-                      <button className="p-2.5 bg-gray-50 text-gray-400 rounded-xl hover:bg-red-600 hover:text-white transition" onClick={async () => { if(confirm('刪除？')){ await fetch(`${WORKER_URL}/api/itineraries?a=${slug}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'deleteItinerary', id:it.id}) }); fetchList(); } }}><Ico n="trash" s={14}/></button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
+      if (auth === 'loading') return <div className="h-screen flex items-center justify-center font-bold text-slate-400">Loading...</div>;
+      if (auth === 'denied') return <div className="h-screen flex flex-col items-center justify-center p-12 text-center bg-white"><div className="text-red-500 text-6xl mb-6">⛔</div><h1 className="text-2xl font-black mb-4">存取被拒</h1><p className="text-slate-500 mb-8">您的 UID: {myUid}</p></div>;
 
       return (
-        <div className="animate-fade-in">
-          <div className="topbar px-8">
-            <div className="flex items-center gap-4">
-              <button className="p-2 hover:bg-gray-100 rounded-full transition" onClick={() => setView('list')}><Ico n="back" s={20}/></button>
-              <span className="font-black uppercase tracking-widest text-xs text-gray-400">Editor Workspace</span>
-            </div>
-            <div className="flex gap-3">
-              {!form.id && (
-                <>
-                  <button className="btn btn-ai px-6 py-2.5 rounded-full" disabled={aiLoading} onClick={() => fileRef.current.click()}>
-                    {aiLoading ? <div className="spinner"/> : <Ico n="sparkles" s={14}/>} AI 視覺擴寫
-                  </button>
-                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAI} />
-                </>
-              )}
-              <button className="btn btn-primary px-8 py-2.5 rounded-full shadow-xl shadow-blue-200" disabled={saving} onClick={handleSave}>{saving ? <div className="spinner"/> : '儲存並發佈'}</button>
-            </div>
-          </div>
-          <div className="editor-wrap">
-            <div className="editor-sidebar custom-scrollbar">
-              <div><label className="field-label">行程標題</label><input className="field-input font-black text-2xl border-none bg-transparent p-0 focus:ring-0" value={form.title} onChange={e=>setF('title',e.target.value)} placeholder="在此揮寫大器標題..." /></div>
-              <div className="grid grid-cols-3 gap-6">
-                <div><label className="field-label">地區</label><select className="field-input font-bold" value={form.region} onChange={e=>setF('region',e.target.value)}>{['亞洲','歐洲','美洲','國旅','大洋洲','非洲'].map(r=><option key={r}>{r}</option>)}</select></div>
-                <div><label className="field-label">天數</label><input type="number" className="field-input font-bold" value={form.days} onChange={e=>setF('days',e.target.value)} /></div>
-                <div><label className="field-label">售價</label><input type="number" className="field-input font-bold" value={form.price} onChange={e=>setF('price',e.target.value)} /></div>
+        <div className="min-h-screen">
+          <nav className="h-16 bg-white border-b px-8 flex justify-between items-center sticky top-0 z-50">
+            <div className="flex items-center gap-8">
+              <h1 className="font-black text-xl tracking-tighter">TRAVEL <span className="text-blue-600">ADMIN</span></h1>
+              <div className="flex gap-4">
+                <button onClick={()=>setView('list')} className={`px-4 py-2 rounded-lg font-bold text-sm ${view==='list'?'bg-blue-50 text-blue-600':'text-slate-400'}`}>行程管理</button>
+                <button onClick={()=>{setView('distributors'); fetchDistributors();}} className={`px-4 py-2 rounded-lg font-bold text-sm ${view==='distributors'?'bg-blue-50 text-blue-600':'text-slate-400'}`}>經銷商審核</button>
               </div>
-              <div className="divider" />
-              <div><label className="field-label">封面大圖</label><input type="url" className="field-input text-xs mb-4" value={form.image} onChange={e=>setF('image',e.target.value)} placeholder="Unsplash 連結..." />{form.image && <img src={form.image} className="w-full h-40 object-cover rounded-2xl shadow-md" />}</div>
-              <div className="divider" />
-              <div className="flex-1 flex flex-col"><label className="field-label">故事長文 (Markdown)</label><textarea className="field-input field-textarea custom-scrollbar bg-white border-2 border-gray-100" value={form.description} onChange={e=>setF('description',e.target.value)} placeholder={`### 第 1 天\n![Image](圖片網址)\n內容故事...`} /></div>
-              <div><label className="field-label">內部備註</label><textarea className="field-input text-xs" rows={2} value={form.notes||''} onChange={e=>setF('notes',e.target.value)} style={{resize:'none'}} /></div>
             </div>
-            <div className="editor-preview custom-scrollbar">
-              <div className="flex items-center gap-3 mb-10 text-[10px] font-black uppercase tracking-[0.3em] text-gray-300"><Ico n="edit" s={12}/> Live Rendering Preview</div>
-              <BlogPreview form={form} />
-            </div>
-          </div>
+            {view === 'list' && (
+              <button onClick={()=>{setForm({ id:null, title:'', region:'亞洲', price:0, days:1, image:'', description:'', notes:'' }); setView('edit');}} className="bg-blue-600 text-white px-5 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 transition">新增行程</button>
+            )}
+          </nav>
+
+          <main className="p-8">
+            {view === 'list' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fade-in">
+                {itineraries.map(it => (
+                  <div key={it.id} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 hover:shadow-xl transition-all group">
+                    <div className="h-48 overflow-hidden"><img src={it.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" /></div>
+                    <div className="p-6">
+                      <h4 className="font-bold text-lg mb-4 line-clamp-1">{it.title}</h4>
+                      <div className="flex justify-between items-center pt-4 border-t">
+                        <span className="text-red-600 font-black text-xl">${Number(it.price).toLocaleString()}</span>
+                        <button onClick={()=>{setForm(it); setView('edit');}} className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-blue-600 hover:text-white transition"><Icon name="edit" /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {view === 'distributors' && (
+              <div className="max-w-5xl mx-auto animate-fade-in">
+                <h2 className="text-2xl font-black mb-8 flex items-center gap-3"><Icon name="users" /> 經銷商申請審核</h2>
+                <div className="bg-white rounded-3xl overflow-hidden border">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-slate-400 text-xs font-black uppercase tracking-widest">
+                      <tr><th className="p-6">申請人</th><th className="p-6">聯絡電話</th><th className="p-6">公司 / 推薦人</th><th className="p-6">狀態</th><th className="p-6 text-right">操作</th></tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {distributors.map(d => (
+                        <tr key={d.id} className="hover:bg-slate-50 transition">
+                          <td className="p-6"><p className="font-bold">{d.name}</p><p className="text-xs text-slate-400 font-mono">{d.uid}</p></td>
+                          <td className="p-6 font-bold">{d.phone}</td>
+                          <td className="p-6"><p className="font-bold">{d.company_name || '個人'}</p><p className="text-[10px] text-indigo-500 font-black">REF: {d.referred_by || '無'}</p></td>
+                          <td className="p-6">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${d.status==='active'?'bg-emerald-100 text-emerald-600':d.status==='pending'?'bg-amber-100 text-amber-600':'bg-red-100 text-red-600'}`}>{d.status}</span>
+                          </td>
+                          <td className="p-6 text-right flex justify-end gap-2">
+                            {d.status === 'pending' && (
+                              <>
+                                <button onClick={()=>handleApprovePartner(d.id, 'active')} className="bg-emerald-600 text-white p-2 rounded-lg shadow-sm hover:scale-110 transition"><Icon name="check" /></button>
+                                <button onClick={()=>handleApprovePartner(d.id, 'rejected')} className="bg-red-500 text-white p-2 rounded-lg shadow-sm hover:scale-110 transition"><Icon name="x" /></button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {view === 'edit' && (
+              <div className="editor-wrap animate-fade-in fixed inset-0 top-16 bg-white z-50">
+                <div className="editor-sidebar custom-scrollbar">
+                  <div className="flex justify-between items-center mb-4">
+                    <button onClick={()=>setView('list')} className="text-slate-400 font-bold text-sm">取消返回</button>
+                    {!form.id && (
+                      <button onClick={()=>fileRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2">
+                        {aiLoading ? <div className="animate-spin border-2 border-indigo-600 border-t-transparent w-3 h-3 rounded-full" /> : <Icon name="sparkles" className="w-3 h-3"/>}
+                        AI 視覺擴寫
+                      </button>
+                    )}
+                    <input ref={fileRef} type="file" className="hidden" onChange={handleAI} />
+                  </div>
+                  <input className="text-3xl font-black border-none outline-none p-0 w-full mb-4" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="行程標題..." />
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase">地區</label><select className="w-full bg-slate-50 p-2 rounded-lg font-bold" value={form.region} onChange={e=>setForm({...form, region:e.target.value})}>{['亞洲','歐洲','美洲','國旅','大洋洲','非洲'].map(r=><option key={r}>{r}</option>)}</select></div>
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase">天數</label><input type="number" className="w-full bg-slate-50 p-2 rounded-lg font-bold" value={form.days} onChange={e=>setForm({...form, days:e.target.value})} /></div>
+                    <div><label className="text-[10px] font-black text-slate-400 uppercase">售價</label><input type="number" className="w-full bg-slate-50 p-2 rounded-lg font-bold" value={form.price} onChange={e=>setForm({...form, price:e.target.value})} /></div>
+                  </div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase">封面大圖</label><input className="w-full bg-slate-50 p-2 rounded-lg text-xs" value={form.image} onChange={e=>setForm({...form, image:e.target.value})} placeholder="URL..." /></div>
+                  <textarea className="flex-1 bg-slate-50 p-6 rounded-3xl outline-none font-medium leading-relaxed custom-scrollbar" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} placeholder="在此編輯 Markdown 行程故事..." />
+                  <button onClick={async ()=>{
+                    const r = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action: form.id?'updateItinerary':'addItinerary', ...form }) });
+                    if((await r.json()).success) { setView('list'); fetchList(); }
+                  }} className="bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl">儲存並發佈部落格</button>
+                </div>
+                <div className="editor-preview custom-scrollbar">
+                   <div className="max-w-2xl mx-auto blog-preview">
+                      {form.image && <img src={form.image} className="w-full h-80 object-cover rounded-[3rem] mb-10" />}
+                      <h1 className="text-4xl font-black mb-8 leading-tight">{form.title || '預覽標題'}</h1>
+                      <div className="flex gap-8 py-6 border-y mb-10">
+                        <div><p className="text-[10px] font-black text-slate-400 uppercase">總計</p><p className="text-2xl font-black text-red-600">TWD {Number(form.price).toLocaleString()}</p></div>
+                        <div><p className="text-[10px] font-black text-slate-400 uppercase">天數</p><p className="text-2xl font-black">{form.days} 天</p></div>
+                      </div>
+                      {(form.description || '').split('\n').map((l, i) => {
+                        const t = l.trim();
+                        if(t.startsWith('###')) return <h3 key={i}>{t.replace('###','').trim()}</h3>;
+                        if(t.includes('![Image](')) { const m = t.match(/\!\[.*?\]\((.*?)\)/); return m ? <img key={i} src={m[1]} /> : null; }
+                        return t ? <p key={i}>{t}</p> : null;
+                      })}
+                   </div>
+                </div>
+              </div>
+            )}
+          </main>
         </div>
       );
     }
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
