@@ -3,177 +3,257 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 系統登入與驗證</title>
+  <title>旅遊管家 - 智慧旅遊平台 (SaaS 版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    @keyframes spin-slow { 100% { transform: rotate(360deg); } }
-    .animate-spin-slow { animation: spin-slow 3s linear infinite; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
   </style>
 </head>
-<body class="bg-gray-100 font-sans text-gray-800 flex items-center justify-center min-h-screen p-4 py-12">
-  <div id="root" class="w-full max-w-2xl"></div>
+<body class="bg-gray-50 font-sans text-gray-800">
+  <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
+    // 圖示組件 - 已修正相鄰 JSX 元素錯誤
+    const Icon = ({ name, className = "w-6 h-6" }) => {
+      const icons = {
+        home: (
+          <React.Fragment>
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </React.Fragment>
+        ),
+        search: (
+          <React.Fragment>
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </React.Fragment>
+        ),
+        user: (
+          <React.Fragment>
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </React.Fragment>
+        ),
+        briefcase: (
+          <React.Fragment>
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          </React.Fragment>
+        ),
+        calendar: (
+          <React.Fragment>
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </React.Fragment>
+        ),
+        refresh: (
+          <React.Fragment>
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </React.Fragment>
+        ),
+        arrowLeft: (
+          <React.Fragment>
+            <line x1="19" y1="12" x2="5" y2="12"/>
+            <polyline points="12 19 5 12 12 5"/>
+          </React.Fragment>
+        )
+      };
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+          {icons[name]}
+        </svg>
+      );
+    };
+
+    // ★ 設定 Worker URL
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
-    const LIFF_ID = '2009367829-BDZCGti8'; 
-    const MAIN_APP_URL = 'index.html'; 
+    const LOGIN_PAGE = 'login.html';
 
-    const CheckCircle = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-16 h-16 text-green-500 mb-4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
-    const Briefcase = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-emerald-600"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
-    const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-orange-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    function App() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const agencySlug = urlParams.get('a') || 'demo'; // 租戶代號
+      const refUid = urlParams.get('r') || '';       // 推薦人 UID
 
-    function LoginApp() {
-      const [step, setStep] = useState('checking'); 
-      const [statusMsg, setStatusMsg] = useState('正在連接 LINE 授權服務...');
-      const [error, setError] = useState(null);
-      const [applyType, setApplyType] = useState('user'); 
-      const [refUid, setRefUid] = useState(''); 
-      const [targetTourId, setTargetTourId] = useState(''); 
-      
-      const [profile, setProfile] = useState(null);
-      const [formData, setFormData] = useState({ name: '', phone: '', companyName: '', taxId: '', lineLink: '', lineAtLink: '', fbLink: '', webLink: '', mapLink: '' });
+      const [tenant, setTenant] = useState(null);    // 旅行社配置
+      const [itineraries, setItineraries] = useState([]);
+      const [activeTab, setActiveTab] = useState('home');
+      const [selectedTour, setSelectedTour] = useState(null);
+      const [isLoading, setIsLoading] = useState(true);
+      const [liffProfile, setLiffProfile] = useState(null);
+      const [myStatus, setMyStatus] = useState({ role: 'guest', isAdmin: false });
 
-      useEffect(() => { initLogic(); }, []);
-
-      const initLogic = async () => {
-        try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const type = urlParams.get('type') || 'user';
-          let ref = urlParams.get('ref_uid') || urlParams.get('r') || '';
-          if (!ref) { try { ref = localStorage.getItem('tracking_ref_uid') || ''; } catch(e){} }
-          const targetTour = urlParams.get('t'); 
-          
-          setApplyType(type); setRefUid(ref); setTargetTourId(targetTour);
-          
-          // ★ 加入 withLoginOnExternalBrowser 防止手機外部瀏覽器無限迴圈
-          await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-          if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
-
-          setStatusMsg('授權成功！正在檢查會員狀態...');
-          const userProfile = await liff.getProfile();
-          setProfile(userProfile);
-          setFormData(prev => ({ ...prev, name: userProfile.displayName, lineLink: `https://line.me/ti/p/~${userProfile.userId}` }));
-
-          const checkResU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers', t: Date.now() }) });
-          const usersList = await checkResU.json();
-          
-          const checkResD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors', t: Date.now() }) });
-          const distList = await checkResD.json();
-
-          // ★ 強化陣列防呆，避免後端異常時前端崩潰
-          const uArray = Array.isArray(usersList) ? usersList : (usersList.data || []);
-          const dArray = Array.isArray(distList) ? distList : (distList.data || []);
-          const existingUser = uArray.find(u => u.uid === userProfile.userId) || dArray.find(u => u.uid === userProfile.userId);
-
-          if (existingUser && existingUser.phone) {
-            setStep('success'); setStatusMsg('歡迎回來！正在為您導向專屬頁面...');
-            setTimeout(() => { 
-                // ★ 改用 location.replace 防止手機上一頁歷史紀錄卡住
-                if (targetTour) window.location.replace(`${MAIN_APP_URL}?tab=home&t=${targetTour}`);
-                else window.location.replace(`${MAIN_APP_URL}?tab=${type === 'distributor' ? 'distributor' : 'member'}`); 
-            }, 1000);
-          } else {
-            setStep('form');
+      // 1. 初始化平台配置
+      useEffect(() => {
+        const init = async () => {
+          try {
+            // 抓取旅行社專屬設定 (LIFF ID, Banner 等)
+            const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
+            const configData = await configRes.json();
+            
+            if (configData.success) {
+              setTenant(configData.data);
+              
+              // 初始化該旅行社的 LIFF
+              await liff.init({ liffId: configData.data.liff_id });
+              if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                setLiffProfile(profile);
+                checkStatus(profile.userId);
+              }
+              
+              // 抓取該旅行社的行程
+              fetchTours();
+            } else {
+              console.error("找不到該租戶的配置");
+            }
+          } catch (e) {
+            console.error("初始化錯誤", e);
+          } finally {
+            setIsLoading(false);
           }
-        } catch (err) { 
-            console.error(err); 
-            setStep('error'); 
-            // ★ 顯示真實錯誤訊息，方便除錯
-            setError(`登入失敗: ${err.message || '請確認 LINE 授權或網路連線'}`); 
+        };
+        init();
+      }, [agencySlug]);
+
+      const fetchTours = async () => {
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
+          const data = await res.json();
+          setItineraries(Array.isArray(data) ? data : []);
+        } catch (e) {
+          console.error("獲取行程錯誤", e);
         }
       };
 
-      const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (applyType === 'distributor' && (!formData.companyName || !formData.taxId)) { alert('經銷商申請必須填寫「公司名稱」與「統一編號」。'); return; }
-
-        let finalMapLink = formData.mapLink.trim();
-        if (finalMapLink && !finalMapLink.startsWith('http')) finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
-
-        setStep('submitting'); setStatusMsg('正在儲存您的專屬資料...');
+      const checkStatus = async (uid) => {
         try {
-          const actionType = applyType === 'distributor' ? 'registerDistributor' : 'registerUser';
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: actionType, uid: profile.userId, ref_uid: refUid, ...formData, mapLink: finalMapLink })
-          });
+          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&a=${agencySlug}`);
           const result = await res.json();
-          if (result.success) {
-            if (!result.isNew) {
-                const updateAction = applyType === 'distributor' ? 'updateDistributorInfo' : 'updateUserInfo';
-                await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: updateAction, uid: profile.userId, ...formData, mapLink: finalMapLink }) });
-            }
-            setStep('success'); setStatusMsg('註冊成功！正在前往系統...');
-            setTimeout(() => { 
-                if (targetTourId) window.location.replace(`${MAIN_APP_URL}?tab=home&t=${targetTourId}`);
-                else window.location.replace(`${MAIN_APP_URL}?tab=${applyType === 'distributor' ? 'distributor' : 'member'}`); 
-            }, 1500);
-          } else throw new Error(result.message || '資料寫入失敗');
-        } catch(err) { setStep('error'); setError(`註冊失敗: ${err.message || '請檢查網路連線或聯絡客服'}`); }
+          if (result.success) setMyStatus(result.data);
+        } catch (e) {
+          console.error("檢查狀態錯誤", e);
+        }
       };
 
+      if (isLoading) return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-500 font-bold">正在進入專屬平台...</p>
+        </div>
+      );
+
+      if (!tenant) return <div className="p-20 text-center text-red-500 font-bold text-2xl">系統配置錯誤，請聯絡管理員。</div>;
+
       return (
-        <div className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl w-full border border-gray-100 animate-fade-in">
-          {(step === 'checking' || step === 'submitting') && (
-            <div className="text-center py-12">
-              <div className="relative mb-8 w-24 h-24 mx-auto"><div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div><div className="relative bg-gradient-to-tr from-blue-600 to-blue-400 w-full h-full rounded-full flex items-center justify-center shadow-lg text-white font-bold text-2xl">Travel</div></div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">系統安全驗證中</h2>
-              <div className="flex flex-col items-center"><svg className="animate-spin-slow w-8 h-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p className="text-gray-500 font-medium">{statusMsg}</p></div>
+        <div className="min-h-screen flex flex-col bg-gray-50">
+          {/* 導航列 */}
+          <nav className="bg-white shadow-sm sticky top-0 z-50 px-6 py-4 flex justify-between items-center">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setSelectedTour(null); }}>
+              <div className="bg-blue-600 p-1.5 rounded-lg text-white font-black text-xs">TK</div>
+              <span className="font-bold text-lg text-blue-900">{tenant.name}</span>
             </div>
-          )}
+            <div className="flex items-center gap-4">
+              {liffProfile ? (
+                <img src={liffProfile.pictureUrl} className="w-9 h-9 rounded-full border border-gray-200" />
+              ) : (
+                <button onClick={() => liff.login()} className="bg-[#00B900] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">登入</button>
+              )}
+            </div>
+          </nav>
 
-          {step === 'form' && profile && (
-            <div className="animate-fade-in">
-              <div className="flex justify-center mb-4"><div className={`p-4 rounded-2xl ${applyType === 'distributor' ? 'bg-emerald-50' : 'bg-orange-50'}`}>{applyType === 'distributor' ? <Briefcase /> : <UserIcon />}</div></div>
-              <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">{applyType === 'distributor' ? '經銷商合作申請' : '一般會員註冊'}</h2>
-              <p className="text-center text-gray-500 mb-8 text-sm">請核對並補全您的聯絡資訊以完成開通</p>
-              
-              <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-4 mb-6 border border-gray-100 relative overflow-hidden">
-                {refUid && <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">推薦開通</div>}
-                <img src={profile.pictureUrl || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full shadow-sm object-cover border-2 border-white"/>
-                <div><p className="text-xs text-gray-400 font-bold tracking-wider mb-1">LINE 授權身分</p><p className="font-bold text-gray-800 text-lg leading-none">{profile.displayName}</p></div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 flex items-center mt-2"><span className="bg-red-500 text-white px-2 py-0.5 rounded text-xs mr-2">必填</span> 基本資訊</div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">真實姓名 / 顯示名稱</label><input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="請輸入姓名"/></div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">聯絡手機</label><input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base" placeholder="例如：0912345678"/></div>
-
-                  {applyType === 'distributor' && (
-                    <><div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center"><span className="bg-purple-500 text-white px-2 py-0.5 rounded text-xs mr-2">審核必填</span> 經銷商審核資料</div>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-1.5">公司或門市名稱</label><input type="text" required value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="例如：東南旅行社 信義分公司"/></div>
-                      <div><label className="block text-sm font-bold text-gray-700 mb-1.5">統一編號 / 交觀編號</label><input type="text" required value={formData.taxId} onChange={(e) => setFormData({...formData, taxId: e.target.value})} className="w-full rounded-xl border-purple-200 border p-3 focus:ring-purple-500 outline-none text-base bg-purple-50/30" placeholder="審核身分用"/></div></>
-                  )}
-
-                  <div className="md:col-span-2 text-sm font-bold text-gray-500 border-b pb-2 mb-2 mt-4 flex items-center"><span className="bg-gray-300 text-white px-2 py-0.5 rounded text-xs mr-2">選填</span> 更多聯絡管道 (未來可自動放入推廣名片按鈕)</div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">個人 LINE 網址</label><input type="url" value={formData.lineLink} onChange={(e) => setFormData({...formData, lineLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://line.me/..."/></div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">官方 LINE@ 網址</label><input type="url" value={formData.lineAtLink} onChange={(e) => setFormData({...formData, lineAtLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://lin.ee/..."/></div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">FB 粉絲專頁網址</label><input type="url" value={formData.fbLink} onChange={(e) => setFormData({...formData, fbLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://facebook.com/..."/></div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-1.5">個人/公司網站網址</label><input type="url" value={formData.webLink} onChange={(e) => setFormData({...formData, webLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="https://..."/></div>
-                  <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-1.5">實體店面導航 (輸入完整地址或 Google Map 網址)</label><input type="text" value={formData.mapLink} onChange={(e) => setFormData({...formData, mapLink: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 outline-none text-base bg-gray-50" placeholder="例如：台北市信義區信義路五段7號 (系統將自動轉為導航網址)"/></div>
+          {/* 內容區 */}
+          <main className="flex-grow pb-24 md:pb-6">
+            {selectedTour ? (
+              // 行程詳情頁
+              <div className="animate-fade-in bg-white min-h-screen">
+                <div className="relative h-[40vh]">
+                  <img src={selectedTour.image} className="w-full h-full object-cover" />
+                  <button onClick={() => setSelectedTour(null)} className="absolute top-4 left-4 bg-black/50 text-white p-2 rounded-full backdrop-blur-md">
+                    <Icon name="arrowLeft" />
+                  </button>
                 </div>
-                <button type="submit" className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg mt-6 text-white ${applyType === 'distributor' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}>確認資料並開通</button>
-              </form>
-            </div>
-          )}
+                <div className="p-6">
+                  <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold mb-3 inline-block">{selectedTour.region}</span>
+                  <h1 className="text-3xl font-black mb-4">{selectedTour.title}</h1>
+                  <div className="flex justify-between items-center bg-gray-50 p-4 rounded-2xl mb-6">
+                    <div><p className="text-gray-400 text-xs font-bold">價格</p><p className="text-2xl font-black text-red-600">TWD {Number(selectedTour.price).toLocaleString()}</p></div>
+                    <div><p className="text-gray-400 text-xs font-bold">天數</p><p className="text-xl font-bold">{selectedTour.days} 天</p></div>
+                  </div>
+                  <div className="prose max-w-none whitespace-pre-wrap leading-relaxed text-gray-700">
+                    {selectedTour.description}
+                  </div>
+                  <button className="w-full bg-[#b82337] text-white py-4 rounded-2xl font-black text-lg mt-10 shadow-lg shadow-red-100">立即預約報名</button>
+                </div>
+              </div>
+            ) : (
+              // 首頁列表
+              <div className="animate-fade-in">
+                <header className="h-64 relative overflow-hidden">
+                  <img src={tenant.banner_url} className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/30 flex flex-col justify-center items-center text-white p-6 text-center">
+                    <h2 className="text-3xl font-black mb-2 drop-shadow-md">探索世界的美好</h2>
+                    <p className="text-sm opacity-90">為您精選最優質的旅遊行程</p>
+                  </div>
+                </header>
 
-          {step === 'success' && (<div className="text-center py-12 animate-fade-in"><div className="flex justify-center"><CheckCircle /></div><h2 className="text-2xl font-bold text-gray-800 mb-3">{statusMsg}</h2><p className="text-gray-500">畫面即將自動跳轉...</p></div>)}
-          {step === 'error' && (<div className="text-center py-12 animate-fade-in"><div className="bg-red-50 text-red-600 p-6 rounded-2xl text-base font-bold border border-red-200 inline-block w-full text-left break-words">❌ {error}</div><button onClick={() => window.location.replace(window.location.href)} className="mt-6 w-full bg-gray-800 text-white px-6 py-4 rounded-xl font-bold hover:bg-gray-700 transition text-lg">重新整理頁面</button></div>)}
+                <div className="max-w-6xl mx-auto px-6 py-10">
+                  <div className="flex justify-between items-center mb-8 border-b pb-4">
+                    <h3 className="text-xl font-bold flex items-center gap-2"><Icon name="calendar" className="w-5 h-5 text-blue-600" /> 精選行程</h3>
+                    <span className="text-xs text-gray-400 font-bold">共 {itineraries.length} 筆</span>
+                  </div>
+
+                  {itineraries.length === 0 ? (
+                    <div className="text-center py-20 text-gray-400 bg-white rounded-3xl border-2 border-dashed border-gray-100">目前尚無行程上架</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {itineraries.map(item => (
+                        <div key={item.id} onClick={() => setSelectedTour(item)} className="bg-white rounded-2xl overflow-hidden border border-gray-200 hover:shadow-xl transition-all cursor-pointer group">
+                          <div className="h-48 overflow-hidden">
+                            <img src={item.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          </div>
+                          <div className="p-4">
+                            <h4 className="font-bold text-lg mb-2 line-clamp-2">{item.title}</h4>
+                            <div className="flex justify-between items-end pt-2 border-t border-gray-50">
+                              <span className="text-sm text-gray-400 font-bold">{item.days} 天</span>
+                              <span className="text-red-600 font-black text-xl">${Number(item.price).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* 底部選單 */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-2 flex justify-around items-center md:hidden shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
+            <button onClick={() => {setActiveTab('home'); setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='home'?'text-blue-600':'text-gray-400'}`}><Icon name="home" /><span className="text-[10px] font-bold">首頁</span></button>
+            <button onClick={() => setActiveTab('member')} className={`flex flex-col items-center gap-1 ${activeTab==='member'?'text-blue-600':'text-gray-400'}`}><Icon name="user" /><span className="text-[10px] font-bold">會員</span></button>
+            <button onClick={() => setActiveTab('dist')} className={`flex flex-col items-center gap-1 ${activeTab==='dist'?'text-blue-600':'text-gray-400'}`}><Icon name="briefcase" /><span className="text-[10px] font-bold">經銷商</span></button>
+          </footer>
         </div>
       );
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<LoginApp />);
+    root.render(<App />);
   </script>
 </body>
 </html>
