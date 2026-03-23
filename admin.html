@@ -15,6 +15,7 @@
     .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
     .custom-scrollbar::-webkit-scrollbar { width: 5px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    textarea { font-family: 'Noto Sans TC', sans-serif; line-height: 1.6; }
   </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-800">
@@ -28,35 +29,25 @@
         box: (
           <React.Fragment>
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-            <line x1="12" y1="22.08" x2="12" y2="12"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
           </React.Fragment>
         ),
         fileText: (
           <React.Fragment>
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
           </React.Fragment>
         ),
         plus: (
-          <React.Fragment>
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </React.Fragment>
+          <React.Fragment><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></React.Fragment>
         ),
         edit: (
           <React.Fragment>
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </React.Fragment>
         ),
         trash: (
           <React.Fragment>
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </React.Fragment>
         ),
         sparkles: (
@@ -65,16 +56,11 @@
           </React.Fragment>
         ),
         upload: (
-          <React.Fragment>
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </React.Fragment>
+          <React.Fragment><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></React.Fragment>
         ),
         link: (
           <React.Fragment>
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
           </React.Fragment>
         )
       };
@@ -119,10 +105,8 @@
               if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
                 setLiffProfile(profile);
-                
                 const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
                 const statusData = await statusRes.json();
-                
                 if (statusData.success && statusData.data.isAdmin) {
                   setIsAdmin(true);
                   fetchData('itineraries');
@@ -131,14 +115,8 @@
               } else {
                 liff.login({ redirectUri: window.location.href });
               }
-            } else {
-              alert("租戶不存在");
-            }
-          } catch (e) {
-            console.error("Init Error", e);
-          } finally {
-            setIsLoading(false);
-          }
+            } else { alert("租戶不存在"); }
+          } catch (e) { console.error(e); } finally { setIsLoading(false); }
         };
         init();
       }, [agencySlug]);
@@ -154,7 +132,7 @@
             const data = await res.json();
             if (data.success) setOrders(data.data);
           }
-        } catch (e) { console.error("Fetch Data Error", e); }
+        } catch (e) { console.error(e); }
       };
 
       const convertGoogleDriveUrl = (url) => {
@@ -188,9 +166,7 @@
             alert('儲存成功！');
             setIsModalOpen(false);
             fetchData('itineraries');
-          } else {
-            alert('儲存失敗：' + result.error);
-          }
+          } else { alert('儲存失敗：' + result.error); }
         } catch (err) { alert('發生錯誤'); }
         setIsSubmitting(false);
       };
@@ -210,7 +186,8 @@
       const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (file.size > 4 * 1024 * 1024) { alert("檔案太大囉！"); return; }
+        if (file.size > 4 * 1024 * 1024) { alert("檔案太大囉！請選擇 4MB 以內的圖片。"); return; }
+
         const reader = new FileReader();
         reader.onloadend = async () => {
           const base64Data = reader.result;
@@ -233,10 +210,8 @@
                 description: result.data.description,
                 notes: result.data.notes
               }));
-              alert('✨ AI 擴寫文章與 Unsplash 搜圖完成！');
-            } else {
-              alert('AI 解析失敗');
-            }
+              alert('✨ AI 擴寫與 Unsplash/Pixabay 搜圖完成！');
+            } else { alert('AI 解析失敗'); }
           } catch (e) { alert('連線發生錯誤'); }
           setAiLoading(false);
         };
@@ -259,55 +234,41 @@
             <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col shadow-xl z-10 md:min-h-screen">
               <div className="p-6 bg-slate-950 flex items-center gap-3">
                 <div className="bg-indigo-500 p-2 rounded-lg"><Icon name="box" className="w-5 h-5 text-white" /></div>
-                <div>
-                  <h1 className="font-black text-lg leading-tight tracking-wider">旅遊管家</h1>
-                  <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Admin Panel</p>
-                </div>
+                <div><h1 className="font-black text-lg">旅遊管家</h1><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Admin Panel</p></div>
               </div>
               <div className="p-4 flex items-center gap-3 border-b border-slate-800">
                 <img src={liffProfile?.pictureUrl} className="w-10 h-10 rounded-full border-2 border-slate-700" />
-                <div>
-                  <p className="text-xs text-slate-400">管理員身分</p>
-                  <p className="text-sm font-bold text-indigo-300">{tenant?.name}</p>
-                </div>
+                <div><p className="text-xs text-slate-400">管理員</p><p className="text-sm font-bold text-indigo-300">{tenant?.name}</p></div>
               </div>
               <nav className="flex-1 p-4 space-y-2">
-                <button onClick={() => setActiveTab('itineraries')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='itineraries' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="box" className="w-5 h-5" /> 行程管理庫</button>
-                <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='orders' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="fileText" className="w-5 h-5" /> 訂單管理</button>
-                <div className="pt-4 mt-4 border-t border-slate-800">
-                  <button onClick={() => window.location.href=`index.html?a=${agencySlug}`} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white"><Icon name="arrowLeft" className="w-5 h-5" /> 返回首頁</button>
-                </div>
+                <button onClick={() => setActiveTab('itineraries')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='itineraries' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="box" /> 行程管理</button>
+                <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='orders' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="fileText" /> 訂單管理</button>
+                <button onClick={() => window.location.href=`index.html?a=${agencySlug}`} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white mt-auto"><Icon name="arrowLeft" /> 返回首頁</button>
               </nav>
             </aside>
 
             <main className="flex-1 p-4 md:p-10 overflow-y-auto">
-              {activeTab === 'itineraries' && (
-                <div className="animate-fade-in max-w-6xl mx-auto">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div>
-                      <h2 className="text-3xl font-black text-slate-800">行程管理庫</h2>
-                      <p className="text-slate-500 font-medium">您可以手動新增或使用 AI 辨識 DM 自動擴寫文章</p>
-                    </div>
-                    <button onClick={() => openModalWith()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 flex items-center gap-2 transition-transform active:scale-95"><Icon name="plus" /> 新增行程</button>
-                  </div>
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[600px]">
-                      <thead><tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm"><th className="p-4 font-bold">圖片 / 名稱</th><th className="p-4 font-bold">地區</th><th className="p-4 font-bold">天數</th><th className="p-4 font-bold">售價</th><th className="p-4 font-bold text-right">操作</th></tr></thead>
-                      <tbody>
-                        {itineraries.length === 0 ? (<tr><td colSpan="5" className="p-8 text-center text-slate-400 font-bold">目前尚無資料</td></tr>) : itineraries.map(item => (
-                          <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                            <td className="p-4 flex items-center gap-4"><img src={item.image} className="w-16 h-12 rounded-lg object-cover bg-slate-200" /><p className="font-bold text-slate-800 line-clamp-1">{item.title}</p></td>
-                            <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold">{item.region}</span></td>
-                            <td className="p-4 font-bold text-slate-600">{item.days} 天</td>
-                            <td className="p-4 font-black text-red-600">${Number(item.price).toLocaleString()}</td>
-                            <td className="p-4 text-right"><button onClick={() => openModalWith(item)} className="text-indigo-600 p-2 mr-1"><Icon name="edit" className="w-5 h-5"/></button><button onClick={() => handleDelete(item.id)} className="text-red-500 p-2"><Icon name="trash" className="w-5 h-5"/></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+              <div className="animate-fade-in max-w-6xl mx-auto">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                  <div><h2 className="text-3xl font-black text-slate-800">行程管理庫</h2><p className="text-slate-500 font-medium">您可以手動新增或使用 AI 辨識 DM 自動擴寫部落格文章</p></div>
+                  <button onClick={() => openModalWith()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"><Icon name="plus" /> 新增行程</button>
                 </div>
-              )}
+                <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
+                  <table className="w-full text-left min-w-[600px]">
+                    <thead><tr className="bg-slate-50 border-b text-slate-500 text-sm"><th className="p-4 font-bold">行程名稱</th><th className="p-4 font-bold">地區</th><th className="p-4 font-bold">售價</th><th className="p-4 font-bold text-right">操作</th></tr></thead>
+                    <tbody>
+                      {itineraries.length === 0 ? (<tr><td colSpan="4" className="p-8 text-center text-slate-400 font-bold">目前尚無行程</td></tr>) : itineraries.map(item => (
+                        <tr key={item.id} className="border-b hover:bg-slate-50 transition-colors">
+                          <td className="p-4 flex items-center gap-4"><img src={item.image} className="w-16 h-12 rounded-lg object-cover bg-slate-200 shadow-sm" /><p className="font-bold text-slate-800 line-clamp-1">{item.title}</p></td>
+                          <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold">{item.region}</span></td>
+                          <td className="p-4 font-black text-red-600">${Number(item.price).toLocaleString()}</td>
+                          <td className="p-4 text-right"><button onClick={() => openModalWith(item)} className="text-indigo-600 p-2"><Icon name="edit"/></button><button onClick={() => handleDelete(item.id)} className="text-red-500 p-2"><Icon name="trash"/></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </main>
           </div>
 
@@ -322,38 +283,40 @@
                   {!formData.id && (
                     <div className="mb-6 p-5 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                       <div className="text-center sm:text-left">
-                        <p className="text-indigo-800 font-black flex items-center justify-center sm:justify-start gap-2 text-lg"><Icon name="sparkles" className="w-6 h-6"/> AI 部落格模式擴寫</p>
-                        <p className="text-indigo-600 text-xs mt-1 font-medium">選取 DM 圖片後，AI 將自動擴寫豐富的文章內容並搭配 Unsplash 美圖</p>
+                        <p className="text-indigo-800 font-black flex items-center justify-center sm:justify-start gap-2 text-lg"><Icon name="sparkles" className="w-6 h-6 text-indigo-600"/> AI 部落格模式擴寫</p>
+                        <p className="text-indigo-600 text-xs mt-1 font-medium">選取手機相簿內的 DM 圖片，AI 將自動擴寫豐富的文章並從 Unsplash/Pixabay 搜圖</p>
                       </div>
                       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                       <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition active:scale-95">
-                        {aiLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Icon name="upload" className="w-4 h-4"/>} {aiLoading ? 'AI 正在擴寫中...' : '開始 AI 擴寫'}
+                        {aiLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Icon name="upload" className="w-4 h-4"/>} 
+                        {aiLoading ? 'AI 正在擴寫文案中...' : '選取 DM 檔案'}
                       </button>
                     </div>
                   )}
                   <form id="tourForm" onSubmit={handleSaveItinerary} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">文章標題</label><input type="text" required value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3 focus:bg-white outline-none" /></div>
-                      <div><label className="block text-sm font-bold text-slate-700 mb-2">地區</label><select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3"><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option></select></div>
+                      <div><label className="block text-sm font-bold text-slate-700 mb-2">地區</label><select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3"><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-sm font-bold text-slate-700 mb-2">天數</label><input type="number" required value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3" /></div>
                         <div><label className="block text-sm font-bold text-slate-700 mb-2">售價</label><input type="number" required value={formData.price} onChange={e=>setFormData({...formData, price:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3" /></div>
                       </div>
-                      <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">封面圖片網址 (支援 Google Drive)</label><input type="url" value={formData.image} onChange={e=>handleImageChange(e.target.value)} className="w-full bg-slate-50 border rounded-xl px-4 py-3 mb-3" placeholder="https://..." />
-                        {formData.image && <img src={formData.image} className="w-full h-48 object-cover rounded-xl shadow-sm border" />}
+                      <div className="md:col-span-2 p-4 bg-slate-50 rounded-2xl border border-dashed">
+                        <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Icon name="link" className="w-4 h-4 text-blue-500"/> 封面圖片網址 (支援 Google Drive 分享連結)</label>
+                        <input type="url" value={formData.image} onChange={e=>handleImageChange(e.target.value)} className="w-full bg-white border rounded-xl px-4 py-3 mb-3" placeholder="https://..." />
+                        {formData.image && <img src={formData.image} className="w-full h-48 object-cover rounded-xl shadow-sm border" onerror="this.src='https://via.placeholder.com/800x400?text=Invalid+Image+URL'"/>}
                       </div>
                       <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">部落格文章內容 (由 AI 擴寫)</label><textarea rows="15" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3 focus:bg-white outline-none custom-scrollbar leading-relaxed" placeholder="在這裡編輯您的旅遊故事..."></textarea></div>
                     </div>
                   </form>
                 </div>
-                <div className="p-5 border-t flex justify-end gap-3 bg-white shrink-0"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500">取消</button><button type="submit" form="tourForm" disabled={isSubmitting} className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg">{isSubmitting ? '儲存中...' : '確認儲存行程'}</button></div>
+                <div className="p-5 border-t flex justify-end gap-3 bg-white shrink-0"><button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 font-bold text-slate-500">取消</button><button type="submit" form="tourForm" disabled={isSubmitting} className="bg-indigo-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg transition active:scale-95">{isSubmitting ? '儲存中...' : '確認儲存行程'}</button></div>
               </div>
             </div>
           )}
         </React.Fragment>
       );
     }
-
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<AdminApp />);
   </script>
