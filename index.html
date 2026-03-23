@@ -24,7 +24,6 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    // 圖示組件 - 已修正相鄰 JSX 元素錯誤
     const Icon = ({ name, className = "w-6 h-6" }) => {
       const icons = {
         home: (
@@ -71,6 +70,15 @@
             <line x1="19" y1="12" x2="5" y2="12"/>
             <polyline points="12 19 5 12 12 5"/>
           </React.Fragment>
+        ),
+        share: (
+          <React.Fragment>
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </React.Fragment>
         )
       };
       return (
@@ -80,43 +88,40 @@
       );
     };
 
-    // ★ 設定 Worker URL
+    // ★ 設定 Worker URL 與頁面路徑
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LOGIN_PAGE = 'login.html';
+    const MODEL_PAGE = 'model.html';
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
-      const agencySlug = urlParams.get('a') || 'demo'; // 租戶代號
-      const refUid = urlParams.get('r') || '';       // 推薦人 UID
+      const agencySlug = urlParams.get('a') || 'demo'; 
+      const refUid = urlParams.get('r') || '';       
+      const initTab = urlParams.get('tab') || 'home';
 
-      const [tenant, setTenant] = useState(null);    // 旅行社配置
+      const [tenant, setTenant] = useState(null);    
       const [itineraries, setItineraries] = useState([]);
-      const [activeTab, setActiveTab] = useState('home');
+      const [activeTab, setActiveTab] = useState(initTab);
       const [selectedTour, setSelectedTour] = useState(null);
       const [isLoading, setIsLoading] = useState(true);
       const [liffProfile, setLiffProfile] = useState(null);
       const [myStatus, setMyStatus] = useState({ role: 'guest', isAdmin: false });
 
-      // 1. 初始化平台配置
       useEffect(() => {
         const init = async () => {
           try {
-            // 抓取旅行社專屬設定 (LIFF ID, Banner 等)
             const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
             const configData = await configRes.json();
             
             if (configData.success) {
               setTenant(configData.data);
               
-              // 初始化該旅行社的 LIFF
               await liff.init({ liffId: configData.data.liff_id });
               if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
                 setLiffProfile(profile);
                 checkStatus(profile.userId);
               }
-              
-              // 抓取該旅行社的行程
               fetchTours();
             } else {
               console.error("找不到該租戶的配置");
@@ -150,6 +155,11 @@
         }
       };
 
+      // 導向註冊/登入頁面邏輯
+      const handleRegister = (type = 'user') => {
+        window.location.href = `${LOGIN_PAGE}?a=${agencySlug}&type=${type}`;
+      };
+
       if (isLoading) return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-white">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -158,6 +168,105 @@
       );
 
       if (!tenant) return <div className="p-20 text-center text-red-500 font-bold text-2xl">系統配置錯誤，請聯絡管理員。</div>;
+
+      // 渲染會員中心
+      const renderMemberTab = () => {
+        if (!liffProfile || myStatus.role === 'guest') {
+          return (
+            <div className="p-6 text-center animate-fade-in mt-10">
+              <div className="bg-orange-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="user" className="w-10 h-10 text-orange-500"/></div>
+              <h2 className="text-2xl font-bold mb-2">您尚未登入或註冊</h2>
+              <p className="text-gray-500 mb-8">註冊成為會員，輕鬆管理您的訂單與行程。</p>
+              <button onClick={() => handleRegister('user')} className="bg-blue-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full max-w-xs">立即免費註冊</button>
+            </div>
+          );
+        }
+
+        return (
+          <div className="p-6 animate-fade-in max-w-3xl mx-auto">
+            <h2 className="text-2xl font-black mb-6">會員中心</h2>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-4 mb-6">
+              <img src={liffProfile.pictureUrl} className="w-16 h-16 rounded-full shadow-sm" />
+              <div>
+                <p className="text-sm text-gray-500 font-bold">{tenant.name} 會員</p>
+                <p className="text-xl font-black text-gray-800">{myStatus.userData?.name || liffProfile.displayName}</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6 text-center py-10">
+              <p className="text-gray-400 font-bold">目前尚無歷史訂單</p>
+            </div>
+
+            {myStatus.role === 'user' && (
+              <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100 flex flex-col items-center text-center">
+                <div className="bg-emerald-100 p-3 rounded-full mb-3"><Icon name="briefcase" className="w-6 h-6 text-emerald-600"/></div>
+                <h3 className="font-bold text-lg text-emerald-800 mb-2">想成為推廣夥伴嗎？</h3>
+                <p className="text-sm text-emerald-600 mb-4">申請成為經銷商，獲取專屬推廣工具與分潤。</p>
+                <button onClick={() => handleRegister('distributor')} className="bg-emerald-600 text-white font-bold py-2.5 px-6 rounded-xl shadow-md">立即申請經銷商</button>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      // 渲染經銷商專區
+      const renderDistTab = () => {
+        if (!liffProfile || myStatus.role !== 'distributor') {
+          return (
+            <div className="p-6 text-center animate-fade-in mt-10">
+              <div className="bg-emerald-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"><Icon name="briefcase" className="w-10 h-10 text-emerald-600"/></div>
+              <h2 className="text-2xl font-bold mb-2">經銷商專區</h2>
+              <p className="text-gray-500 mb-8">此區域僅限審核通過的推廣夥伴使用。</p>
+              <button onClick={() => handleRegister('distributor')} className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full max-w-xs">申請加入經銷商</button>
+            </div>
+          );
+        }
+
+        const distData = myStatus.distributorData;
+        return (
+          <div className="p-6 animate-fade-in max-w-3xl mx-auto">
+            <h2 className="text-2xl font-black mb-6 text-emerald-800">推廣管理後台</h2>
+            
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <img src={liffProfile.pictureUrl} className="w-12 h-12 rounded-full shadow-sm" />
+                  <div>
+                    <p className="font-black text-lg">{distData?.name || liffProfile.displayName}</p>
+                    <p className="text-xs text-gray-500 font-bold">{distData?.company_name}</p>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 rounded text-xs font-bold ${distData?.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                  {distData?.status === 'approved' ? '審核通過' : '審核中'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                <p className="text-xs text-gray-400 font-bold mb-1">本月推廣數</p>
+                <p className="text-2xl font-black text-gray-800">0</p>
+              </div>
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                <p className="text-xs text-gray-400 font-bold mb-1">預估分潤</p>
+                <p className="text-2xl font-black text-emerald-600">$0</p>
+              </div>
+            </div>
+
+            {distData?.status === 'approved' && (
+              <button onClick={() => window.location.href = `${MODEL_PAGE}?a=${agencySlug}`} className="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center gap-2 mb-4 hover:bg-slate-700 transition">
+                <Icon name="share" /> 開啟名片推廣工具 (Web)
+              </button>
+            )}
+            
+            {distData?.status !== 'approved' && (
+              <div className="bg-orange-50 text-orange-700 p-4 rounded-xl text-sm font-bold border border-orange-200">
+                ⚠️ 您的帳號目前正在審核中，通過後即可使用推廣工具。
+              </div>
+            )}
+          </div>
+        );
+      };
 
       return (
         <div className="min-h-screen flex flex-col bg-gray-50">
@@ -169,14 +278,14 @@
             </div>
             <div className="flex items-center gap-4">
               {liffProfile ? (
-                <img src={liffProfile.pictureUrl} className="w-9 h-9 rounded-full border border-gray-200" />
+                <img src={liffProfile.pictureUrl} className="w-9 h-9 rounded-full border border-gray-200" onClick={() => setActiveTab('member')} />
               ) : (
-                <button onClick={() => liff.login()} className="bg-[#00B900] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">登入</button>
+                <button onClick={() => handleRegister('user')} className="bg-[#00B900] text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">登入 / 註冊</button>
               )}
             </div>
           </nav>
 
-          {/* 內容區 */}
+          {/* 內容區切換 */}
           <main className="flex-grow pb-24 md:pb-6">
             {selectedTour ? (
               // 行程詳情頁
@@ -200,6 +309,10 @@
                   <button className="w-full bg-[#b82337] text-white py-4 rounded-2xl font-black text-lg mt-10 shadow-lg shadow-red-100">立即預約報名</button>
                 </div>
               </div>
+            ) : activeTab === 'member' ? (
+              renderMemberTab()
+            ) : activeTab === 'dist' ? (
+              renderDistTab()
             ) : (
               // 首頁列表
               <div className="animate-fade-in">
@@ -243,10 +356,10 @@
           </main>
 
           {/* 底部選單 */}
-          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-2 flex justify-around items-center md:hidden shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
-            <button onClick={() => {setActiveTab('home'); setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='home'?'text-blue-600':'text-gray-400'}`}><Icon name="home" /><span className="text-[10px] font-bold">首頁</span></button>
-            <button onClick={() => setActiveTab('member')} className={`flex flex-col items-center gap-1 ${activeTab==='member'?'text-blue-600':'text-gray-400'}`}><Icon name="user" /><span className="text-[10px] font-bold">會員</span></button>
-            <button onClick={() => setActiveTab('dist')} className={`flex flex-col items-center gap-1 ${activeTab==='dist'?'text-blue-600':'text-gray-400'}`}><Icon name="briefcase" /><span className="text-[10px] font-bold">經銷商</span></button>
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-2 flex justify-around items-center md:hidden shadow-[0_-4px_10px_rgba(0,0,0,0.03)] z-50">
+            <button onClick={() => {setActiveTab('home'); setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='home'&&!selectedTour?'text-blue-600':'text-gray-400'}`}><Icon name="home" /><span className="text-[10px] font-bold">首頁</span></button>
+            <button onClick={() => {setActiveTab('member'); setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='member'&&!selectedTour?'text-blue-600':'text-gray-400'}`}><Icon name="user" /><span className="text-[10px] font-bold">會員</span></button>
+            <button onClick={() => {setActiveTab('dist'); setSelectedTour(null);}} className={`flex flex-col items-center gap-1 ${activeTab==='dist'&&!selectedTour?'text-blue-600':'text-gray-400'}`}><Icon name="briefcase" /><span className="text-[10px] font-bold">經銷商</span></button>
           </footer>
         </div>
       );
