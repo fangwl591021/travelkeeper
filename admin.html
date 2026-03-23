@@ -26,51 +26,20 @@
 
     const Icon = ({ name, className = "w-6 h-6" }) => {
       const icons = {
-        box: (
-          <React.Fragment>
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
-          </React.Fragment>
-        ),
-        fileText: (
-          <React.Fragment>
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-          </React.Fragment>
-        ),
-        plus: (
-          <React.Fragment><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></React.Fragment>
-        ),
-        edit: (
-          <React.Fragment>
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </React.Fragment>
-        ),
-        trash: (
-          <React.Fragment>
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </React.Fragment>
-        ),
-        sparkles: (
-          <React.Fragment>
-            <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
-          </React.Fragment>
-        ),
-        upload: (
-          <React.Fragment><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></React.Fragment>
-        ),
-        link: (
-          <React.Fragment>
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-          </React.Fragment>
-        )
+        box: (<React.Fragment><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></React.Fragment>),
+        fileText: (<React.Fragment><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></React.Fragment>),
+        plus: (<React.Fragment><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></React.Fragment>),
+        edit: (<React.Fragment><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></React.Fragment>),
+        trash: (<React.Fragment><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></React.Fragment>),
+        sparkles: (<React.Fragment><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></React.Fragment>),
+        upload: (<React.Fragment><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></React.Fragment>),
+        link: (<React.Fragment><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></React.Fragment>),
+        arrowLeft: (<React.Fragment><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></React.Fragment>)
       };
-      return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-          {icons[name]}
-        </svg>
-      );
+      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
     };
 
+    // ★ 設定 Worker URL (確保末尾沒有多餘斜槓)
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
     function AdminApp() {
@@ -83,12 +52,11 @@
       const [isAdmin, setIsAdmin] = useState(false);
       const [isLoading, setIsLoading] = useState(true);
       const [activeTab, setActiveTab] = useState('itineraries'); 
-      
       const [itineraries, setItineraries] = useState([]);
       const [orders, setOrders] = useState([]);
       
       const [isModalOpen, setIsModalOpen] = useState(false);
-      const [formData, setFormData] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, startDate: '', endDate: '', image: '', description: '', notes: '' });
+      const [formData, setFormData] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' });
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [aiLoading, setAiLoading] = useState(false);
 
@@ -97,11 +65,9 @@
           try {
             const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
             const configData = await configRes.json();
-            
             if (configData.success) {
               setTenant(configData.data);
               await liff.init({ liffId: configData.data.liff_id });
-              
               if (liff.isLoggedIn()) {
                 const profile = await liff.getProfile();
                 setLiffProfile(profile);
@@ -112,9 +78,7 @@
                   fetchData('itineraries');
                   fetchData('orders');
                 }
-              } else {
-                liff.login({ redirectUri: window.location.href });
-              }
+              } else { liff.login({ redirectUri: window.location.href }); }
             } else { alert("租戶不存在"); }
           } catch (e) { console.error(e); } finally { setIsLoading(false); }
         };
@@ -123,15 +87,10 @@
 
       const fetchData = async (type) => {
         try {
-          if (type === 'itineraries') {
-            const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
-            const data = await res.json();
-            setItineraries(Array.isArray(data) ? data : []);
-          } else if (type === 'orders') {
-            const res = await fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders&a=${agencySlug}`);
-            const data = await res.json();
-            if (data.success) setOrders(data.data);
-          }
+          const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}${type === 'orders' ? '&action=getAllOrders' : ''}`);
+          const data = await res.json();
+          if (type === 'itineraries') setItineraries(Array.isArray(data) ? data : []);
+          else if (type === 'orders') setOrders(data.success ? data.data : []);
         } catch (e) { console.error(e); }
       };
 
@@ -147,8 +106,7 @@
       };
 
       const handleImageChange = (val) => {
-        const converted = convertGoogleDriveUrl(val);
-        setFormData({...formData, image: converted});
+        setFormData({...formData, image: convertGoogleDriveUrl(val)});
       };
 
       const handleSaveItinerary = async (e) => {
@@ -166,8 +124,8 @@
             alert('儲存成功！');
             setIsModalOpen(false);
             fetchData('itineraries');
-          } else { alert('儲存失敗：' + result.error); }
-        } catch (err) { alert('發生錯誤'); }
+          } else { alert('儲存失敗：' + (result.error || '未知錯誤')); }
+        } catch (err) { alert('發生連線錯誤'); }
         setIsSubmitting(false);
       };
 
@@ -210,9 +168,9 @@
                 description: result.data.description,
                 notes: result.data.notes
               }));
-              alert('✨ AI 擴寫與 Unsplash/Pixabay 搜圖完成！');
-            } else { alert('AI 解析失敗'); }
-          } catch (e) { alert('連線發生錯誤'); }
+              alert('✨ AI 擴寫與 Unsplash 搜圖完成！');
+            } else { alert('AI 解析失敗：' + result.error); }
+          } catch (e) { alert('AI 連線發生錯誤'); }
           setAiLoading(false);
         };
         reader.readAsDataURL(file);
@@ -221,7 +179,7 @@
 
       const openModalWith = (tour = null) => {
         if (tour) setFormData({ ...tour });
-        else setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, startDate: '', endDate: '', image: '', description: '', notes: '' });
+        else setFormData({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '', notes: '' });
         setIsModalOpen(true);
       };
 
@@ -234,68 +192,81 @@
             <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col shadow-xl z-10 md:min-h-screen">
               <div className="p-6 bg-slate-950 flex items-center gap-3">
                 <div className="bg-indigo-500 p-2 rounded-lg"><Icon name="box" className="w-5 h-5 text-white" /></div>
-                <div><h1 className="font-black text-lg">旅遊管家</h1><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Admin Panel</p></div>
+                <div><h1 className="font-black text-lg leading-tight">旅遊管家</h1><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Admin Panel</p></div>
               </div>
               <div className="p-4 flex items-center gap-3 border-b border-slate-800">
                 <img src={liffProfile?.pictureUrl} className="w-10 h-10 rounded-full border-2 border-slate-700" />
-                <div><p className="text-xs text-slate-400">管理員</p><p className="text-sm font-bold text-indigo-300">{tenant?.name}</p></div>
+                <div className="min-w-0"><p className="text-xs text-slate-400 truncate">管理員：{liffProfile?.displayName}</p><p className="text-sm font-bold text-indigo-300 truncate">{tenant?.name}</p></div>
               </div>
               <nav className="flex-1 p-4 space-y-2">
-                <button onClick={() => setActiveTab('itineraries')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='itineraries' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="box" /> 行程管理</button>
+                <button onClick={() => setActiveTab('itineraries')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='itineraries' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="box" /> 行程管理庫</button>
                 <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab==='orders' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Icon name="fileText" /> 訂單管理</button>
                 <button onClick={() => window.location.href=`index.html?a=${agencySlug}`} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white mt-auto"><Icon name="arrowLeft" /> 返回首頁</button>
               </nav>
             </aside>
 
             <main className="flex-1 p-4 md:p-10 overflow-y-auto">
-              <div className="animate-fade-in max-w-6xl mx-auto">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                  <div><h2 className="text-3xl font-black text-slate-800">行程管理庫</h2><p className="text-slate-500 font-medium">您可以手動新增或使用 AI 辨識 DM 自動擴寫部落格文章</p></div>
-                  <button onClick={() => openModalWith()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"><Icon name="plus" /> 新增行程</button>
+              {activeTab === 'itineraries' ? (
+                <div className="animate-fade-in max-w-6xl mx-auto">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <div><h2 className="text-3xl font-black text-slate-800">行程管理庫</h2><p className="text-slate-500 font-medium mt-1">手動新增或使用 GPT-4o mini 視覺辨識擴寫文章</p></div>
+                    <button onClick={() => openModalWith()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 transition active:scale-95"><Icon name="plus" /> 新增行程</button>
+                  </div>
+                  <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
+                    <table className="w-full text-left min-w-[600px]">
+                      <thead><tr className="bg-slate-50 border-b text-slate-500 text-sm"><th className="p-4 font-bold">圖片 / 名稱</th><th className="p-4 font-bold">地區</th><th className="p-4 font-bold">售價</th><th className="p-4 font-bold text-right">操作</th></tr></thead>
+                      <tbody>
+                        {itineraries.length === 0 ? (<tr><td colSpan="4" className="p-8 text-center text-slate-400 font-bold">目前尚無行程資料</td></tr>) : itineraries.map(item => (
+                          <tr key={item.id} className="border-b hover:bg-slate-50 transition-colors">
+                            <td className="p-4 flex items-center gap-4"><img src={item.image} className="w-16 h-12 rounded-lg object-cover bg-slate-200" /><p className="font-bold text-slate-800 line-clamp-1">{item.title}</p></td>
+                            <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold">{item.region}</span></td>
+                            <td className="p-4 font-black text-red-600">${Number(item.price).toLocaleString()}</td>
+                            <td className="p-4 text-right"><button onClick={() => openModalWith(item)} className="text-indigo-600 p-2"><Icon name="edit"/></button><button onClick={() => handleDelete(item.id)} className="text-red-500 p-2"><Icon name="trash"/></button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
-                  <table className="w-full text-left min-w-[600px]">
-                    <thead><tr className="bg-slate-50 border-b text-slate-500 text-sm"><th className="p-4 font-bold">行程名稱</th><th className="p-4 font-bold">地區</th><th className="p-4 font-bold">售價</th><th className="p-4 font-bold text-right">操作</th></tr></thead>
-                    <tbody>
-                      {itineraries.length === 0 ? (<tr><td colSpan="4" className="p-8 text-center text-slate-400 font-bold">目前尚無行程</td></tr>) : itineraries.map(item => (
-                        <tr key={item.id} className="border-b hover:bg-slate-50 transition-colors">
-                          <td className="p-4 flex items-center gap-4"><img src={item.image} className="w-16 h-12 rounded-lg object-cover bg-slate-200 shadow-sm" /><p className="font-bold text-slate-800 line-clamp-1">{item.title}</p></td>
-                          <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold">{item.region}</span></td>
-                          <td className="p-4 font-black text-red-600">${Number(item.price).toLocaleString()}</td>
-                          <td className="p-4 text-right"><button onClick={() => openModalWith(item)} className="text-indigo-600 p-2"><Icon name="edit"/></button><button onClick={() => handleDelete(item.id)} className="text-red-500 p-2"><Icon name="trash"/></button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              ) : (
+                <div className="animate-fade-in max-w-6xl mx-auto">
+                  <h2 className="text-3xl font-black text-slate-800 mb-8">訂單管理</h2>
+                  <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
+                    <table className="w-full text-left min-w-[700px]">
+                      <thead><tr className="bg-slate-50 border-b text-slate-500 text-sm"><th className="p-4 font-bold">編號 / 日期</th><th className="p-4 font-bold">聯絡人</th><th className="p-4 font-bold">行程 ID</th><th className="p-4 font-bold">總額</th><th className="p-4 font-bold">狀態</th></tr></thead>
+                      <tbody>
+                        {orders.length === 0 ? (<tr><td colSpan="5" className="p-8 text-center text-slate-400 font-bold">目前尚無訂單</td></tr>) : orders.map(order => (
+                          <tr key={order.order_id} className="border-b hover:bg-slate-50 transition-colors"><td className="p-4"><p className="font-bold text-sm">{order.order_id}</p><p className="text-[10px] text-slate-400">{new Date(order.created_at).toLocaleString()}</p></td><td className="p-4"><p className="font-bold">{order.contact_name}</p><p className="text-xs text-slate-500">{order.contact_phone}</p></td><td className="p-4 text-slate-600">#{order.tour_id}</td><td className="p-4 font-black text-red-600">${Number(order.total_amount).toLocaleString()}</td><td className="p-4"><span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold">{order.order_status}</span></td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              )}
             </main>
           </div>
 
           {isModalOpen && (
             <div className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-2 sm:p-4">
               <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden animate-fade-in flex flex-col">
-                <div className="p-5 border-b flex justify-between items-center bg-white/95 backdrop-blur shrink-0">
+                <div className="p-5 border-b flex justify-between items-center shrink-0">
                   <h3 className="text-xl font-black text-slate-800">{formData.id ? '編輯行程' : '新增行程'}</h3>
                   <button onClick={() => setIsModalOpen(false)} className="text-slate-400 p-2">✕</button>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
                   {!formData.id && (
                     <div className="mb-6 p-5 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <div className="text-center sm:text-left">
-                        <p className="text-indigo-800 font-black flex items-center justify-center sm:justify-start gap-2 text-lg"><Icon name="sparkles" className="w-6 h-6 text-indigo-600"/> AI 部落格模式擴寫</p>
-                        <p className="text-indigo-600 text-xs mt-1 font-medium">選取手機相簿內的 DM 圖片，AI 將自動擴寫豐富的文章並從 Unsplash/Pixabay 搜圖</p>
-                      </div>
+                      <div><p className="text-indigo-800 font-black flex items-center gap-2 text-lg"><Icon name="sparkles" className="w-6 h-6 text-indigo-600"/> AI 部落格化擴寫模式</p><p className="text-indigo-600 text-xs mt-1 font-medium">選取手機相簿內的 DM 圖片，GPT-4o mini 將自動擴寫豐富文案並配圖</p></div>
                       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                      <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition active:scale-95">
+                      <button type="button" onClick={() => fileInputRef.current.click()} disabled={aiLoading} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition active:scale-95 shrink-0">
                         {aiLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Icon name="upload" className="w-4 h-4"/>} 
-                        {aiLoading ? 'AI 正在擴寫文案中...' : '選取 DM 檔案'}
+                        {aiLoading ? 'AI 正在擴寫文案中...' : '開始 AI 擴寫'}
                       </button>
                     </div>
                   )}
                   <form id="tourForm" onSubmit={handleSaveItinerary} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">文章標題</label><input type="text" required value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3 focus:bg-white outline-none" /></div>
+                      <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">文章標題</label><input type="text" required value={formData.title} onChange={e=>setFormData({...formData, title:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3 outline-none focus:bg-white" /></div>
                       <div><label className="block text-sm font-bold text-slate-700 mb-2">地區</label><select value={formData.region} onChange={e=>setFormData({...formData, region:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3"><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-sm font-bold text-slate-700 mb-2">天數</label><input type="number" required value={formData.days} onChange={e=>setFormData({...formData, days:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3" /></div>
@@ -303,10 +274,10 @@
                       </div>
                       <div className="md:col-span-2 p-4 bg-slate-50 rounded-2xl border border-dashed">
                         <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Icon name="link" className="w-4 h-4 text-blue-500"/> 封面圖片網址 (支援 Google Drive 分享連結)</label>
-                        <input type="url" value={formData.image} onChange={e=>handleImageChange(e.target.value)} className="w-full bg-white border rounded-xl px-4 py-3 mb-3" placeholder="https://..." />
+                        <input type="url" value={formData.image} onChange={e=>handleImageChange(e.target.value)} className="w-full bg-white border rounded-xl px-4 py-3 mb-3 text-sm" placeholder="https://..." />
                         {formData.image && <img src={formData.image} className="w-full h-48 object-cover rounded-xl shadow-sm border" onerror="this.src='https://via.placeholder.com/800x400?text=Invalid+Image+URL'"/>}
                       </div>
-                      <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">部落格文章內容 (由 AI 擴寫)</label><textarea rows="15" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3 focus:bg-white outline-none custom-scrollbar leading-relaxed" placeholder="在這裡編輯您的旅遊故事..."></textarea></div>
+                      <div className="md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-2">部落格文章內容 (由 AI 擴寫，可自由修改)</label><textarea rows="15" value={formData.description} onChange={e=>setFormData({...formData, description:e.target.value})} className="w-full bg-slate-50 border rounded-xl px-4 py-3 focus:bg-white outline-none custom-scrollbar leading-relaxed" placeholder="在這裡編輯您的旅遊故事..."></textarea></div>
                     </div>
                   </form>
                 </div>
