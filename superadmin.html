@@ -126,7 +126,10 @@
     select { background:var(--white); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:7px 12px; font-size:12px; font-weight:700; font-family:'Noto Sans TC',sans-serif; outline:none; cursor:pointer; }
     select:focus { border-color:var(--green); }
 
+    /* Tenant card color strip */
     .tstrip { height:4px; border-radius:12px 12px 0 0; }
+
+    /* Setting row */
     .srow { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--border); }
     .srow:last-child { border-bottom:none; }
 
@@ -168,17 +171,12 @@
   const ini = s => (s||'?')[0].toUpperCase();
   const actCol = t => t==='green'?'#06C755':t==='red'?'#FF3B30':t==='pending'?'#FF9500':'#007AFF';
 
-  // 靜態裝飾資料 (圖表用)
-  const MA = [
-    {time:'10:32',event:'新夥伴申請',detail:'王小明 申請加入 demo',    type:'pending'},
-    {time:'09:15',event:'審核通過',  detail:'林佳欣 已獲授權',         type:'green'},
-    {time:'08:54',event:'新行程上架',detail:'東風旅遊「東京賞楓五日」',type:'blue'},
-    {time:'昨天', event:'新租戶開通',detail:'藍波旅行 系統上線',        type:'blue'},
-    {time:'昨天', event:'申請拒絕',  detail:'某用戶 資料不符',          type:'red'},
-    {time:'2天前',event:'新行程上架',detail:'陽光旅行社 + 3 筆行程',   type:'green'},
-  ];
   const WB = [30,45,28,60,42,72,55];
+  const MA = [
+    {time:'剛剛', event:'資料更新', detail:'正在讀取最新的系統資料', type:'blue'}
+  ];
 
+  /* ── Sidebar item ── */
   function SbItem({id,label,icon,badge,active,onClick}) {
     return (
       <div className={`sb-item${active?' on':''}`} onClick={()=>onClick(id)}>
@@ -189,6 +187,7 @@
     );
   }
 
+  /* ── Stat card ── */
   function SC({label,val,change,cls,icon}) {
     return (
       <div className={`scard ${cls}`}>
@@ -200,32 +199,53 @@
     );
   }
 
+  /* ── App ── */
   function App() {
     const [page,  setPage]  = useState('dashboard');
     const [stats, setStat]  = useState({ tenants:0, distributors:0, pending:0, itineraries:0, revenue:0 });
     const [ten,   setTen]   = useState([]);
-    const [pend,  setPend]  = useState([]);
+    const [dists, setDists] = useState([]);
     const [filt,  setFilt]  = useState('all');
+    const [statusFilt, setStatusFilt] = useState('all');
     const [toast, setToast] = useState('');
 
     const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),2800); };
 
     useEffect(()=>{
       (async()=>{
-        try{ const r=await fetch(`${WORKER_URL}/api/super/stats`);    if(r.ok){const d=await r.json();if(d.success)setStat(d.data);} }catch{}
-        try{ const r=await fetch(`${WORKER_URL}/api/super/tenants`);  if(r.ok){const d=await r.json();if(d.success)setTen(d.data);}  }catch{}
-        try{ const r=await fetch(`${WORKER_URL}/api/super/pending`);  if(r.ok){const d=await r.json();if(d.success)setPend(d.data);} }catch{}
+        try{ const r=await fetch(`${WORKER_URL}/api/super/stats`);        if(r.ok){const d=await r.json();if(d.success)setStat(d.data);} }catch{}
+        try{ const r=await fetch(`${WORKER_URL}/api/super/tenants`);      if(r.ok){const d=await r.json();if(d.success)setTen(d.data);}  }catch{}
+        try{ const r=await fetch(`${WORKER_URL}/api/super/distributors`); if(r.ok){const d=await r.json();if(d.success)setDists(d.data);} }catch{}
       })();
     },[]);
 
     const approve = async (item,status) => {
-      setPend(p=>p.filter(x=>x.uid!==item.uid));
-      setStat(s=>({...s,pending:s.pending-1,distributors:status==='active'?s.distributors+1:s.distributors}));
-      showToast(status==='active'?`✅ 已核准 ${item.name}`:`🚫 已拒絕 ${item.name}`);
+      setDists(p => p.map(x => x.uid === item.uid ? { ...x, status } : x));
+      
+      setStat(s => {
+        let pCount = s.pending;
+        let dCount = s.distributors;
+        if (item.status === 'pending' && status === 'active') { pCount--; dCount++; }
+        else if (item.status === 'pending' && status === 'rejected') { pCount--; }
+        else if (item.status === 'active' && status === 'rejected') { dCount--; }
+        else if (item.status === 'rejected' && status === 'active') { dCount++; }
+        return { ...s, pending: pCount, distributors: dCount };
+      });
+
+      showToast(status === 'active' ? `✅ 已核准 ${item.name}` : `🚫 已變更 ${item.name} 的狀態`);
       try{ await fetch(`${WORKER_URL}/api/super/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:item.uid,status})}); }catch{}
     };
 
-    const fp = filt==='all' ? pend : pend.filter(p=>p.agency===filt);
+    const pendingDists = dists.filter(d => d.status === 'pending');
+    let fd = dists;
+    if(filt !== 'all') fd = fd.filter(d => d.agency === filt);
+    if(statusFilt !== 'all') fd = fd.filter(d => d.status === statusFilt);
+
+    const StatusBadge = ({status}) => {
+      if (status === 'active') return <span className="badge bg">✅ 已核准</span>;
+      if (status === 'pending') return <span className="badge ba">⏳ 待審核</span>;
+      return <span className="badge br">🚫 已拒絕/停權</span>;
+    };
 
     return (
       <>
@@ -248,9 +268,9 @@
           </div>
 
           <div className="sb-section">主選單</div>
-          <SbItem id="dashboard" label="儀表板"    icon={I.grid}  active={page==='dashboard'} onClick={setPage}/>
-          <SbItem id="pending"   label="待審核申請" icon={I.bell}  badge={pend.length} active={page==='pending'}   onClick={setPage}/>
-          <SbItem id="tenants"   label="旅行社管理" icon={I.bldg}  active={page==='tenants'}   onClick={setPage}/>
+          <SbItem id="dashboard"    label="系統儀表板" icon={I.grid}  active={page==='dashboard'}    onClick={setPage}/>
+          <SbItem id="distributors" label="合作夥伴名單" icon={I.users} badge={pendingDists.length} active={page==='distributors'} onClick={setPage}/>
+          <SbItem id="tenants"      label="旅行社管理" icon={I.bldg}  active={page==='tenants'}      onClick={setPage}/>
 
           <div className="sb-section" style={{marginTop:4}}>系統</div>
           <SbItem id="settings"  label="系統設定"   icon={I.gear}  active={page==='settings'}  onClick={setPage}/>
@@ -276,44 +296,44 @@
               </div>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn btn-ghost" onClick={()=>window.location.reload()}><Ic d={I.reload} size={13}/> 重新整理</button>
-                <button className="btn btn-primary" onClick={()=>setPage('pending')}>
+                <button className="btn btn-primary" onClick={()=>setPage('distributors')}>
                   <Ic d={I.bell} size={13}/> 待審核
-                  {pend.length>0 && <span style={{background:'rgba(0,0,0,.18)',borderRadius:999,padding:'1px 7px',fontSize:11}}>{pend.length}</span>}
+                  {pendingDists.length>0 && <span style={{background:'rgba(0,0,0,.18)',borderRadius:999,padding:'1px 7px',fontSize:11}}>{pendingDists.length}</span>}
                 </button>
               </div>
             </div>
             <div className="content">
               {/* Stat cards */}
               <div className="stat-grid a0">
-                <SC label="旅行社總數"  val={fmt(stats.tenants)}      cls="g" icon={I.bldg}/>
+                <SC label="旅行社總數"    val={fmt(stats.tenants)}      cls="g" icon={I.bldg}/>
                 <SC label="授權合作夥伴"  val={fmt(stats.distributors)} cls="g" icon={I.users}/>
-                <SC label="待審核申請"  val={fmt(stats.pending)}      cls="a" icon={I.bell}/>
-                <SC label="上架行程數"  val={fmt(stats.itineraries)}  cls="b" icon={I.map}/>
-                <SC label="預估月營收"  val={`$${Math.round(stats.revenue/10000)}萬`} cls="p" icon={I.trend}/>
+                <SC label="待審核申請"    val={fmt(stats.pending)}      cls="a" icon={I.bell}/>
+                <SC label="上架行程數"    val={fmt(stats.itineraries)}  cls="b" icon={I.map}/>
+                <SC label="預估月營收"    val={`$${Math.round(stats.revenue/10000)}萬`} cls="p" icon={I.trend}/>
               </div>
 
               <div style={{display:'grid',gridTemplateColumns:'1fr 348px',gap:16}}>
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
                   {/* Pending quick */}
-                  {pend.length>0 && (
+                  {pendingDists.length>0 && (
                     <div className="card a1">
                       <div className="card-head">
                         <div style={{display:'flex',alignItems:'center',gap:8}}>
                           <div style={{width:8,height:8,borderRadius:'50%',background:'#FF9500'}}/>
                           <span className="card-title">最新待審核申請</span>
-                          <span className="badge ba">{pend.length} 件</span>
+                          <span className="badge ba">{pendingDists.length} 件</span>
                         </div>
-                        <button className="btn btn-ol" style={{fontSize:11}} onClick={()=>setPage('pending')}>全部查看 →</button>
+                        <button className="btn btn-ol" style={{fontSize:11}} onClick={()=>setPage('distributors')}>全部查看 →</button>
                       </div>
                       <table className="tbl">
                         <thead><tr><th>申請人</th><th>電話</th><th>所屬旅行社</th><th>時間</th><th style={{textAlign:'right'}}>操作</th></tr></thead>
                         <tbody>
-                          {pend.slice(0,4).map(d=>(
+                          {pendingDists.slice(0,4).map(d=>(
                             <tr key={d.uid}>
                               <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="ava">{ini(d.name)}</div><div><div style={{fontWeight:700}}>{d.name}</div><div style={{fontSize:11,color:'#aaa'}}>{d.company_name||'個人'}</div></div></div></td>
                               <td style={{fontSize:12,color:'#555',fontFamily:'monospace'}}>{d.phone}</td>
-                              <td><span className="badge bg">{d.agency}</span></td>
+                              <td><span className="badge bx">{d.agency}</span></td>
                               <td style={{fontSize:12,color:'#aaa'}}>{ago(d.join_date)}</td>
                               <td style={{textAlign:'right'}}><div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
                                 <button className="btn btn-ok" onClick={()=>approve(d,'active')}><Ic d={I.check} size={12}/> 核准</button>
@@ -354,7 +374,7 @@
 
                 {/* Right column */}
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  {/* Bar chart (保留作為裝飾用UI) */}
+                  {/* Bar chart (裝飾) */}
                   <div className="card a3">
                     <div className="card-head">
                       <span className="card-title">本週活動趨勢</span>
@@ -370,7 +390,7 @@
                     </div>
                   </div>
 
-                  {/* Activity (保留作為裝飾用UI) */}
+                  {/* Activity (裝飾) */}
                   <div className="card a4" style={{flex:1}}>
                     <div className="card-head"><span className="card-title">最新動態</span></div>
                     <div className="card-body" style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -393,38 +413,42 @@
             </div>
           </>}
 
-          {/* ══ PENDING ══ */}
-          {page==='pending' && <>
+          {/* ══ DISTRIBUTORS (ALL PARTNERS) ══ */}
+          {page==='distributors' && <>
             <div className="topbar">
-              <div><div className="tb-title">合作夥伴審核</div><div className="tb-sub">共 {fp.length} 件待審申請</div></div>
-              <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <span style={{fontSize:12,color:'#717171'}}>篩選：</span>
-                <select value={filt} onChange={e=>setFilt(e.target.value)}>
-                  <option value="all">全部旅行社</option>
-                  {ten.map(t=><option key={t.slug} value={t.slug}>{t.name}</option>)}
-                </select>
+              <div><div className="tb-title">合作夥伴管理</div><div className="tb-sub">共 {fd.length} 筆資料</div></div>
+              <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <span style={{fontSize:12,color:'#717171'}}>狀態：</span>
+                  <select value={statusFilt} onChange={e=>setStatusFilt(e.target.value)}>
+                    <option value="all">全部狀態</option>
+                    <option value="pending">待審核</option>
+                    <option value="active">已核准</option>
+                    <option value="rejected">已停權 / 拒絕</option>
+                  </select>
+                </div>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <span style={{fontSize:12,color:'#717171'}}>旅行社：</span>
+                  <select value={filt} onChange={e=>setFilt(e.target.value)}>
+                    <option value="all">全部旅行社</option>
+                    {ten.map(t=><option key={t.slug} value={t.slug}>{t.name}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="content">
-              {fp.length===0 ? (
+              {fd.length===0 ? (
                 <div className="card"><div style={{textAlign:'center',padding:'56px 0'}}>
-                  <div style={{fontSize:52,marginBottom:12}}>🎉</div>
-                  <div style={{fontSize:16,fontWeight:700,marginBottom:6}}>沒有待審核申請</div>
-                  <div style={{fontSize:13,color:'#717171'}}>目前所有申請皆已處理完畢</div>
+                  <div style={{fontSize:52,marginBottom:12}}>📭</div>
+                  <div style={{fontSize:16,fontWeight:700,marginBottom:6}}>查無資料</div>
+                  <div style={{fontSize:13,color:'#717171'}}>目前沒有符合條件的合作夥伴名單</div>
                 </div></div>
               ) : (
                 <div className="card a0">
-                  <div className="card-head">
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <div style={{width:8,height:8,borderRadius:'50%',background:'#FF9500'}}/>
-                      <span className="card-title">待審核列表</span>
-                      <span className="badge ba">{fp.length} 件</span>
-                    </div>
-                  </div>
                   <table className="tbl">
-                    <thead><tr><th>申請人</th><th>聯絡電話</th><th>公司 / 品牌</th><th>所屬旅行社</th><th>推薦人</th><th>申請時間</th><th style={{textAlign:'right'}}>操作</th></tr></thead>
+                    <thead><tr><th>合作夥伴</th><th>聯絡電話</th><th>公司 / 品牌</th><th>所屬旅行社</th><th>推薦人</th><th>狀態</th><th>申請時間</th><th style={{textAlign:'right'}}>操作</th></tr></thead>
                     <tbody>
-                      {fp.map((d,i)=>(
+                      {fd.map((d,i)=>(
                         <tr key={d.uid} style={{animation:`fadeUp .3s ${i*.04}s both`}}>
                           <td><div style={{display:'flex',alignItems:'center',gap:10}}>
                             <div className="ava">{ini(d.name)}</div>
@@ -432,14 +456,25 @@
                           </div></td>
                           <td style={{fontSize:12,color:'#444',fontFamily:'monospace'}}>{d.phone}</td>
                           <td style={{fontSize:13,color:d.company_name?'#333':'#C0C0C0'}}>{d.company_name||'—'}</td>
-                          <td><span className="badge bg">{d.agency}</span></td>
+                          <td><span className="badge bx">{d.agency}</span></td>
                           <td style={{fontSize:11,fontFamily:'monospace'}}>
                             {d.referred_by ? <span style={{color:'#AF52DE'}} title={d.referred_by}>{d.referred_by.slice(0,8)}…</span> : <span style={{color:'#C0C0C0'}}>直接申請</span>}
                           </td>
+                          <td><StatusBadge status={d.status} /></td>
                           <td style={{fontSize:12,color:'#aaa'}}>{ago(d.join_date)}</td>
                           <td style={{textAlign:'right'}}><div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
-                            <button className="btn btn-ok" onClick={()=>approve(d,'active')}><Ic d={I.check} size={12}/> 核准</button>
-                            <button className="btn btn-no" onClick={()=>approve(d,'rejected')}><Ic d={I.xmark} size={12}/> 拒絕</button>
+                            {d.status === 'pending' && (
+                              <>
+                                <button className="btn btn-ok" onClick={()=>approve(d,'active')}><Ic d={I.check} size={12}/> 核准</button>
+                                <button className="btn btn-no" onClick={()=>approve(d,'rejected')}><Ic d={I.xmark} size={12}/> 拒絕</button>
+                              </>
+                            )}
+                            {d.status === 'active' && (
+                                <button className="btn btn-no" onClick={()=>approve(d,'rejected')}>停權</button>
+                            )}
+                            {d.status === 'rejected' && (
+                                <button className="btn btn-ok" onClick={()=>approve(d,'active')}>恢復核准</button>
+                            )}
                           </div></td>
                         </tr>
                       ))}
