@@ -182,13 +182,13 @@
     {slug:'bluewave',  name:'藍波旅行',        distributors:0, itineraries:0, status:'pending',created_at:'2024-06-18'},
   ];
   const MP = [
-    {id:1,name:'王小明',phone:'0912-111-111',company_name:'自由業',  agency:'demo',     created_at:'2024-06-20',ref_uid:''},
-    {id:2,name:'李美華',phone:'0933-222-333',company_name:'環島旅遊',agency:'sunshine', created_at:'2024-06-19',ref_uid:'Uf123abc'},
-    {id:3,name:'陳大偉',phone:'0966-444-555',company_name:'',        agency:'eastwind', created_at:'2024-06-18',ref_uid:''},
-    {id:4,name:'林佳欣',phone:'0988-666-777',company_name:'景程企業',agency:'demo',     created_at:'2024-06-17',ref_uid:'Uf456def'},
-    {id:5,name:'張志遠',phone:'0911-888-999',company_name:'',        agency:'globetrek',created_at:'2024-06-16',ref_uid:''},
-    {id:6,name:'吳雅玲',phone:'0955-123-456',company_name:'玲瓏旅行',agency:'sunshine', created_at:'2024-06-15',ref_uid:''},
-    {id:7,name:'蔡宗翰',phone:'0977-654-321',company_name:'',        agency:'demo',     created_at:'2024-06-14',ref_uid:'Uf789ghi'},
+    {uid:'Ua1',name:'王小明',phone:'0912-111-111',company_name:'自由業',  agency:'demo',     created_at:'2024-06-20',ref_uid:''},
+    {uid:'Ub2',name:'李美華',phone:'0933-222-333',company_name:'環島旅遊',agency:'sunshine', created_at:'2024-06-19',ref_uid:'Uf123abc'},
+    {uid:'Uc3',name:'陳大偉',phone:'0966-444-555',company_name:'',        agency:'eastwind', created_at:'2024-06-18',ref_uid:''},
+    {uid:'Ud4',name:'林佳欣',phone:'0988-666-777',company_name:'景程企業',agency:'demo',     created_at:'2024-06-17',ref_uid:'Uf456def'},
+    {uid:'Ue5',name:'張志遠',phone:'0911-888-999',company_name:'',        agency:'globetrek',created_at:'2024-06-16',ref_uid:''},
+    {uid:'Uf6',name:'吳雅玲',phone:'0955-123-456',company_name:'玲瓏旅行',agency:'sunshine', created_at:'2024-06-15',ref_uid:''},
+    {uid:'Ug7',name:'蔡宗翰',phone:'0977-654-321',company_name:'',        agency:'demo',     created_at:'2024-06-14',ref_uid:'Uf789ghi'},
   ];
   const MA = [
     {time:'10:32',event:'新夥伴申請',detail:'王小明 申請加入 demo',    type:'pending'},
@@ -243,10 +243,10 @@
     },[]);
 
     const approve = async (item,status) => {
-      setPend(p=>p.filter(x=>x.id!==item.id));
+      setPend(p=>p.filter(x=>x.uid!==item.uid));
       setStat(s=>({...s,pending:s.pending-1,distributors:status==='active'?s.distributors+1:s.distributors}));
       showToast(status==='active'?`✅ 已核准 ${item.name}`:`🚫 已拒絕 ${item.name}`);
-      try{ await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${item.agency}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:item.id,status})}); }catch{}
+      try{ await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${item.agency}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:item.uid,status})}); }catch{}
     };
 
     const fp = filt==='all' ? pend : pend.filter(p=>p.agency===filt);
@@ -335,7 +335,7 @@
                         <thead><tr><th>申請人</th><th>電話</th><th>所屬旅行社</th><th>時間</th><th style={{textAlign:'right'}}>操作</th></tr></thead>
                         <tbody>
                           {pend.slice(0,4).map(d=>(
-                            <tr key={d.id}>
+                            <tr key={d.uid}>
                               <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="ava">{ini(d.name)}</div><div><div style={{fontWeight:700}}>{d.name}</div><div style={{fontSize:11,color:'#aaa'}}>{d.company_name||'個人'}</div></div></div></td>
                               <td style={{fontSize:12,color:'#555',fontFamily:'monospace'}}>{d.phone}</td>
                               <td><span className="badge bg">{d.agency}</span></td>
@@ -450,10 +450,10 @@
                     <thead><tr><th>申請人</th><th>聯絡電話</th><th>公司 / 品牌</th><th>所屬旅行社</th><th>推薦人</th><th>申請時間</th><th style={{textAlign:'right'}}>操作</th></tr></thead>
                     <tbody>
                       {fp.map((d,i)=>(
-                        <tr key={d.id} style={{animation:`fadeUp .3s ${i*.04}s both`}}>
+                        <tr key={d.uid} style={{animation:`fadeUp .3s ${i*.04}s both`}}>
                           <td><div style={{display:'flex',alignItems:'center',gap:10}}>
                             <div className="ava">{ini(d.name)}</div>
-                            <div><div style={{fontWeight:700,fontSize:13}}>{d.name}</div><div style={{fontSize:10,color:'#C0C0C0',fontFamily:'monospace'}}>#{d.id}</div></div>
+                            <div><div style={{fontWeight:700,fontSize:13}}>{d.name}</div><div style={{fontSize:10,color:'#C0C0C0',fontFamily:'monospace'}}>#{d.uid}</div></div>
                           </div></td>
                           <td style={{fontSize:12,color:'#444',fontFamily:'monospace'}}>{d.phone}</td>
                           <td style={{fontSize:13,color:d.company_name?'#333':'#C0C0C0'}}>{d.company_name||'—'}</td>
