@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>經銷商申請 | 旅遊管家</title>
+  <title>合作夥伴申請 | 旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -94,13 +94,13 @@
                   color:'rgba(255,255,255,.9)',fontSize:10,fontWeight:900,
                   letterSpacing:'0.15em',textTransform:'uppercase',
                   padding:'5px 14px',borderRadius:999,marginBottom:14}}>
-                  經銷夥伴計畫
+                  合作夥伴計畫
                 </span>
                 <h1 style={{color:'#fff',fontSize:26,fontWeight:900,margin:0,lineHeight:1.3}}>
                   {tenant?.name || '旅遊管家'}
                 </h1>
                 <p style={{color:'rgba(255,255,255,.75)',fontSize:13,fontWeight:600,marginTop:6}}>
-                  Distributor Partner Program
+                  Partner Program
                 </p>
               </div>
             </div>
@@ -119,11 +119,11 @@
       const refUid     = p.get('r') || '';
 
       // step: loading | form | submitting | success | pending | already | error
-      const [step,    setStep]   = useState('loading');
-      const [tenant,  setTenant] = useState(null);
-      const [profile, setProf]   = useState(null);
-      const [form,    setForm]   = useState({ name:'', phone:'', company_name:'' });
-      const [errMsg,  setErr]    = useState('');
+      const [step,     setStep]   = useState('loading');
+      const [tenant,   setTenant] = useState(null);
+      const [profile,  setProf]   = useState(null);
+      const [form,     setForm]   = useState({ name:'', phone:'', company_name:'' });
+      const [errMsg,   setErr]    = useState('');
 
       useEffect(() => {
         (async () => {
@@ -212,11 +212,11 @@
               boxShadow:'0 8px 24px rgba(16,185,129,.15)'}}>
               <CheckIcon />
             </div>
-            <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>您已是授權經銷商 ✅</h2>
+            <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>您已是授權合作夥伴 ✅</h2>
             <p style={{color:'#64748b',fontWeight:600,marginBottom:28,lineHeight:1.7}}>
               您的帳號已通過核准。<br/>請前往業務後台開始推廣行程。
             </p>
-            <a href={`login.html?a=${agencySlug}`}
+            <a href={`index.html?a=${agencySlug}&tab=dist`}
               style={{display:'inline-block',background:'linear-gradient(135deg,#10b981,#059669)',
                 color:'#fff',padding:'16px 36px',borderRadius:14,fontWeight:900,fontSize:15,
                 textDecoration:'none',boxShadow:'0 10px 24px rgba(16,185,129,.25)'}}>
@@ -250,7 +250,7 @@
             </div>
             <h2 style={{fontSize:26,fontWeight:900,color:'#0f172a',marginBottom:10}}>申請已送出！🎉</h2>
             <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8}}>
-              感謝您申請成為經銷夥伴。<br/>
+              感謝您申請成為合作夥伴。<br/>
               審核通過後，您即可登入業務系統開始推廣。
             </p>
           </div>
@@ -272,7 +272,7 @@
                   <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
                 </svg>
               </div>
-              <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:6}}>申請成為經銷夥伴</h2>
+              <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:6}}>申請成為合作夥伴</h2>
               <p style={{color:'#64748b',fontWeight:600,fontSize:13,lineHeight:1.7}}>
                 填寫以下資料，提交後由後台審核。<br/>
                 通過即可獲得專屬推廣連結與分潤機制。
