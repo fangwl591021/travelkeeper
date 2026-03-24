@@ -191,7 +191,7 @@
     {id:7,name:'蔡宗翰',phone:'0977-654-321',company_name:'',        agency:'demo',     created_at:'2024-06-14',ref_uid:'Uf789ghi'},
   ];
   const MA = [
-    {time:'10:32',event:'新經銷申請',detail:'王小明 申請加入 demo',    type:'pending'},
+    {time:'10:32',event:'新夥伴申請',detail:'王小明 申請加入 demo',    type:'pending'},
     {time:'09:15',event:'審核通過',  detail:'林佳欣 已獲授權',         type:'green'},
     {time:'08:54',event:'新行程上架',detail:'東風旅遊「東京賞楓五日」',type:'blue'},
     {time:'昨天', event:'新租戶開通',detail:'藍波旅行 系統上線',        type:'blue'},
@@ -311,7 +311,7 @@
               {/* Stat cards */}
               <div className="stat-grid a0">
                 <SC label="旅行社總數"  val={fmt(stats.tenants)}      cls="g" icon={I.bldg}  change="↑ 本月新增 2"/>
-                <SC label="授權經銷商"  val={fmt(stats.distributors)} cls="g" icon={I.users}  change="↑ 本週 +12"/>
+                <SC label="授權合作夥伴"  val={fmt(stats.distributors)} cls="g" icon={I.users}  change="↑ 本週 +12"/>
                 <SC label="待審核申請"  val={fmt(stats.pending)}      cls="a" icon={I.bell}/>
                 <SC label="上架行程數"  val={fmt(stats.itineraries)}  cls="b" icon={I.map}    change="↑ 本月 +8"/>
                 <SC label="預估月營收"  val={`$${Math.round(stats.revenue/10000)}萬`} cls="p" icon={I.trend} change="↑ 18%"/>
@@ -358,7 +358,7 @@
                       <button className="btn btn-ghost" style={{fontSize:11}} onClick={()=>setPage('tenants')}>查看全部 →</button>
                     </div>
                     <table className="tbl">
-                      <thead><tr><th>旅行社</th><th>經銷商</th><th>行程</th><th>狀態</th><th>建立日期</th></tr></thead>
+                      <thead><tr><th>旅行社</th><th>合作夥伴</th><th>行程</th><th>狀態</th><th>建立日期</th></tr></thead>
                       <tbody>
                         {ten.map(t=>(
                           <tr key={t.slug}>
@@ -421,7 +421,7 @@
           {/* ══ PENDING ══ */}
           {page==='pending' && <>
             <div className="topbar">
-              <div><div className="tb-title">經銷商審核</div><div className="tb-sub">共 {fp.length} 件待審申請</div></div>
+              <div><div className="tb-title">合作夥伴審核</div><div className="tb-sub">共 {fp.length} 件待審申請</div></div>
               <div style={{display:'flex',gap:8,alignItems:'center'}}>
                 <span style={{fontSize:12,color:'#717171'}}>篩選：</span>
                 <select value={filt} onChange={e=>setFilt(e.target.value)}>
@@ -494,7 +494,7 @@
                       <div style={{fontWeight:900,fontSize:15,marginBottom:2}}>{t.name}</div>
                       <div style={{fontSize:11,color:'#B0B0B0',fontFamily:'monospace',marginBottom:16}}>{t.slug}</div>
                       <div style={{display:'flex',borderTop:'1px solid #F0F0F0',paddingTop:14,gap:0}}>
-                        <div style={{flex:1}}><div style={{fontSize:10,color:'#B0B0B0',marginBottom:4}}>經銷商</div><div style={{fontWeight:900,fontSize:22,color:'#06C755'}}>{t.distributors}</div></div>
+                        <div style={{flex:1}}><div style={{fontSize:10,color:'#B0B0B0',marginBottom:4}}>合作夥伴</div><div style={{fontWeight:900,fontSize:22,color:'#06C755'}}>{t.distributors}</div></div>
                         <div style={{flex:1}}><div style={{fontSize:10,color:'#B0B0B0',marginBottom:4}}>行程</div><div style={{fontWeight:900,fontSize:22,color:'#007AFF'}}>{t.itineraries}</div></div>
                         <div style={{alignSelf:'flex-end'}}>
                           <button className="btn btn-ol" style={{fontSize:11}}><Ic d={I.eye} size={12}/> 進入後台</button>
