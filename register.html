@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>合作夥伴申請 | 旅遊管家</title>
+  <title>特約分銷夥伴申請 | 旅遊管家 B2B</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -94,13 +94,13 @@
                   color:'rgba(255,255,255,.9)',fontSize:10,fontWeight:900,
                   letterSpacing:'0.15em',textTransform:'uppercase',
                   padding:'5px 14px',borderRadius:999,marginBottom:14}}>
-                  合作夥伴計畫
+                  分銷夥伴計畫
                 </span>
                 <h1 style={{color:'#fff',fontSize:26,fontWeight:900,margin:0,lineHeight:1.3}}>
                   {tenant?.name || '旅遊管家'}
                 </h1>
                 <p style={{color:'rgba(255,255,255,.75)',fontSize:13,fontWeight:600,marginTop:6}}>
-                  Partner Program
+                  B2B Distribution Program
                 </p>
               </div>
             </div>
@@ -118,7 +118,6 @@
       const agencySlug = p.get('a') || 'demo';
       const refUid     = p.get('r') || '';
 
-      // step: loading | form | submitting | success | pending | already | error
       const [step,     setStep]   = useState('loading');
       const [tenant,   setTenant] = useState(null);
       const [profile,  setProf]   = useState(null);
@@ -128,25 +127,21 @@
       useEffect(() => {
         (async () => {
           try {
-            // 1. 抓旅行社設定 (包含 liff_id)
             const cfgRes  = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
             const cfgData = await cfgRes.json();
             if (!cfgData.success) { setStep('error'); return; }
             setTenant(cfgData.data);
 
-            // 2. LIFF 初始化 & 登入
             await liff.init({ liffId: cfgData.data.liff_id });
             if (!liff.isLoggedIn()) {
               liff.login({ redirectUri: window.location.href });
               return;
             }
 
-            // 3. 取得 LINE 用戶資料
             const prof = await liff.getProfile();
             setProf(prof);
             setForm(f => ({ ...f, name: prof.displayName }));
 
-            // 4. 確認是否已申請過
             const stRes  = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${prof.userId}&a=${agencySlug}`);
             const stData = await stRes.json();
             if (stData.success) {
@@ -154,7 +149,6 @@
               if (role === 'distributor') {
                 if (distributorData?.status === 'active')  { setStep('already');  return; }
                 if (distributorData?.status === 'pending') { setStep('pending');  return; }
-                // rejected → 允許重新申請，直接顯示表單
               }
             }
             setStep('form');
@@ -184,15 +178,13 @@
         }
       };
 
-      /* ── Loading ── */
       if (step === 'loading') return (
         <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}>
           <div className="spin" style={{width:44,height:44,border:'4px solid #e2e8f0',borderTopColor:'#10b981',borderRadius:'50%'}}/>
-          <p style={{color:'#94a3b8',fontWeight:700,fontFamily:'Noto Sans TC,sans-serif'}}>身份驗證中…</p>
+          <p style={{color:'#94a3b8',fontWeight:700,fontFamily:'Noto Sans TC,sans-serif'}}>身分驗證中…</p>
         </div>
       );
 
-      /* ── Error ── */
       if (step === 'error') return (
         <Shell tenant={null}>
           <div style={{textAlign:'center',padding:'40px 0'}}>
@@ -203,7 +195,6 @@
         </Shell>
       );
 
-      /* ── Already active ── */
       if (step === 'already') return (
         <Shell tenant={tenant}>
           <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
@@ -212,34 +203,32 @@
               boxShadow:'0 8px 24px rgba(16,185,129,.15)'}}>
               <CheckIcon />
             </div>
-            <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>您已是授權合作夥伴 ✅</h2>
+            <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>您已是授權分銷商 ✅</h2>
             <p style={{color:'#64748b',fontWeight:600,marginBottom:28,lineHeight:1.7}}>
-              您的帳號已通過核准。<br/>請前往業務後台開始推廣行程。
+              您的帳號已通過總部核准。<br/>請前往分銷商業務後台開始推廣行程。
             </p>
             <a href={`index.html?a=${agencySlug}&tab=dist`}
               style={{display:'inline-block',background:'linear-gradient(135deg,#10b981,#059669)',
                 color:'#fff',padding:'16px 36px',borderRadius:14,fontWeight:900,fontSize:15,
                 textDecoration:'none',boxShadow:'0 10px 24px rgba(16,185,129,.25)'}}>
-              前往業務後台 →
+              前往分銷專區 →
             </a>
           </div>
         </Shell>
       );
 
-      /* ── Pending ── */
       if (step === 'pending') return (
         <Shell tenant={tenant}>
           <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
             <div style={{fontSize:72,marginBottom:20}}>⏳</div>
             <h2 style={{fontSize:24,fontWeight:900,color:'#0f172a',marginBottom:8}}>申請審核中</h2>
             <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8}}>
-              總部正在核對您的資料。<br/>審核通過後會透過 LINE 通知您，請耐心等候。
+              總部正在核對您的分銷資格。<br/>審核通過後會開通推廣權限，請耐心等候。
             </p>
           </div>
         </Shell>
       );
 
-      /* ── Success ── */
       if (step === 'success') return (
         <Shell tenant={tenant}>
           <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
@@ -250,20 +239,17 @@
             </div>
             <h2 style={{fontSize:26,fontWeight:900,color:'#0f172a',marginBottom:10}}>申請已送出！🎉</h2>
             <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8}}>
-              感謝您申請成為合作夥伴。<br/>
-              審核通過後，您即可登入業務系統開始推廣。
+              感謝您申請成為我們的分銷夥伴。<br/>
+              審核通過後，您即可登入業務系統獲取推廣連結。
             </p>
           </div>
         </Shell>
       );
 
-      /* ── Form (+ submitting) ── */
       const isSubmitting = step === 'submitting';
       return (
         <Shell tenant={tenant}>
           <form onSubmit={handleSubmit} className="fade-up">
-
-            {/* 說明 */}
             <div style={{textAlign:'center',marginBottom:28}}>
               <div style={{width:64,height:64,background:'#ecfdf5',borderRadius:18,
                 display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',
@@ -272,23 +258,22 @@
                   <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
                 </svg>
               </div>
-              <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:6}}>申請成為合作夥伴</h2>
+              <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:6}}>特約分銷夥伴申請</h2>
               <p style={{color:'#64748b',fontWeight:600,fontSize:13,lineHeight:1.7}}>
-                填寫以下資料，提交後由後台審核。<br/>
-                通過即可獲得專屬推廣連結與分潤機制。
+                此為同業與個人業務專屬之 B2B 分銷計畫。<br/>
+                審核通過後，將獲得專屬推廣資源與分潤資格。
               </p>
             </div>
 
             <hr style={{border:'none',borderTop:'1.5px solid #f1f5f9',margin:'0 0 26px'}}/>
 
-            {/* LINE 帳號區塊 */}
             {profile && (
               <div style={{display:'flex',alignItems:'center',gap:14,background:'#f8fafc',
                 borderRadius:14,padding:'12px 16px',marginBottom:26,border:'2px solid #f1f5f9'}}>
                 <img src={profile.pictureUrl} style={{width:44,height:44,borderRadius:'50%',border:'2px solid #e2e8f0'}}/>
                 <div>
                   <p style={{fontSize:10,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',
-                    letterSpacing:'0.12em',marginBottom:2}}>LINE 帳號</p>
+                    letterSpacing:'0.12em',marginBottom:2}}>LINE 帳號綁定</p>
                   <p style={{fontWeight:900,color:'#0f172a',fontSize:15}}>{profile.displayName}</p>
                 </div>
                 <div style={{marginLeft:'auto',background:'#dcfce7',color:'#16a34a',
@@ -298,39 +283,36 @@
               </div>
             )}
 
-            {/* 表單欄位 */}
-            <Field label="真實姓名" hint="將用於合約與發票">
+            <Field label="真實姓名" hint="將用於佣金發放與實名認證">
               <input required style={baseInput} value={form.name}
                 onChange={e => setForm({...form, name:e.target.value})}
-                placeholder="請輸入真實姓名"
+                placeholder="請輸入您的真實姓名"
                 onFocus={focusOn} onBlur={focusOff}/>
             </Field>
 
-            <Field label="聯絡電話" hint="用於後台聯繫，不對外公開">
+            <Field label="聯絡電話" hint="總部審核或聯繫時使用">
               <input required type="tel" style={baseInput} value={form.phone}
                 onChange={e => setForm({...form, phone:e.target.value})}
-                placeholder="0912-345-678"
+                placeholder="例如：0912-345-678"
                 onFocus={focusOn} onBlur={focusOff}/>
             </Field>
 
-            <Field label="公司 / 門市 / 品牌名稱" hint="個人業務請填本名即可，非必填">
+            <Field label="同業/品牌名稱" hint="若為乙種旅行社或工作室請填寫；個人業務請填無">
               <input style={baseInput} value={form.company_name}
                 onChange={e => setForm({...form, company_name:e.target.value})}
-                placeholder="非必填"
+                placeholder="例如：陽光旅行社 / 自由接案"
                 onFocus={focusOn} onBlur={focusOff}/>
             </Field>
 
-            {/* 推薦人 */}
             {refUid && (
               <div style={{background:'#f0fdf4',border:'2px solid #bbf7d0',borderRadius:14,
                 padding:'12px 18px',marginBottom:22}}>
                 <p style={{fontSize:10,fontWeight:900,color:'#16a34a',textTransform:'uppercase',
-                  letterSpacing:'0.12em',marginBottom:4}}>✅ 已綁定推薦人</p>
+                  letterSpacing:'0.12em',marginBottom:4}}>🎯 已綁定上線推薦人</p>
                 <p style={{fontFamily:'monospace',fontSize:11,fontWeight:700,color:'#15803d',wordBreak:'break-all'}}>{refUid}</p>
               </div>
             )}
 
-            {/* 錯誤訊息 */}
             {errMsg && (
               <div style={{background:'#fef2f2',border:'2px solid #fecaca',borderRadius:14,
                 padding:'12px 18px',marginBottom:18,color:'#dc2626',fontSize:13,fontWeight:700}}>
@@ -338,7 +320,6 @@
               </div>
             )}
 
-            {/* 送出按鈕 */}
             <button type="submit" disabled={isSubmitting} style={{
               width:'100%', border:'none',
               background: isSubmitting ? '#94a3b8' : 'linear-gradient(135deg,#10b981,#059669)',
@@ -350,13 +331,13 @@
               display:'flex', alignItems:'center', justifyContent:'center', gap:10
             }}>
               {isSubmitting
-                ? <><div className="spin" style={{width:20,height:20,border:'3px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>提交中…</>
-                : '送出審核申請 →'
+                ? <><div className="spin" style={{width:20,height:20,border:'3px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>資料送出中…</>
+                : '送出分銷審核申請 →'
               }
             </button>
 
             <p style={{textAlign:'center',color:'#cbd5e1',fontSize:11,fontWeight:600,marginTop:14}}>
-              提交即代表同意成為本平台之合作夥伴
+              提交即代表同意總部之分銷規範與條款
             </p>
           </form>
         </Shell>
