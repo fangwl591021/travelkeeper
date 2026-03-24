@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - SaaS 平台級系統 (v4.1)</title>
+  <title>旅遊管家 - 智能業務系統 (v4.1 旗艦版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -29,9 +29,8 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback } = React;
 
-    // --- Lucide Icons Mock (使用 SVG 替代) ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
@@ -58,7 +57,10 @@
     const ArrowUp = ({ className }) => <IconWrapper className={className}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></IconWrapper>;
     const ClipboardList = ({ className }) => <IconWrapper className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
     const CopyIcon = ({ className }) => <IconWrapper className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
-    const BuildingIcon = () => <IconWrapper className="w-8 h-8 text-purple-600"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></IconWrapper>;
+    const Smartphone = ({ className }) => <IconWrapper className={className}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></IconWrapper>;
+    const BadgeDollarSign = ({ className }) => <IconWrapper className={className}><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></IconWrapper>;
+    const FileCheck = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></IconWrapper>;
+    const Settings = ({ className }) => <IconWrapper className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
@@ -72,69 +74,95 @@
         return p;
     };
 
-    // --- SaaS 版 App 元件 ---
     function App() {
-      // 狀態定義
-      const [activeTab, setActiveTab] = useState(new URLSearchParams(window.location.search).get('tab') || 'home');
-      const [isLoading, setIsLoading] = useState(true);
+      // 狀態聲明
+      const urlParams = new URLSearchParams(window.location.search);
+      const actionParam = urlParams.get('action'); 
+      const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
+      const [tourDetailTab, setTourDetailTab] = useState('itinerary'); 
+      const [shareStatusText, setShareStatusText] = useState('搜尋中...'); 
+      const [selectedTourId, setSelectedTourId] = useState(() => urlParams.get('t') || urlParams.get('tour_id') || null);
+      const [refUid, setRefUid] = useState(() => {
+        const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
+        if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
+        return urlRef || localStorage.getItem('tracking_ref_uid') || '';
+      });
+
       const [itineraries, setItineraries] = useState([]);
+      const [toast, setToast] = useState(null);
+      const [isLoading, setIsLoading] = useState(true); 
+      const [isUploadingImage, setIsUploadingImage] = useState(false); 
+      const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); 
+      const [isSubmitting, setIsSubmitting] = useState(false); 
+      
       const [liffProfile, setLiffProfile] = useState(null);
       const [isLiffReady, setIsLiffReady] = useState(false);
-      const [toast, setToast] = useState(null);
-
-      // 權限狀態
-      const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+      const [distributorStatus, setDistributorStatus] = useState(null); 
       const [isAdmin, setIsAdmin] = useState(false);
-      const [isTenant, setIsTenant] = useState(false);
-      const [tenantStatus, setTenantStatus] = useState(null);
-      const [distributorStatus, setDistributorStatus] = useState(null);
       const [isGeneralMember, setIsGeneralMember] = useState(false);
+      const [isStatusChecked, setIsStatusChecked] = useState(false);
 
-      // 選取的行程 ID (for 行程明細)
-      const [selectedTourId, setSelectedTourId] = useState(new URLSearchParams(window.location.search).get('t') || null);
-      const [tourDetailTab, setTourDetailTab] = useState('itinerary');
-      const [refUid, setRefUid] = useState(new URLSearchParams(window.location.search).get('r') || '');
+      const [myDistributorData, setMyDistributorData] = useState(null);
+      const [myUserData, setMyUserData] = useState(null);
+      const [distributorStats, setDistributorStats] = useState({ users: [], orders: [] }); 
+      const [myOrders, setMyOrders] = useState([]); 
+
+      const [crmDistributors, setCrmDistributors] = useState([]);
+      const [crmUsers, setCrmUsers] = useState([]);
+      const [crmOrders, setCrmOrders] = useState([]); 
+      const [crmSubTab, setCrmSubTab] = useState('orders');
+
+      const [searchRegion, setSearchRegion] = useState('');
+      const [searchKeyword, setSearchKeyword] = useState('');
+      const [filteredResults, setFilteredResults] = useState([]);
+      const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
+
+      const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' });
+      const [ocrStatus, setOcrStatus] = useState('idle');
+      const [uploadMode, setUploadMode] = useState('dm');
+      const [bookingModalData, setBookingModalData] = useState(null);
+      const [editingDistributor, setEditingDistributor] = useState(null);
+      const [editFormData, setEditFormData] = useState({});
+      const [deleteModalId, setDeleteModalId] = useState(null);
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+      const [promoToolOpen, setPromoToolOpen] = useState(false);
+      
+      const [distCardMode, setDistCardMode] = useState('single'); 
+      const [distSelectedIds, setDistSelectedIds] = useState(new Set());
+      const [flexModalItem, setFlexModalItem] = useState(null);
+      const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
 
       const articleTopRef = useRef(null);
       const priceCardAnchorRef = useRef(null);
       const articleBodyRef = useRef(null);
       const [priceCardStyle, setPriceCardStyle] = useState({});
 
-      // 初始化 LIFF
-      useEffect(() => {
-        const init = async () => {
-          try {
-            await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-            setIsLiffReady(true);
-            if (liff.isLoggedIn()) {
-              const profile = await liff.getProfile();
-              setLiffProfile(profile);
-              checkMyStatus(profile.userId);
-            }
-          } catch (e) { console.error(e); }
-          fetchItineraries();
-        };
-        init();
-      }, []);
+      // 1. 初始化與 API 呼叫
+      useEffect(() => { initLiff(); fetchItineraries(); }, []);
+
+      const initLiff = async () => {
+        try {
+          await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+          setIsLiffReady(true);
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            setLiffProfile(profile);
+            checkMyStatus(profile.userId);
+          }
+        } catch (err) { console.error('LIFF 初始化失敗', err); }
+      };
 
       const checkMyStatus = async (uid) => {
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${Date.now()}`);
           const data = await res.json();
           if (data.success) {
-            const info = data.data;
-            if (info.isSuperAdmin) setIsSuperAdmin(true);
-            if (info.role === 'tenant') {
-              setIsTenant(true); setTenantStatus(info.status);
-              if (info.status === 'approved') setIsAdmin(true);
-            } else if (info.role === 'distributor') {
-              setDistributorStatus(info.status);
-              setIsGeneralMember(true);
-            } else if (info.role === 'user') {
-              setIsGeneralMember(true);
-            }
+             const info = data.data;
+             if (info.isAdmin) setIsAdmin(true);
+             if (info.role === 'distributor') { setDistributorStatus(info.status); setMyDistributorData(info.distributorData); setIsGeneralMember(true); fetchUserOrders(uid); } 
+             else if (info.role === 'user') { setMyUserData(info.userData); setIsGeneralMember(true); fetchUserOrders(uid); }
           }
-        } catch (e) { console.error(e); }
+        } catch (e) {} finally { setIsStatusChecked(true); }
       };
 
       const fetchItineraries = async () => {
@@ -142,102 +170,223 @@
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${Date.now()}`);
           const data = await res.json();
-          setItineraries(data || []);
-        } catch (e) { console.error(e); }
-        setIsLoading(false);
+          const items = Array.isArray(data) ? data : (data.data || []);
+          setItineraries(items); setFilteredResults(items);
+        } catch (e) {} finally { setIsLoading(false); }
       };
 
-      const showToast = (message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
+      const fetchUserOrders = async (uid) => {
+          try {
+              const res = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}&_t=${Date.now()}`);
+              const data = await res.json();
+              if (data.success) setMyOrders(data.data);
+          } catch(e) {}
       };
 
-      const changeTab = (newTab) => {
-        setActiveTab(newTab);
-        window.history.replaceState({}, '', `?tab=${newTab}`);
+      const fetchDistributorStats = async (uid) => {
+          try {
+              const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributorPerformance&uid=${uid}&_t=${Date.now()}`);
+              const data = await res.json();
+              if (data.success) setDistributorStats({ users: data.users || [], orders: data.orders || [] });
+          } catch(e) {}
       };
 
-      const goBackToList = () => {
-        setSelectedTourId(null);
-        window.history.pushState({}, '', '?tab=home');
+      const fetchFullCrmData = async () => {
+        try {
+          const [resD, resU, resO] = await Promise.all([
+            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${Date.now()}`),
+            fetch(`${WORKER_URL}/api/itineraries?action=getUsers&_t=${Date.now()}`),
+            fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders&_t=${Date.now()}`)
+          ]);
+          const [dataD, dataU, dataO] = await Promise.all([resD.json(), resU.json(), resO.json()]);
+          setCrmDistributors(Array.isArray(dataD) ? dataD : []);
+          setCrmUsers(Array.isArray(dataU) ? dataU : []);
+          if (dataO && dataO.success) setCrmOrders(dataO.data || []);
+        } catch (e) {}
       };
 
-      // 渲染導覽列 (SaaS 版)
+      // 2. 輔助函數與事件處理
+      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
+      const changeTab = (newTab) => { setActiveTab(newTab); setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.replaceState({}, '', `?tab=${newTab}`); };
+      
+      const goBackToList = () => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); };
+      const scrollArticleToTop = () => { 
+        if (articleTopRef.current) articleTopRef.current.scrollIntoView({ behavior: 'smooth' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleSearch = () => {
+        let res = itineraries;
+        if (searchRegion) res = res.filter(i => i.region.includes(searchRegion));
+        if (searchKeyword) res = res.filter(i => i.title.toLowerCase().includes(searchKeyword.toLowerCase()));
+        setFilteredResults(res);
+      };
+
+      const handleFileUpload = async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        setOcrStatus('processing'); setIsUploadingImage(true);
+        const reader = new FileReader(); reader.readAsDataURL(file);
+        reader.onloadend = async () => {
+          try {
+            const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', body: JSON.stringify({ image: reader.result }) });
+            const result = await res.json();
+            if (result.success) { setDraftData(result.data); setOcrStatus('done'); showToast('AI 解析完成！'); }
+            else throw new Error('解析失敗');
+          } catch (e) { setOcrStatus('idle'); showToast('解析失敗', 'error'); } finally { setIsUploadingImage(false); }
+        };
+      };
+
+      const handleUpdateContent = async () => {
+        const action = draftData.id ? 'updateItinerary' : 'addItinerary';
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', body: JSON.stringify({ ...draftData, action }) });
+          const result = await res.json();
+          if (result.success) { showToast('操作成功！'); fetchItineraries(); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); setOcrStatus('idle'); }
+        } catch (e) { showToast('操作失敗', 'error'); }
+      };
+
+      const handleBookNow = (tour) => {
+          if (!isGeneralMember) { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid}&t=${tour.id}`; return; }
+          setBookingModalData({ tourId: tour.id, tourTitle: tour.title, price: tour.price, pax: 1, totalAmount: tour.price, contactName: liffProfile?.displayName || '', contactPhone: formatPhone(myUserData?.phone || myDistributorData?.phone || '') });
+      };
+
+      const submitBooking = async (e) => {
+          e.preventDefault(); setIsSubmitting(true);
+          try {
+              const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', body: JSON.stringify({ action: 'addOrder', uid: liffProfile.userId, ref_uid: refUid, ...bookingModalData }) });
+              const result = await res.json();
+              if (result.success) { showToast('報名成功！'); setBookingModalData(null); fetchUserOrders(liffProfile.userId); changeTab('member'); }
+          } catch(e) { showToast('報名失敗', 'error'); } finally { setIsSubmitting(false); }
+      };
+
+      // 3. 渲染子組件
       const renderNavBar = () => {
         let badge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
-        if (isSuperAdmin) badge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 系統總管</span>;
-        else if (isTenant && tenantStatus === 'approved') badge = <span className="bg-purple-100 text-purple-700 text-[11px] px-2 py-0.5 rounded font-bold border border-purple-200">🏢 旅行社主帳號</span>;
-        else if (isTenant && tenantStatus === 'pending') badge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 主帳號審核中</span>;
-        else if (distributorStatus === 'approved') badge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 金牌分銷商</span>;
+        if (isAdmin) badge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 管理員</span>;
+        else if (distributorStatus === 'approved') badge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 經銷商</span>;
         else if (isGeneralMember) badge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 會員</span>;
 
         return (
           <nav className="bg-white shadow-sm sticky top-0 z-50">
             <div className="w-full max-w-[1920px] mx-auto px-4 h-16 flex items-center justify-between">
-              <div className="flex items-center cursor-pointer" onClick={() => changeTab('home')}>
-                <Navigation className="h-8 w-8 text-blue-600 mr-2" />
-                <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
-              </div>
+              <div className="flex items-center cursor-pointer" onClick={() => changeTab('home')}><Navigation className="h-8 w-8 text-blue-600 mr-2" /><span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span></div>
               <div className="flex items-center space-x-2">
                 <button onClick={() => changeTab('home')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>找行程</button>
-                {isAdmin && <button onClick={() => changeTab('crm')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600'}`}>{isSuperAdmin ? '總管理' : '旅行社 CRM'}</button>}
-                <div className="pl-3 border-l ml-3 flex items-center gap-2">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-xs font-bold">{liffProfile?.displayName || '未登入'}</p>
-                    {badge}
-                  </div>
-                  <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full border shadow-sm" />
-                </div>
+                <button onClick={() => changeTab('member')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600'}`}>會員中心</button>
+                <button onClick={() => changeTab('distributor')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600'}`}>經銷專區</button>
+                {isAdmin && <button onClick={() => changeTab('crm')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600'}`}>後台 CRM</button>}
+                {isAdmin && <button onClick={() => changeTab('admin')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>智能上稿</button>}
+              </div>
+              <div className="hidden md:flex items-center gap-3 pl-4 border-l">
+                {liffProfile ? (<div className="flex items-center gap-2"><div className="text-right"><p className="text-xs font-bold leading-none mb-1">{liffProfile.displayName}</p>{badge}</div><img src={liffProfile.pictureUrl} className="w-10 h-10 rounded-full border shadow-sm" /></div>) : (<button onClick={() => liff.login()} className="bg-[#00B900] text-white px-4 py-2 rounded-lg text-sm font-bold">LINE 登入</button>)}
               </div>
             </div>
           </nav>
         );
       };
 
-      // 渲染行程列表
-      const renderHomeTab = () => (
-        <div className="p-6 max-w-7xl mx-auto">
-          <h2 className="text-2xl font-black mb-6">探索世界的美好行程</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {itineraries.map(item => (
-              <div key={item.id} onClick={() => setSelectedTourId(item.id)} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition">
-                <div className="h-48 overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div>
-                <div className="p-4">
-                  <p className="text-xs font-bold text-blue-600 mb-1">{item.region}</p>
-                  <h4 className="font-bold text-lg mb-2 line-clamp-2">{item.title}</h4>
-                  <div className="flex justify-between items-center border-t pt-3 mt-2">
-                    <span className="text-sm text-gray-500">{item.days} 天行程</span>
-                    <span className="text-xl font-black text-red-600">${Number(item.price).toLocaleString()}</span>
+      const renderHomeTab = () => {
+          if (selectedTourId) {
+              const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
+              if (!tour) return <div className="p-20 text-center">載入中...</div>;
+              return (
+                  <div ref={articleTopRef} className="animate-fade-in pb-20">
+                      <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white">{tour.title}</h1></div></div>
+                      <div className="max-w-7xl mx-auto py-10 px-6 flex flex-col lg:flex-row gap-10">
+                          <div className="flex-1 space-y-6">{renderAgencyBlogDescription(tour.description)}</div>
+                          <div className="w-full lg:w-96 sticky top-24 self-start space-y-4">
+                              <div className="bg-white p-6 rounded-2xl shadow-xl border"><p className="text-sm font-bold text-gray-400">專案優惠價</p><p className="text-4xl font-black text-red-600">TWD {Number(tour.price).toLocaleString()}</p><button onClick={() => handleBookNow(tour)} className="w-full bg-red-600 text-white font-bold py-4 rounded-xl mt-6">立即報名</button></div>
+                          </div>
+                      </div>
                   </div>
-                </div>
+              );
+          }
+          return (
+              <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                      {filteredResults.map(item => (
+                          <div key={item.id} onClick={() => setSelectedTourId(item.id)} className="bg-white rounded-xl shadow-sm border overflow-hidden cursor-pointer hover:shadow-md transition"><div className="h-48 overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div><div className="p-4"><h4 className="font-bold mb-2 line-clamp-2">{item.title}</h4><p className="text-red-600 font-black text-xl">${Number(item.price).toLocaleString()}</p></div></div>
+                      ))}
+                  </div>
               </div>
-            ))}
+          );
+      };
+
+      const renderAgencyBlogDescription = (text) => {
+        if (!text) return null;
+        return text.split('\n').map((line, i) => <p key={i} className="mb-4 text-lg leading-relaxed">{line}</p>);
+      };
+
+      const renderAdminEditorTab = () => (
+          <div className="p-6 max-w-4xl mx-auto animate-fade-in">
+              <div className="bg-white p-8 rounded-2xl shadow-lg border">
+                  <h2 className="text-2xl font-black mb-6">智能上稿解析</h2>
+                  <div className="border-2 border-dashed p-10 text-center rounded-2xl bg-gray-50 relative">
+                      {ocrStatus === 'processing' ? <RefreshCw className="animate-spin w-12 h-12 mx-auto" /> : <UploadCloud className="w-12 h-12 mx-auto text-gray-300" />}
+                      <p className="mt-4 font-bold">上傳旅遊 DM 圖片或 PDF 檔案</p>
+                      <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                  </div>
+                  {draftData.title && (
+                      <div className="mt-10 space-y-4">
+                          <input value={draftData.title} onChange={e=>setDraftData({...draftData, title: e.target.value})} className="w-full p-4 border rounded-xl" placeholder="行程標題" />
+                          <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description: e.target.value})} rows="10" className="w-full p-4 border rounded-xl" />
+                          <button onClick={handleUpdateContent} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl">一鍵上架更新行程</button>
+                      </div>
+                  )}
+              </div>
           </div>
-        </div>
       );
 
-      // 渲染主畫面
       return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen flex flex-col bg-gray-50">
           {renderNavBar()}
-          {selectedTourId ? (
-             <div className="p-10 text-center">
-               <button onClick={goBackToList} className="text-blue-600 font-bold mb-4 flex items-center justify-center mx-auto gap-2"><ArrowLeft /> 返回列表</button>
-               <h1 className="text-3xl font-black">正在查看行程 ID: {selectedTourId} 的明細內容</h1>
-               <p className="mt-4 text-gray-500">此頁面為 SaaS 旗艦版完整明細視圖...</p>
-             </div>
-          ) : (
-            <>
-              {activeTab === 'home' && renderHomeTab()}
-              {activeTab === 'crm' && (
-                <div className="p-10 text-center">
-                  <h2 className="text-2xl font-black">{isSuperAdmin ? '系統總後台' : '旅行社租戶後台'}</h2>
-                  <p className="mt-4">這裡可以管理租戶申請、分銷商業績、以及智能上稿功能。</p>
-                </div>
-              )}
-            </>
+          <div className="flex-grow w-full">
+            {activeTab === 'home' && renderHomeTab()}
+            {activeTab === 'member' && (
+                <div className="p-10 text-center"><h2>會員專區</h2><p>您的預約訂單：{myOrders.length} 筆</p></div>
+            )}
+            {activeTab === 'distributor' && (
+                <div className="p-10 text-center"><h2>經銷商專區</h2><button onClick={() => setPromoToolOpen(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">開啟推廣名片工具</button></div>
+            )}
+            {activeTab === 'crm' && (
+                <div className="p-10 text-center"><h2>管理後台 CRM</h2><p>這裡是處理訂單與經銷商審核的地方。</p></div>
+            )}
+            {activeTab === 'admin' && renderAdminEditorTab()}
+          </div>
+
+          {promoToolOpen && (
+              <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-fade-in">
+                  <div className="h-16 border-b flex items-center justify-between px-6 bg-white shadow-sm">
+                      <span className="font-black text-xl">推廣工具箱 (旗艦版)</span>
+                      <div className="flex bg-gray-100 rounded-lg p-1 text-xs font-bold">
+                          <button onClick={()=>setDistCardMode('single')} className={`px-4 py-1.5 rounded-md ${distCardMode==='single'?'bg-white shadow-sm':''}`}>單張名片</button>
+                          <button onClick={()=>setDistCardMode('carousel')} className={`px-4 py-1.5 rounded-md ${distCardMode==='carousel'?'bg-white shadow-sm':''}`}>橫向輪播</button>
+                          <button onClick={()=>setDistCardMode('multi')} className={`px-4 py-1.5 rounded-md ${distCardMode==='multi'?'bg-white shadow-sm':''}`}>列表多頁</button>
+                      </div>
+                      <button onClick={()=>setPromoToolOpen(false)} className="bg-red-600 text-white p-2 rounded-full"><X className="w-4 h-4"/></button>
+                  </div>
+                  <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                      <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {itineraries.map(item => (
+                                  <div key={item.id} onClick={()=>toggleDistCard(item.id)} className={`bg-white border-2 rounded-xl overflow-hidden cursor-pointer transition ${distSelectedIds.has(item.id)?'border-blue-500 shadow-md':''}`}>
+                                      <img src={item.image} className="h-32 w-full object-cover" />
+                                      <div className="p-2 font-bold text-xs line-clamp-2">{item.title}</div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                      <div className="w-full md:w-96 border-l p-6 bg-white shadow-inner overflow-y-auto">
+                          <h3 className="font-bold mb-4">預覽與發送</h3>
+                          <div className="space-y-4">
+                              <button onClick={()=>showToast('功能串接中...')} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl">喚起 LINE 通訊錄發送名片</button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
           )}
-          {toast && (<div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up"><div className="bg-gray-900 text-white p-5 rounded-2xl shadow-2xl font-bold">{toast.message}</div></div>)}
+
+          {toast && (<div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up"><div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div></div>)}
         </div>
       );
     }
