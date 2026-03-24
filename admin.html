@@ -3,262 +3,124 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 Admin</title>
+  <title>老闆管理後台 | 旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; }
-    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .editor-wrap { display: grid; grid-template-columns: 6fr 4fr; height: calc(100vh - 64px); width: 100vw; }
-    .editor-sidebar { border-right: 1px solid #e2e8f0; overflow-y: auto; background: #fff; padding: 32px; display: flex; flex-direction: column; gap: 24px; }
-    .editor-preview { overflow-y: auto; background: #f8fafc; padding: 40px; }
-    .blog-preview h3 { font-size: 1.8rem; font-weight: 900; margin: 3rem 0 1rem; border-left: 6px solid #2563eb; padding-left: 1rem; }
-    .blog-preview img { width: 100%; border-radius: 2rem; margin: 1rem 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
   </style>
 </head>
-<body class="text-slate-800">
+<body>
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect, useRef } = React;
-
-    const Icon = ({ name, className = "w-5 h-5" }) => {
-      const icons = {
-        plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
-        edit: <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
-        trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>,
-        sparkles: <><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707"/></>,
-        check: <><polyline points="20 6 9 17 4 12"/></>,
-        x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
-        users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>
-      };
-      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name]}</svg>;
-    };
-
+    const { useState, useEffect } = React;
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const agencySlug = urlParams.get('a') || 'demo';
-      const fileRef = useRef(null);
       
       const [auth, setAuth] = useState('loading');
       const [myUid, setMyUid] = useState('');
-      const [view, setView] = useState('list');
-      const [itineraries, setItineraries] = useState([]);
-      const [distributors, setDistributors] = useState([]);
-      const [form, setForm] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' });
-      const [aiLoading, setAiLoading] = useState(false);
+      const [tenantName, setTenantName] = useState('');
 
       useEffect(() => {
         const init = async () => {
           try {
             const configRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
             const configData = await configRes.json();
-            if (configData.success) {
-              await liff.init({ liffId: configData.data.liff_id });
-              if (liff.isLoggedIn()) {
-                const profile = await liff.getProfile();
-                setMyUid(profile.userId);
-                const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
-                const statusData = await statusRes.json();
-                if (statusData.success && statusData.data.isAdmin) {
-                  setAuth('admin');
-                  fetchList();
-                } else { setAuth('denied'); }
-              } else { liff.login(); }
+            if (!configData.success) { setAuth('error'); return; }
+
+            await liff.init({ liffId: configData.data.liff_id });
+            if (!liff.isLoggedIn()) { liff.login(); return; }
+
+            const profile = await liff.getProfile();
+            setMyUid(profile.userId);
+
+            const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${profile.userId}&a=${agencySlug}`);
+            const statusData = await statusRes.json();
+
+            if (statusData.success && statusData.data.isAdmin) {
+              setTenantName(statusData.data.tenantName);
+              setAuth('admin');
+            } else {
+              setAuth('denied');
             }
-          } catch (e) { setAuth('denied'); }
+          } catch (e) { setAuth('error'); }
         };
         init();
       }, [agencySlug]);
 
-      const fetchList = async () => {
-        const res = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
-        setItineraries(await res.json());
-      };
+      if (auth === 'loading') return (
+        <div className="h-screen flex flex-col items-center justify-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-slate-400 font-bold">驗證管理員權限中...</p>
+        </div>
+      );
 
-      const fetchDistributors = async () => {
-        const res = await fetch(`${WORKER_URL}/api/admin/distributors?a=${agencySlug}&uid=${myUid}`);
-        setDistributors(await res.json());
-      };
-
-      const handleApprove = async (id, status) => {
-        await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${agencySlug}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, status, adminUid: myUid })
-        });
-        fetchDistributors();
-      };
-
-      const handleAI = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          setAiLoading(true);
-          try {
-            const r = await fetch(`${WORKER_URL}/api/upload-dm?a=${agencySlug}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: reader.result })
-            });
-            const d = await r.json();
-            if (d.success) setForm(prev => ({ ...prev, ...d.data }));
-          } catch(e) { alert('AI 解析失敗'); }
-          setAiLoading(false);
-        };
-        reader.readAsDataURL(file);
-      };
-
-      if (auth === 'loading') return <div className="h-screen flex items-center justify-center font-bold text-slate-300 text-2xl tracking-widest">TK ADMIN INITIALIZING...</div>;
-      
-      // 優化後的「權限不足」引導畫面
       if (auth === 'denied') return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
-          <div className="text-red-500 text-7xl mb-6">⛔</div>
-          <h1 className="text-3xl font-black mb-4 text-slate-800">管理權限不足</h1>
-          <p className="text-slate-500 font-bold mb-8">您的 LINE UID: <code className="bg-slate-200 text-slate-700 px-3 py-1 rounded-lg break-all text-xs block mt-2">{myUid}</code></p>
-          
-          <div className="bg-white border border-slate-200 shadow-xl p-8 rounded-[2rem] max-w-md text-left">
-            <p className="font-black text-lg mb-4 flex items-center gap-2">💡 系統角色導航</p>
-            <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                <p className="font-bold text-blue-800 mb-1">如果您是「合作夥伴 / 業務」</p>
-                <p className="text-xs text-blue-600 mb-3">此頁面為老闆專用。請前往前台挑選行程與推廣。</p>
-                <a href={`index.html?a=${agencySlug}&tab=dist`} className="inline-block bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition">前往夥伴推廣前台 →</a>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <p className="font-bold text-slate-700 mb-1">如果您是「旅行社老闆」</p>
-                <p className="text-xs text-slate-500">請確認您的 UID 已加入 D1 資料庫中 <code>tenants</code> 表格的 <code>admin_uids</code> 欄位。</p>
-              </div>
+        <div className="h-screen flex items-center justify-center p-6">
+          <div className="bg-white p-10 rounded-[3rem] shadow-2xl max-w-md w-full text-center border border-red-100 animate-fade-in">
+            <div className="text-6xl mb-6">🚫</div>
+            <h1 className="text-2xl font-black mb-2 text-slate-800">管理權限不足</h1>
+            <p className="text-slate-500 mb-8 leading-relaxed">此頁面為「{agencySlug}」老闆專用。<br/>您的帳號目前未被列入管理員名單。</p>
+            
+            <div className="bg-slate-50 p-5 rounded-2xl mb-8 text-left">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">請將此 UID 加入管理員名單：</p>
+              <code className="text-xs font-mono text-blue-600 break-all bg-white p-3 rounded-xl border border-slate-100 block">{myUid}</code>
+            </div>
+
+            <div className="space-y-3">
+              <a href={`index.html?a=${agencySlug}&tab=dist`} className="block w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-100 hover:scale-[1.02] transition">前往合作夥伴專區</a>
+              <button onClick={()=>window.location.reload()} className="block w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-sm">重新整理</button>
             </div>
           </div>
         </div>
       );
 
+      if (auth === 'error') return <div className="h-screen flex items-center justify-center font-bold text-red-500">❌ 無法載入租戶配置，請檢查網址參數。</div>;
+
       return (
-        <div className="min-h-screen">
-          <nav className="h-16 bg-white border-b px-8 flex justify-between items-center sticky top-0 z-50">
-            <div className="flex items-center gap-10">
-              <h1 className="font-black text-2xl tracking-tighter italic">SaaS <span className="text-blue-600">Admin</span></h1>
-              <div className="flex gap-2">
-                <button onClick={()=>setView('list')} className={`px-5 py-2 rounded-2xl font-black text-xs uppercase tracking-widest transition ${view==='list'?'bg-blue-600 text-white shadow-xl shadow-blue-100':'text-slate-400'}`}>行程管理</button>
-                <button onClick={()=>{setView('distributors'); fetchDistributors();}} className={`px-5 py-2 rounded-2xl font-black text-xs uppercase tracking-widest transition ${view==='distributors'?'bg-emerald-600 text-white shadow-xl shadow-emerald-100':'text-slate-400'}`}>夥伴審核</button>
-              </div>
+        <div className="min-h-screen animate-fade-in">
+          <nav className="bg-white border-b px-10 py-5 flex justify-between items-center sticky top-0 z-50">
+            <div className="flex items-center gap-4">
+               <div className="bg-blue-600 text-white p-2 rounded-xl font-black italic text-xs">SAAS</div>
+               <h1 className="text-2xl font-black tracking-tighter">{tenantName} <span className="text-slate-300 text-sm font-bold ml-2">管理控制台</span></h1>
             </div>
-            {view === 'list' && (
-              <button onClick={()=>{setForm({ id:null, title:'', region:'亞洲', price:0, days:1, image:'', description:'' }); setView('edit');}} className="bg-slate-900 text-white px-6 py-2.5 rounded-full font-black text-sm shadow-xl hover:scale-105 transition">打造行程</button>
-            )}
+            <div className="flex items-center gap-6">
+               <div className="text-right hidden sm:block">
+                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Logged in as</p>
+                  <p className="text-sm font-bold text-slate-600">Administrator</p>
+               </div>
+               <button onClick={()=>liff.logout()} className="bg-slate-50 text-slate-400 px-4 py-2 rounded-xl text-xs font-black hover:text-red-500 transition">登出</button>
+            </div>
           </nav>
-
-          <main className="p-8">
-            {view === 'list' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 animate-fade-in">
-                {itineraries.map(it => (
-                  <div key={it.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 hover:shadow-2xl transition-all group">
-                    <div className="h-56 overflow-hidden"><img src={it.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" /></div>
-                    <div className="p-8">
-                      <h4 className="font-black text-xl mb-4 line-clamp-1">{it.title}</h4>
-                      <div className="flex justify-between items-center pt-6 border-t border-slate-50">
-                        <span className="text-red-600 font-black text-2xl">${Number(it.price).toLocaleString()}</span>
-                        <button onClick={()=>{setForm(it); setView('edit');}} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-blue-600 hover:text-white transition shadow-sm"><Icon name="edit" /></button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {view === 'distributors' && (
-              <div className="max-w-6xl mx-auto animate-fade-in">
-                <div className="flex justify-between items-end mb-10">
-                    <div><h2 className="text-4xl font-black tracking-tighter">合作夥伴審核</h2><p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-2">Partner Verification</p></div>
+          
+          <main className="p-10 max-w-7xl mx-auto">
+             <div className="bg-gradient-to-br from-blue-600 to-blue-500 p-12 rounded-[3.5rem] text-white shadow-2xl shadow-blue-200 mb-12">
+                <h2 className="text-5xl font-black mb-4">歡迎回來，老闆！👋</h2>
+                <p className="text-blue-100 text-xl font-medium">您現在可以自由管理行程與審核合作夥伴了。</p>
+             </div>
+             {/* 這裡之後會補上行程管理列表 */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                   <h3 className="text-xl font-black mb-2">📦 行程庫管理</h3>
+                   <p className="text-slate-400 text-sm mb-6">發布新行程、AI 擴寫故事內容</p>
+                   <button className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-bold">進入管理</button>
                 </div>
-                <div className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 shadow-sm">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                      <tr><th className="p-8">申請人資訊</th><th className="p-8">聯絡電話</th><th className="p-8">公司 / 推薦關係</th><th className="p-8">當前狀態</th><th className="p-8 text-right">核准操作</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {distributors.map(d => (
-                        <tr key={d.id} className="hover:bg-slate-50/50 transition">
-                          <td className="p-8"><p className="font-black text-lg">{d.name}</p><p className="text-[10px] text-slate-300 font-mono mt-1">{d.uid}</p></td>
-                          <td className="p-8 font-black text-slate-600">{d.phone}</td>
-                          <td className="p-8"><p className="font-black text-slate-800">{d.company_name || '一般會員'}</p><p className="text-[10px] text-indigo-400 font-black mt-1">REF: {d.referred_by || '直接註冊'}</p></td>
-                          <td className="p-8">
-                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${d.status==='active'?'bg-emerald-100 text-emerald-600':d.status==='pending'?'bg-amber-100 text-amber-600':'bg-red-100 text-red-600'}`}>{d.status}</span>
-                          </td>
-                          <td className="p-8 text-right flex justify-end gap-3 mt-2">
-                            {d.status === 'pending' && (
-                              <>
-                                <button onClick={()=>handleApprove(d.id, 'active')} className="bg-emerald-600 text-white p-3 rounded-2xl shadow-xl shadow-emerald-100 hover:scale-110 transition"><Icon name="check" /></button>
-                                <button onClick={()=>handleApprove(d.id, 'rejected')} className="bg-red-500 text-white p-3 rounded-2xl shadow-xl shadow-red-100 hover:scale-110 transition"><Icon name="x" /></button>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                   <h3 className="text-xl font-black mb-2">👥 夥伴審核</h3>
+                   <p className="text-slate-400 text-sm mb-6">管理申請名單、發放推廣權限</p>
+                   <button className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold">進入審核</button>
                 </div>
-              </div>
-            )}
-
-            {view === 'edit' && (
-              <div className="editor-wrap animate-fade-in fixed inset-0 top-16 bg-white z-50">
-                <div className="editor-sidebar custom-scrollbar">
-                  <div className="flex justify-between items-center mb-8">
-                    <button onClick={()=>setView('list')} className="text-slate-400 font-black text-xs uppercase tracking-widest">Cancel</button>
-                    {!form.id && (
-                      <button onClick={()=>fileRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-600 px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-indigo-100 transition">
-                        {aiLoading ? <div className="animate-spin border-2 border-indigo-600 border-t-transparent w-4 h-4 rounded-full" /> : <Icon name="sparkles" />}
-                        AI 視覺擴寫故事
-                      </button>
-                    )}
-                    <input ref={fileRef} type="file" className="hidden" onChange={handleAI} />
-                  </div>
-                  <input className="text-5xl font-black border-none outline-none p-0 w-full mb-8 tracking-tighter" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="揮寫標題..." />
-                  <div className="grid grid-cols-3 gap-6 mb-8">
-                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Region</label><select className="w-full bg-slate-50 p-4 rounded-2xl font-black outline-none focus:ring-4 ring-blue-500/5" value={form.region} onChange={e=>setForm({...form, region:e.target.value})}>{['亞洲','歐洲','美洲','國旅','大洋洲','非洲'].map(r=><option key={r}>{r}</option>)}</select></div>
-                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Days</label><input type="number" className="w-full bg-slate-50 p-4 rounded-2xl font-black outline-none" value={form.days} onChange={e=>setForm({...form, days:e.target.value})} /></div>
-                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Price</label><input type="number" className="w-full bg-slate-50 p-4 rounded-2xl font-black outline-none" value={form.price} onChange={e=>setForm({...form, price:e.target.value})} /></div>
-                  </div>
-                  <div className="space-y-2 mb-8"><label className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Cover Image</label><input className="w-full bg-slate-50 p-4 rounded-2xl text-xs font-mono" value={form.image} onChange={e=>setForm({...form, image:e.target.value})} placeholder="URL..." /></div>
-                  <textarea className="flex-1 bg-slate-50 p-8 rounded-[3rem] outline-none font-medium leading-relaxed custom-scrollbar text-xl mb-8" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} placeholder="在這裡編寫 Markdown 旅遊故事..." />
-                  <button onClick={async ()=>{
-                    const r = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action: form.id?'updateItinerary':'addItinerary', ...form }) });
-                    if((await r.json()).success) { setView('list'); fetchList(); }
-                  }} className="bg-blue-600 text-white py-6 rounded-[2rem] font-black text-xl shadow-2xl shadow-blue-100 hover:scale-[1.02] transition">儲存並公開文章</button>
-                </div>
-                <div className="editor-preview custom-scrollbar p-16">
-                   <div className="max-w-2xl mx-auto blog-preview animate-fade-in">
-                      {form.image && <img src={form.image} className="w-full h-96 object-cover rounded-[3.5rem] mb-12 shadow-2xl" />}
-                      <h1 className="text-6xl font-black mb-10 leading-tight tracking-tighter text-slate-900">{form.title || 'PREVIEW'}</h1>
-                      <div className="flex gap-12 py-10 border-y border-slate-100 mb-12">
-                        <div><p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">Total Amount</p><p className="text-4xl font-black text-red-600 tracking-tighter">NT$ {Number(form.price).toLocaleString()}</p></div>
-                        <div><p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">Duration</p><p className="text-4xl font-black text-slate-800 tracking-tighter">{form.days} 天之旅</p></div>
-                      </div>
-                      <div className="blog-content">
-                        {(form.description || '').split('\n').map((l, i) => {
-                          const t = l.trim();
-                          if(t.startsWith('###')) return <h3 key={i} className="text-2xl font-black mt-12 mb-6 text-slate-800 border-l-8 border-blue-600 pl-6">{t.replace('###','').trim()}</h3>;
-                          if(t.includes('![Image](')) { const m = t.match(/\!\[.*?\]\((.*?)\)/); return m ? <img key={i} src={m[1]} className="rounded-[2.5rem] shadow-xl my-8 w-full" /> : null; }
-                          return t ? <p key={i} className="text-lg leading-relaxed text-slate-500 mb-6">{t}</p> : null;
-                        })}
-                      </div>
-                   </div>
-                </div>
-              </div>
-            )}
+             </div>
           </main>
         </div>
       );
