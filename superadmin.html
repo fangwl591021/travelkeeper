@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TravelKeeper 系統總後台</title>
+  <title>TravelKeeper 系統總後台 (真實數據版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -126,10 +126,7 @@
     select { background:var(--white); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:7px 12px; font-size:12px; font-weight:700; font-family:'Noto Sans TC',sans-serif; outline:none; cursor:pointer; }
     select:focus { border-color:var(--green); }
 
-    /* Tenant card color strip */
     .tstrip { height:4px; border-radius:12px 12px 0 0; }
-
-    /* Setting row */
     .srow { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--border); }
     .srow:last-child { border-bottom:none; }
 
@@ -166,30 +163,12 @@
     plus:   <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
   };
 
-  /* helpers */
   const ago = ts => { if(!ts) return '—'; const d=Math.floor((Date.now()-new Date(ts))/86400000); return d===0?'今天':d===1?'昨天':`${d} 天前`; };
   const fmt = n => Number(n||0).toLocaleString();
   const ini = s => (s||'?')[0].toUpperCase();
   const actCol = t => t==='green'?'#06C755':t==='red'?'#FF3B30':t==='pending'?'#FF9500':'#007AFF';
 
-  /* mock */
-  const MS = { tenants:12, distributors:148, pending:7, itineraries:94, revenue:4820000 };
-  const MT = [
-    {slug:'demo',      name:'旅遊管家示範社', distributors:32,itineraries:18,status:'active', created_at:'2024-01-15'},
-    {slug:'sunshine',  name:'陽光旅行社',     distributors:21,itineraries:12,status:'active', created_at:'2024-02-20'},
-    {slug:'eastwind',  name:'東風旅遊',        distributors:15,itineraries:9, status:'active', created_at:'2024-03-10'},
-    {slug:'globetrek', name:'環球探索',        distributors:8, itineraries:5, status:'trial',  created_at:'2024-05-01'},
-    {slug:'bluewave',  name:'藍波旅行',        distributors:0, itineraries:0, status:'pending',created_at:'2024-06-18'},
-  ];
-  const MP = [
-    {uid:'Ua1',name:'王小明',phone:'0912-111-111',company_name:'自由業',  agency:'demo',     created_at:'2024-06-20',ref_uid:''},
-    {uid:'Ub2',name:'李美華',phone:'0933-222-333',company_name:'環島旅遊',agency:'sunshine', created_at:'2024-06-19',ref_uid:'Uf123abc'},
-    {uid:'Uc3',name:'陳大偉',phone:'0966-444-555',company_name:'',        agency:'eastwind', created_at:'2024-06-18',ref_uid:''},
-    {uid:'Ud4',name:'林佳欣',phone:'0988-666-777',company_name:'景程企業',agency:'demo',     created_at:'2024-06-17',ref_uid:'Uf456def'},
-    {uid:'Ue5',name:'張志遠',phone:'0911-888-999',company_name:'',        agency:'globetrek',created_at:'2024-06-16',ref_uid:''},
-    {uid:'Uf6',name:'吳雅玲',phone:'0955-123-456',company_name:'玲瓏旅行',agency:'sunshine', created_at:'2024-06-15',ref_uid:''},
-    {uid:'Ug7',name:'蔡宗翰',phone:'0977-654-321',company_name:'',        agency:'demo',     created_at:'2024-06-14',ref_uid:'Uf789ghi'},
-  ];
+  // 靜態裝飾資料 (圖表用)
   const MA = [
     {time:'10:32',event:'新夥伴申請',detail:'王小明 申請加入 demo',    type:'pending'},
     {time:'09:15',event:'審核通過',  detail:'林佳欣 已獲授權',         type:'green'},
@@ -200,7 +179,6 @@
   ];
   const WB = [30,45,28,60,42,72,55];
 
-  /* ── Sidebar item ── */
   function SbItem({id,label,icon,badge,active,onClick}) {
     return (
       <div className={`sb-item${active?' on':''}`} onClick={()=>onClick(id)}>
@@ -211,7 +189,6 @@
     );
   }
 
-  /* ── Stat card ── */
   function SC({label,val,change,cls,icon}) {
     return (
       <div className={`scard ${cls}`}>
@@ -223,12 +200,11 @@
     );
   }
 
-  /* ── App ── */
   function App() {
     const [page,  setPage]  = useState('dashboard');
-    const [stats, setStat]  = useState(MS);
-    const [ten,   setTen]   = useState(MT);
-    const [pend,  setPend]  = useState(MP);
+    const [stats, setStat]  = useState({ tenants:0, distributors:0, pending:0, itineraries:0, revenue:0 });
+    const [ten,   setTen]   = useState([]);
+    const [pend,  setPend]  = useState([]);
     const [filt,  setFilt]  = useState('all');
     const [toast, setToast] = useState('');
 
@@ -246,7 +222,7 @@
       setPend(p=>p.filter(x=>x.uid!==item.uid));
       setStat(s=>({...s,pending:s.pending-1,distributors:status==='active'?s.distributors+1:s.distributors}));
       showToast(status==='active'?`✅ 已核准 ${item.name}`:`🚫 已拒絕 ${item.name}`);
-      try{ await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${item.agency}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:item.uid,status})}); }catch{}
+      try{ await fetch(`${WORKER_URL}/api/super/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:item.uid,status})}); }catch{}
     };
 
     const fp = filt==='all' ? pend : pend.filter(p=>p.agency===filt);
@@ -260,7 +236,6 @@
           <div className="sb-head">
             <div className="sb-logo">
               <div className="sb-logo-icon">
-                {/* LINE-style chat bubble icon */}
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
                   <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
                 </svg>
@@ -310,11 +285,11 @@
             <div className="content">
               {/* Stat cards */}
               <div className="stat-grid a0">
-                <SC label="旅行社總數"  val={fmt(stats.tenants)}      cls="g" icon={I.bldg}  change="↑ 本月新增 2"/>
-                <SC label="授權合作夥伴"  val={fmt(stats.distributors)} cls="g" icon={I.users}  change="↑ 本週 +12"/>
+                <SC label="旅行社總數"  val={fmt(stats.tenants)}      cls="g" icon={I.bldg}/>
+                <SC label="授權合作夥伴"  val={fmt(stats.distributors)} cls="g" icon={I.users}/>
                 <SC label="待審核申請"  val={fmt(stats.pending)}      cls="a" icon={I.bell}/>
-                <SC label="上架行程數"  val={fmt(stats.itineraries)}  cls="b" icon={I.map}    change="↑ 本月 +8"/>
-                <SC label="預估月營收"  val={`$${Math.round(stats.revenue/10000)}萬`} cls="p" icon={I.trend} change="↑ 18%"/>
+                <SC label="上架行程數"  val={fmt(stats.itineraries)}  cls="b" icon={I.map}/>
+                <SC label="預估月營收"  val={`$${Math.round(stats.revenue/10000)}萬`} cls="p" icon={I.trend}/>
               </div>
 
               <div style={{display:'grid',gridTemplateColumns:'1fr 348px',gap:16}}>
@@ -326,7 +301,7 @@
                       <div className="card-head">
                         <div style={{display:'flex',alignItems:'center',gap:8}}>
                           <div style={{width:8,height:8,borderRadius:'50%',background:'#FF9500'}}/>
-                          <span className="card-title">待審核申請</span>
+                          <span className="card-title">最新待審核申請</span>
                           <span className="badge ba">{pend.length} 件</span>
                         </div>
                         <button className="btn btn-ol" style={{fontSize:11}} onClick={()=>setPage('pending')}>全部查看 →</button>
@@ -339,7 +314,7 @@
                               <td><div style={{display:'flex',alignItems:'center',gap:8}}><div className="ava">{ini(d.name)}</div><div><div style={{fontWeight:700}}>{d.name}</div><div style={{fontSize:11,color:'#aaa'}}>{d.company_name||'個人'}</div></div></div></td>
                               <td style={{fontSize:12,color:'#555',fontFamily:'monospace'}}>{d.phone}</td>
                               <td><span className="badge bg">{d.agency}</span></td>
-                              <td style={{fontSize:12,color:'#aaa'}}>{ago(d.created_at)}</td>
+                              <td style={{fontSize:12,color:'#aaa'}}>{ago(d.join_date)}</td>
                               <td style={{textAlign:'right'}}><div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
                                 <button className="btn btn-ok" onClick={()=>approve(d,'active')}><Ic d={I.check} size={12}/> 核准</button>
                                 <button className="btn btn-no" onClick={()=>approve(d,'rejected')}><Ic d={I.xmark} size={12}/> 拒絕</button>
@@ -379,15 +354,15 @@
 
                 {/* Right column */}
                 <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  {/* Bar chart */}
+                  {/* Bar chart (保留作為裝飾用UI) */}
                   <div className="card a3">
                     <div className="card-head">
-                      <span className="card-title">本週申請趨勢</span>
+                      <span className="card-title">本週活動趨勢</span>
                       <span style={{fontSize:20,fontWeight:900,color:'#06C755'}}>{WB.reduce((a,b)=>a+b)}</span>
                     </div>
                     <div className="card-body">
                       <div className="bars">
-                        {WB.map((v,i)=><div key={i} className={`bar${i===6?' now':''}`} style={{height:`${Math.round(v/72*100)}%`}} title={`${['一','二','三','四','五','六','日'][i]}: ${v}件`}/>)}
+                        {WB.map((v,i)=><div key={i} className={`bar${i===6?' now':''}`} style={{height:`${Math.round(v/72*100)}%`}} title={`${['一','二','三','四','五','六','日'][i]}: ${v}次`}/>)}
                       </div>
                       <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
                         {['一','二','三','四','五','六','日'].map(d=><span key={d} style={{fontSize:10,color:'#C0C0C0',flex:1,textAlign:'center'}}>{d}</span>)}
@@ -395,7 +370,7 @@
                     </div>
                   </div>
 
-                  {/* Activity */}
+                  {/* Activity (保留作為裝飾用UI) */}
                   <div className="card a4" style={{flex:1}}>
                     <div className="card-head"><span className="card-title">最新動態</span></div>
                     <div className="card-body" style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -435,7 +410,7 @@
                 <div className="card"><div style={{textAlign:'center',padding:'56px 0'}}>
                   <div style={{fontSize:52,marginBottom:12}}>🎉</div>
                   <div style={{fontSize:16,fontWeight:700,marginBottom:6}}>沒有待審核申請</div>
-                  <div style={{fontSize:13,color:'#717171'}}>所有申請皆已處理完畢</div>
+                  <div style={{fontSize:13,color:'#717171'}}>目前所有申請皆已處理完畢</div>
                 </div></div>
               ) : (
                 <div className="card a0">
@@ -459,9 +434,9 @@
                           <td style={{fontSize:13,color:d.company_name?'#333':'#C0C0C0'}}>{d.company_name||'—'}</td>
                           <td><span className="badge bg">{d.agency}</span></td>
                           <td style={{fontSize:11,fontFamily:'monospace'}}>
-                            {d.ref_uid ? <span style={{color:'#AF52DE'}} title={d.ref_uid}>{d.ref_uid.slice(0,8)}…</span> : <span style={{color:'#C0C0C0'}}>直接申請</span>}
+                            {d.referred_by ? <span style={{color:'#AF52DE'}} title={d.referred_by}>{d.referred_by.slice(0,8)}…</span> : <span style={{color:'#C0C0C0'}}>直接申請</span>}
                           </td>
-                          <td style={{fontSize:12,color:'#aaa'}}>{ago(d.created_at)}</td>
+                          <td style={{fontSize:12,color:'#aaa'}}>{ago(d.join_date)}</td>
                           <td style={{textAlign:'right'}}><div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
                             <button className="btn btn-ok" onClick={()=>approve(d,'active')}><Ic d={I.check} size={12}/> 核准</button>
                             <button className="btn btn-no" onClick={()=>approve(d,'rejected')}><Ic d={I.xmark} size={12}/> 拒絕</button>
