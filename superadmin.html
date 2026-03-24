@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TK SUPER ADMIN</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #060912;
+      --surface:  #0d1117;
+      --border:   rgba(255,255,255,0.06);
+      --border2:  rgba(255,255,255,0.10);
+      --text:     #e2e8f0;
+      --muted:    #4b5563;
+      --accent:   #3b82f6;
+      --green:    #10b981;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Animated grid bg ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(59,130,246,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    #root { position: relative; z-index: 1; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0;
+      width: 240px;
+      background: rgba(13,17,23,0.95);
+      border-right: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+      display: flex; flex-direction: column;
+      padding: 28px 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 0 24px 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 24px;
+      font-size: 13px; font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 0;
+      transition: all 0.15s;
+      position: relative;
+      letter-spacing: 0.01em;
+    }
+    .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+    .nav-item.active {
+      color: #fff;
+      background: rgba(59,130,246,0.10);
+    }
+    .nav-item.active::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px; background: var(--accent);
+      border-radius: 0 2px 2px 0;
+    }
+    .nav-section {
+      padding: 20px 24px 8px;
+      font-size: 9px; font-weight: 700; color: #374151;
+      letter-spacing: 0.15em; text-transform: uppercase;
+    }
+
+    /* ── Main content ── */
+    .main { margin-left: 240px; padding: 32px 36px; min-height: 100vh; }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 32px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--border2); }
+
+    /* ── Stat card ── */
+    .stat-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 36px; font-weight: 700; line-height: 1;
+      margin: 8px 0 4px;
+    }
+    .stat-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
+    .stat-change { font-size: 11px; font-weight: 700; margin-top: 8px; }
+    .stat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-size: 10px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.12em;
+      padding: 14px 16px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 16px 16px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.01); }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 999px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .badge-green  { background: rgba(16,185,129,.12); color: #10b981; }
+    .badge-amber  { background: rgba(245,158,11,.12);  color: #f59e0b; }
+    .badge-red    { background: rgba(239,68,68,.12);   color: #ef4444; }
+    .badge-blue   { background: rgba(59,130,246,.12);  color: #60a5fa; }
+
+    /* ── Button ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 8px; border: none;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif;
+      transition: all 0.15s;
+    }
+    .btn-green { background: rgba(16,185,129,.15); color: #10b981; }
+    .btn-green:hover { background: rgba(16,185,129,.25); }
+    .btn-red   { background: rgba(239,68,68,.12);  color: #ef4444; }
+    .btn-red:hover   { background: rgba(239,68,68,.22); }
+    .btn-blue  { background: var(--accent); color: #fff; }
+    .btn-blue:hover  { background: #2563eb; transform: translateY(-1px); }
+    .btn-ghost { background: rgba(255,255,255,.05); color: var(--muted); }
+    .btn-ghost:hover { background: rgba(255,255,255,.08); color: var(--text); }
+
+    /* ── Mini bar chart ── */
+    .bar-wrap { display: flex; align-items: flex-end; gap: 4px; height: 40px; }
+    .bar {
+      flex: 1; border-radius: 3px 3px 0 0;
+      background: rgba(59,130,246,0.25);
+      transition: background 0.2s;
+      position: relative;
+    }
+    .bar.active, .bar:hover { background: var(--accent); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 10px; }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .anim { animation: fadeUp 0.4s cubic-bezier(.22,1,.36,1) both; }
+    .anim-1 { animation-delay: 0.05s; }
+    .anim-2 { animation-delay: 0.10s; }
+    .anim-3 { animation-delay: 0.15s; }
+    .anim-4 { animation-delay: 0.20s; }
+    .anim-5 { animation-delay: 0.25s; }
+    .anim-6 { animation-delay: 0.30s; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .spin { animation: spin 0.8s linear infinite; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react,env">
+  const { useState, useEffect, useCallback } = React;
+
+  const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+  /* ─────────── ICONS ─────────── */
+  const Ic = ({ d, size = 16 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {d}
+    </svg>
+  );
+  const icons = {
+    dashboard:   <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></>,
+    users:       <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+    building:    <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
+    check:       <><polyline points="20 6 9 17 4 12"/></>,
+    x:           <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    refresh:     <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
+    bell:        <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>,
+    briefcase:   <><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></>,
+    map:         <><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></>,
+    trend:       <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+    logout:      <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
+    eye:         <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
+    settings:    <><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></>,
+    terminal:    <><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></>,
+  };
+
+  /* ─────────── HELPERS ─────────── */
+  const ago = (ts) => {
+    if (!ts) return '—';
+    const d = Math.floor((Date.now() - new Date(ts)) / 86400000);
+    return d === 0 ? '今天' : d === 1 ? '昨天' : `${d} 天前`;
+  };
+
+  const fmt = (n) => Number(n || 0).toLocaleString();
+
+  /* ─────────── MOCK FALLBACK DATA ─────────── */
+  const MOCK = {
+    stats: { tenants:12, distributors:148, pending:7, itineraries:94, revenue: 4820000 },
+    tenants: [
+      { slug:'demo',      name:'旅遊管家示範社', distributors:32, itineraries:18, status:'active',  created_at:'2024-01-15' },
+      { slug:'sunshine',  name:'陽光旅行社',     distributors:21, itineraries:12, status:'active',  created_at:'2024-02-20' },
+      { slug:'eastwind',  name:'東風旅遊',        distributors:15, itineraries: 9, status:'active',  created_at:'2024-03-10' },
+      { slug:'globetrek', name:'環球探索',        distributors: 8, itineraries: 5, status:'trial',   created_at:'2024-05-01' },
+      { slug:'bluewave',  name:'藍波旅行',        distributors: 0, itineraries: 0, status:'pending', created_at:'2024-06-18' },
+    ],
+    pending: [
+      { id:1, name:'王小明', phone:'0912-111-111', company_name:'自由業',   agency:'demo',      status:'pending', created_at:'2024-06-20', ref_uid:'' },
+      { id:2, name:'李美華', phone:'0933-222-333', company_name:'環島旅遊', agency:'sunshine',  status:'pending', created_at:'2024-06-19', ref_uid:'Uf123abc' },
+      { id:3, name:'陳大偉', phone:'0966-444-555', company_name:'',         agency:'eastwind',  status:'pending', created_at:'2024-06-18', ref_uid:'' },
+      { id:4, name:'林佳欣', phone:'0988-666-777', company_name:'景程企業', agency:'demo',      status:'pending', created_at:'2024-06-17', ref_uid:'Uf456def' },
+      { id:5, name:'張志遠', phone:'0911-888-999', company_name:'',         agency:'globetrek', status:'pending', created_at:'2024-06-16', ref_uid:'' },
+      { id:6, name:'吳雅玲', phone:'0955-123-456', company_name:'玲瓏旅行', agency:'sunshine',  status:'pending', created_at:'2024-06-15', ref_uid:'' },
+      { id:7, name:'蔡宗翰', phone:'0977-654-321', company_name:'',         agency:'demo',      status:'pending', created_at:'2024-06-14', ref_uid:'Uf789ghi' },
+    ],
+    activity: [
+      { time:'10:32', event:'新經銷申請', sub:'王小明 申請 demo 旅行社', type:'pending' },
+      { time:'09:15', event:'審核通過',   sub:'林佳欣 已獲授權',          type:'green'   },
+      { time:'08:54', event:'新行程上架', sub:'東風旅遊 +「東京賞楓五日」', type:'blue'   },
+      { time:'昨天',  event:'新租戶開通', sub:'藍波旅行 系統上線',          type:'blue'   },
+      { time:'昨天',  event:'申請拒絕',   sub:'某用戶 資料不符',            type:'red'    },
+    ],
+    weekBars: [30,45,28,60,42,72,55],
+  };
+
+  /* ─────────── STAT CARD ─────────── */
+  function StatCard({ label, value, change, color = '#3b82f6', icon, delay = '' }) {
+    return (
+      <div className={`card anim ${delay}`} style={{position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',top:16,right:16,opacity:0.12,color}}>
+          <Ic d={icon} size={40}/>
+        </div>
+        <div className="stat-label">{label}</div>
+        <div className="stat-num" style={{color}}>{value}</div>
+        {change && (
+          <div className="stat-change" style={{color: change > 0 ? '#10b981' : '#ef4444'}}>
+            {change > 0 ? '↑' : '↓'} {Math.abs(change)}% 較上週
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ─────────── MAIN APP ─────────── */
+  function App() {
+    const [page,        setPage]    = useState('dashboard');
+    const [stats,       setStats]   = useState(MOCK.stats);
+    const [tenants,     setTenants] = useState(MOCK.tenants);
+    const [pending,     setPending] = useState(MOCK.pending);
+    const [activity]               = useState(MOCK.activity);
+    const [loading,     setLoading] = useState(false);
+    const [toastMsg,    setToast]   = useState('');
+    const [filterSlug,  setFilter]  = useState('all');
+
+    /* ── Toast ── */
+    const toast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+    /* ── 嘗試從 API 拿真實資料，失敗時用 MOCK ── */
+    useEffect(() => {
+      (async () => {
+        try {
+          const r = await fetch(`${WORKER_URL}/api/super/stats`);
+          if (r.ok) { const d = await r.json(); if (d.success) setStats(d.data); }
+        } catch {}
+        try {
+          const r = await fetch(`${WORKER_URL}/api/super/tenants`);
+          if (r.ok) { const d = await r.json(); if (d.success) setTenants(d.data); }
+        } catch {}
+        try {
+          const r = await fetch(`${WORKER_URL}/api/super/pending`);
+          if (r.ok) { const d = await r.json(); if (d.success) setPending(d.data); }
+        } catch {}
+      })();
+    }, []);
+
+    /* ── 審核動作 ── */
+    const handleApprove = async (item, status) => {
+      const label = status === 'active' ? '核准' : '拒絕';
+      setPending(prev => prev.filter(p => p.id !== item.id));
+      setStats(s => ({ ...s, pending: s.pending - 1, distributors: status === 'active' ? s.distributors + 1 : s.distributors }));
+      toast(`✅ 已${label} ${item.name}`);
+      try {
+        await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${item.agency}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id, status })
+        });
+      } catch {}
+    };
+
+    /* ── 篩選 pending ── */
+    const filteredPending = filterSlug === 'all' ? pending : pending.filter(p => p.agency === filterSlug);
+
+    /* ── Sidebar items ── */
+    const navItems = [
+      { id:'dashboard', label:'儀表板',   icon: icons.dashboard },
+      { id:'pending',   label:'待審核',   icon: icons.bell, badge: pending.length },
+      { id:'tenants',   label:'旅行社管理', icon: icons.building },
+      { id:'settings',  label:'系統設定', icon: icons.settings },
+    ];
+
+    return (
+      <>
+        {/* ── Toast ── */}
+        {toastMsg && (
+          <div style={{
+            position:'fixed', top:24, right:24, zIndex:9999,
+            background:'#10b981', color:'#fff',
+            padding:'12px 20px', borderRadius:10,
+            fontSize:13, fontWeight:700,
+            boxShadow:'0 8px 24px rgba(16,185,129,.35)',
+            animation:'fadeUp 0.3s ease'
+          }}>{toastMsg}</div>
+        )}
+
+        {/* ── Sidebar ── */}
+        <aside className="sidebar">
+          <div className="sidebar-logo">
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{
+                width:34, height:34,
+                background:'linear-gradient(135deg,#1d4ed8,#3b82f6)',
+                borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center',
+                boxShadow:'0 4px 12px rgba(59,130,246,.4)'
+              }}>
+                <Ic d={icons.terminal} size={16}/>
+              </div>
+              <div>
+                <div style={{fontWeight:700, fontSize:13, letterSpacing:'0.02em', color:'#fff'}}>SUPER ADMIN</div>
+                <div style={{fontSize:10, color:'#374151', fontFamily:'JetBrains Mono', letterSpacing:'0.05em'}}>TravelKeeper SaaS</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="nav-section">Navigation</div>
+          {navItems.map(n => (
+            <div key={n.id} className={`nav-item ${page===n.id?'active':''}`} onClick={() => setPage(n.id)}>
+              <Ic d={n.icon} size={15}/>
+              <span style={{flex:1}}>{n.label}</span>
+              {n.badge > 0 && (
+                <span style={{
+                  background:'#ef4444', color:'#fff',
+                  fontSize:10, fontWeight:700, minWidth:18,
+                  padding:'1px 6px', borderRadius:999, textAlign:'center'
+                }}>{n.badge}</span>
+              )}
+            </div>
+          ))}
+
+          <div style={{marginTop:'auto', padding:'0 24px'}}>
+            <div style={{borderTop:'1px solid var(--border)', paddingTop:16}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+                <div style={{width:32,height:32,borderRadius:'50%',
+                  background:'linear-gradient(135deg,#1e3a5f,#1d4ed8)',
+                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <Ic d={icons.settings} size={14}/>
+                </div>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:'#fff'}}>Super Admin</div>
+                  <div style={{fontSize:10,color:'var(--muted)'}}>系統管理員</div>
+                </div>
+              </div>
+              <div className="btn btn-ghost" style={{width:'100%',justifyContent:'center',gap:8}}>
+                <Ic d={icons.logout} size={13}/> 登出
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Main ── */}
+        <main className="main">
+
+          {/* ════ DASHBOARD ════ */}
+          {page === 'dashboard' && (
+            <div>
+              <div className="topbar">
+                <div>
+                  <div style={{fontSize:22,fontWeight:700,color:'#fff',letterSpacing:'-0.02em'}}>系統儀表板</div>
+                  <div style={{fontSize:12,color:'var(--muted)',marginTop:3,fontFamily:'JetBrains Mono'}}>
+                    {new Date().toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'})}
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  <button className="btn btn-ghost" onClick={() => window.location.reload()}>
+                    <Ic d={icons.refresh} size={13}/> 刷新
+                  </button>
+                  <button className="btn btn-blue" onClick={() => setPage('pending')}>
+                    <Ic d={icons.bell} size={13}/>
+                    審核待辦 {pending.length > 0 && <span style={{
+                      background:'rgba(255,255,255,.25)',borderRadius:999,
+                      padding:'1px 7px',fontSize:11
+                    }}>{pending.length}</span>}
+                  </button>
+                </div>
+              </div>
+
+              {/* Stat cards */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:16,marginBottom:28}}>
+                <StatCard label="旅行社總數"   value={fmt(stats.tenants)}      color="#60a5fa" icon={icons.building}  delay="anim-1" change={8} />
+                <StatCard label="授權經銷商"   value={fmt(stats.distributors)} color="#10b981" icon={icons.users}     delay="anim-2" change={12}/>
+                <StatCard label="待審核申請"   value={fmt(stats.pending)}      color="#f59e0b" icon={icons.bell}      delay="anim-3" />
+                <StatCard label="上架行程"     value={fmt(stats.itineraries)}  color="#a78bfa" icon={icons.map}       delay="anim-4" change={5} />
+                <StatCard label="預估月營收"   value={`$${Math.round(stats.revenue/10000)}萬`} color="#f472b6" icon={icons.trend} delay="anim-5" change={18}/>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20}}>
+
+                {/* 旅行社列表 */}
+                <div className="card anim anim-6">
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+                    <div style={{fontSize:14,fontWeight:700,color:'#fff'}}>旅行社概覽</div>
+                    <button className="btn btn-ghost" style={{fontSize:11}} onClick={()=>setPage('tenants')}>
+                      查看全部 →
+                    </button>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>旅行社</th><th>經銷商</th><th>行程</th><th>狀態</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tenants.slice(0,5).map(t => (
+                        <tr key={t.slug}>
+                          <td>
+                            <div style={{fontWeight:700,color:'#fff',fontSize:13}}>{t.name}</div>
+                            <div style={{fontSize:11,color:'var(--muted)',fontFamily:'JetBrains Mono'}}>{t.slug}</div>
+                          </td>
+                          <td style={{fontFamily:'JetBrains Mono',color:'#60a5fa',fontWeight:700}}>{t.distributors}</td>
+                          <td style={{fontFamily:'JetBrains Mono',color:'#a78bfa',fontWeight:700}}>{t.itineraries}</td>
+                          <td>
+                            <span className={`badge ${t.status==='active'?'badge-green':t.status==='trial'?'badge-amber':'badge-blue'}`}>
+                              {t.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 活動紀錄 + mini chart */}
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  {/* Mini bar chart */}
+                  <div className="card anim anim-6">
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+                      <div style={{fontSize:13,fontWeight:700,color:'#fff'}}>本週申請趨勢</div>
+                      <div style={{fontSize:20,fontWeight:700,color:'#60a5fa',fontFamily:'JetBrains Mono'}}>{MOCK.weekBars.reduce((a,b)=>a+b,0)}</div>
+                    </div>
+                    <div className="bar-wrap">
+                      {MOCK.weekBars.map((v,i) => (
+                        <div key={i} className={`bar ${i===6?'active':''}`}
+                             title={v}
+                             style={{height:`${Math.round(v/72*100)}%`}}/>
+                      ))}
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
+                      {['一','二','三','四','五','六','日'].map(d=>(
+                        <span key={d} style={{fontSize:9,color:'var(--muted)',flex:1,textAlign:'center'}}>{d}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Activity */}
+                  <div className="card anim anim-6" style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:16}}>最新動態</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                      {activity.map((a,i) => (
+                        <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                          <div style={{
+                            width:7, height:7, borderRadius:'50%', marginTop:5, flexShrink:0,
+                            background: a.type==='green'?'#10b981':a.type==='red'?'#ef4444':a.type==='pending'?'#f59e0b':'#60a5fa'
+                          }}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:700,color:'#cbd5e1'}}>{a.event}</div>
+                            <div style={{fontSize:11,color:'var(--muted)',marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.sub}</div>
+                          </div>
+                          <div style={{fontSize:10,color:'var(--muted)',whiteSpace:'nowrap',fontFamily:'JetBrains Mono'}}>{a.time}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════ PENDING APPROVAL ════ */}
+          {page === 'pending' && (
+            <div>
+              <div className="topbar">
+                <div>
+                  <div style={{fontSize:22,fontWeight:700,color:'#fff',letterSpacing:'-0.02em'}}>經銷商審核</div>
+                  <div style={{fontSize:12,color:'var(--muted)',marginTop:3}}>共 {pending.length} 件待審核申請</div>
+                </div>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <span style={{fontSize:12,color:'var(--muted)'}}>篩選旅行社：</span>
+                  <select
+                    value={filterSlug}
+                    onChange={e=>setFilter(e.target.value)}
+                    style={{
+                      background:'var(--surface)', border:'1px solid var(--border)',
+                      color:'var(--text)', borderRadius:8, padding:'7px 12px',
+                      fontSize:12, fontFamily:'Space Grotesk', outline:'none', cursor:'pointer'
+                    }}>
+                    <option value="all">全部</option>
+                    {tenants.map(t=><option key={t.slug} value={t.slug}>{t.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {filteredPending.length === 0 ? (
+                <div className="card anim" style={{textAlign:'center',padding:'60px 0',color:'var(--muted)'}}>
+                  <div style={{fontSize:48,marginBottom:12}}>🎉</div>
+                  <div style={{fontSize:16,fontWeight:700,color:'#cbd5e1'}}>目前沒有待審核申請</div>
+                  <div style={{fontSize:12,marginTop:6}}>所有申請皆已處理完畢</div>
+                </div>
+              ) : (
+                <div className="card anim">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>申請人</th>
+                        <th>聯絡電話</th>
+                        <th>公司 / 品牌</th>
+                        <th>所屬旅行社</th>
+                        <th>推薦人</th>
+                        <th>申請時間</th>
+                        <th style={{textAlign:'right'}}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPending.map((d, i) => (
+                        <tr key={d.id} className="anim" style={{animationDelay:`${i*0.04}s`}}>
+                          <td>
+                            <div style={{fontWeight:700,color:'#fff',fontSize:14}}>{d.name}</div>
+                            <div style={{fontSize:10,color:'var(--muted)',fontFamily:'JetBrains Mono',marginTop:2}}>id:{d.id}</div>
+                          </td>
+                          <td style={{fontFamily:'JetBrains Mono',fontSize:12,color:'#cbd5e1'}}>{d.phone}</td>
+                          <td style={{fontSize:13,color:d.company_name?'#cbd5e1':'var(--muted)'}}>
+                            {d.company_name || '—'}
+                          </td>
+                          <td>
+                            <span className="badge badge-blue">{d.agency}</span>
+                          </td>
+                          <td style={{fontFamily:'JetBrains Mono',fontSize:11}}>
+                            {d.ref_uid
+                              ? <span style={{color:'#a78bfa'}} title={d.ref_uid}>{d.ref_uid.slice(0,10)}…</span>
+                              : <span style={{color:'var(--muted)'}}>直接申請</span>
+                            }
+                          </td>
+                          <td style={{fontSize:12,color:'var(--muted)'}}>{ago(d.created_at)}</td>
+                          <td style={{textAlign:'right'}}>
+                            <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+                              <button className="btn btn-green" onClick={() => handleApprove(d, 'active')}>
+                                <Ic d={icons.check} size={12}/> 核准
+                              </button>
+                              <button className="btn btn-red" onClick={() => handleApprove(d, 'rejected')}>
+                                <Ic d={icons.x} size={12}/> 拒絕
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════ TENANTS ════ */}
+          {page === 'tenants' && (
+            <div>
+              <div className="topbar">
+                <div>
+                  <div style={{fontSize:22,fontWeight:700,color:'#fff',letterSpacing:'-0.02em'}}>旅行社管理</div>
+                  <div style={{fontSize:12,color:'var(--muted)',marginTop:3}}>共 {tenants.length} 間租戶</div>
+                </div>
+                <button className="btn btn-blue"><Ic d={icons.building} size={13}/> 新增旅行社</button>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+                {tenants.map((t,i) => (
+                  <div key={t.slug} className={`card anim anim-${i+1}`}
+                       style={{cursor:'pointer',transition:'border-color .2s,transform .2s'}}
+                       onMouseEnter={e=>e.currentTarget.style.borderColor='var(--border2)'}
+                       onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+                      <div style={{
+                        width:40, height:40, borderRadius:10,
+                        background:'linear-gradient(135deg,#1e3a5f,#1d4ed8)',
+                        display:'flex', alignItems:'center', justifyContent:'center'
+                      }}>
+                        <Ic d={icons.building} size={18}/>
+                      </div>
+                      <span className={`badge ${t.status==='active'?'badge-green':t.status==='trial'?'badge-amber':'badge-blue'}`}>
+                        {t.status}
+                      </span>
+                    </div>
+                    <div style={{fontWeight:700,color:'#fff',fontSize:15,marginBottom:4}}>{t.name}</div>
+                    <div style={{fontSize:11,color:'var(--muted)',fontFamily:'JetBrains Mono',marginBottom:16}}>{t.slug}</div>
+                    <div style={{display:'flex',gap:20,paddingTop:14,borderTop:'1px solid var(--border)'}}>
+                      <div>
+                        <div style={{fontSize:10,color:'var(--muted)',marginBottom:2}}>經銷商</div>
+                        <div style={{fontFamily:'JetBrains Mono',fontWeight:700,color:'#60a5fa',fontSize:18}}>{t.distributors}</div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,color:'var(--muted)',marginBottom:2}}>行程</div>
+                        <div style={{fontFamily:'JetBrains Mono',fontWeight:700,color:'#a78bfa',fontSize:18}}>{t.itineraries}</div>
+                      </div>
+                      <div style={{marginLeft:'auto',alignSelf:'flex-end'}}>
+                        <button className="btn btn-ghost" style={{fontSize:11}}>
+                          <Ic d={icons.eye} size={12}/> 進入
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ════ SETTINGS ════ */}
+          {page === 'settings' && (
+            <div>
+              <div className="topbar">
+                <div style={{fontSize:22,fontWeight:700,color:'#fff',letterSpacing:'-0.02em'}}>系統設定</div>
+              </div>
+              <div className="card anim" style={{maxWidth:560}}>
+                <div style={{fontSize:14,fontWeight:700,color:'#fff',marginBottom:20}}>Worker API 端點</div>
+                <div style={{
+                  background:'#060912', borderRadius:10, padding:'14px 16px',
+                  fontFamily:'JetBrains Mono', fontSize:12, color:'#60a5fa',
+                  border:'1px solid var(--border)', marginBottom:20
+                }}>{WORKER_URL}</div>
+                <div style={{fontSize:14,fontWeight:700,color:'#fff',marginBottom:20}}>版本資訊</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  {[['系統版本','v2.4.1'],['部署環境','Cloudflare Workers'],['資料庫','D1 SQLite'],['LIFF 整合','LINE 2.x']].map(([k,v])=>(
+                    <div key={k} style={{background:'#060912',borderRadius:10,padding:'12px 14px',border:'1px solid var(--border)'}}>
+                      <div style={{fontSize:10,color:'var(--muted)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em'}}>{k}</div>
+                      <div style={{fontFamily:'JetBrains Mono',fontSize:13,color:'#e2e8f0',fontWeight:700}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </main>
+      </>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
