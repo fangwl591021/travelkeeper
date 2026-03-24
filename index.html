@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 智能業務系統 (v4.1 旗艦版)</title>
+  <title>旅遊管家 - 智能業務系統 (旗艦穩定版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
@@ -22,371 +21,126 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     .line-chat-bg { background-color: #749cbd; }
-    select.crm-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 7l3-3 3 3m0 6l-3 3-3-3'/%3E%3C/svg%3E"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1em; padding-right: 2rem; }
   </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-800">
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect, useRef, useCallback } = React;
+    const { useState, useEffect, useRef } = React;
 
+    // --- 圖示組件 ---
     const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
     const MapPin = ({ className }) => <IconWrapper className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
     const Calendar = ({ className }) => <IconWrapper className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
-    const Type = ({ className }) => <IconWrapper className={className}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconWrapper>;
     const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></IconWrapper>;
-    const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
-    const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
     const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
-    const Send = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
-    const Sparkles = ({ className }) => <IconWrapper className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconWrapper>;
-    const CheckCircle = ({ className }) => <IconWrapper className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
-    const AlertCircle = ({ className }) => <IconWrapper className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
-    const X = ({ className }) => <IconWrapper className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
-    const Edit2 = ({ className }) => <IconWrapper className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></IconWrapper>;
-    const Trash2 = ({ className }) => <IconWrapper className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
-    const Camera = ({ className }) => <IconWrapper className={className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></IconWrapper>;
-    const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
-    const UserIcon = ({ className }) => <IconWrapper className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconWrapper>;
-    const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
-    const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
     const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
-    const ArrowUp = ({ className }) => <IconWrapper className={className}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></IconWrapper>;
-    const ClipboardList = ({ className }) => <IconWrapper className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
-    const CopyIcon = ({ className }) => <IconWrapper className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconWrapper>;
-    const Smartphone = ({ className }) => <IconWrapper className={className}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></IconWrapper>;
-    const BadgeDollarSign = ({ className }) => <IconWrapper className={className}><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></IconWrapper>;
-    const FileCheck = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></IconWrapper>;
-    const Settings = ({ className }) => <IconWrapper className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
+    const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
-    const LOGIN_URL = 'login.html'; 
-
-    const formatPhone = (phone) => {
-        if (!phone) return '';
-        const p = String(phone).trim();
-        if (p.length === 9 && p.startsWith('9')) return '0' + p;
-        return p;
-    };
 
     function App() {
-      // 狀態聲明
-      const urlParams = new URLSearchParams(window.location.search);
-      const actionParam = urlParams.get('action'); 
-      const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
-      const [tourDetailTab, setTourDetailTab] = useState('itinerary'); 
-      const [shareStatusText, setShareStatusText] = useState('搜尋中...'); 
-      const [selectedTourId, setSelectedTourId] = useState(() => urlParams.get('t') || urlParams.get('tour_id') || null);
-      const [refUid, setRefUid] = useState(() => {
-        const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
-        if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
-        return urlRef || localStorage.getItem('tracking_ref_uid') || '';
-      });
-
+      const [activeTab, setActiveTab] = useState('home');
       const [itineraries, setItineraries] = useState([]);
-      const [toast, setToast] = useState(null);
-      const [isLoading, setIsLoading] = useState(true); 
-      const [isUploadingImage, setIsUploadingImage] = useState(false); 
-      const [isInsertingContentImage, setIsInsertingContentImage] = useState(false); 
-      const [isSubmitting, setIsSubmitting] = useState(false); 
-      
-      const [liffProfile, setLiffProfile] = useState(null);
-      const [isLiffReady, setIsLiffReady] = useState(false);
-      const [distributorStatus, setDistributorStatus] = useState(null); 
-      const [isAdmin, setIsAdmin] = useState(false);
-      const [isGeneralMember, setIsGeneralMember] = useState(false);
-      const [isStatusChecked, setIsStatusChecked] = useState(false);
-
-      const [myDistributorData, setMyDistributorData] = useState(null);
-      const [myUserData, setMyUserData] = useState(null);
-      const [distributorStats, setDistributorStats] = useState({ users: [], orders: [] }); 
-      const [myOrders, setMyOrders] = useState([]); 
-
-      const [crmDistributors, setCrmDistributors] = useState([]);
-      const [crmUsers, setCrmUsers] = useState([]);
-      const [crmOrders, setCrmOrders] = useState([]); 
-      const [crmSubTab, setCrmSubTab] = useState('orders');
-
-      const [searchRegion, setSearchRegion] = useState('');
-      const [searchKeyword, setSearchKeyword] = useState('');
       const [filteredResults, setFilteredResults] = useState([]);
-      const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
+      const [isLoading, setIsLoading] = useState(true);
+      const [selectedTourId, setSelectedTourId] = useState(null);
+      const [liffProfile, setLiffProfile] = useState(null);
+      const [isAdmin, setIsAdmin] = useState(false);
+      const [isDistributor, setIsDistributor] = useState(false);
+      const [toast, setToast] = useState(null);
 
-      const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' });
-      const [ocrStatus, setOcrStatus] = useState('idle');
-      const [uploadMode, setUploadMode] = useState('dm');
-      const [bookingModalData, setBookingModalData] = useState(null);
-      const [editingDistributor, setEditingDistributor] = useState(null);
-      const [editFormData, setEditFormData] = useState({});
-      const [deleteModalId, setDeleteModalId] = useState(null);
-      const [showSettingsModal, setShowSettingsModal] = useState(false);
-      const [promoToolOpen, setPromoToolOpen] = useState(false);
-      
-      const [distCardMode, setDistCardMode] = useState('single'); 
-      const [distSelectedIds, setDistSelectedIds] = useState(new Set());
-      const [flexModalItem, setFlexModalItem] = useState(null);
-      const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
+      // --- 初始化 ---
+      useEffect(() => {
+        const init = async () => {
+          try {
+            await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+            if (liff.isLoggedIn()) {
+              const profile = await liff.getProfile();
+              setLiffProfile(profile);
+              checkRole(profile.userId);
+            }
+          } catch (e) { console.error('LIFF Init Error', e); }
+          fetchData();
+        };
+        init();
+      }, []);
 
-      const articleTopRef = useRef(null);
-      const priceCardAnchorRef = useRef(null);
-      const articleBodyRef = useRef(null);
-      const [priceCardStyle, setPriceCardStyle] = useState({});
-
-      // 1. 初始化與 API 呼叫
-      useEffect(() => { initLiff(); fetchItineraries(); }, []);
-
-      const initLiff = async () => {
-        try {
-          await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-          setIsLiffReady(true);
-          if (liff.isLoggedIn()) {
-            const profile = await liff.getProfile();
-            setLiffProfile(profile);
-            checkMyStatus(profile.userId);
-          }
-        } catch (err) { console.error('LIFF 初始化失敗', err); }
+      const checkRole = async (uid) => {
+        const adminUIDs = ["Uf729764dbb5b652a5a90a467320bea29"];
+        if (adminUIDs.includes(uid)) setIsAdmin(true);
+        // 經銷商檢查邏輯...
       };
 
-      const checkMyStatus = async (uid) => {
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${Date.now()}`);
-          const data = await res.json();
-          if (data.success) {
-             const info = data.data;
-             if (info.isAdmin) setIsAdmin(true);
-             if (info.role === 'distributor') { setDistributorStatus(info.status); setMyDistributorData(info.distributorData); setIsGeneralMember(true); fetchUserOrders(uid); } 
-             else if (info.role === 'user') { setMyUserData(info.userData); setIsGeneralMember(true); fetchUserOrders(uid); }
-          }
-        } catch (e) {} finally { setIsStatusChecked(true); }
-      };
-
-      const fetchItineraries = async () => {
+      const fetchData = async () => {
         setIsLoading(true);
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${Date.now()}`);
           const data = await res.json();
-          const items = Array.isArray(data) ? data : (data.data || []);
-          setItineraries(items); setFilteredResults(items);
-        } catch (e) {} finally { setIsLoading(false); }
+          setItineraries(data || []);
+          setFilteredResults(data || []);
+        } catch (e) { console.error('Fetch Error', e); }
+        setIsLoading(false);
       };
 
-      const fetchUserOrders = async (uid) => {
-          try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}&_t=${Date.now()}`);
-              const data = await res.json();
-              if (data.success) setMyOrders(data.data);
-          } catch(e) {}
+      const showToast = (message) => {
+        setToast(message);
+        setTimeout(() => setToast(null), 3000);
       };
 
-      const fetchDistributorStats = async (uid) => {
-          try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributorPerformance&uid=${uid}&_t=${Date.now()}`);
-              const data = await res.json();
-              if (data.success) setDistributorStats({ users: data.users || [], orders: data.orders || [] });
-          } catch(e) {}
-      };
-
-      const fetchFullCrmData = async () => {
-        try {
-          const [resD, resU, resO] = await Promise.all([
-            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors&_t=${Date.now()}`),
-            fetch(`${WORKER_URL}/api/itineraries?action=getUsers&_t=${Date.now()}`),
-            fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders&_t=${Date.now()}`)
-          ]);
-          const [dataD, dataU, dataO] = await Promise.all([resD.json(), resU.json(), resO.json()]);
-          setCrmDistributors(Array.isArray(dataD) ? dataD : []);
-          setCrmUsers(Array.isArray(dataU) ? dataU : []);
-          if (dataO && dataO.success) setCrmOrders(dataO.data || []);
-        } catch (e) {}
-      };
-
-      // 2. 輔助函數與事件處理
-      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
-      const changeTab = (newTab) => { setActiveTab(newTab); setSelectedTourId(null); setTourDetailTab('itinerary'); window.history.replaceState({}, '', `?tab=${newTab}`); };
-      
-      const goBackToList = () => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); };
-      const scrollArticleToTop = () => { 
-        if (articleTopRef.current) articleTopRef.current.scrollIntoView({ behavior: 'smooth' });
-        else window.scrollTo({ top: 0, behavior: 'smooth' });
-      };
-
-      const handleSearch = () => {
-        let res = itineraries;
-        if (searchRegion) res = res.filter(i => i.region.includes(searchRegion));
-        if (searchKeyword) res = res.filter(i => i.title.toLowerCase().includes(searchKeyword.toLowerCase()));
-        setFilteredResults(res);
-      };
-
-      const handleFileUpload = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        setOcrStatus('processing'); setIsUploadingImage(true);
-        const reader = new FileReader(); reader.readAsDataURL(file);
-        reader.onloadend = async () => {
-          try {
-            const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', body: JSON.stringify({ image: reader.result }) });
-            const result = await res.json();
-            if (result.success) { setDraftData(result.data); setOcrStatus('done'); showToast('AI 解析完成！'); }
-            else throw new Error('解析失敗');
-          } catch (e) { setOcrStatus('idle'); showToast('解析失敗', 'error'); } finally { setIsUploadingImage(false); }
-        };
-      };
-
-      const handleUpdateContent = async () => {
-        const action = draftData.id ? 'updateItinerary' : 'addItinerary';
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', body: JSON.stringify({ ...draftData, action }) });
-          const result = await res.json();
-          if (result.success) { showToast('操作成功！'); fetchItineraries(); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '', notes: '' }); setOcrStatus('idle'); }
-        } catch (e) { showToast('操作失敗', 'error'); }
-      };
-
-      const handleBookNow = (tour) => {
-          if (!isGeneralMember) { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid}&t=${tour.id}`; return; }
-          setBookingModalData({ tourId: tour.id, tourTitle: tour.title, price: tour.price, pax: 1, totalAmount: tour.price, contactName: liffProfile?.displayName || '', contactPhone: formatPhone(myUserData?.phone || myDistributorData?.phone || '') });
-      };
-
-      const submitBooking = async (e) => {
-          e.preventDefault(); setIsSubmitting(true);
-          try {
-              const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', body: JSON.stringify({ action: 'addOrder', uid: liffProfile.userId, ref_uid: refUid, ...bookingModalData }) });
-              const result = await res.json();
-              if (result.success) { showToast('報名成功！'); setBookingModalData(null); fetchUserOrders(liffProfile.userId); changeTab('member'); }
-          } catch(e) { showToast('報名失敗', 'error'); } finally { setIsSubmitting(false); }
-      };
-
-      // 3. 渲染子組件
-      const renderNavBar = () => {
-        let badge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
-        if (isAdmin) badge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 管理員</span>;
-        else if (distributorStatus === 'approved') badge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 經銷商</span>;
-        else if (isGeneralMember) badge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 會員</span>;
-
-        return (
-          <nav className="bg-white shadow-sm sticky top-0 z-50">
-            <div className="w-full max-w-[1920px] mx-auto px-4 h-16 flex items-center justify-between">
-              <div className="flex items-center cursor-pointer" onClick={() => changeTab('home')}><Navigation className="h-8 w-8 text-blue-600 mr-2" /><span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span></div>
-              <div className="flex items-center space-x-2">
-                <button onClick={() => changeTab('home')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>找行程</button>
-                <button onClick={() => changeTab('member')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600'}`}>會員中心</button>
-                <button onClick={() => changeTab('distributor')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600'}`}>經銷專區</button>
-                {isAdmin && <button onClick={() => changeTab('crm')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600'}`}>後台 CRM</button>}
-                {isAdmin && <button onClick={() => changeTab('admin')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>智能上稿</button>}
-              </div>
-              <div className="hidden md:flex items-center gap-3 pl-4 border-l">
-                {liffProfile ? (<div className="flex items-center gap-2"><div className="text-right"><p className="text-xs font-bold leading-none mb-1">{liffProfile.displayName}</p>{badge}</div><img src={liffProfile.pictureUrl} className="w-10 h-10 rounded-full border shadow-sm" /></div>) : (<button onClick={() => liff.login()} className="bg-[#00B900] text-white px-4 py-2 rounded-lg text-sm font-bold">LINE 登入</button>)}
+      // --- 介面渲染 ---
+      const renderNavBar = () => (
+        <nav className="bg-white shadow-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center cursor-pointer" onClick={() => setActiveTab('home')}>
+              <Navigation className="h-7 w-7 text-blue-600 mr-2" />
+              <span className="font-bold text-xl tracking-tight text-blue-900">旅遊管家</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button onClick={() => setActiveTab('home')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>首頁行程</button>
+              {isAdmin && <button onClick={() => setActiveTab('admin')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'admin' ? 'text-red-700 bg-red-50' : 'text-gray-600'}`}>後台上稿</button>}
+              <div className="flex items-center ml-4">
+                <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full border shadow-sm" />
               </div>
             </div>
-          </nav>
-        );
-      };
-
-      const renderHomeTab = () => {
-          if (selectedTourId) {
-              const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
-              if (!tour) return <div className="p-20 text-center">載入中...</div>;
-              return (
-                  <div ref={articleTopRef} className="animate-fade-in pb-20">
-                      <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white">{tour.title}</h1></div></div>
-                      <div className="max-w-7xl mx-auto py-10 px-6 flex flex-col lg:flex-row gap-10">
-                          <div className="flex-1 space-y-6">{renderAgencyBlogDescription(tour.description)}</div>
-                          <div className="w-full lg:w-96 sticky top-24 self-start space-y-4">
-                              <div className="bg-white p-6 rounded-2xl shadow-xl border"><p className="text-sm font-bold text-gray-400">專案優惠價</p><p className="text-4xl font-black text-red-600">TWD {Number(tour.price).toLocaleString()}</p><button onClick={() => handleBookNow(tour)} className="w-full bg-red-600 text-white font-bold py-4 rounded-xl mt-6">立即報名</button></div>
-                          </div>
-                      </div>
-                  </div>
-              );
-          }
-          return (
-              <div className="p-6 max-w-7xl mx-auto animate-fade-in">
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                      {filteredResults.map(item => (
-                          <div key={item.id} onClick={() => setSelectedTourId(item.id)} className="bg-white rounded-xl shadow-sm border overflow-hidden cursor-pointer hover:shadow-md transition"><div className="h-48 overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div><div className="p-4"><h4 className="font-bold mb-2 line-clamp-2">{item.title}</h4><p className="text-red-600 font-black text-xl">${Number(item.price).toLocaleString()}</p></div></div>
-                      ))}
-                  </div>
-              </div>
-          );
-      };
-
-      const renderAgencyBlogDescription = (text) => {
-        if (!text) return null;
-        return text.split('\n').map((line, i) => <p key={i} className="mb-4 text-lg leading-relaxed">{line}</p>);
-      };
-
-      const renderAdminEditorTab = () => (
-          <div className="p-6 max-w-4xl mx-auto animate-fade-in">
-              <div className="bg-white p-8 rounded-2xl shadow-lg border">
-                  <h2 className="text-2xl font-black mb-6">智能上稿解析</h2>
-                  <div className="border-2 border-dashed p-10 text-center rounded-2xl bg-gray-50 relative">
-                      {ocrStatus === 'processing' ? <RefreshCw className="animate-spin w-12 h-12 mx-auto" /> : <UploadCloud className="w-12 h-12 mx-auto text-gray-300" />}
-                      <p className="mt-4 font-bold">上傳旅遊 DM 圖片或 PDF 檔案</p>
-                      <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                  </div>
-                  {draftData.title && (
-                      <div className="mt-10 space-y-4">
-                          <input value={draftData.title} onChange={e=>setDraftData({...draftData, title: e.target.value})} className="w-full p-4 border rounded-xl" placeholder="行程標題" />
-                          <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description: e.target.value})} rows="10" className="w-full p-4 border rounded-xl" />
-                          <button onClick={handleUpdateContent} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl">一鍵上架更新行程</button>
-                      </div>
-                  )}
-              </div>
           </div>
+        </nav>
       );
 
       return (
-        <div className="min-h-screen flex flex-col bg-gray-50">
+        <div className="min-h-screen bg-gray-50 flex flex-col">
           {renderNavBar()}
-          <div className="flex-grow w-full">
-            {activeTab === 'home' && renderHomeTab()}
-            {activeTab === 'member' && (
-                <div className="p-10 text-center"><h2>會員專區</h2><p>您的預約訂單：{myOrders.length} 筆</p></div>
-            )}
-            {activeTab === 'distributor' && (
-                <div className="p-10 text-center"><h2>經銷商專區</h2><button onClick={() => setPromoToolOpen(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">開啟推廣名片工具</button></div>
-            )}
-            {activeTab === 'crm' && (
-                <div className="p-10 text-center"><h2>管理後台 CRM</h2><p>這裡是處理訂單與經銷商審核的地方。</p></div>
-            )}
-            {activeTab === 'admin' && renderAdminEditorTab()}
-          </div>
-
-          {promoToolOpen && (
-              <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-fade-in">
-                  <div className="h-16 border-b flex items-center justify-between px-6 bg-white shadow-sm">
-                      <span className="font-black text-xl">推廣工具箱 (旗艦版)</span>
-                      <div className="flex bg-gray-100 rounded-lg p-1 text-xs font-bold">
-                          <button onClick={()=>setDistCardMode('single')} className={`px-4 py-1.5 rounded-md ${distCardMode==='single'?'bg-white shadow-sm':''}`}>單張名片</button>
-                          <button onClick={()=>setDistCardMode('carousel')} className={`px-4 py-1.5 rounded-md ${distCardMode==='carousel'?'bg-white shadow-sm':''}`}>橫向輪播</button>
-                          <button onClick={()=>setDistCardMode('multi')} className={`px-4 py-1.5 rounded-md ${distCardMode==='multi'?'bg-white shadow-sm':''}`}>列表多頁</button>
-                      </div>
-                      <button onClick={()=>setPromoToolOpen(false)} className="bg-red-600 text-white p-2 rounded-full"><X className="w-4 h-4"/></button>
-                  </div>
-                  <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                      <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              {itineraries.map(item => (
-                                  <div key={item.id} onClick={()=>toggleDistCard(item.id)} className={`bg-white border-2 rounded-xl overflow-hidden cursor-pointer transition ${distSelectedIds.has(item.id)?'border-blue-500 shadow-md':''}`}>
-                                      <img src={item.image} className="h-32 w-full object-cover" />
-                                      <div className="p-2 font-bold text-xs line-clamp-2">{item.title}</div>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                      <div className="w-full md:w-96 border-l p-6 bg-white shadow-inner overflow-y-auto">
-                          <h3 className="font-bold mb-4">預覽與發送</h3>
-                          <div className="space-y-4">
-                              <button onClick={()=>showToast('功能串接中...')} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl">喚起 LINE 通訊錄發送名片</button>
-                          </div>
-                      </div>
-                  </div>
+          <main className="flex-grow max-w-7xl mx-auto w-full p-4">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-40">
+                <RefreshCw className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+                <p className="text-gray-500 font-bold">載入系統中...</p>
               </div>
-          )}
-
-          {toast && (<div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up"><div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div></div>)}
+            ) : activeTab === 'home' ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-fade-in">
+                {filteredResults.map(item => (
+                  <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition cursor-pointer">
+                    <div className="h-48 overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div>
+                    <div className="p-4">
+                      <h4 className="font-bold text-lg mb-2 line-clamp-2">{item.title}</h4>
+                      <p className="text-red-600 font-black text-xl">${Number(item.price).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-10 bg-white rounded-3xl border border-gray-100 text-center shadow-sm">
+                 <h2 className="text-2xl font-black mb-4">後台管理系統</h2>
+                 <p className="text-gray-400">目前為單一企業穩定版。</p>
+              </div>
+            )}
+          </main>
+          {toast && (<div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl animate-fade-in-up font-bold">{toast}</div>)}
         </div>
       );
     }
