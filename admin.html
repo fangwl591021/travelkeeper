@@ -90,11 +90,11 @@
         setDistributors(await res.json());
       };
 
-      const handleApprove = async (uid, status) => {
+      const handleApprove = async (id, status) => {
         await fetch(`${WORKER_URL}/api/admin/approve-distributor?a=${agencySlug}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid, status, adminUid: myUid })
+          body: JSON.stringify({ id, status, adminUid: myUid })
         });
         fetchDistributors();
       };
@@ -119,8 +119,31 @@
         reader.readAsDataURL(file);
       };
 
-      if (auth === 'loading') return <div className="h-screen flex items-center justify-center font-bold text-slate-200">TK ADMIN INITIALIZING...</div>;
-      if (auth === 'denied') return <div className="h-screen flex flex-col items-center justify-center p-12 text-center bg-white"><div className="text-red-500 text-8xl mb-10">⛔</div><h1 className="text-4xl font-black mb-4">ACCESS DENIED</h1><p className="text-slate-400 font-bold mb-8">UID: {myUid}</p></div>;
+      if (auth === 'loading') return <div className="h-screen flex items-center justify-center font-bold text-slate-300 text-2xl tracking-widest">TK ADMIN INITIALIZING...</div>;
+      
+      // 優化後的「權限不足」引導畫面
+      if (auth === 'denied') return (
+        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50">
+          <div className="text-red-500 text-7xl mb-6">⛔</div>
+          <h1 className="text-3xl font-black mb-4 text-slate-800">管理權限不足</h1>
+          <p className="text-slate-500 font-bold mb-8">您的 LINE UID: <code className="bg-slate-200 text-slate-700 px-3 py-1 rounded-lg break-all text-xs block mt-2">{myUid}</code></p>
+          
+          <div className="bg-white border border-slate-200 shadow-xl p-8 rounded-[2rem] max-w-md text-left">
+            <p className="font-black text-lg mb-4 flex items-center gap-2">💡 系統角色導航</p>
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                <p className="font-bold text-blue-800 mb-1">如果您是「合作夥伴 / 業務」</p>
+                <p className="text-xs text-blue-600 mb-3">此頁面為老闆專用。請前往前台挑選行程與推廣。</p>
+                <a href={`index.html?a=${agencySlug}&tab=dist`} className="inline-block bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition">前往夥伴推廣前台 →</a>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="font-bold text-slate-700 mb-1">如果您是「旅行社老闆」</p>
+                <p className="text-xs text-slate-500">請確認您的 UID 已加入 D1 資料庫中 <code>tenants</code> 表格的 <code>admin_uids</code> 欄位。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
 
       return (
         <div className="min-h-screen">
@@ -167,7 +190,7 @@
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {distributors.map(d => (
-                        <tr key={d.uid} className="hover:bg-slate-50/50 transition">
+                        <tr key={d.id} className="hover:bg-slate-50/50 transition">
                           <td className="p-8"><p className="font-black text-lg">{d.name}</p><p className="text-[10px] text-slate-300 font-mono mt-1">{d.uid}</p></td>
                           <td className="p-8 font-black text-slate-600">{d.phone}</td>
                           <td className="p-8"><p className="font-black text-slate-800">{d.company_name || '一般會員'}</p><p className="text-[10px] text-indigo-400 font-black mt-1">REF: {d.referred_by || '直接註冊'}</p></td>
@@ -177,8 +200,8 @@
                           <td className="p-8 text-right flex justify-end gap-3 mt-2">
                             {d.status === 'pending' && (
                               <>
-                                <button onClick={()=>handleApprove(d.uid, 'active')} className="bg-emerald-600 text-white p-3 rounded-2xl shadow-xl shadow-emerald-100 hover:scale-110 transition"><Icon name="check" /></button>
-                                <button onClick={()=>handleApprove(d.uid, 'rejected')} className="bg-red-500 text-white p-3 rounded-2xl shadow-xl shadow-red-100 hover:scale-110 transition"><Icon name="x" /></button>
+                                <button onClick={()=>handleApprove(d.id, 'active')} className="bg-emerald-600 text-white p-3 rounded-2xl shadow-xl shadow-emerald-100 hover:scale-110 transition"><Icon name="check" /></button>
+                                <button onClick={()=>handleApprove(d.id, 'rejected')} className="bg-red-500 text-white p-3 rounded-2xl shadow-xl shadow-red-100 hover:scale-110 transition"><Icon name="x" /></button>
                               </>
                             )}
                           </td>
