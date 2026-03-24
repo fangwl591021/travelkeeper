@@ -365,6 +365,10 @@
                             <td style={{fontWeight:700,color:'#007AFF'}}>{t.itineraries}</td>
                             <td><span className={`badge ${t.status==='active'?'bg':t.status==='trial'?'ba':'bb'}`}>{t.status==='active'?'運營中':t.status==='trial'?'試用中':'申請中'}</span></td>
                             <td style={{fontSize:12,color:'#aaa'}}>{t.created_at}</td>
+                            {/* 加入導向各旅行社後台的按鈕 */}
+                            <td style={{textAlign:'right'}}>
+                              <button className="btn btn-ol" style={{fontSize:11}} onClick={() => window.open(`admin.html?a=${t.slug}`, '_blank')}><Ic d={I.eye} size={12}/> 進入後台</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -507,7 +511,7 @@
                         <div style={{flex:1}}><div style={{fontSize:10,color:'#B0B0B0',marginBottom:4}}>合作夥伴</div><div style={{fontWeight:900,fontSize:22,color:'#06C755'}}>{t.distributors}</div></div>
                         <div style={{flex:1}}><div style={{fontSize:10,color:'#B0B0B0',marginBottom:4}}>行程</div><div style={{fontWeight:900,fontSize:22,color:'#007AFF'}}>{t.itineraries}</div></div>
                         <div style={{alignSelf:'flex-end'}}>
-                          <button className="btn btn-ol" style={{fontSize:11}}><Ic d={I.eye} size={12}/> 進入後台</button>
+                          <button className="btn btn-ol" style={{fontSize:11}} onClick={() => window.open(`admin.html?a=${t.slug}`, '_blank')}><Ic d={I.eye} size={12}/> 進入後台</button>
                         </div>
                       </div>
                     </div>
