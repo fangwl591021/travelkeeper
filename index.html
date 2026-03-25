@@ -23,54 +23,192 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     select.crm-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 7l3-3 3 3m0 6l-3 3-3-3'/%3E%3C/svg%3E"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1em; padding-right: 2rem; }
-    .tour-card { transition: all 0.2s; }
-    .tour-card:hover { transform: translateY(-4px); }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback } = React;
 
-    // --- Components & Icons ---
-    const Icon = ({ name, className = "w-6 h-6" }) => {
-      const paths = {
-        navigation: <polygon points="3 11 22 2 13 21 11 13 3 11"/>,
-        search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
-        map: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
-        calendar: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
-        briefcase: <><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></>,
-        users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
-        share: <><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></>,
-        settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>,
-        arrowLeft: <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
-        refresh: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>
-      };
-      return <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{paths[name]}</svg>;
-    };
+    // --- Icons ---
+    const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
+    const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
+    const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
+    const MapPin = ({ className }) => <IconWrapper className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
+    const Calendar = ({ className }) => <IconWrapper className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
+    const Type = ({ className }) => <IconWrapper className={className}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconWrapper>;
+    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></IconWrapper>;
+    const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
+    const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
+    const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
+    const Send = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
+    const Sparkles = ({ className }) => <IconWrapper className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconWrapper>;
+    const AlertCircle = ({ className }) => <IconWrapper className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
+    const X = ({ className }) => <IconWrapper className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
+    const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
+    const UserIcon = ({ className }) => <IconWrapper className={className}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconWrapper>;
+    const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
+    const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
+    const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
+    const ArrowUp = ({ className }) => <IconWrapper className={className}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></IconWrapper>;
+    const ClipboardList = ({ className }) => <IconWrapper className={className}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></IconWrapper>;
+    const Smartphone = ({ className }) => <IconWrapper className={className}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></IconWrapper>;
+    const BadgeDollarSign = ({ className }) => <IconWrapper className={className}><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></IconWrapper>;
+    const FileCheck = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></IconWrapper>;
+    const Settings = ({ className }) => <IconWrapper className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
+
+    const RunningMan = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <circle cx="16" cy="5" r="2"/><path d="M12 9l3-2 1.5 2.5"/><path d="M10.5 16.5L8 11h3l2.5 4 4.5-1.5"/><path d="M14.5 22l-2-6-3.5 2.5"/><path d="M5.5 22L8 17"/>
+      </svg>
+    );
 
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8';
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
+    const LOGIN_URL = 'login.html';
+
+    // --- Helpers ---
+    const formatPhone = (p) => { if(!p) return ''; let s = String(p).trim(); return (s.length===9 && s.startsWith('9')) ? '0'+s : s; };
+
+    const buildFlexMessage = (tour, dist, rUid, opts) => {
+      const trackUrl = `${ENDPOINT_URL}?t=${tour.id}&r=${rUid || 'GUEST'}`;
+      const optS = [opts.phone, opts.line, opts.lineAt, opts.fb, opts.web, opts.map].map(b=>b?'1':'0').join('');
+      const shareLiff = `https://liff.line.me/${LIFF_ID}?action=share&t=${tour.id}&r=${rUid || ''}&o=${optS}`;
+      const btns = [
+        { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackUrl } },
+        { "type": "button", "style": "primary", "color": "#b82337", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiff } }
+      ];
+      if (opts.phone && dist.phone) btns.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${formatPhone(dist.phone)}` }});
+      if (opts.line && dist.lineLink) btns.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "💬 私訊 LINE", "uri": dist.lineLink }});
+      if (opts.lineAt && dist.lineAtLink) btns.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🟢 官方 LINE@", "uri": dist.lineAtLink }});
+      return {
+        "type": "flex", "altText": `推薦行程：${tour.title}`,
+        "contents": {
+          "type": "bubble",
+          "hero": { "type": "image", "url": tour.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800', "size": "full", "aspectRatio": "20:13", "aspectMode": "cover", "action": { "type": "uri", "uri": trackUrl } },
+          "body": { "type": "box", "layout": "vertical", "contents": [
+            { "type": "text", "text": tour.title, "weight": "bold", "size": "xl", "wrap": true },
+            { "type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
+              { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "天數", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `${tour.days} 天`, "wrap": true, "color": "#666666", "size": "sm", "flex": 5 } ] },
+              { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "價格", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `TWD ${Number(tour.price).toLocaleString()}`, "wrap": true, "color": "#b82337", "size": "md", "weight": "bold", "flex": 5 } ] }
+            ]}
+          ]},
+          "footer": { "type": "box", "layout": "vertical", "spacing": "sm", "contents": btns }
+        }
+      };
+    };
+
+    const renderAgencyBlogDescription = (text) => {
+      if (!text) return null;
+      const lines = text.split('\n');
+      const blocks = [];
+      let currentBlock = { type: 'intro', dayText: '行程介紹', title: '', content: [], meals: [], hotels: [] };
+      let inMeal = false; let inHotel = false;
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line) { currentBlock.content.push({ type: 'space' }); continue; }
+        const dayMatch = line.match(/^(Day\s*\d+|第\s*[\d一二三四五六七八九十]+\s*天)(.*)/i);
+        if (dayMatch) {
+          if (currentBlock.content.length > 0 || currentBlock.meals.length > 0 || currentBlock.hotels.length > 0 || currentBlock.dayText !== '行程介紹') blocks.push(currentBlock);
+          currentBlock = { type: 'day', dayText: dayMatch[1].replace(/\s+/g, ''), title: dayMatch[2].replace(/^[:：\-\s]+/, ''), content: [], meals: [], hotels: [] };
+          inMeal = false; inHotel = false; continue;
+        }
+        if (line.match(/^(餐食|早餐|午餐|晚餐)[:：]/)) { inMeal = true; inHotel = false; currentBlock.meals.push(line); continue; }
+        if (line.match(/^(住宿|飯店|旅館|酒店)[:：]/)) { inHotel = true; inMeal = false; currentBlock.hotels.push(line); continue; }
+        if (inMeal && line.match(/^(早餐|午餐|晚餐|早|午|晚)[:：]/)) { currentBlock.meals.push(line); continue; }
+        if (inHotel && line.length < 40) { currentBlock.hotels.push(line); continue; }
+        inMeal = false; inHotel = false;
+        const parts = line.split(/(!\[.*?\]\(.*?\))/g);
+        const parsedLine = parts.filter(p => p).map((part) => {
+          const mdMatch = part.match(/^!\[(.*?)\]\((.*?)\)$/);
+          if (mdMatch) return { type: 'image', alt: mdMatch[1], url: mdMatch[2] };
+          if (part.startsWith('http') && !part.includes(' ') && parts.length === 1) return { type: 'image', alt: '圖片', url: part };
+          return { type: 'text', text: part };
+        });
+        currentBlock.content.push({ type: 'mixed', elements: parsedLine });
+      }
+      blocks.push(currentBlock);
+      return blocks.map((block, bIdx) => (
+        <div key={bIdx} className="mb-12 w-full max-w-full">
+          {block.dayText !== '行程介紹' && (
+            <div className="mb-10 mt-16 w-full">
+              <div className="text-center relative mb-8"><div className="absolute top-1/2 left-0 w-full border-t-[2px] border-dashed border-[#b82337] -z-10"></div><h2 className="inline-block px-6 bg-white text-4xl md:text-5xl font-black text-gray-900 tracking-widest">{block.dayText}</h2></div>
+              {block.title && (<div className="flex items-start mb-6 px-2"><span className="text-[#b82337] font-light text-2xl mr-3 flex-shrink-0">— {block.dayText.replace(/\D/g, '') || '*'}</span><h3 className="text-xl md:text-2xl font-bold text-gray-800 leading-snug pt-0.5">{block.title}</h3></div>)}
+            </div>
+          )}
+          <div className="text-[1.15rem] leading-[2.2] text-gray-700 tracking-wide text-justify w-full break-words">
+            {block.content.map((item, idx) => {
+              if (item.type === 'space') return <div key={idx} className="h-6"></div>;
+              if (item.type === 'mixed') {
+                return (
+                  <p key={idx} className="mb-5 break-words whitespace-pre-wrap">
+                    {item.elements.map((el, eIdx) => {
+                      if (el.type === 'image') return (
+                        <span key={eIdx} className="block my-10 w-full relative group">
+                          <img src={el.url} className="w-full h-auto max-w-full object-cover rounded-none md:rounded-2xl max-h-[800px] border border-gray-100" alt={el.alt} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                          <span className="hidden bg-blue-50 p-5 border-l-[6px] border-blue-500 my-4 rounded-lg text-sm text-blue-800 shadow-sm font-medium tracking-wider w-full overflow-hidden break-words"><span className="font-extrabold mr-2 text-red-600">⚠️ 防盜鏈阻擋：</span>原網站禁止直接顯示圖片，請改用系統「上傳雲端圖片」按鈕，或 <a href={el.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline font-bold">點此查看圖片</a></span>
+                        </span>
+                      );
+                      return <span key={eIdx}>{el.text}</span>;
+                    })}
+                  </p>
+                );
+              }
+              return null;
+            })}
+          </div>
+          {(block.meals.length > 0 || block.hotels.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
+              {block.meals.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🍽️</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">餐食</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.meals.map((m, mIdx) => { const parts = m.split(/[:：](.+)/); if (parts.length > 1) return (<div key={mIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={mIdx}>{m}</p>; })}</div></div></div>)}
+              {block.hotels.length > 0 && (<div className="border border-gray-200 p-6 flex items-start bg-white w-full rounded-md shadow-sm hover:shadow-md transition"><div className="text-3xl mr-4 opacity-90 flex-shrink-0 text-[#b82337]">🏨</div><div className="w-full border-l-[3px] border-[#b82337] pl-5 min-w-0"><p className="font-bold text-gray-900 mb-2 text-lg">住宿</p><div className="space-y-1 text-gray-600 font-medium text-[0.95rem] break-words">{block.hotels.map((h, hIdx) => { const parts = h.split(/[:：](.+)/); if (parts.length > 1) return (<div key={hIdx} className="flex"><span className="font-bold text-gray-900 w-14 flex-shrink-0">{parts[0]}</span><span className="text-gray-600 break-words flex-1">: {parts[1]}</span></div>); return <p key={hIdx}>{h}</p>; })}</div></div></div>)}
+            </div>
+          )}
+        </div>
+      ));
+    };
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
-      const tabParam = urlParams.get('tab');
+      const actionParam = urlParams.get('action');
       const tourParam = urlParams.get('t');
+      const tabParam = urlParams.get('tab');
 
-      // --- State ---
-      // 根據 tab=distributor 自動偵測初始視圖
-      const [view, setView] = useState(tabParam === 'distributor' ? 'toolbox' : 'portal'); 
+      const [activeTab, setActiveTab] = useState(tabParam || 'home');
       const [itineraries, setItineraries] = useState([]);
       const [liffProfile, setLiffProfile] = useState(null);
+      const [isAdmin, setIsAdmin] = useState(false);
+      const [isGeneralMember, setIsGeneralMember] = useState(false);
+      const [distributorStatus, setDistributorStatus] = useState(null);
       const [myDistributorData, setMyDistributorData] = useState(null);
+      const [myUserData, setMyUserData] = useState(null);
       const [isLoading, setIsLoading] = useState(true);
       const [selectedTourId, setSelectedTourId] = useState(tourParam);
-      const [distSelectedIds, setDistSelectedIds] = useState(new Set());
-      const [refUid] = useState(urlParams.get('r') || localStorage.getItem('tracking_ref_uid') || '');
+      const [refUid, setRefUid] = useState(urlParams.get('r') || localStorage.getItem('tracking_ref_uid') || '');
+      const [toast, setToast] = useState(null);
 
-      // --- Init ---
+      // --- CRM & Dist States ---
+      const [distPanel, setDistPanel] = useState('tours');
+      const [crmSubTab, setCrmSubTab] = useState('orders');
+      const [distributorStats, setDistributorStats] = useState({ users: [], orders: [] });
+      const [crmDistributors, setCrmDistributors] = useState([]);
+      const [crmUsers, setCrmUsers] = useState([]);
+      const [crmOrders, setCrmOrders] = useState([]);
+      const [myOrders, setMyOrders] = useState([]);
+
+      // --- Promotion Tool States ---
+      const [distCardMode, setDistCardMode] = useState('single');
+      const [distSelectedIds, setDistSelectedIds] = useState(new Set());
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+      // --- Tour Detail State ---
+      const [tourDetailTab, setTourDetailTab] = useState('itinerary');
+      const [priceCardStyle, setPriceCardStyle] = useState({});
+      const articleTopRef = useRef(null);
+      const priceCardAnchorRef = useRef(null);
+      const articleBodyRef = useRef(null);
+
       useEffect(() => {
         initLiff();
         fetchItineraries();
@@ -84,221 +222,300 @@
           } else {
             const profile = await liff.getProfile();
             setLiffProfile(profile);
-            checkUserStatus(profile.userId);
+            checkMyStatus(profile.userId);
           }
-        } catch (err) { console.error('LIFF Error', err); }
+        } catch (err) { console.error('LIFF Init Error', err); }
       };
 
-      const checkUserStatus = async (uid) => {
+      const checkMyStatus = async (uid) => {
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
           const data = await res.json();
-          if (data.success && data.data.role === 'distributor') {
-            setMyDistributorData(data.data.distributorData);
-            // 如果是在首頁且偵測到是經銷商身分，可以視需求決定是否自動跳轉，目前遵循 tab 參數
+          if (data.success) {
+            const info = data.data;
+            if (info.isAdmin) setIsAdmin(true);
+            if (info.role === 'distributor') {
+              setDistributorStatus(info.status ? info.status.toLowerCase() : 'pending');
+              setMyDistributorData(info.distributorData);
+              setIsGeneralMember(true);
+              fetchUserOrders(uid);
+            } else if (info.role === 'user') {
+              setMyUserData(info.userData);
+              setIsGeneralMember(true);
+              fetchUserOrders(uid);
+            }
           }
-        } catch (e) { console.error('Status check error', e); }
+        } catch (e) { console.error('Status Check Error', e); }
+        finally { setIsLoading(false); }
       };
 
       const fetchItineraries = async () => {
-        setIsLoading(true);
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries`);
           const data = await res.json();
           setItineraries(Array.isArray(data) ? data : (data.data || []));
-        } catch (error) { console.error('Fetch error', error); }
-        finally { setIsLoading(false); }
+        } catch (e) { console.error('Fetch Tours Error', e); }
       };
 
-      // --- Utils ---
-      const showToast = (msg) => {
-        const toast = document.createElement('div');
-        toast.className = "fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-xl z-[9999] animate-fade-in-up font-bold";
-        toast.innerText = msg;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+      const fetchUserOrders = async (uid) => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
+        const data = await res.json();
+        if (data.success) setMyOrders(data.data);
       };
 
-      const handleViewChange = (newView) => {
-        setView(newView);
-        const newUrl = new URL(window.location.href);
-        if (newView === 'toolbox') {
-          newUrl.searchParams.set('tab', 'distributor');
-        } else {
-          newUrl.searchParams.delete('tab');
-        }
-        window.history.pushState({}, '', newUrl);
+      const fetchDistributorStats = async (uid) => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributorPerformance&uid=${uid}`);
+        const data = await res.json();
+        if (data.success) setDistributorStats({ users: data.users || [], orders: data.orders || [] });
       };
 
-      // --- Render Portal ---
-      const renderHome = () => (
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-black text-slate-800">探索世界的美好</h2>
-            <div className="flex gap-2">
-              {myDistributorData && (
-                <button 
-                  onClick={() => handleViewChange('toolbox')}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition"
-                >
-                  <Icon name="briefcase" className="w-5 h-5" /> 推廣工具箱
-                </button>
-              )}
+      const fetchFullCrmData = async () => {
+        const [resD, resU, resO] = await Promise.all([
+          fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`),
+          fetch(`${WORKER_URL}/api/itineraries?action=getUsers`),
+          fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`)
+        ]);
+        const [d, u, o] = await Promise.all([resD.json(), resU.json(), resO.json()]);
+        setCrmDistributors(d); setCrmUsers(u); setCrmOrders(o.data || []);
+      };
+
+      useEffect(() => {
+        if (activeTab === 'crm' && isAdmin) fetchFullCrmData();
+        if (activeTab === 'distributor' && distributorStatus === 'approved') fetchDistributorStats(liffProfile.userId);
+      }, [activeTab, isAdmin, distributorStatus]);
+
+      const changeTab = (newTab) => {
+        setActiveTab(newTab);
+        setSelectedTourId(null);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', newTab);
+        url.searchParams.delete('t');
+        window.history.pushState({}, '', url);
+      };
+
+      const showToastMsg = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
+
+      // --- Render Navbar ---
+      const roleBadge = isAdmin ? <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 管理員</span> :
+                        distributorStatus === 'approved' ? <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 經銷商</span> :
+                        isGeneralMember ? <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 會員</span> :
+                        <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
+
+      const renderNavBar = () => (
+        <nav className="bg-white shadow-sm sticky top-0 z-50">
+          <div className="w-full max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center cursor-pointer" onClick={() => changeTab('home')}>
+              <Navigation className="h-8 w-8 text-blue-600 mr-2" />
+              <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
+            </div>
+            <div className="hidden md:flex items-center space-x-2">
+              <button onClick={() => changeTab('home')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>找行程</button>
+              <button onClick={() => changeTab('member')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'member' ? 'bg-orange-50 text-orange-700' : 'text-gray-600 hover:bg-gray-100'}`}>會員中心</button>
+              <button onClick={() => changeTab('distributor')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'distributor' ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'}`}>經銷專區</button>
+              {isAdmin && <button onClick={() => changeTab('crm')} className={`px-4 py-2 rounded-lg text-sm font-bold ${activeTab === 'crm' ? 'bg-purple-50 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}>CRM</button>}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold leading-none mb-1">{liffProfile?.displayName || '未登入'}</p>
+                {roleBadge}
+              </div>
+              <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />
             </div>
           </div>
-          
-          {isLoading ? (
-            <div className="flex justify-center py-20"><Icon name="refresh" className="w-10 h-10 animate-spin text-blue-500" /></div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {itineraries.map(item => (
-                <div key={item.id} className="tour-card bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl border border-gray-100 flex flex-col">
-                  <div className="h-48 relative overflow-hidden">
-                    <img src={item.image} className="w-full h-full object-cover" alt={item.title} />
-                    <span className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-black text-blue-600">{item.region}</span>
-                  </div>
-                  <div className="p-5 flex-1 flex flex-col">
-                    <h3 className="font-bold text-slate-800 line-clamp-2 mb-4 h-12">{item.title}</h3>
-                    <div className="mt-auto flex justify-between items-end">
-                      <div className="text-sm text-gray-400 font-bold">{item.days} 天行程</div>
-                      <div className="text-right">
-                        <div className="text-xs text-red-500 font-bold">優惠價</div>
-                        <div className="text-xl font-black text-red-600">${Number(item.price).toLocaleString()}</div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => { setSelectedTourId(item.id); window.history.pushState({}, '', `?t=${item.id}${refUid ? '&r='+refUid : ''}`); }}
-                      className="w-full mt-4 py-3 bg-slate-50 hover:bg-blue-50 text-blue-600 rounded-2xl font-bold transition"
-                    >
-                      查看詳情
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </nav>
       );
 
-      // --- Render Toolbox (New Integrated Promotion UI) ---
-      const renderToolbox = () => (
-        <div className="min-h-screen bg-slate-50 pb-20">
-          <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200 h-16 flex items-center px-6 justify-between shadow-sm">
-            <div className="flex items-center gap-3">
-              <button onClick={() => handleViewChange('portal')} className="p-2 hover:bg-slate-100 rounded-full transition">
-                <Icon name="arrowLeft" className="w-6 h-6 text-slate-600" />
-              </button>
-              <span className="font-black text-xl text-slate-800">經銷推廣工具箱</span>
-            </div>
-            <div className="flex bg-slate-100 rounded-xl p-1 text-xs font-bold">
-              <button className="px-5 py-2 rounded-lg bg-white shadow-sm text-slate-800">商品列表</button>
-              <button className="px-5 py-2 rounded-lg text-slate-400 hover:text-slate-600">業績統計</button>
-            </div>
-          </nav>
-
-          <div className="max-w-6xl mx-auto px-4 pt-8">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-6 mb-8 flex items-center gap-5">
-              <div className="bg-emerald-500 p-3 rounded-2xl text-white shadow-lg"><Icon name="share" className="w-8 h-8" /></div>
-              <div>
-                <h3 className="font-black text-emerald-800 text-lg">快速生成推廣名片</h3>
-                <p className="text-emerald-600 text-sm font-medium">勾選您想推廣的行程（最多 8 個），一鍵傳送 LINE Flex 訊息給客戶。</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {itineraries.map(item => {
-                const isSelected = distSelectedIds.has(item.id);
-                return (
-                  <div 
-                    key={item.id} 
-                    onClick={() => {
-                      const next = new Set(distSelectedIds);
-                      if (next.has(item.id)) next.delete(item.id);
-                      else if (next.size < 8) next.add(item.id);
-                      else showToast('最多只能選 8 個');
-                      setDistSelectedIds(next);
-                    }}
-                    className={`relative rounded-2xl overflow-hidden border-2 cursor-pointer transition-all ${isSelected ? 'border-emerald-500 ring-4 ring-emerald-100 shadow-xl' : 'border-transparent bg-white shadow-sm'}`}
-                  >
-                    <div className="h-32 bg-slate-200">
-                      <img src={item.image} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="p-3">
-                      <p className="text-xs font-bold text-slate-800 line-clamp-2 h-8">{item.title}</p>
-                      <p className="text-xs font-black text-red-600 mt-2">${Number(item.price).toLocaleString()}</p>
-                    </div>
-                    {isSelected && (
-                      <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow-lg">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+      // --- Render Distributor Panel ---
+      const renderDistPanel = () => {
+        if (!distributorStatus) return (
+          <div className="py-20 text-center bg-white rounded-3xl border border-gray-100 shadow-sm max-w-2xl mx-auto mt-10 p-10">
+            <Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" />
+            <h2 className="text-3xl font-bold mb-4">申請成為經銷商</h2>
+            <p className="text-gray-500 mb-8">立即獲得專屬推廣連結與分潤獎金。</p>
+            <button className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往註冊 / 登入</button>
           </div>
+        );
 
-          {/* Floating Action Bar */}
-          {distSelectedIds.size > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-2xl bg-slate-900 text-white rounded-3xl p-4 flex items-center justify-between shadow-2xl animate-fade-in-up">
-              <div className="px-4">
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">已選行程</p>
-                <p className="text-lg font-black text-emerald-400">{distSelectedIds.size} / 8</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setDistSelectedIds(new Set())} className="px-5 py-3 text-sm font-bold hover:text-slate-300">清空</button>
-                <button 
-                  onClick={async () => {
-                    // 根據 mode 生成 Flex JSON 並呼叫 liff.shareTargetPicker
-                    showToast('正在開啟 LINE 分享...');
-                  }}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg transition"
-                >
-                  發送推廣名片
-                </button>
+        if (distributorStatus === 'pending') return (
+          <div className="py-20 text-center"><h3 className="text-xl font-bold text-gray-500">⏳ 帳號審核中，請稍候。</h3></div>
+        );
+
+        return (
+          <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
+            <div className="w-full md:w-64 bg-white border-r border-gray-200 p-4 sticky top-16 h-fit md:h-[calc(100vh-64px)]">
+              <div className="space-y-1">
+                {[
+                  { id:'tours', label:'可推廣行程', icon:'✈️' },
+                  { id:'orders', label:'業績訂單', icon:'📋' },
+                  { id:'members', label:'推薦會員', icon:'👥' },
+                  { id:'stats', label:'業績總覽', icon:'📊' },
+                  { id:'settings', label:'推廣設定', icon:'⚙️' },
+                ].map(item => (
+                  <button key={item.id} onClick={() => setDistPanel(item.id)} className={`w-full text-left px-4 py-3 rounded-xl font-bold transition flex items-center gap-3 ${distPanel === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    <span className="text-lg">{item.icon}</span> {item.label}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
-        </div>
-      );
-
-      // --- Main Render ---
-      return (
-        <div className="min-h-screen">
-          {view === 'portal' ? (
-            <>
-              {/* Portal Header */}
-              <nav className="bg-white/80 backdrop-blur sticky top-0 z-50 border-b border-gray-100 h-16 flex items-center px-6 justify-between">
-                <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setSelectedTourId(null); handleViewChange('portal'); }}>
-                  <Icon name="navigation" className="w-8 h-8 text-blue-600" />
-                  <span className="font-black text-2xl tracking-tighter text-slate-800">旅遊管家</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  {liffProfile && (
-                    <img src={liffProfile.pictureUrl} className="w-9 h-9 rounded-full border-2 border-white shadow-sm" alt="Profile" />
+            <div className="flex-1 p-6 md:p-10">
+              {distPanel === 'tours' && (
+                <div className="animate-fade-in">
+                  <div className="flex justify-between items-center mb-8 border-b pb-4">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">可推廣行程 <span className="text-sm font-normal text-gray-400">共 {itineraries.length} 個</span></h2>
+                    <div className="flex bg-gray-100 rounded-xl p-1 text-sm font-bold">
+                      <button onClick={() => { setDistCardMode('single'); setDistSelectedIds(new Set()); }} className={`px-4 py-2 rounded-lg ${distCardMode === 'single' ? 'bg-white shadow-sm' : 'text-gray-400'}`}>單張名片</button>
+                      <button onClick={() => setDistCardMode('multi')} className={`px-4 py-2 rounded-lg ${distCardMode === 'multi' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-400'}`}>多頁名片</button>
+                    </div>
+                  </div>
+                  {distCardMode === 'multi' && (
+                    <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">☑️</span>
+                        <div>
+                          <p className="text-sm font-bold text-emerald-700">多選模式</p>
+                          <p className="text-xs text-emerald-600">已選 {distSelectedIds.size} / 8 個行程</p>
+                        </div>
+                      </div>
+                      <button disabled={distSelectedIds.size === 0} className={`px-6 py-2 rounded-xl font-bold transition ${distSelectedIds.size > 0 ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'}`}>發送多頁推廣卡片</button>
+                    </div>
                   )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {itineraries.map(tour => {
+                      const isSel = distSelectedIds.has(tour.id);
+                      return (
+                        <div key={tour.id} onClick={() => {
+                          if (distCardMode === 'single') { setSelectedTourId(tour.id); } 
+                          else {
+                            const next = new Set(distSelectedIds);
+                            if (next.has(tour.id)) next.delete(tour.id);
+                            else if (next.size < 8) next.add(tour.id);
+                            setDistSelectedIds(next);
+                          }
+                        }} className={`bg-white rounded-3xl overflow-hidden border-2 transition relative cursor-pointer ${isSel ? 'border-emerald-500 shadow-xl' : 'border-gray-100 hover:border-emerald-400'}`}>
+                          <div className="h-40 overflow-hidden"><img src={tour.image} className="w-full h-full object-cover" /></div>
+                          <div className="p-4">
+                            <h4 className="font-bold text-gray-800 line-clamp-2 h-10 mb-2">{tour.title}</h4>
+                            <div className="flex justify-between items-center mt-4">
+                              <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">分潤 {(myDistributorData?.commission || 10)}%</span>
+                              <span className="text-lg font-black text-red-600">${Number(tour.price).toLocaleString()}</span>
+                            </div>
+                            <button className="w-full mt-4 bg-gray-50 text-gray-600 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                              <Share2 className="w-4 h-4" /> 生成推廣名片
+                            </button>
+                          </div>
+                          {isSel && <div className="absolute top-2 left-2 bg-emerald-500 text-white rounded-lg p-1 shadow-lg"><FileCheck className="w-5 h-5" /></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </nav>
+              )}
+              {/* 其他面板 (orders, members, stats) 根據資料渲染表格即可 */}
+              {distPanel !== 'tours' && <div className="text-center py-20 text-gray-400">目前資料載入中或尚無紀錄...</div>}
+            </div>
+          </div>
+        );
+      };
 
-              {selectedTourId ? (
-                <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
-                   <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="mb-6 flex items-center gap-2 text-slate-500 font-bold hover:text-blue-600 transition">
-                     <Icon name="arrowLeft" className="w-5 h-5" /> 返回列表
-                   </button>
-                   <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
-                     {itineraries.find(i => i.id == selectedTourId)?.title ? (
-                       <div className="p-8">
-                         <h1 className="text-4xl font-black text-slate-800 mb-6">{itineraries.find(i => i.id == selectedTourId).title}</h1>
-                         <div className="prose prose-slate max-w-none">
-                           <p className="text-gray-600 leading-relaxed text-lg">行程載入中或顯示靜態內容...</p>
-                         </div>
-                       </div>
-                     ) : <p className="p-10 text-center font-bold text-gray-400">找不到該行程</p>}
-                   </div>
+      // --- Render Portal (Home) ---
+      const renderHomeTab = () => {
+        if (selectedTourId) {
+          const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
+          if (!tour) return <div className="p-20 text-center">找不到行程</div>;
+          return (
+            <div ref={articleTopRef} className="bg-white animate-fade-in pb-20 overflow-x-hidden min-h-screen">
+              <div className="relative h-[50vh] md:h-[65vh]">
+                <img src={tour.image} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                <div className="absolute bottom-10 left-10 text-white">
+                  <span className="bg-[#b82337] px-4 py-1 rounded-lg text-sm font-bold mr-4">{tour.region}</span>
+                  <h1 className="text-4xl md:text-6xl font-black mt-4">{tour.title}</h1>
                 </div>
-              ) : renderHome()}
-            </>
-          ) : renderToolbox()}
+              </div>
+              <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row gap-10">
+                <div className="flex-1">
+                  <div className="flex border-b mb-10 text-lg font-bold">
+                    <button onClick={() => setTourDetailTab('itinerary')} className={`pb-4 px-6 ${tourDetailTab === 'itinerary' ? 'text-[#b82337] border-b-4 border-[#b82337]' : 'text-gray-400'}`}>行程介紹</button>
+                    <button onClick={() => setTourDetailTab('notes')} className={`pb-4 px-6 ${tourDetailTab === 'notes' ? 'text-[#b82337] border-b-4 border-[#b82337]' : 'text-gray-400'}`}>注意事項</button>
+                  </div>
+                  {tourDetailTab === 'itinerary' ? renderAgencyBlogDescription(tour.description) : <div className="bg-gray-50 p-10 rounded-3xl text-gray-600 whitespace-pre-wrap">{tour.notes || '無注意事項'}</div>}
+                </div>
+                <div className="w-full md:w-[380px] shrink-0 sticky top-24 h-fit">
+                  <div className="bg-white border border-gray-100 rounded-3xl shadow-2xl overflow-hidden">
+                    <div className="bg-[#b82337] p-8 text-center text-white">
+                      <p className="text-sm font-bold opacity-80 mb-2">專案特惠價</p>
+                      <p className="text-5xl font-black">${Number(tour.price).toLocaleString()}</p>
+                    </div>
+                    <div className="p-8 space-y-6">
+                      <div className="flex items-center text-lg font-bold gap-3"><Calendar className="text-[#b82337]" /> {tour.days} 天精華遊</div>
+                      <button className="w-full bg-[#b82337] hover:bg-red-800 text-white py-4 rounded-2xl font-bold text-xl shadow-lg transition">立即報名保留位</button>
+                      <button onClick={() => setSelectedTourId(null)} className="w-full bg-gray-50 text-gray-500 py-3 rounded-2xl font-bold flex items-center justify-center gap-2"><ArrowLeft className="w-5 h-5" /> 返回行程列表</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="pb-20">
+            <div className="h-80 md:h-[450px] relative bg-slate-900 overflow-hidden">
+              <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1920" className="w-full h-full object-cover opacity-60" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6">
+                <h1 className="text-4xl md:text-6xl font-black mb-6 tracking-widest">探索世界的美好</h1>
+                <div className="w-full max-w-4xl bg-white/95 backdrop-blur rounded-2xl p-4 shadow-2xl flex flex-col md:flex-row gap-4 items-center">
+                  <div className="flex-1 flex items-center bg-gray-100 rounded-xl px-4 py-3 gap-3 w-full"><Search className="text-gray-400" /><input type="text" placeholder="搜尋目的地或行程關鍵字..." className="bg-transparent outline-none w-full text-gray-800 font-bold" /></div>
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-10 rounded-xl whitespace-nowrap w-full md:w-auto">搜尋行程</button>
+                </div>
+              </div>
+            </div>
+            <div className="max-w-7xl mx-auto px-4 mt-12">
+              <h2 className="text-3xl font-black mb-10 text-gray-800 border-l-8 border-blue-600 pl-4">為您推薦的精選行程</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                {itineraries.map(tour => (
+                  <div key={tour.id} onClick={() => { setSelectedTourId(tour.id); window.history.pushState({}, '', `?t=${tour.id}`); }} className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col">
+                    <div className="h-56 overflow-hidden"><img src={tour.image} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" /></div>
+                    <div className="p-6 flex-1 flex flex-col">
+                      <span className="text-xs font-bold text-blue-600 mb-2">{tour.region}</span>
+                      <h4 className="text-xl font-bold text-gray-900 leading-tight mb-4 group-hover:text-blue-600 transition h-14 line-clamp-2">{tour.title}</h4>
+                      <div className="mt-auto pt-6 border-t flex justify-between items-center">
+                        <span className="text-sm font-bold text-gray-400">{tour.days} 天暢遊</span>
+                        <span className="text-2xl font-black text-[#b82337]">${Number(tour.price).toLocaleString()} <span className="text-xs font-normal">起</span></span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Main Render Logic ---
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+          {renderNavBar()}
+          <div className="flex-grow">
+            {activeTab === 'home' && renderHomeTab()}
+            {activeTab === 'member' && (
+              <div className="max-w-7xl mx-auto px-4 py-12">
+                <h2 className="text-3xl font-black mb-8 flex items-center gap-3"><Users className="text-orange-500" /> 會員中心</h2>
+                <div className="bg-white rounded-3xl p-10 shadow-sm border border-gray-100 text-center">
+                  <p className="text-gray-500 text-lg">正在載入您的個人資料與訂單紀錄...</p>
+                </div>
+              </div>
+            )}
+            {activeTab === 'distributor' && renderDistPanel()}
+            {activeTab === 'crm' && (
+               <div className="max-w-7xl mx-auto px-4 py-12">
+                 <h2 className="text-3xl font-black mb-8 flex items-center gap-3 text-purple-700"><IconWrapper className="w-8 h-8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></IconWrapper> 全站 CRM 管理</h2>
+                 <div className="bg-white rounded-3xl shadow-sm p-10 border border-gray-100">
+                    <p className="text-gray-400 font-bold">⚠️ 此區域僅限系統管理員存取。</p>
+                 </div>
+               </div>
+            )}
+          </div>
+          {toast && (<div className="fixed bottom-10 right-10 z-[100] animate-fade-in-up"><div className="bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl font-bold">{toast.message}</div></div>)}
         </div>
       );
     }
