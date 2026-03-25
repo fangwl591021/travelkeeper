@@ -27,219 +27,111 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect } = React;
 
-    const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
+    // --- 基礎組件與圖示定義 (必須在 App 之前) ---
+    const IconWrapper = ({ children, className = "w-6 h-6" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+    );
     const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
     const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
     const MapPin = ({ className }) => <IconWrapper className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
     const Calendar = ({ className }) => <IconWrapper className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconWrapper>;
     const Type = ({ className }) => <IconWrapper className={className}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconWrapper>;
-    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></IconWrapper>;
+    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></IconWrapper>;
     const ImageIcon = ({ className }) => <IconWrapper className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconWrapper>;
-    const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></IconWrapper>;
+    const FileText = ({ className }) => <IconWrapper className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></IconWrapper>;
     const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
     const Send = ({ className }) => <IconWrapper className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconWrapper>;
-    const Sparkles = ({ className }) => <IconWrapper className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></IconWrapper>;
     const CheckCircle = ({ className }) => <IconWrapper className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconWrapper>;
     const AlertCircle = ({ className }) => <IconWrapper className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
     const X = ({ className }) => <IconWrapper className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
-    const Edit2 = ({ className }) => <IconWrapper className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></IconWrapper>;
-    const Trash2 = ({ className }) => <IconWrapper className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
     const Camera = ({ className }) => <IconWrapper className={className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></IconWrapper>;
-    const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
+    const Users = ({ className }) => <IconWrapper className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></IconWrapper>;
     const Share2 = ({ className }) => <IconWrapper className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></IconWrapper>;
     const Briefcase = ({ className }) => <IconWrapper className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconWrapper>;
 
+    const AdminDeniedScreen = () => (
+      <div className="w-full max-w-3xl mx-auto px-4 py-32 animate-fade-in text-center">
+        <AlertCircle className="w-24 h-24 text-red-500 mx-auto mb-6" />
+        <h2 className="text-4xl font-bold text-gray-800 mb-4">權限不足</h2>
+        <p className="text-gray-500 text-xl">此區塊為管理員專屬，您的帳號無權限訪問。</p>
+      </div>
+    );
+
+    // --- 全域參數 ---
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
-    const LOGIN_URL = 'login.html'; 
 
-    // 產生完整版且精簡過的 JSON
+    // --- Flex Message 產生器 ---
     const buildFlexMessage = (tourItem, distributorData, refUidStr, options) => {
-        const trackingUrl = `${ENDPOINT_URL}?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
-        const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
-        const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
+      const trackingUrl = `${ENDPOINT_URL}index.html?t=${tourItem.id}&r=${refUidStr || 'GUEST'}`;
+      const optsStr = [options.phone, options.line, options.lineAt, options.fb, options.web, options.map].map(b=>b?'1':'0').join('');
+      const shareLiffUrl = `https://liff.line.me/${LIFF_ID}?action=share&t=${tourItem.id}&r=${refUidStr || ''}&o=${optsStr}`;
 
-        const buttons = [
-            { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
-            { "type": "button", "style": "primary", "color": "#FF334B", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
-        ];
-        
-        if (options.phone && distributorData.phone) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${distributorData.phone}` }});
-        if (options.line && distributorData.lineLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "💬 私訊 LINE", "uri": distributorData.lineLink }});
-        if (options.lineAt && distributorData.lineAtLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🟢 官方 LINE@", "uri": distributorData.lineAtLink }});
-        if (options.fb && distributorData.fbLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "👍 FB 粉絲專頁", "uri": distributorData.fbLink }});
-        if (options.web && distributorData.webLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "🌐 官方網站", "uri": distributorData.webLink }});
-        if (options.map && distributorData.mapLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📍 門市導航", "uri": distributorData.mapLink }});
+      const buttons = [
+        { "type": "button", "style": "primary", "color": "#00B900", "height": "sm", "action": { "type": "uri", "label": "查看行程 / 立即報名", "uri": trackingUrl } },
+        { "type": "button", "style": "primary", "color": "#FF334B", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "分享行程給好友", "uri": shareLiffUrl } }
+      ];
+      
+      if (options.phone && distributorData.phone) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "📞 聯絡電話", "uri": `tel:${distributorData.phone}` }});
+      if (options.line && distributorData.lineLink) buttons.push({ "type": "button", "style": "secondary", "height": "sm", "margin": "sm", "action": { "type": "uri", "label": "💬 私訊 LINE", "uri": distributorData.lineLink }});
 
-        return {
-          "type": "flex",
-          "altText": `推薦行程：${tourItem.title}`,
-          "contents": {
-            "type": "bubble",
-            "hero": {
-              "type": "image",
-              "url": tourItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80',
-              "size": "full",
-              "aspectRatio": "20:13",
-              "aspectMode": "cover",
-              "action": { "type": "uri", "uri": trackingUrl }
-            },
-            "body": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [
-                { "type": "text", "text": tourItem.title, "weight": "bold", "size": "xl", "wrap": true },
-                {
-                  "type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm",
-                  "contents": [
-                    { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "天數", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `${tourItem.days} 天`, "wrap": true, "color": "#666666", "size": "sm", "flex": 5 } ] },
-                    { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "價格", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": `TWD ${Number(tourItem.price).toLocaleString()}`, "wrap": true, "color": "#ff334b", "size": "md", "weight": "bold", "flex": 5 } ] },
-                    { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [ { "type": "text", "text": "介紹", "color": "#aaaaaa", "size": "sm", "flex": 1 }, { "type": "text", "text": tourItem.description ? tourItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！', "wrap": true, "maxLines": 5, "color": "#666666", "size": "sm", "flex": 5 } ] }
-                  ]
-                }
-              ]
-            },
-            "footer": { "type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons, "flex": 0 }
-          }
-        };
+      return {
+        "type": "flex",
+        "altText": `推薦行程：${tourItem.title}`,
+        "contents": {
+          "type": "bubble",
+          "hero": {
+            "type": "image",
+            "url": tourItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80',
+            "size": "full",
+            "aspectRatio": "20:13",
+            "aspectMode": "cover"
+          },
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              { "type": "text", "text": tourItem.title, "weight": "bold", "size": "xl", "wrap": true },
+              { "type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
+                { "type": "text", "text": `價格: TWD ${Number(tourItem.price).toLocaleString()}`, "color": "#ff334b", "weight": "bold" }
+              ]}
+            ]
+          },
+          "footer": { "type": "box", "layout": "vertical", "spacing": "sm", "contents": buttons, "flex": 0 }
+        }
+      };
     };
 
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home'); 
-      const [isAutoSharing, setIsAutoSharing] = useState(urlParams.get('action') === 'share');
-      const [shareStatusText, setShareStatusText] = useState('啟動 LINE 分享中...');
-
-      const [refUid, setRefUid] = useState(() => {
-        const urlRef = urlParams.get('r') || urlParams.get('ref_uid');
-        if (urlRef) localStorage.setItem('tracking_ref_uid', urlRef);
-        return urlRef || localStorage.getItem('tracking_ref_uid') || '';
-      });
-
-      const [crmSubTab, setCrmSubTab] = useState('distributors'); 
       const [itineraries, setItineraries] = useState([]);
-      const [toast, setToast] = useState(null);
-      const [isLoading, setIsLoading] = useState(false);
-      const [isUploadingImage, setIsUploadingImage] = useState(false); 
-      
       const [liffProfile, setLiffProfile] = useState(null);
-      const [isLiffReady, setIsLiffReady] = useState(false);
       const [distributorStatus, setDistributorStatus] = useState(null); 
-      const [isGeneralMember, setIsGeneralMember] = useState(false);
       const [isAdmin, setIsAdmin] = useState(false);
-
+      const [isGeneralMember, setIsGeneralMember] = useState(false);
       const [myDistributorData, setMyDistributorData] = useState(null);
       const [isStatusChecked, setIsStatusChecked] = useState(false);
-
-      const [crmDistributors, setCrmDistributors] = useState([]);
-      const [crmUsers, setCrmUsers] = useState([]);
-
-      const [searchRegion, setSearchRegion] = useState('');
-      const [searchStartDate, setSearchStartDate] = useState('');
-      const [searchEndDate, setSearchEndDate] = useState('');
-      const [searchKeyword, setSearchKeyword] = useState('');
-      const [filteredResults, setFilteredResults] = useState([]);
-      
-      const [bannerImage, setBannerImage] = useState(() => localStorage.getItem('travel_keeper_banner') || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
-
-      const [uploadMode, setUploadMode] = useState('dm');
-      const [ocrStatus, setOcrStatus] = useState('idle');
-      const [draftData, setDraftData] = useState({ 
-        id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' 
-      });
-      
-      const [deleteModalId, setDeleteModalId] = useState(null);
+      const [toast, setToast] = useState(null);
       const [flexModalItem, setFlexModalItem] = useState(null);
-
-      const [editingDistributor, setEditingDistributor] = useState(null);
-      const [editFormData, setEditFormData] = useState({});
-      const [approveModalUser, setApproveModalUser] = useState(null);
-      const [approveData, setApproveData] = useState({ commission: 10, note: '' });
-
-      const [cardOptions, setCardOptions] = useState({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false });
+      const [cardOptions, setCardOptions] = useState({ phone: false, line: false });
 
       useEffect(() => {
         initLiff();
         fetchItineraries();
       }, []);
 
-      const executeShare = async (tour, targetDistData, rUid, cOptions, isAutoMode = false) => {
-          try {
-            const flexMsg = buildFlexMessage(tour, targetDistData, rUid, cOptions);
-            
-            await liff.shareTargetPicker([flexMsg]);
-            
-            if (isAutoMode) {
-                setShareStatusText('✅ 成功發送名片！正在關閉視窗...');
-                setTimeout(() => liff.closeWindow(), 1500);
-            } else {
-                showToast('✅ 名片已成功發送！');
-                setFlexModalItem(null);
-            }
-          } catch(e) {
-            console.error("LIFF SDK Share Error:", e);
-            if (e.message && e.message.includes('not allowed')) {
-                alert("⚠️ 發現您的授權 Token 已過期或權限受阻！\n\n系統將為您登出，請在畫面重新載入後，再次登入以取得最新推播權限。");
-                liff.logout();
-                window.location.reload();
-            } else {
-                if (isAutoMode) {
-                    setShareStatusText('⚠️ 轉傳取消或發生錯誤。');
-                    setTimeout(() => liff.closeWindow(), 2000);
-                } else {
-                    showToast('已取消發送或發生未知的錯誤', 'error');
-                }
-            }
-          }
-      };
-
-      useEffect(() => {
-        const processAutoShare = async () => {
-           if (isAutoSharing && isLiffReady && itineraries.length > 0 && liffProfile && isStatusChecked) {
-              const tourId = urlParams.get('t') || urlParams.get('tour_id');
-              const rUid = urlParams.get('r') || urlParams.get('ref_uid');
-              const optsParam = urlParams.get('o') || urlParams.get('opts') || '000000';
-              
-              const tour = itineraries.find(i => String(i.id) === String(tourId));
-              let targetDistData = {};
-              if (rUid === liffProfile.userId) { targetDistData = myDistributorData || {}; } 
-              else { targetDistData = crmDistributors.find(d => d.uid === rUid) || {}; }
-              
-              if (!tour) { setShareStatusText('找不到該行程資訊'); return; }
-
-              const cOptions = { phone: optsParam[0]==='1', line: optsParam[1]==='1', lineAt: optsParam[2]==='1', fb: optsParam[3]==='1', web: optsParam[4]==='1', map: optsParam[5]==='1' };
-
-              setShareStatusText("正在喚起 LINE 通訊錄...");
-              await executeShare(tour, targetDistData, rUid, cOptions, true);
-           }
-        };
-
-        if (crmDistributors.length > 0) { processAutoShare(); } 
-        else if (isAutoSharing && isLiffReady && isStatusChecked) { fetchFullCrmData(); }
-      }, [isLiffReady, itineraries, isStatusChecked, crmDistributors, isAutoSharing]);
+      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
 
       const initLiff = async () => {
         try {
           await liff.init({ liffId: LIFF_ID });
-          setIsLiffReady(true);
-          
           if (!liff.isLoggedIn()) {
             liff.login({ redirectUri: window.location.href });
           } else {
             const profile = await liff.getProfile();
             setLiffProfile(profile);
-
-            // ★ 靜默綁定機制
-            const activeRef = urlParams.get('r') || urlParams.get('ref_uid') || localStorage.getItem('tracking_ref_uid');
-            if (activeRef && activeRef !== profile.userId) {
-                fetch(`${WORKER_URL}/api/itineraries`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'registerUser', uid: profile.userId, name: profile.displayName, ref_uid: activeRef })
-                }).catch(e => console.error("Silent tracking error", e));
-            }
-
             checkMyStatus(profile.userId);
           }
         } catch (err) { console.error('LIFF 初始化失敗', err); }
@@ -247,661 +139,128 @@
 
       const checkMyStatus = async (uid) => {
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'checkUserStatus', uid: uid }) });
-          const data = await res.json();
-          if (data.success) {
-             const info = data.data;
-             if (info.isAdmin) setIsAdmin(true);
-             if (info.role === 'distributor') { setDistributorStatus(info.status ? info.status.toString().trim().toLowerCase() : 'pending'); setMyDistributorData(info.distributorData); } 
-             else if (info.role === 'user') { setIsGeneralMember(true); }
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ action: 'checkUserStatus', uid: uid }) 
+          });
+          const result = await res.json();
+          if (result.success) {
+            const info = result.data;
+            if (info.isAdmin) setIsAdmin(true);
+            if (info.role === 'distributor') {
+              setDistributorStatus(info.status ? String(info.status).trim().toLowerCase() : 'pending');
+              setMyDistributorData(info.distributorData);
+            } else if (info.role === 'user') {
+              setIsGeneralMember(true);
+            }
           }
-        } catch (e) { console.error('Status check error', e); } finally { setIsStatusChecked(true); }
-      };
-
-      const fetchFullCrmData = async () => {
-        try {
-          const currentTimestamp = new Date().getTime();
-          const resD = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getDistributors', timestamp: currentTimestamp }) });
-          const dataD = await resD.json();
-          setCrmDistributors(Array.isArray(dataD) ? dataD : []);
-          
-          const resU = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'getUsers', timestamp: currentTimestamp }) });
-          const dataU = await resU.json();
-          setCrmUsers(Array.isArray(dataU) ? dataU : []);
-        } catch (e) { console.error('CRM Fetch error', e); }
+        } catch (e) { console.error('API 連線失敗', e); }
+        finally { setIsStatusChecked(true); }
       };
 
       const fetchItineraries = async () => {
-        setIsLoading(true);
         try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?timestamp=${new Date().getTime()}`);
+          const res = await fetch(`${WORKER_URL}/api/itineraries`);
           const data = await res.json();
-          if (data && Array.isArray(data)) { setItineraries(data); setFilteredResults(data); }
-        } catch (error) { console.error('Fetch error', error); } finally { setIsLoading(false); }
+          if (Array.isArray(data)) setItineraries(data);
+        } catch (e) { console.error('獲取行程失敗', e); }
       };
 
-      const changeTab = (newTab) => {
-        setActiveTab(newTab);
-        window.history.replaceState({}, '', `?tab=${newTab}`);
-        if (newTab === 'crm' || newTab === 'distributor') fetchFullCrmData();
+      const changeTab = (tab) => {
+        setActiveTab(tab);
+        window.history.replaceState({}, '', `?tab=${tab}`);
       };
 
-      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
-      const loginAsDistributor = () => { window.location.href = `${LOGIN_URL}?type=distributor&ref_uid=${refUid}`; };
-      const loginAsMember = () => { window.location.href = `${LOGIN_URL}?type=user&ref_uid=${refUid}`; };
-
-      const handleSearch = () => {
-        let results = itineraries;
-        if (searchRegion) results = results.filter(item => item.region.includes(searchRegion));
-        if (searchKeyword) {
-          const kw = searchKeyword.toLowerCase();
-          results = results.filter(item => (item.title && item.title.toLowerCase().includes(kw)) || (item.description && item.description.toLowerCase().includes(kw)));
-        }
-        if (searchStartDate) results = results.filter(item => item.startDate && item.startDate >= searchStartDate);
-        if (searchEndDate) results = results.filter(item => item.endDate && item.endDate <= searchEndDate);
-        setFilteredResults(results);
-        showToast(`為您找到 ${results.length} 筆符合的行程`);
+      const openFlexModal = (item) => {
+        setCardOptions({ phone: !!myDistributorData?.phone, line: !!myDistributorData?.lineLink });
+        setFlexModalItem(item);
       };
-
-      const handleImageUploadToDrive = async (e, type = 'itinerary') => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (type === 'itinerary') setIsUploadingImage(true); else showToast('Banner 上傳中，請稍候...');
-
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onloadend = async () => {
-          try {
-            const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'uploadImage', base64: reader.result }) });
-            const result = await res.json();
-            if (result.success) {
-              if (type === 'itinerary') { setDraftData({ ...draftData, image: result.url }); showToast('✅ 圖片已成功上傳！'); } 
-              else { setBannerImage(result.url); localStorage.setItem('travel_keeper_banner', result.url); showToast('✅ Banner 已成功更新！'); }
-            } else throw new Error(result.message || result.error);
-          } catch (err) { showToast('上傳失敗: ' + err.message, 'error'); } finally { if (type === 'itinerary') setIsUploadingImage(false); }
-        };
-      };
-
-      const handleFileUpload = async (e) => {
-        const file = e.target.files[0]; if (!file) return; 
-        setOcrStatus('processing');
-        setIsUploadingImage(true);
-
-        try {
-          const reader = new FileReader(); reader.readAsDataURL(file);
-          reader.onloadend = async () => {
-            const base64data = reader.result;
-
-            let uploadedUrl = '';
-            try {
-              const driveRes = await fetch(`${WORKER_URL}/api/itineraries`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'uploadImage', base64: base64data })
-              });
-              const driveResult = await driveRes.json();
-              if (driveResult.success) uploadedUrl = driveResult.url;
-            } catch (err) { console.warn('圖片上傳失敗', err); }
-
-            const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: base64data }) });
-            const aiResult = await res.json();
-
-            if (aiResult.success) {
-              const parsedData = aiResult.data;
-              const REGION_IMAGES = {
-                '國旅': 'https://images.unsplash.com/photo-1578338944883-7eecc7a95079?auto=format&fit=crop&w=800&q=80',
-                '亞洲': 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
-                '歐洲': 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=800&q=80',
-                '美洲': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80',
-                '大洋洲': 'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=800&q=80',
-                '非洲': 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80',
-                '預設': 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80'
-              };
-
-              parsedData.image = uploadedUrl || REGION_IMAGES[parsedData.region] || REGION_IMAGES['預設'];
-              parsedData.id = Date.now(); 
-              setDraftData(parsedData); 
-              showToast('✅ 圖片已上傳且 AI 解析完成！系統正自動寫入資料庫...');
-              
-              const newItinerary = { ...parsedData, action: 'addItinerary', price: parseInt(parsedData.price, 10) || 0 };
-              setItineraries(prev => [newItinerary, ...prev]);
-              try {
-                const dbRes = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newItinerary) });
-                const dbResult = await dbRes.json();
-                if (dbResult.success) { showToast('🎉 行程已成功上架！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); fetchItineraries(); } else throw new Error('寫入失敗');
-              } catch (dbErr) { setOcrStatus('done'); showToast('寫入失敗，請手動點擊「儲存」', 'error'); }
-            } else throw new Error(aiResult.error || '解析失敗');
-            setIsUploadingImage(false);
-          };
-        } catch (error) { setOcrStatus('idle'); setIsUploadingImage(false); showToast(error.message || '解析失敗', 'error'); }
-      };
-
-      const handleUpdateContent = async () => {
-        if (!draftData.title) return showToast('請先填寫內容', 'error');
-        const isEditing = !!draftData.id;
-        const submitData = { ...draftData, id: draftData.id || Date.now(), price: parseInt(draftData.price, 10) || 0, action: isEditing ? 'updateItinerary' : 'addItinerary' };
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submitData) });
-          const result = await res.json();
-          if (result.success) { showToast(isEditing ? '修改成功！' : '新增成功！'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setOcrStatus('idle'); setUploadMode('dm'); fetchItineraries(); } else throw new Error('操作失敗');
-        } catch (error) { showToast('寫入資料庫錯誤', 'error'); }
-      };
-
-      const handleEditClick = (item) => { setUploadMode('manual'); setOcrStatus('done'); setDraftData(item); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-
-      const confirmDelete = async () => {
-        if (!deleteModalId) return;
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteItinerary', id: deleteModalId }) });
-          const result = await res.json();
-          if (result.success) { showToast('已成功下架！'); setDeleteModalId(null); fetchItineraries(); } else throw new Error('刪除失敗');
-        } catch (error) { showToast('下架發生錯誤', 'error'); }
-      };
-
-      const saveDistributorEdit = async () => {
-        try {
-          const payload = { action: 'updateDistributorInfo', ...editFormData };
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          const result = await res.json();
-          if (result.success) { showToast('✅ 經銷商資料與狀態已更新！'); setEditingDistributor(null); fetchFullCrmData(); } else throw new Error('儲存失敗');
-        } catch (e) { showToast('更新失敗，請檢查資料', 'error'); }
-      };
-
-      const handleApproveSubmit = async () => {
-        if (!approveModalUser) return;
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateDistributorStatus', uid: approveModalUser.uid, status: 'approved', commission: approveData.commission, note: approveData.note }) });
-          const result = await res.json();
-          if (result.success) { showToast(`已核准 ${approveModalUser.name}，並設定專屬分潤 ${approveData.commission}%！`); setApproveModalUser(null); fetchFullCrmData(); }
-        } catch (e) { showToast('審核失敗', 'error'); }
-      };
-
-      const openFlexModal = (item) => { setCardOptions({ phone: false, line: false, lineAt: false, fb: false, web: false, map: false }); setFlexModalItem(item); };
 
       const triggerFlexSharing = async () => {
-        if (!isLiffReady || !liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
-        await executeShare(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions, false);
+        try {
+          const flexMsg = buildFlexMessage(flexModalItem, myDistributorData || {}, liffProfile.userId, cardOptions);
+          await liff.shareTargetPicker([flexMsg]);
+          showToast('✅ 發送成功！');
+          setFlexModalItem(null);
+        } catch(e) { showToast('取消或發送失敗', 'error'); }
       };
 
-      let roleBadge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border border-gray-200">訪客</span>;
-      if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold border border-red-200">👑 系統管理員</span>;
-      else if (distributorStatus === 'approved') roleBadge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold border border-emerald-200">💼 金牌經銷商</span>;
-      else if (distributorStatus === 'pending') roleBadge = <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold border border-yellow-200">⏳ 經銷審核中</span>;
-      else if (isGeneralMember) roleBadge = <span className="bg-orange-100 text-orange-700 text-[11px] px-2 py-0.5 rounded font-bold border border-orange-200">👤 一般會員</span>;
-
-      if (isAutoSharing) {
-         return (
-           <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center"><div className="text-[#00B900] text-5xl mb-4 animate-bounce"><Send className="w-12 h-12 inline-block" /></div><p className="text-gray-500 font-bold text-sm tracking-widest">{shareStatusText}</p></div>
-         );
-      }
-
-      // --- 內部元件：拒絕存取畫面 ---
-      const AdminDeniedScreen = () => (
-        <div className="w-full max-w-3xl mx-auto px-4 py-32 animate-fade-in text-center">
-          <AlertCircle className="w-24 h-24 text-red-500 mx-auto mb-6" />
-          <h2 className="text-4xl font-bold text-gray-800 mb-4">權限不足 (Access Denied)</h2>
-          <p className="text-gray-500 text-xl mb-10">此區塊為最高權限管理員專屬，您的帳號無權限訪問。</p>
-        </div>
-      );
-
-      // --- 內部元件：CRM經銷商編輯畫面 ---
-      const CrmDistributorEditView = () => {
-        const referredUsers = crmUsers.filter(u => u.referredBy === editFormData.uid);
-        return (
-          <div className="animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <button onClick={() => setEditingDistributor(null)} className="flex items-center text-gray-500 hover:text-purple-600 font-bold transition"><Navigation className="w-5 h-5 mr-1 transform -rotate-90" /> 返回名單列表</button>
-              <button onClick={saveDistributorEdit} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-bold shadow-md">儲存修改</button>
-            </div>
-            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden mb-8">
-              <div className="p-6 border-b border-gray-100 bg-purple-50/30 flex items-center justify-between">
-                 <div className="flex items-center"><div className="bg-purple-100 p-3 rounded-full mr-4"><Briefcase className="text-purple-600 w-6 h-6"/></div><div><h2 className="text-2xl font-bold text-gray-800">編輯經銷商: {editFormData.name}</h2><p className="text-sm font-mono text-gray-500 mt-1">UID: {editFormData.uid}</p></div></div>
-              </div>
-              <div className="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">聯絡與審核資料</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-500 mb-1">姓名</label><input type="text" value={editFormData.name || ''} onChange={e=>setEditFormData({...editFormData, name: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                    <div><label className="block text-xs font-bold text-gray-500 mb-1">手機</label><input type="text" value={editFormData.phone || ''} onChange={e=>setEditFormData({...editFormData, phone: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                    <div><label className="block text-xs font-bold text-purple-500 mb-1">公司/門市名稱</label><input type="text" value={editFormData.companyName || ''} onChange={e=>setEditFormData({...editFormData, companyName: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 focus:ring-purple-500 outline-none"/></div>
-                    <div><label className="block text-xs font-bold text-purple-500 mb-1">統編</label><input type="text" value={editFormData.taxId || ''} onChange={e=>setEditFormData({...editFormData, taxId: e.target.value})} className="w-full rounded-lg border border-purple-300 bg-purple-50/30 p-2 focus:ring-purple-500 outline-none"/></div>
-                    <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">個人 LINE 網址</label><input type="text" value={editFormData.lineLink || ''} onChange={e=>setEditFormData({...editFormData, lineLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                    <div className="col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">實體店面導航 (Map)</label><input type="text" value={editFormData.mapLink || ''} onChange={e=>setEditFormData({...editFormData, mapLink: e.target.value})} className="w-full rounded-lg border border-gray-300 p-2 focus:ring-purple-500 outline-none"/></div>
-                  </div>
-                </div>
-                <div className="space-y-4 bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <h3 className="font-bold text-lg text-gray-800 mb-4 border-b pb-2">系統權限與分潤設定</h3>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-2">開通狀態</label><select value={editFormData.status || 'pending'} onChange={e=>setEditFormData({...editFormData, status: e.target.value})} className="w-full rounded-lg border-2 border-purple-300 p-3 focus:ring-purple-500 outline-none font-bold"><option value="pending">待審核 (停權中)</option><option value="approved">✅ 已核准開通</option></select></div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">專屬分潤比例 (%)</label><input type="number" value={editFormData.commission || ''} onChange={e=>setEditFormData({...editFormData, commission: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none text-lg font-bold text-red-500" placeholder="例如：10" /></div>
-                  <div><label className="block text-sm font-bold text-gray-700 mb-2 mt-4">內部審核備註</label><textarea rows="3" value={editFormData.note || ''} onChange={e=>setEditFormData({...editFormData, note: e.target.value})} className="w-full rounded-lg border border-gray-300 p-3 focus:ring-purple-500 outline-none" placeholder="輸入備註事項..." /></div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-               <div className="p-6 border-b border-gray-100 flex items-center justify-between"><h3 className="text-xl font-bold text-gray-800 flex items-center"><Users className="w-6 h-6 mr-2 text-blue-500"/> 帶來的專屬客戶 / 會員清單</h3><span className="bg-blue-100 text-blue-800 font-bold px-3 py-1 rounded-full text-sm">共 {referredUsers.length} 人</span></div>
-               <div className="p-0 overflow-x-auto">
-                 <table className="w-full text-left border-collapse">
-                    <thead><tr className="bg-gray-50 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">註冊日期</th><th className="p-4 font-bold text-gray-600 text-sm">會員姓名</th><th className="p-4 font-bold text-gray-600 text-sm">聯絡電話</th><th className="p-4 font-bold text-gray-600 text-sm">LINE UID</th></tr></thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {referredUsers.length === 0 ? <tr><td colSpan="4" className="p-8 text-center text-gray-400 font-medium">該經銷商目前尚未帶來任何新註冊會員</td></tr> : 
-                       referredUsers.map(u => (
-                        <tr key={u.uid} className="hover:bg-blue-50/30 transition-colors"><td className="p-4 text-sm text-gray-500">{u.joinDate ? String(u.joinDate).substring(0, 10) : ''}</td><td className="p-4 font-bold text-gray-800 text-lg">{u.name}</td><td className="p-4 font-medium text-gray-600">{u.phone}</td><td className="p-4 font-mono text-xs text-gray-400">{u.uid}</td></tr>
-                      ))}
-                    </tbody>
-                 </table>
-               </div>
-            </div>
-          </div>
-        );
-      };
+      let roleBadge = <span className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-bold">訪客</span>;
+      if (isAdmin) roleBadge = <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold">管理員</span>;
+      else if (distributorStatus === 'approved') roleBadge = <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded font-bold">經銷商</span>;
 
       return (
-        <div className="min-h-screen flex flex-col bg-gray-50">
-          <nav className="bg-white shadow-sm sticky top-0 z-50">
-            <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
-              <div className="flex flex-col md:flex-row md:items-center justify-between py-3 md:py-0 md:h-16">
-                <div className="flex justify-between items-center w-full md:w-auto">
-                  <div className="flex items-center cursor-pointer mr-8" onClick={() => changeTab('home')}>
-                    <Navigation className="h-8 w-8 text-blue-600 mr-2" />
-                    <span className="font-bold text-xl tracking-wider text-blue-900">旅遊管家</span>
-                  </div>
-                  <div className="md:hidden flex items-center">
-                    {liffProfile ? (
-                      <div className="flex items-center gap-2"><div className="flex flex-col items-end">{roleBadge}</div><img src={liffProfile.pictureUrl || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" /></div>
-                    ) : (
-                      <button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-[#00B900] hover:bg-[#009900] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm">LINE 登入</button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-1 overflow-x-auto custom-scrollbar mt-3 md:mt-0 pb-1 md:pb-0 w-full md:w-auto flex-nowrap">
-                  <button onClick={() => changeTab('home')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>找行程</button>
-                  <button onClick={() => changeTab('member')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600 hover:bg-gray-100'}`}><Users className="w-4 h-4 mr-1.5" /> 會員中心</button>
-                  <button onClick={() => changeTab('distributor')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 hover:bg-gray-100'}`}><Briefcase className="w-4 h-4 mr-1.5" /> 經銷商專區</button>
-                  {isAdmin && (
-                    <><button onClick={() => changeTab('crm')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台 CRM</button>
-                    <button onClick={() => changeTab('admin')} className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${activeTab === 'admin' ? 'text-blue-700 bg-blue-50' : 'text-gray-600 hover:bg-gray-100'}`}>後台上稿</button></>
-                  )}
-                </div>
-                <div className="hidden md:flex items-center ml-4 pl-4 border-l border-gray-200 shrink-0">
-                  {liffProfile ? (
-                    <div className="flex items-center gap-3">
-                      <div className="text-right"><p className="text-sm font-bold text-gray-800 leading-none mb-1.5">{liffProfile.displayName}</p><div className="flex justify-end">{roleBadge}</div></div>
-                      <img src={liffProfile.pictureUrl || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />
-                    </div>
-                  ) : (<button onClick={() => liff.login({ redirectUri: window.location.href })} className="bg-[#00B900] hover:bg-[#009900] text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">LINE 登入</button>)}
-                </div>
-              </div>
+        <div className="min-h-screen flex flex-col">
+          <nav className="bg-white shadow-sm h-16 sticky top-0 z-50 flex items-center px-4">
+            <div className="flex-1 flex items-center cursor-pointer" onClick={() => changeTab('home')}>
+              <Navigation className="w-6 h-6 text-blue-600 mr-2" />
+              <span className="font-bold text-lg text-blue-900">旅遊管家</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button onClick={() => changeTab('home')} className={`text-sm font-bold ${activeTab === 'home' ? 'text-blue-600' : 'text-gray-500'}`}>行程</button>
+              <button onClick={() => changeTab('distributor')} className={`text-sm font-bold ${activeTab === 'distributor' ? 'text-emerald-600' : 'text-gray-500'}`}>經銷</button>
+              {liffProfile && <img src={liffProfile.pictureUrl} className="w-8 h-8 rounded-full border" />}
             </div>
           </nav>
 
-          <div className="flex-grow w-full">
-            {/* ====== 前台：找行程 ====== */}
+          <main className="flex-grow p-4">
             {activeTab === 'home' && (
-              <div className="w-full animate-fade-in pb-12">
-                <div className="relative w-full h-64 md:h-80 xl:h-[400px] group bg-gray-200">
-                  <img src={bannerImage} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center">
-                    <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-wider mb-4 drop-shadow-lg">探索世界的美好</h1><p className="text-lg md:text-xl lg:text-2xl drop-shadow-md font-light">發現您的下一個夢幻旅程</p>
-                  </div>
-                  {isAdmin && (
-                    <label className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-800 px-5 py-2.5 rounded-lg cursor-pointer shadow-lg backdrop-blur-sm transition-all flex items-center text-sm font-bold opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0">
-                      <Camera className="w-5 h-5 mr-2 text-blue-600" />{isUploadingImage ? '上傳中...' : '更換 Banner'}
-                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'banner')} disabled={isUploadingImage} />
-                    </label>
-                  )}
-                </div>
-
-                <div className="sticky top-16 z-40 w-full bg-white/95 backdrop-blur-md shadow-md border-b border-gray-200 transition-all">
-                  <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-4 md:py-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
-                      <div className="w-full">
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">前往地區</label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" />
-                          <select value={searchRegion} onChange={(e) => setSearchRegion(e.target.value)} className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors font-medium">
-                            <option value="">探索所有地區</option><option value="國旅">國旅 (台灣)</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="w-full">
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">出發區間</label>
-                        <div className="relative flex items-center bg-gray-50 rounded-xl border border-gray-300 hover:bg-white transition-colors focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-                          <Calendar className="absolute left-3.5 h-5 w-5 text-gray-400" />
-                          <input type="date" value={searchStartDate} onChange={e => setSearchStartDate(e.target.value)} className="pl-11 pr-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" />
-                          <span className="text-gray-400">-</span>
-                          <input type="date" value={searchEndDate} onChange={e => setSearchEndDate(e.target.value)} className="px-2 py-3 bg-transparent outline-none w-1/2 text-sm font-medium text-gray-700" />
-                        </div>
-                      </div>
-                      <div className="w-full">
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">關鍵字搜尋</label>
-                        <div className="relative">
-                          <Type className="absolute left-3.5 top-3.5 h-5 w-5 text-gray-400" />
-                          <input type="text" value={searchKeyword} onChange={e => setSearchKeyword(e.target.value)} placeholder="請輸入行程名稱或關鍵字..." className="pl-11 w-full rounded-xl border-gray-300 border p-3 focus:ring-blue-500 bg-gray-50 outline-none hover:bg-white transition-colors font-medium" />
-                        </div>
-                      </div>
-                      <div className="w-full">
-                        <button onClick={handleSearch} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-md flex items-center justify-center text-lg"><Search className="w-5 h-5 mr-2" /> 搜尋行程</button>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
+                {itineraries.map(item => (
+                  <div key={item.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <img src={item.image} className="w-full h-40 object-cover" />
+                    <div className="p-4">
+                      <h3 className="font-bold mb-2 line-clamp-1">{item.title}</h3>
+                      <div className="flex justify-between items-center">
+                        <span className="text-red-500 font-bold">${Number(item.price).toLocaleString()}</span>
+                        <span className="text-xs text-gray-400">{item.days}天</span>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-10">
-                  <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800 flex items-center">為您推薦的精選行程</h3><span className="text-sm font-medium text-gray-500 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">共 {filteredResults.length} 筆</span></div>
-                  {isLoading ? <div className="text-center py-32 text-gray-500 bg-white rounded-3xl shadow-sm border border-gray-100"><RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" /><p className="text-lg">載入中...</p></div> : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8 lg:gap-10">
-                      {filteredResults.map(item => (
-                        <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group border border-gray-100 flex flex-col h-full transform hover:-translate-y-1.5">
-                          <div className="h-64 lg:h-72 overflow-hidden relative bg-gray-100">
-                            <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                            <div className="absolute top-4 left-4 flex flex-col gap-2">
-                               <span className="bg-black/60 backdrop-blur-md text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow-lg w-fit">{item.region}</span>
-                            </div>
-                          </div>
-                          <div className="p-6 md:p-8 flex flex-col flex-grow">
-                            <h4 className="font-bold text-xl lg:text-2xl mb-3 text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">{item.title}</h4>
-                            <p className="text-gray-500 text-base mb-6 line-clamp-3 flex-grow leading-relaxed">{item.description}</p>
-                            <div className="flex justify-between items-end border-t border-gray-100 pt-5 mt-auto">
-                              <span className="text-base font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">{item.days} 天</span>
-                              <span className="text-3xl font-extrabold text-red-500">${Number(item.price).toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredResults.length === 0 && (<div className="col-span-full text-center py-32 text-gray-500 bg-white rounded-3xl border border-dashed border-gray-300"><Search className="w-16 h-16 text-gray-300 mx-auto mb-4" /><p className="font-bold text-2xl text-gray-600">找不到行程</p></div>)}
-                    </div>
-                  )}
-                </div>
+                ))}
               </div>
             )}
 
-            {/* ====== 模組 B：一般會員中心 ====== */}
-            {activeTab === 'member' && (
-              <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                {!isGeneralMember ? (
-                  <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10">
-                     <Users className="w-20 h-20 text-orange-500 mx-auto mb-6" />
-                     <h2 className="text-3xl font-bold mb-4">一般會員登入</h2>
-                     <p className="text-gray-500 mb-8 text-lg">您必須先補全會員聯絡資訊才能啟用此區塊。</p>
-                     <button onClick={loginAsMember} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">前往填寫會員資料</button>
-                  </div>
-                ) : (
-                  <div className="bg-orange-500 rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative">
-                    <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
-                      <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
-                      <div>
-                        <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎回來，{liffProfile?.displayName}！</h2>
-                        <p className="text-orange-100 text-lg max-w-2xl">您已成功登入一般會員。未來預定的行程與報名紀錄都會歸屬在此帳號下。</p>
-                        {crmUsers.find(u => u.uid === liffProfile?.userId)?.referredBy && (
-                          <div className="mt-4 inline-block bg-white/20 px-3 py-1 rounded-md text-sm font-bold border border-white/30">✨ 您是由專屬旅遊顧問推薦的 VIP 會員</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ====== 模組 C：經銷商專區 ====== */}
             {activeTab === 'distributor' && (
-              <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                {!distributorStatus ? (
-                  <div className="bg-white rounded-3xl p-12 text-center shadow-md border border-gray-100 max-w-2xl mx-auto mt-10">
-                     <Briefcase className="w-20 h-20 text-emerald-500 mx-auto mb-6" />
-                     <h2 className="text-3xl font-bold mb-4">經銷商登入/註冊</h2>
-                     <p className="text-gray-500 mb-8 text-lg">成為經銷夥伴，取得專屬推廣連結與業績統計功能。</p>
-                     <button onClick={loginAsDistributor} className="bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all text-xl w-full">使用 LINE 註冊/登入</button>
-                  </div>
-                ) : (
-                  <>
-                    <div className={`rounded-3xl p-8 md:p-12 text-white shadow-xl mb-10 overflow-hidden relative ${distributorStatus === 'approved' ? 'bg-emerald-600' : 'bg-gray-600'}`}>
-                      <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
-                        <img src={liffProfile?.pictureUrl || 'https://via.placeholder.com/150'} className="w-24 h-24 rounded-full border-4 border-white/30 shadow-lg object-cover" />
-                        <div>
-                          <h2 className="text-3xl md:text-4xl font-bold mb-3">歡迎，{liffProfile?.displayName}！</h2>
-                          {distributorStatus === 'approved' ? <p className="text-emerald-100 text-lg max-w-2xl">點擊下方「產生推廣名片」，勾選您專屬的聯絡按鈕即可自動轉發給好友！</p> : <p className="text-gray-200 text-lg max-w-2xl font-bold bg-white/20 p-3 rounded-lg border border-white/30 inline-block">您的經銷商資格目前「正在審核中」，請靜候後台開通。</p>}
-                        </div>
+              <div className="animate-fade-in">
+                {distributorStatus === 'approved' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {itineraries.map(item => (
+                      <div key={item.id} className="bg-white p-4 border rounded-xl flex items-center justify-between">
+                        <span className="font-bold truncate mr-2">{item.title}</span>
+                        <button onClick={() => openFlexModal(item)} className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shrink-0">推廣</button>
                       </div>
-                      <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4"><Briefcase className="w-96 h-96" /></div>
-                    </div>
-
-                    {distributorStatus === 'approved' && (
-                      <>
-                        <div className="flex justify-between items-end mb-6 border-b border-gray-200 pb-4"><h3 className="text-3xl font-bold text-gray-800">可推廣的優質行程</h3></div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8">
-                          {itineraries.map(item => (
-                            <div key={item.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden border border-gray-100 flex flex-col h-full">
-                              <div className="h-56 overflow-hidden relative bg-gray-100">
-                                <img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" />
-                                <div className="absolute top-3 left-3 bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold shadow">分潤 {(myDistributorData && myDistributorData.commission) || 10}%</div>
-                              </div>
-                              <div className="p-6 flex flex-col flex-grow">
-                                <h4 className="font-bold text-xl mb-2 text-gray-900 line-clamp-2">{item.title}</h4>
-                                <div className="flex justify-between items-end mt-auto pt-4"><span className="text-2xl font-extrabold text-red-500">${Number(item.price).toLocaleString()}</span></div>
-                                <button onClick={() => openFlexModal(item)} className="mt-5 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow transition-colors flex justify-center items-center"><Share2 className="w-5 h-5 mr-2" /> 產生推廣名片</button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
+                    ))}
+                  </div>
+                ) : <AdminDeniedScreen />}
               </div>
             )}
+          </main>
 
-            {/* ====== 模組 D：後台 CRM ====== */}
-            {activeTab === 'crm' && (
-              isAdmin ? (
-                <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                  {editingDistributor ? (
-                    <CrmDistributorEditView />
-                  ) : (
-                    <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-                      <div className="p-6 md:p-8 border-b border-gray-100 bg-purple-50/30 flex justify-between items-center">
-                        <div><h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center"><Users className="w-8 h-8 mr-3 text-purple-600" /> 後台 CRM 管理</h2><p className="text-gray-500 mt-2">檢視一般會員名單，審核經銷商資格與業績。</p></div>
-                      </div>
-                      <div className="flex border-b border-gray-200 px-6 pt-4 bg-gray-50">
-                        <button onClick={() => setCrmSubTab('distributors')} className={`pb-3 px-6 font-bold text-lg transition-colors ${crmSubTab === 'distributors' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>經銷商名單與審核</button>
-                        <button onClick={() => setCrmSubTab('users')} className={`pb-3 px-6 font-bold text-lg transition-colors ${crmSubTab === 'users' ? 'text-purple-600 border-b-4 border-purple-600' : 'text-gray-500 hover:text-purple-500'}`}>一般會員列表</button>
-                      </div>
-                      <div className="overflow-x-auto p-4">
-                        {crmSubTab === 'distributors' ? (
-                          <table className="w-full text-left border-collapse min-w-[1000px]">
-                            <thead><tr className="bg-gray-100 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">申請日期</th><th className="p-4 font-bold text-gray-600 text-sm">經銷商資訊</th><th className="p-4 font-bold text-gray-600 text-sm">審核資料 (公司/統編)</th><th className="p-4 font-bold text-gray-600 text-sm">資格狀態</th><th className="p-4 font-bold text-gray-600 text-sm text-right">累積業績</th><th className="p-4 font-bold text-gray-600 text-sm text-center">操作</th></tr></thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {crmDistributors.length === 0 ? <tr><td colSpan="6" className="p-8 text-center text-gray-400">尚無資料</td></tr> : 
-                               crmDistributors.map(user => (
-                                <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
-                                  <td className="p-4 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td>
-                                  <td className="p-4"><p className="font-bold text-gray-800 text-lg mb-1">{user.name}</p><p className="text-sm text-gray-600">{user.phone}</p></td>
-                                  <td className="p-4"><p className="font-bold text-purple-700">{user.companyName || '未填寫'}</p><p className="text-sm text-gray-500 font-mono mt-1">統編: {user.taxId || '未填寫'}</p></td>
-                                  <td className="p-4">
-                                    {user.status && user.status.trim().toLowerCase() === 'approved' ? (
-                                      <div><span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">已核准</span><span className="text-xs text-gray-500 font-bold ml-2">分潤 {user.commission || 10}%</span></div>
-                                    ) : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">待審核</span>}
-                                  </td>
-                                  <td className="p-4 text-right"><p className="font-bold text-gray-800 text-lg">{Number(user.sales) ? user.sales : '0'} 筆</p><p className="text-xs text-gray-500 font-medium">${Number(user.revenue) ? Number(user.revenue).toLocaleString() : '0'}</p></td>
-                                  <td className="p-4 text-center"><button onClick={() => { setEditingDistributor(user); setEditFormData(user); }} className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition">編輯 / 審核</button></td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        ) : (
-                          <table className="w-full text-left border-collapse">
-                            <thead><tr className="bg-gray-100 border-b border-gray-200"><th className="p-4 font-bold text-gray-600 text-sm">註冊日期</th><th className="p-4 font-bold text-gray-600 text-sm">會員暱稱</th><th className="p-4 font-bold text-gray-600 text-sm">聯絡電話</th><th className="p-4 font-bold text-gray-600 text-sm">推薦來源</th></tr></thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {crmUsers.length === 0 ? <tr><td colSpan="4" className="p-8 text-center text-gray-400">尚無資料</td></tr> : 
-                               crmUsers.map(user => {
-                                const refDist = crmDistributors.find(d => d.uid === user.referredBy);
-                                return (
-                                <tr key={user.uid} className="hover:bg-purple-50/30 transition-colors">
-                                  <td className="p-4 text-sm text-gray-500">{user.joinDate ? String(user.joinDate).substring(0, 10) : ''}</td>
-                                  <td className="p-4 font-bold text-gray-800 text-lg">{user.name}</td>
-                                  <td className="p-4"><p className="text-sm text-gray-800">{user.phone}</p></td>
-                                  <td className="p-4">{refDist ? <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded">推薦人: {refDist.name}</span> : <span className="text-xs text-gray-400">自然流量</span>}</td>
-                                </tr>
-                              )})}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : <AdminDeniedScreen />
-            )}
-
-            {/* ====== 模組 E：後台上稿系統 ====== */}
-            {activeTab === 'admin' && (
-              isAdmin ? (
-                <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 animate-fade-in pb-20">
-                  <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100">
-                    <div className="flex justify-between items-center border-b pb-4 mb-6"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><UploadCloud className="h-6 w-6 mr-2 text-blue-500" /> 行程智能上稿系統</h2><button onClick={handleUpdateContent} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium shadow-sm"><RefreshCw className="w-4 h-4 mr-2" /> {draftData.id ? '儲存修改' : '手動新增上架'}</button></div>
-                    {!draftData.id && (
-                      <div className="flex space-x-4 mb-8 max-w-2xl">
-                        <button onClick={() => setUploadMode('dm')} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'dm' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><ImageIcon className="mr-2 h-5 w-5" /> DM 智能解析</button>
-                        <button onClick={() => { setUploadMode('manual'); setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); }} className={`flex-1 py-3.5 rounded-xl border-2 font-bold flex justify-center items-center transition-colors ${uploadMode === 'manual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}><FileText className="mr-2 h-5 w-5" /> 人工填寫</button>
-                      </div>
-                    )}
-                    {uploadMode === 'dm' && !draftData.id && (
-                      <div className="mb-8 w-full max-w-4xl">
-                        <div className="mt-1 flex justify-center px-6 pt-12 pb-16 border-2 border-gray-300 border-dashed rounded-2xl bg-gray-50 hover:bg-gray-100 transition relative">
-                          <div className="space-y-2 text-center"><ImageIcon className="mx-auto h-20 w-20 text-gray-300 mb-4" /><label className="relative cursor-pointer bg-white rounded-lg font-bold text-blue-600 border shadow-sm px-4 py-2"><span>選擇 DM 圖片</span><input type="file" className="sr-only" accept="image/*" onChange={handleFileUpload} disabled={ocrStatus === 'processing'} /></label></div>
-                          {ocrStatus === 'processing' && <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10 backdrop-blur-sm"><RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" /><p className="text-blue-700 font-bold text-2xl">ChatGPT 解析中...</p></div>}
-                        </div>
-                      </div>
-                    )}
-                    {(uploadMode === 'manual' || ocrStatus === 'done' || draftData.title) && (
-                      <div className="bg-gray-50/80 p-6 lg:p-8 rounded-2xl border border-gray-200 relative">
-                        {draftData.id && <button onClick={() => { setDraftData({ id: null, title: '', region: '', price: '', days: '', startDate: '', endDate: '', description: '', image: '' }); setUploadMode('dm'); setOcrStatus('idle'); }} className="absolute top-6 right-6 text-gray-400 bg-white rounded-full p-1.5 border shadow-sm"><X className="w-6 h-6" /></button>}
-                        <div className="flex items-center mb-8"><h3 className="text-2xl font-bold">{draftData.id ? '✏️ 修改行程' : '📝 行程內容草稿'}</h3></div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-                          <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">行程標題</label><input type="text" value={draftData.title} onChange={(e) => setDraftData({...draftData, title: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
-                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">所屬地區</label><select value={draftData.region} onChange={(e) => setDraftData({...draftData, region: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 bg-white outline-none text-lg"><option value="">請選擇</option><option value="國旅">國旅</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option><option value="美洲">美洲</option><option value="大洋洲">大洋洲</option><option value="非洲">非洲</option></select></div>
-                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">價格 (TWD)</label><input type="number" value={draftData.price} onChange={(e) => setDraftData({...draftData, price: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg"/></div>
-                          
-                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">出發日期</label><input type="date" value={draftData.startDate} onChange={(e) => setDraftData({...draftData, startDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
-                          <div className="lg:col-span-1"><label className="block text-sm font-bold text-gray-700 mb-2">結束日期</label><input type="date" value={draftData.endDate} onChange={(e) => setDraftData({...draftData, endDate: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg bg-white"/></div>
-                          <div className="lg:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">總天數</label><input type="number" value={draftData.days} onChange={(e) => setDraftData({...draftData, days: e.target.value})} className="w-full rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none text-lg" placeholder="例如：7"/></div>
-                          
-                          <div className="lg:col-span-4">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">圖片網址 或 上傳雲端圖片</label>
-                            <div className="flex gap-4 items-center">
-                              <input type="text" value={draftData.image || ''} onChange={(e) => setDraftData({...draftData, image: e.target.value})} className="flex-1 rounded-xl border-gray-300 border p-3.5 focus:ring-blue-500 outline-none font-mono text-base text-gray-600" placeholder="https://..." />
-                              <label className={`cursor-pointer bg-blue-100 text-blue-700 px-4 py-3.5 rounded-xl font-bold hover:bg-blue-200 transition whitespace-nowrap ${isUploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
-                                {isUploadingImage ? '上傳中...' : '☁️ 上傳圖片'}
-                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadToDrive(e, 'itinerary')} disabled={isUploadingImage} />
-                              </label>
-                              {draftData.image && <img src={draftData.image} className="w-16 h-16 rounded-xl object-cover border flex-shrink-0" />}
-                            </div>
-                          </div>
-                        </div>
-                        <div><label className="block text-sm font-bold text-gray-700 mb-2">詳細行程文案</label><textarea rows={6} value={draftData.description} onChange={(e) => setDraftData({...draftData, description: e.target.value})} className="w-full rounded-xl border-gray-300 border p-5 focus:ring-blue-500 outline-none text-lg leading-relaxed"/></div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-white rounded-2xl shadow-md p-6 lg:p-8 border border-gray-100 mt-6">
-                    <div className="flex justify-between items-center mb-6 border-b pb-4"><h3 className="text-2xl font-bold flex items-center"><FileText className="w-6 h-6 mr-2" /> 現有行程管理</h3></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 max-h-[800px] overflow-y-auto pr-2 pb-2">
-                      {itineraries.map(item => (
-                        <div key={item.id} className="flex flex-col p-5 bg-white rounded-2xl border border-gray-200 shadow-sm h-full">
-                          <div className="flex gap-5 mb-5"><img src={item.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-28 h-28 rounded-xl object-cover border" /><div className="flex-1"><span className="bg-gray-200 px-2 py-0.5 rounded text-xs font-bold">{item.region}</span><h4 className="font-bold text-lg line-clamp-2 mt-1">{item.title}</h4><div className="mt-3"><span className="font-extrabold text-red-500 text-xl">${Number(item.price).toLocaleString()}</span><span className="text-sm ml-1">• {item.days}天</span></div></div></div>
-                          <div className="flex space-x-3 justify-end mt-auto border-t border-gray-100 pt-4">
-                            <button onClick={() => handleEditClick(item)} className="flex-1 py-2 bg-white border rounded-xl text-sm font-bold shadow-sm">編輯</button>
-                            <button onClick={() => setDeleteModalId(item.id)} className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold shadow-sm">下架</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : <AdminDeniedScreen />
-            )}
-          </div>
-
-          {/* ====== 獨立元件：Flex Message 設定與產生 Modal ====== */}
           {flexModalItem && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-[2rem] overflow-hidden max-w-5xl w-full flex flex-col md:flex-row shadow-2xl relative animate-fade-in-up">
-                <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/50 text-white rounded-full p-2 transition"><X className="w-6 h-6"/></button>
-                
-                <div className="w-full md:w-3/5 p-8 lg:p-12 flex flex-col justify-center bg-white border-r border-gray-100 h-[80vh] md:h-auto overflow-y-auto custom-scrollbar">
-                  <div className="flex items-center text-[#00B900] mb-2"><CheckCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-extrabold">準備您的專屬名片</h3></div>
-                  <p className="text-gray-500 mb-8 font-medium">勾選您想放在名片上的聯絡方式，預覽將即時更新。</p>
-                  
-                  <div className="space-y-6">
-                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-                      <p className="font-bold text-gray-800 mb-4 border-b pb-2">自訂名片按鈕 (建議勾選1~3項)</p>
-                      <div className="grid grid-cols-2 gap-3">
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.phone ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.phone ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.phone} checked={cardOptions.phone} onChange={(e) => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 聯絡電話</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.line ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineLink} checked={cardOptions.line} onChange={(e) => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 個人 LINE</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.lineAtLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.lineAt ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.lineAtLink} checked={cardOptions.lineAt} onChange={(e) => setCardOptions({...cardOptions, lineAt: e.target.checked})} /> 🟢 官方 LINE@</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.fbLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.fb ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.fbLink} checked={cardOptions.fb} onChange={(e) => setCardOptions({...cardOptions, fb: e.target.checked})} /> 👍 FB 粉專</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.webLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.web ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.webLink} checked={cardOptions.web} onChange={(e) => setCardOptions({...cardOptions, web: e.target.checked})} /> 🌐 官方網站</label>
-                         <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition ${!myDistributorData?.mapLink ? 'opacity-50 bg-gray-100 cursor-not-allowed' : cardOptions.map ? 'bg-emerald-50 border-emerald-500' : 'hover:bg-gray-50'}`}><input type="checkbox" className="mr-3 w-4 h-4 accent-emerald-500" disabled={!myDistributorData?.mapLink} checked={cardOptions.map} onChange={(e) => setCardOptions({...cardOptions, map: e.target.checked})} /> 📍 實體店導航</label>
-                      </div>
-                      <p className="text-xs text-red-500 mt-3 font-bold">* 若按鈕反灰，請先至個人資料設定補全該網址</p>
-                    </div>
-                    
-                    <div className="pt-4">
-                      <button onClick={() => triggerFlexSharing()} className="w-full bg-[#00B900] hover:bg-[#009900] text-white font-bold py-4 rounded-2xl shadow-lg transition-all flex justify-center items-center text-lg"><Share2 className="w-5 h-5 mr-2" /> 一鍵發送名片給 LINE 好友</button>
-                    </div>
-                  </div>
+            <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-sm p-6 relative animate-fade-in-up">
+                <button onClick={() => setFlexModalItem(null)} className="absolute top-4 right-4 text-gray-400"><X /></button>
+                <h3 className="text-lg font-bold mb-4">推廣名片設定</h3>
+                <div className="space-y-3 mb-6">
+                  <label className="flex items-center p-3 border rounded-xl"><input type="checkbox" className="mr-3" checked={cardOptions.phone} onChange={e => setCardOptions({...cardOptions, phone: e.target.checked})} /> 📞 電話</label>
+                  <label className="flex items-center p-3 border rounded-xl"><input type="checkbox" className="mr-3" checked={cardOptions.line} onChange={e => setCardOptions({...cardOptions, line: e.target.checked})} /> 💬 LINE</label>
                 </div>
-
-                <div className="w-full md:w-2/5 line-chat-bg p-6 flex flex-col items-center justify-center border-l border-gray-200 shadow-inner">
-                   <p className="text-white/80 font-bold mb-4 tracking-widest text-sm uppercase bg-black/20 px-4 py-1 rounded-full">預覽畫面</p>
-                   
-                   <div className="w-full max-w-[300px] bg-white rounded-[20px] overflow-hidden shadow-2xl transform scale-95 origin-top relative flex flex-col">
-                     <div className="relative">
-                        <div className="relative h-40"><img src={flexModalItem.image || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=800&q=80'} className="w-full h-full object-cover" /></div>
-                        <div className="p-4 flex flex-col items-center text-center">
-                          <h4 className="font-bold text-xl text-gray-900 leading-snug mb-2 line-clamp-2 w-full">{flexModalItem.title}</h4>
-                          <p className="text-xs text-gray-500 line-clamp-5 mb-3 text-left w-full">{flexModalItem.description ? flexModalItem.description.substring(0, 120) + '...' : '點擊下方按鈕了解行程！'}</p>
-                          <div className="flex justify-between items-baseline w-full mb-2"><span className="text-gray-400 text-xs">🔥 熱門搶購中</span><span className="font-extrabold text-[#ff334b] text-xl">${Number(flexModalItem.price).toLocaleString()}</span></div>
-                        </div>
-                     </div>
-                     <div className="px-4 pb-4 space-y-2 bg-white mt-auto">
-                        <div className="w-full bg-[#00B900] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">查看行程 / 立即報名</div>
-                        <div className="w-full bg-[#ff334b] text-white text-center py-2.5 rounded-xl font-bold text-sm shadow-sm cursor-pointer hover:opacity-90">📤 分享此行程給好友</div>
-                        {cardOptions.phone && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📞 聯絡電話</div>}
-                        {cardOptions.line && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">💬 私訊 LINE</div>}
-                        {cardOptions.lineAt && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🟢 官方 LINE@</div>}
-                        {cardOptions.fb && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">👍 FB 粉絲專頁</div>}
-                        {cardOptions.web && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">🌐 官方網站</div>}
-                        {cardOptions.map && <div className="w-full bg-gray-100 text-gray-700 text-center py-2 rounded-xl font-bold text-sm">📍 門市導航</div>}
-                     </div>
-                   </div>
-                </div>
+                <button onClick={triggerFlexSharing} className="w-full bg-[#00B900] text-white py-3 rounded-xl font-bold">發送名片</button>
               </div>
             </div>
           )}
 
-          {/* 刪除確認 Modal */}
-          {deleteModalId && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-fade-in-up">
-                <div className="flex items-center text-red-600 mb-5"><AlertCircle className="w-8 h-8 mr-3" /><h3 className="text-2xl font-bold">確認下架此行程？</h3></div>
-                <p className="text-gray-600 mb-8 text-lg leading-relaxed">下架後該行程將從前台及資料庫移除，確定要繼續嗎？</p>
-                <div className="flex justify-end space-x-4">
-                  <button onClick={() => setDeleteModalId(null)} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-lg">取消</button>
-                  <button onClick={confirmDelete} className="px-6 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 text-lg">確定下架</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Toast Notification */}
           {toast && (
-            <div className="fixed bottom-6 right-6 z-[90] animate-fade-in-up">
-              <div className={`flex items-center p-5 rounded-2xl shadow-2xl ${toast.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-gray-900 text-white'}`}><span className="font-bold text-lg tracking-wide">{toast.message}</span></div>
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-full font-bold shadow-xl animate-fade-in-up">
+              {toast.message}
             </div>
           )}
         </div>
       );
     }
+
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
