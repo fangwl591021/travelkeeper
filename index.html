@@ -55,16 +55,20 @@
     const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
 
     function App() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+      const tourParam = urlParams.get('t');
+
       // --- State ---
-      const [view, setView] = useState('portal'); // 'portal' or 'toolbox'
-      const [activeTab, setActiveTab] = useState('home');
+      // 根據 tab=distributor 自動偵測初始視圖
+      const [view, setView] = useState(tabParam === 'distributor' ? 'toolbox' : 'portal'); 
       const [itineraries, setItineraries] = useState([]);
       const [liffProfile, setLiffProfile] = useState(null);
       const [myDistributorData, setMyDistributorData] = useState(null);
       const [isLoading, setIsLoading] = useState(true);
-      const [selectedTourId, setSelectedTourId] = useState(new URLSearchParams(window.location.search).get('t'));
+      const [selectedTourId, setSelectedTourId] = useState(tourParam);
       const [distSelectedIds, setDistSelectedIds] = useState(new Set());
-      const [refUid] = useState(new URLSearchParams(window.location.search).get('r') || localStorage.getItem('tracking_ref_uid') || '');
+      const [refUid] = useState(urlParams.get('r') || localStorage.getItem('tracking_ref_uid') || '');
 
       // --- Init ---
       useEffect(() => {
@@ -91,6 +95,7 @@
           const data = await res.json();
           if (data.success && data.data.role === 'distributor') {
             setMyDistributorData(data.data.distributorData);
+            // 如果是在首頁且偵測到是經銷商身分，可以視需求決定是否自動跳轉，目前遵循 tab 參數
           }
         } catch (e) { console.error('Status check error', e); }
       };
@@ -114,6 +119,17 @@
         setTimeout(() => toast.remove(), 3000);
       };
 
+      const handleViewChange = (newView) => {
+        setView(newView);
+        const newUrl = new URL(window.location.href);
+        if (newView === 'toolbox') {
+          newUrl.searchParams.set('tab', 'distributor');
+        } else {
+          newUrl.searchParams.delete('tab');
+        }
+        window.history.pushState({}, '', newUrl);
+      };
+
       // --- Render Portal ---
       const renderHome = () => (
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -122,7 +138,7 @@
             <div className="flex gap-2">
               {myDistributorData && (
                 <button 
-                  onClick={() => setView('toolbox')}
+                  onClick={() => handleViewChange('toolbox')}
                   className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition"
                 >
                   <Icon name="briefcase" className="w-5 h-5" /> 推廣工具箱
@@ -169,7 +185,7 @@
         <div className="min-h-screen bg-slate-50 pb-20">
           <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200 h-16 flex items-center px-6 justify-between shadow-sm">
             <div className="flex items-center gap-3">
-              <button onClick={() => setView('portal')} className="p-2 hover:bg-slate-100 rounded-full transition">
+              <button onClick={() => handleViewChange('portal')} className="p-2 hover:bg-slate-100 rounded-full transition">
                 <Icon name="arrowLeft" className="w-6 h-6 text-slate-600" />
               </button>
               <span className="font-black text-xl text-slate-800">經銷推廣工具箱</span>
@@ -233,10 +249,8 @@
                 <button onClick={() => setDistSelectedIds(new Set())} className="px-5 py-3 text-sm font-bold hover:text-slate-300">清空</button>
                 <button 
                   onClick={async () => {
-                    const selectedItems = Array.from(distSelectedIds).map(id => itineraries.find(i => i.id === id));
-                    // 此處執行 LIFF shareTargetPicker 邏輯
-                    showToast('正在開啟 LINE 分享...');
                     // 根據 mode 生成 Flex JSON 並呼叫 liff.shareTargetPicker
+                    showToast('正在開啟 LINE 分享...');
                   }}
                   className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg transition"
                 >
@@ -255,7 +269,7 @@
             <>
               {/* Portal Header */}
               <nav className="bg-white/80 backdrop-blur sticky top-0 z-50 border-b border-gray-100 h-16 flex items-center px-6 justify-between">
-                <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setSelectedTourId(null); setView('portal'); }}>
+                <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setSelectedTourId(null); handleViewChange('portal'); }}>
                   <Icon name="navigation" className="w-8 h-8 text-blue-600" />
                   <span className="font-black text-2xl tracking-tighter text-slate-800">旅遊管家</span>
                 </div>
@@ -271,17 +285,15 @@
                    <button onClick={() => { setSelectedTourId(null); window.history.pushState({}, '', '?tab=home'); }} className="mb-6 flex items-center gap-2 text-slate-500 font-bold hover:text-blue-600 transition">
                      <Icon name="arrowLeft" className="w-5 h-5" /> 返回列表
                    </button>
-                   {/* 行程詳情渲染區 (根據您的 renderAgencyBlogDescription 邏輯) */}
                    <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
                      {itineraries.find(i => i.id == selectedTourId)?.title ? (
                        <div className="p-8">
                          <h1 className="text-4xl font-black text-slate-800 mb-6">{itineraries.find(i => i.id == selectedTourId).title}</h1>
                          <div className="prose prose-slate max-w-none">
-                           {/* 這裡插入您的文章渲染邏輯 */}
                            <p className="text-gray-600 leading-relaxed text-lg">行程載入中或顯示靜態內容...</p>
                          </div>
                        </div>
-                     ) : <p>找不到該行程</p>}
+                     ) : <p className="p-10 text-center font-bold text-gray-400">找不到該行程</p>}
                    </div>
                 </div>
               ) : renderHome()}
