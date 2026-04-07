@@ -2,14 +2,12 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>智能上稿 - 旗艦版</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 </head>
 <body class="bg-gray-100">
   <div id="root"></div>
@@ -23,18 +21,21 @@
       const [isAdmin, setIsAdmin] = useState(false);
       const [ocrStatus, setOcrStatus] = useState('idle');
       const [draftData, setDraftData] = useState(null);
+      const [uid, setUid] = useState('');
 
       useEffect(() => {
         liff.init({ liffId: LIFF_ID }).then(() => {
           if (liff.isLoggedIn()) {
-            liff.getProfile().then(p => checkAuth(p.userId));
+            liff.getProfile().then(p => {
+              setUid(p.userId);
+              checkAuth(p.userId);
+            });
           } else liff.login();
         });
-        if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
       }, []);
 
-      const checkAuth = async (uid) => {
-        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
+      const checkAuth = async (userId) => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${userId}`);
         const data = await res.json();
         if (data.success && data.data.isAdmin) setIsAdmin(true);
       };
@@ -44,36 +45,49 @@
         setOcrStatus('processing');
         const reader = new FileReader();
         reader.onload = async (ev) => {
-          const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
-            method: 'POST',
-            body: JSON.stringify({ image: ev.target.result })
-          });
-          const result = await res.json();
-          if (result.success) { setDraftData(result.data); setOcrStatus('done'); }
-          else setOcrStatus('idle');
+          try {
+            const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+              method: 'POST',
+              body: JSON.stringify({ image: ev.target.result })
+            });
+            const result = await res.json();
+            if (result.success) { setDraftData(result.data); setOcrStatus('done'); }
+            else throw new Error();
+          } catch (e) { setOcrStatus('idle'); alert('解析失敗，請確認圖檔清晰'); }
         };
         reader.readAsDataURL(file);
       };
 
-      if (!isAdmin) return <div className="p-20 text-center font-bold">驗證權限中...</div>;
+      const handleConfirm = async () => {
+        await fetch(`${WORKER_URL}/api/itineraries`, {
+          method: 'POST',
+          body: JSON.stringify({ ...draftData, action: 'addItinerary' })
+        });
+        alert('行程已成功發布至首頁！');
+        window.location.href = 'index.html';
+      };
+
+      if (!isAdmin) return (
+        <div className="p-20 text-center">
+          <h2 className="text-3xl font-black mb-4">ACCESS DENIED</h2>
+          <p className="text-gray-500 mb-4">您的帳號無管理權限。</p>
+          <div className="bg-slate-100 p-4 rounded-xl border border-dashed text-blue-600 font-mono text-xs">UID: {uid}</div>
+        </div>
+      );
 
       return (
         <div className="max-w-4xl mx-auto p-10">
           <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl">
-            <h1 className="text-3xl font-black mb-8">🚀 智能行程上稿</h1>
-            <div className="border-4 border-dashed rounded-[2rem] p-16 text-center bg-gray-50 relative">
-               {ocrStatus === 'processing' ? <p className="animate-pulse text-blue-600 font-bold">AI 深度解析擴寫中...</p> : <p className="font-bold text-gray-400">點擊上傳 DM 圖片</p>}
+            <h1 className="text-3xl font-black mb-8 flex items-center gap-2">🚀 智能行程上稿</h1>
+            <div className={`border-4 border-dashed rounded-[2rem] p-16 text-center transition ${ocrStatus === 'processing' ? 'border-blue-500 bg-blue-50' : 'bg-gray-50 border-gray-200'}`}>
+               {ocrStatus === 'processing' ? <p className="animate-pulse text-blue-600 font-black text-xl">AI 深度解析擴寫中...</p> : <p className="font-bold text-gray-400">點擊上傳旅遊 DM 圖片</p>}
                <input type="file" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" />
             </div>
             {draftData && (
-              <div className="mt-10 space-y-6">
-                <input value={draftData.title} className="w-full p-4 border rounded-xl font-bold" />
-                <textarea value={draftData.description} rows="10" className="w-full p-4 border rounded-xl" />
-                <button onClick={async () => {
-                   await fetch(`${WORKER_URL}/api/itineraries`, { method:'POST', body: JSON.stringify({...draftData, action:'addItinerary'}) });
-                   alert('行程已發布！');
-                   window.location.href = 'index.html';
-                }} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg">確認發布此行程</button>
+              <div className="mt-12 space-y-6">
+                <input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-black text-xl focus:border-blue-500 outline-none" />
+                <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="15" className="w-full p-5 border-2 rounded-2xl leading-relaxed text-gray-700" />
+                <button onClick={handleConfirm} className="w-full bg-blue-600 text-white font-black py-6 rounded-[2rem] shadow-xl text-xl hover:bg-blue-700 transition">確認發布此行程</button>
               </div>
             )}
           </div>
