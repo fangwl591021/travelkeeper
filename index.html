@@ -3,40 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 智能業務系統 (旗艦版)</title>
+  <title>旅遊管家 - 旗艦完全體 (v4.1)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .animate-fade-in-up { animation: fadeInUp 0.35s ease-out forwards; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .line-chat-bg { background-color: #749cbd; }
   </style>
 </head>
-<body class="bg-gray-50 font-sans text-gray-800">
+<body class="bg-gray-50 font-sans text-slate-800">
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    const Navigation = () => <svg className="w-8 h-8 text-blue-600 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>;
+    const Navigation = () => <svg className="w-8 h-8 text-blue-600 mr-2" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>;
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
 
     function App() {
-      const [activeTab, setActiveTab] = useState('home');
+      // 1. 狀態與引用宣告 (旗艦穩定版)
+      const urlParams = new URLSearchParams(window.location.search);
+      const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home');
       const [isLoading, setIsLoading] = useState(true);
       const [itineraries, setItineraries] = useState([]);
-      const [filteredResults, setFilteredResults] = useState([]); // ★ 修正：確保 filteredResults 已定義
+      const [filteredResults, setFilteredResults] = useState([]); 
       const [liffProfile, setLiffProfile] = useState(null);
       const [isAdmin, setIsAdmin] = useState(false);
       const [distributorStatus, setDistributorStatus] = useState(null);
       const [myOrders, setMyOrders] = useState([]);
-      const [selectedTourId, setSelectedTourId] = useState(null);
+      const [toast, setToast] = useState(null);
+      const [selectedTourId, setSelectedTourId] = useState(urlParams.get('t') || null);
+      
+      const [searchRegion, setSearchRegion] = useState('');
+      const [searchKeyword, setSearchKeyword] = useState('');
+      const [bannerImage, setBannerImage] = useState('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
 
       useEffect(() => {
         const init = async () => {
@@ -54,15 +64,17 @@
       }, []);
 
       const checkAuth = async (uid) => {
-        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
-        const data = await res.json();
-        if (data.success) {
-          if (data.data.isAdmin) setIsAdmin(true);
-          if (data.data.role === 'distributor') setDistributorStatus(data.data.status);
-          const ores = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
-          const odata = await ores.json();
-          setMyOrders(odata.data || []);
-        }
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
+          const data = await res.json();
+          if (data.success) {
+            if (data.data.isAdmin) setIsAdmin(true);
+            if (data.data.role === 'distributor') setDistributorStatus(data.data.status);
+            const ores = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
+            const odata = await ores.json();
+            setMyOrders(odata.data || []);
+          }
+        } catch (e) {}
       };
 
       const fetchData = async () => {
@@ -70,10 +82,18 @@
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?_t=${Date.now()}`);
           const data = await res.json();
-          setItineraries(data || []);
-          setFilteredResults(data || []);
+          const items = Array.isArray(data) ? data : (data.data || []);
+          setItineraries(items); 
+          setFilteredResults(items);
         } catch (e) {}
         setIsLoading(false);
+      };
+
+      const handleSearch = () => {
+        let res = itineraries;
+        if (searchRegion) res = res.filter(i => i.region.includes(searchRegion));
+        if (searchKeyword) res = res.filter(i => i.title.toLowerCase().includes(searchKeyword.toLowerCase()));
+        setFilteredResults(res);
       };
 
       const renderNavBar = () => {
@@ -83,12 +103,12 @@
 
         return (
           <nav className="bg-white shadow-sm sticky top-0 z-50 h-16 flex items-center px-4 justify-between border-b">
-            <div className="flex items-center cursor-pointer" onClick={() => { setSelectedTourId(null); setActiveTab('home'); }}>
+            <div className="flex items-center cursor-pointer" onClick={() => { setSelectedTourId(null); setActiveTab('home'); window.history.pushState({}, '', '?tab=home'); }}>
               <Navigation />
               <span className="font-black text-xl text-blue-900 tracking-wider">旅遊管家</span>
             </div>
             <div className="flex items-center space-x-2">
-              <button onClick={() => { setSelectedTourId(null); setActiveTab('home'); }} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>找行程</button>
+              <button onClick={() => setActiveTab('home')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>找行程</button>
               <button onClick={() => setActiveTab('member')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600'}`}>會員中心</button>
               <button onClick={() => setActiveTab('distributor')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600'}`}>經銷專區</button>
               {isAdmin && <button onClick={() => window.location.href='admin.html'} className="px-3 py-2 rounded-lg text-sm font-bold text-red-700 bg-red-50">智能上稿</button>}
@@ -107,16 +127,24 @@
       const renderHomeTab = () => {
         if (selectedTourId) {
           const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
-          if (!tour) return <div className="p-20 text-center animate-pulse">載入中...</div>;
+          if (!tour) return <div className="p-20 text-center animate-pulse">行程內容載入中...</div>;
           return (
             <div className="animate-fade-in pb-20">
-              <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/30 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white">{tour.title}</h1></div></div>
+              <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white leading-tight">{tour.title}</h1></div></div>
               <div className="max-w-7xl mx-auto py-10 px-6 flex flex-col lg:flex-row gap-10">
-                <div className="flex-1 space-y-6 text-lg leading-relaxed text-gray-700 whitespace-pre-wrap">{tour.description}</div>
-                <div className="w-full lg:w-96 sticky top-24 self-start bg-white p-8 rounded-3xl shadow-xl border text-center">
-                  <p className="text-sm font-bold text-gray-400">專案特惠價</p>
-                  <p className="text-5xl font-black text-red-600 my-4">${Number(tour.price).toLocaleString()}</p>
-                  <button className="w-full bg-[#b82337] text-white font-bold py-4 rounded-2xl shadow-lg">立即預約報名</button>
+                <div className="flex-1 space-y-8">
+                  {tour.description?.split('\n').map((line, i) => {
+                    const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
+                    if (imgMatch) return <img key={i} src={imgMatch[2]} className="w-full rounded-2xl shadow-lg aspect-[16/9] object-cover my-6" />;
+                    return <p key={i} className="text-lg leading-relaxed text-slate-700">{line}</p>;
+                  })}
+                </div>
+                <div className="w-full lg:w-96 sticky top-24 self-start">
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border text-center">
+                    <p className="text-sm font-bold text-slate-400">專案特惠價</p>
+                    <p className="text-5xl font-black text-red-600 my-4">TWD {Number(tour.price).toLocaleString()}</p>
+                    <button className="w-full bg-[#b82337] text-white font-black py-5 rounded-2xl shadow-lg hover:bg-red-700 transition">立即預約報名</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -124,30 +152,42 @@
         }
 
         return (
-          <div className="animate-fade-in">
-            {/* ★ 旗艦 Banner */}
-            <div className="relative w-full h-[350px] md:h-[500px] overflow-hidden bg-slate-900">
-               <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80" className="w-full h-full object-cover opacity-60" />
+          <div className="animate-fade-in pb-20">
+            {/* 旗艦視覺 Banner */}
+            <div className="relative w-full h-[400px] md:h-[550px] overflow-hidden bg-slate-900">
+               <img src={bannerImage} className="w-full h-full object-cover opacity-60" />
                <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center">
-                  <h1 className="text-5xl md:text-7xl font-black mb-6 drop-shadow-2xl">探索世界的美好</h1>
-                  <p className="text-xl md:text-3xl font-light tracking-[0.5em] drop-shadow-lg">發現您的下一個夢幻旅程</p>
+                  <h1 className="text-5xl md:text-8xl font-black mb-6 drop-shadow-2xl animate-fade-in-up">探索世界的美好</h1>
+                  <p className="text-xl md:text-3xl font-light tracking-[0.5em] drop-shadow-lg opacity-90">發現您的下一個夢幻旅程</p>
                </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
+            {/* 搜尋列 */}
+            <div className="bg-white shadow-2xl max-w-6xl mx-auto -mt-12 relative z-10 rounded-[2.5rem] p-8 border grid grid-cols-1 md:grid-cols-3 gap-6">
+               <select value={searchRegion} onChange={e=>setSearchRegion(e.target.value)} className="p-4 border-2 rounded-2xl bg-slate-50 outline-none font-bold text-slate-700 focus:border-blue-500">
+                 <option value="">探索所有地區</option>
+                 <option value="國旅">國旅 (台灣)</option><option value="亞洲">亞洲</option><option value="歐洲">歐洲</option>
+               </select>
+               <input value={searchKeyword} onChange={e=>setSearchKeyword(e.target.value)} placeholder="輸入行程關鍵字..." className="p-4 border-2 rounded-2xl bg-slate-50 outline-none font-bold focus:border-blue-500" />
+               <button onClick={handleSearch} className="bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-700 transition transform hover:-translate-y-1">搜尋行程</button>
+            </div>
+
+            {/* 行程卡片列表 */}
+            <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-10">
               {filteredResults.map(item => (
-                <div key={item.id} onClick={() => setSelectedTourId(item.id)} className="bg-white rounded-3xl shadow-sm border overflow-hidden cursor-pointer hover:shadow-2xl transition duration-500 group">
-                  <div className="h-56 overflow-hidden"><img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" /></div>
-                  <div className="p-6">
-                    <p className="text-xs font-bold text-blue-500 mb-1">{item.region}</p>
-                    <h4 className="font-bold text-lg mb-4 line-clamp-2 h-14">{item.title}</h4>
-                    <div className="flex justify-between items-center border-t pt-4">
-                      <span className="text-gray-400 text-sm font-bold">{item.days}天</span>
+                <div key={item.id} onClick={() => { setSelectedTourId(item.id); window.history.pushState({}, '', `?t=${item.id}`); }} className="bg-white rounded-[2.5rem] shadow-sm border overflow-hidden cursor-pointer hover:shadow-2xl transition duration-500 group flex flex-col h-full">
+                  <div className="h-60 overflow-hidden"><img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" /></div>
+                  <div className="p-7 flex-grow flex flex-col">
+                    <p className="text-xs font-bold text-blue-600 mb-2 uppercase tracking-widest">{item.region}</p>
+                    <h4 className="font-bold text-xl mb-4 line-clamp-2 h-14 text-slate-800 leading-tight">{item.title}</h4>
+                    <div className="flex justify-between items-end border-t pt-5 mt-auto">
+                      <span className="text-slate-400 text-sm font-bold">{item.days}天精華</span>
                       <span className="text-red-600 font-black text-2xl">${Number(item.price).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               ))}
+              {filteredResults.length === 0 && <p className="col-span-full text-center py-20 text-slate-400 font-bold">目前無相符行程</p>}
             </div>
           </div>
         );
@@ -155,13 +195,13 @@
 
       const renderMemberTab = () => (
         <div className="p-10 max-w-5xl mx-auto animate-fade-in">
-          <h2 className="text-3xl font-black mb-8">預約報名中心</h2>
-          {myOrders.length === 0 ? <p className="text-gray-400 font-bold p-20 text-center">尚無報名紀錄</p> : (
-            <div className="grid gap-4">
+          <h2 className="text-4xl font-black mb-10 text-slate-900">預約報名中心</h2>
+          {myOrders.length === 0 ? <div className="p-20 bg-white rounded-[2.5rem] border text-center text-slate-400 font-bold">您目前尚無預約行程</div> : (
+            <div className="grid gap-6">
               {myOrders.map(o => (
-                <div key={o.orderId} className="bg-white p-8 rounded-3xl border flex justify-between items-center shadow-sm">
-                  <div><p className="font-bold text-xl mb-1">{o.tourTitle}</p><p className="text-sm text-gray-400">單號: {o.orderId}</p></div>
-                  <div className="text-right"><p className="font-black text-red-600 text-2xl">${Number(o.totalAmount).toLocaleString()}</p><span className="text-xs bg-gray-100 px-3 py-1 rounded-full font-bold uppercase">{o.orderStatus}</span></div>
+                <div key={o.orderId} className="bg-white p-8 rounded-[2rem] border flex justify-between items-center shadow-sm hover:shadow-md transition">
+                  <div><p className="font-bold text-xl mb-2 text-slate-800">{o.tourTitle}</p><p className="text-sm text-slate-400 font-mono tracking-tighter">單號: {o.orderId}</p></div>
+                  <div className="text-right"><p className="font-black text-red-600 text-2xl mb-2">${Number(o.totalAmount).toLocaleString()}</p><span className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black uppercase">{o.orderStatus}</span></div>
                 </div>
               ))}
             </div>
@@ -173,18 +213,28 @@
         <div className="min-h-screen flex flex-col bg-gray-50 overflow-x-hidden">
           {renderNavBar()}
           <main className="flex-grow">
-            {isLoading ? <div className="p-40 text-center animate-pulse font-black text-gray-400">核心系統載入中...</div> : (
+            {isLoading ? (
+              <div className="p-40 text-center flex flex-col items-center">
+                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+                 <p className="font-black text-slate-400 tracking-[0.3em]">核心系統載入中</p>
+              </div>
+            ) : (
               <>
                 {activeTab === 'home' && renderHomeTab()}
                 {activeTab === 'member' && renderMemberTab()}
                 {activeTab === 'distributor' && (
-                  <div className="p-10 text-center">
-                    <button onClick={()=>window.location.href='model.html'} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black text-xl shadow-xl">開啟推廣工具箱</button>
+                  <div className="p-20 text-center animate-fade-in">
+                    <div className="bg-emerald-600 rounded-[2.5rem] p-12 text-white max-w-4xl mx-auto shadow-2xl">
+                       <h2 className="text-4xl font-black mb-4">經銷商推廣專區</h2>
+                       <p className="text-emerald-100 text-lg mb-10">推廣專屬連結，即時追蹤您的分潤業績。</p>
+                       <button onClick={()=>window.location.href='model.html'} className="bg-white text-emerald-700 font-black px-12 py-5 rounded-2xl text-xl shadow-lg hover:bg-emerald-50 transition">開啟三合一名片工具</button>
+                    </div>
                   </div>
                 )}
               </>
             )}
           </main>
+          {toast && (<div className="fixed bottom-10 right-10 z-[100] bg-slate-900 text-white px-10 py-5 rounded-[2rem] shadow-2xl font-black animate-fade-in-up">{toast}</div>)}
         </div>
       );
     }
