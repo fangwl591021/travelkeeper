@@ -30,7 +30,7 @@
     const LIFF_ID = '2009367829-BDZCGti8'; 
 
     function App() {
-      // 1. 核心狀態宣告
+      // 1. 核心狀態
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home');
       const [isLoading, setIsLoading] = useState(true);
@@ -47,13 +47,12 @@
       
       const [searchRegion, setSearchRegion] = useState('');
       const [searchKeyword, setSearchKeyword] = useState('');
+      const [bannerImage, setBannerImage] = useState('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
+
       const [ocrStatus, setOcrStatus] = useState('idle');
       const [draftData, setDraftData] = useState(null);
 
-      // ★ 修復 ReferenceError: bannerImage is not defined
-      const [bannerImage, setBannerImage] = useState('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
-
-      // 2. 初始化流程
+      // 2. 初始化
       useEffect(() => {
         const init = async () => {
           try {
@@ -74,7 +73,7 @@
         if (activeTab === 'crm' && isAdmin) fetchCrmData();
       }, [activeTab, isAdmin]);
 
-      // 3. API 串接邏輯
+      // 3. API 串接
       const checkAuth = async (uid) => {
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
@@ -122,6 +121,7 @@
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`);
           const data = await res.json();
+          // 資料來自 Users 表，物件鍵值會對應 Users 表的首列標題
           setCrmDistributors(Array.isArray(data) ? data : []);
         } catch (e) {}
       };
@@ -134,10 +134,10 @@
           });
           const result = await res.json();
           if (result.success) {
-            showToast(`已更新狀態為 ${newStatus}`);
+            showToast(`已成功核准經銷商狀態`);
             fetchCrmData();
           }
-        } catch (e) { showToast('操作失敗', 'error'); }
+        } catch (e) { showToast('核准操作失敗', 'error'); }
       };
 
       const handleSearch = () => {
@@ -152,33 +152,23 @@
         setTimeout(() => setToast(null), 3000);
       };
 
-      // 4. 渲染導覽列
-      const renderNavBar = () => {
-        let badge = <span className="bg-gray-100 text-gray-400 text-[10px] px-2 py-0.5 rounded font-medium border border-gray-200">訪客</span>;
-        if (isAdmin) badge = <span className="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded font-medium border border-red-100">👑 管理員</span>;
-        else if (distributorStatus === 'approved') badge = <span className="bg-emerald-50 text-emerald-600 text-[10px] px-2 py-0.5 rounded font-medium border border-emerald-100">💼 經銷商</span>;
+      // 4. 渲染 UI
+      const renderNavBar = () => (
+        <nav className="glass-nav sticky top-0 z-50 h-16 flex items-center px-4 justify-between border-b border-gray-100">
+          <div className="flex items-center cursor-pointer" onClick={() => { setSelectedTourId(null); setActiveTab('home'); }}>
+            <svg className="w-8 h-8 text-blue-600 mr-2" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span className="font-black text-xl text-blue-900 tracking-tight">旅遊管家</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <button onClick={() => { setSelectedTourId(null); setActiveTab('home'); }} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-slate-500'}`}>找行程</button>
+            <button onClick={() => setActiveTab('member')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'member' ? 'text-blue-700 bg-blue-50' : 'text-slate-500'}`}>會員中心</button>
+            {isAdmin && <button onClick={() => setActiveTab('crm')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-slate-500'}`}>CRM 管理</button>}
+            {isAdmin && <button onClick={() => setActiveTab('admin')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'admin' ? 'text-red-700 bg-red-50' : 'text-slate-500'}`}>智能上稿</button>}
+            <img src={liffProfile?.pictureUrl || 'https://aiwe.cc/wp-content/uploads/2026/03/avatar_placeholder.jpg'} className="w-8 h-8 rounded-full border shadow-sm ml-2" />
+          </div>
+        </nav>
+      );
 
-        return (
-          <nav className="glass-nav sticky top-0 z-50 h-16 flex items-center px-4 justify-between border-b border-gray-100">
-            <div className="flex items-center cursor-pointer" onClick={() => { setSelectedTourId(null); setActiveTab('home'); }}>
-              <svg className="w-8 h-8 text-blue-600 mr-2" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-              <span className="font-black text-xl text-blue-900 tracking-tight">旅遊管家</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button onClick={() => { setSelectedTourId(null); setActiveTab('home'); }} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-slate-500'}`}>找行程</button>
-              <button onClick={() => setActiveTab('member')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'member' ? 'text-blue-700 bg-blue-50' : 'text-slate-500'}`}>會員中心</button>
-              {isAdmin && <button onClick={() => setActiveTab('crm')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-slate-500'}`}>CRM 管理</button>}
-              {isAdmin && <button onClick={() => setActiveTab('admin')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'admin' ? 'text-red-700 bg-red-50' : 'text-slate-500'}`}>智能上稿</button>}
-              <div className="hidden sm:flex items-center gap-2 pl-3 border-l ml-2">
-                <div className="text-right"><p className="text-[10px] font-bold leading-none mb-1">{liffProfile?.displayName || '未登入'}</p>{badge}</div>
-                <img src={liffProfile?.pictureUrl || 'https://aiwe.cc/wp-content/uploads/2026/03/avatar_placeholder.jpg'} className="w-8 h-8 rounded-full border shadow-sm" />
-              </div>
-            </div>
-          </nav>
-        );
-      };
-
-      // 5. 渲染首頁
       const renderHomeTab = () => {
         if (selectedTourId) {
           const tour = itineraries.find(i => String(i.id) === String(selectedTourId));
@@ -190,14 +180,14 @@
                 <div className="flex-1 space-y-8">
                   {tour.description?.split('\n').map((line, i) => {
                     const imgMatch = line.match(/!\[(.*?)\]\((.*?)\)/);
-                    if (imgMatch) return <img key={i} src={imgMatch[2]} className="w-full rounded-3xl shadow-lg aspect-[16/9] object-cover my-6" />;
+                    if (imgMatch) return <img key={i} src={imgMatch[2]} className="w-full rounded-[2rem] shadow-lg aspect-[16/9] object-cover my-6" />;
                     return <p key={i} className="text-lg leading-relaxed text-slate-700">{line}</p>;
                   })}
                 </div>
                 <div className="w-full lg:w-96 sticky top-24 self-start bg-white p-8 line-oa-style text-center shadow-xl">
-                  <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">限時特惠價</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">限時優惠價</p>
                   <p className="text-5xl font-black text-red-600 my-4">${Number(tour.price).toLocaleString()}</p>
-                  <button className="w-full bg-[#b82337] text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition">立即預約報名</button>
+                  <button className="w-full bg-[#b82337] text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition">立即預約行程</button>
                 </div>
               </div>
             </div>
@@ -241,7 +231,6 @@
         );
       };
 
-      // 6. 渲染分級會員中心
       const renderMemberTab = () => {
         const totalSales = distributorStats.orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0);
         return (
@@ -262,45 +251,25 @@
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-emerald-600 p-8 line-oa-style text-white shadow-emerald-100 shadow-xl">
-                    <p className="text-emerald-100 text-xs font-bold tracking-widest uppercase mb-1">累積推廣成交總額</p>
+                    <p className="text-emerald-100 text-xs font-bold tracking-widest uppercase mb-1">累積成交總額</p>
                     <p className="text-4xl font-black">${totalSales.toLocaleString()}</p>
                   </div>
                   <div className="bg-white p-8 line-oa-style border border-gray-100">
-                    <p className="text-slate-400 text-xs font-bold tracking-widest uppercase mb-1">成功推薦會員</p>
+                    <p className="text-slate-400 text-xs font-bold tracking-widest uppercase mb-1">成功推薦人數</p>
                     <p className="text-4xl font-black text-slate-800">{distributorStats.users.length} <span className="text-lg font-medium text-slate-400">位</span></p>
                   </div>
-                </div>
-                <div className="bg-white line-oa-style border border-gray-100 overflow-hidden">
-                   <div className="p-6 bg-slate-50/30 border-b border-gray-50 flex justify-between items-center"><span className="font-bold text-slate-800 tracking-wide">已綁定之推薦會員名單</span></div>
-                   <div className="overflow-x-auto">
-                     <table className="w-full text-left">
-                        <thead className="bg-gray-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                          <tr className="border-b border-gray-50"><th className="p-4">會員姓名</th><th className="p-4">註冊日期</th><th className="p-4 text-right">推薦來源</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {distributorStats.users.map((u,idx) => (
-                            <tr key={idx} className="text-sm hover:bg-slate-50/50 transition">
-                              <td className="p-4 font-bold text-slate-700">{u.name}</td>
-                              <td className="p-4 text-slate-400 font-mono">{u.regTime?.split(' ')[0]}</td>
-                              <td className="p-4 text-right text-emerald-600 font-bold">經銷連結</td>
-                            </tr>
-                          ))}
-                          {distributorStats.users.length === 0 && <tr><td colSpan="3" className="p-20 text-center text-slate-300 font-medium">尚無推薦資料紀錄</td></tr>}
-                        </tbody>
-                     </table>
-                   </div>
                 </div>
               </section>
             )}
 
             <section className="space-y-6">
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight px-2">我的預約報名紀錄</h3>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight px-2">預約報名紀錄</h3>
               {myOrders.length === 0 ? (
-                <div className="p-20 bg-white line-oa-style border border-gray-50 text-center text-slate-300 font-bold">您目前尚無行程預約</div>
+                <div className="p-20 bg-white line-oa-style border border-gray-50 text-center text-slate-300 font-bold tracking-widest">您目前尚無行程預約</div>
               ) : (
                 <div className="grid gap-4">
                   {myOrders.map(o => (
-                    <div key={o.orderId} className="bg-white p-8 line-oa-style border border-gray-50 flex justify-between items-center hover:shadow-md transition">
+                    <div key={o.orderId} className="bg-white p-8 line-oa-style border border-gray-50 flex justify-between items-center hover:shadow-md transition duration-300">
                       <div><p className="font-black text-xl text-slate-800 mb-1">{o.tourTitle}</p><p className="text-xs text-slate-400 font-mono tracking-tighter">單號: {o.orderId}</p></div>
                       <div className="text-right"><p className="font-black text-red-600 text-2xl mb-1">${Number(o.totalAmount).toLocaleString()}</p><span className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black uppercase tracking-widest">{o.orderStatus}</span></div>
                     </div>
@@ -312,47 +281,44 @@
         );
       };
 
-      // 7. 渲染 CRM 管理
       const renderCrmTab = () => (
         <div className="p-4 md:p-10 max-w-6xl mx-auto animate-fade-in space-y-10">
           <header className="px-2">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tight">CRM 經銷商管理系統</h2>
-            <p className="text-slate-400 font-medium mt-1 text-sm tracking-wide">管理核准經銷權限，拓展您的業務版圖</p>
+            <h2 className="text-4xl font-black text-slate-900 tracking-tight text-center sm:text-left">CRM 經銷商管理系統</h2>
+            <p className="text-slate-400 font-medium mt-1 text-sm tracking-wide text-center sm:text-left">管理從 Users 表格同步的所有經銷申請與身份狀態</p>
           </header>
 
           <div className="bg-white line-oa-style overflow-hidden shadow-2xl">
              <div className="p-6 bg-slate-50/50 border-b border-gray-100 flex justify-between items-center px-8">
-                <span className="font-black text-slate-700 tracking-widest uppercase text-xs">申請名單總覽</span>
-                <span className="text-[10px] font-bold text-slate-400">共 {crmDistributors.length} 筆資料</span>
+                <span className="font-black text-slate-700 tracking-widest uppercase text-xs">經銷商申請名單總覽</span>
+                <span className="text-[10px] font-bold text-slate-400">共 {crmDistributors.length} 位經銷商</span>
              </div>
              <div className="overflow-x-auto">
-               <table className="w-full text-left">
+               <table className="w-full text-left border-collapse">
                   <thead className="bg-gray-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-gray-100">
-                    <tr><th className="p-6">經銷夥伴</th><th className="p-6">LINE UID</th><th className="p-6">狀態</th><th className="p-6 text-right">核准控制</th></tr>
+                    <tr><th className="p-6">經銷夥伴姓名</th><th className="p-6">聯絡電話</th><th className="p-6">LINE UID</th><th className="p-6">目前狀態</th><th className="p-6 text-right">核准控制</th></tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {crmDistributors.map((d, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 transition duration-300">
-                        <td className="p-6">
-                           <p className="font-black text-slate-800 text-base">{d.name || '未填寫'}</p>
-                           <p className="text-xs text-slate-400 font-medium">{d.phone || '無電話號碼'}</p>
-                        </td>
+                        <td className="p-6 font-black text-slate-800 text-base">{d.name || '未填寫'}</td>
+                        <td className="p-6 text-sm text-slate-500 font-medium">{d.phone || '無資料'}</td>
                         <td className="p-6 font-mono text-[10px] text-slate-300 break-all max-w-[120px]">{d.uid}</td>
                         <td className="p-6">
                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${d.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
-                             {d.status === 'approved' ? '已核准' : '審核中'}
+                             {d.status === 'approved' ? '已核准' : '待核准'}
                            </span>
                         </td>
                         <td className="p-6 text-right">
                            {d.status !== 'approved' ? (
-                             <button onClick={() => handleDistributorApproval(d.uid, 'approved')} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-lg hover:bg-blue-700 transition transform active:scale-95">核准加入</button>
+                             <button onClick={() => handleDistributorApproval(d.uid, 'approved')} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-lg hover:bg-blue-700 transition">核准加入</button>
                            ) : (
                              <button onClick={() => handleDistributorApproval(d.uid, 'pending')} className="text-slate-300 hover:text-red-500 transition text-xs font-bold">撤銷權限</button>
                            )}
                         </td>
                       </tr>
                     ))}
-                    {crmDistributors.length === 0 && <tr><td colSpan="4" className="p-20 text-center text-slate-300 font-medium">目前暫無任何經銷商申請</td></tr>}
+                    {crmDistributors.length === 0 && <tr><td colSpan="5" className="p-20 text-center text-slate-300 font-medium tracking-widest">目前 Users 名單中尚無經銷商資料</td></tr>}
                   </tbody>
                </table>
              </div>
@@ -360,7 +326,6 @@
         </div>
       );
 
-      // 8. 智能上稿
       const handleFileUpload = async (e) => {
         const file = e.target.files[0]; if (!file) return;
         setOcrStatus('processing');
@@ -395,10 +360,10 @@
               <div className="mt-12 space-y-8 animate-fade-in-up">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">行程標題</label><input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl bg-slate-50/50 outline-none focus:border-blue-500 transition" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">團費價格</label><input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl text-red-600 bg-slate-50/50" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">預估團費</label><input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl text-red-600 bg-slate-50/50" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">天數</label><input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl bg-slate-50/50" /></div>
                 </div>
-                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">詳細擴寫內容 (含 16:9 自動配圖)</label><textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="12" className="w-full p-6 border-2 border-slate-50 rounded-[2rem] leading-relaxed text-slate-600 text-lg bg-slate-50/50 outline-none focus:border-blue-500 transition" /></div>
+                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">詳細腦補內容 (含 16:9 自動配圖)</label><textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="12" className="w-full p-6 border-2 border-slate-50 rounded-[2rem] leading-relaxed text-slate-600 text-lg bg-slate-50/50 outline-none focus:border-blue-500 transition" /></div>
                 <button onClick={async () => {
                    await fetch(`${WORKER_URL}/api/itineraries`, { method:'POST', body: JSON.stringify({...draftData, action:'addItinerary'}) });
                    showToast('行程已正式發布！'); fetchData(); setActiveTab('home');
@@ -416,7 +381,7 @@
             {isLoading ? (
               <div className="p-40 text-center flex flex-col items-center">
                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-                 <p className="font-black text-slate-400 tracking-[0.3em] text-xs animate-pulse uppercase">Connecting System...</p>
+                 <p className="font-black text-slate-400 tracking-[0.3em] text-xs animate-pulse uppercase">System Syncing...</p>
               </div>
             ) : (
               <>
