@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅遊管家 Admin (純淨管理版)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; margin: 0; }
+    .editor-wrap { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 64px); }
+    .editor-sidebar { border-right: 1px solid #e2e8f0; overflow-y: auto; background: #fff; padding: 32px; display: flex; flex-direction: column; gap: 20px; }
+    .editor-preview { overflow-y: auto; background: #f8fafc; padding: 40px; }
+    .blog-preview h3 { font-size: 1.5rem; font-weight: 900; margin: 2rem 0 1rem; border-left: 5px solid #2563eb; padding-left: 0.75rem; }
+    .blog-preview img { width: 100%; border-radius: 1rem; margin: 1rem 0; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  </style>
+</head>
+<body class="text-slate-800">
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react,env">
+    const { useState, useEffect, useRef } = React;
+    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+    function App() {
+      const [view, setView] = useState('list');
+      const [itineraries, setItineraries] = useState([]);
+      const [form, setForm] = useState({ id: null, title: '', region: '亞洲', price: 0, days: 1, image: '', description: '' });
+      const [aiLoading, setAiLoading] = useState(false);
+      const fileRef = useRef(null);
+
+      // 載入時直接抓取行程，無須經過 LINE 授權
+      useEffect(() => { fetchList(); }, []);
+
+      const fetchList = async () => {
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`);
+          const data = await res.json();
+          setItineraries(Array.isArray(data) ? data : []);
+        } catch(e) { console.error('無法取得行程資料', e); }
+      };
+
+      const handleAI = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          setAiLoading(true);
+          try {
+            const r = await fetch(`${WORKER_URL}/api/upload-dm`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: reader.result })
+            });
+            const d = await r.json();
+            if (d.success) setForm(prev => ({ ...prev, ...d.data }));
+          } catch(e) { alert('AI 解析失敗'); }
+          setAiLoading(false);
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const handleSave = async () => {
+        try {
+          const r = await fetch(`${WORKER_URL}/api/itineraries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: form.id ? 'updateItinerary' : 'addItinerary', ...form })
+          });
+          const d = await r.json();
+          if (d.success) {
+            setView('list');
+            fetchList();
+          } else {
+            alert('儲存失敗');
+          }
+        } catch (e) {
+          alert('連線錯誤');
+        }
+      };
+
+      const handleDelete = async (id) => {
+        if(!confirm('確定要刪除此行程嗎？')) return;
+        try {
+          const r = await fetch(`${WORKER_URL}/api/itineraries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'deleteItinerary', id })
+          });
+          if ((await r.json()).success) fetchList();
+        } catch(e) { alert('刪除失敗'); }
+      };
+
+      return (
+        <div className="min-h-screen">
+          <nav className="h-16 bg-white border-b px-8 flex justify-between items-center sticky top-0 z-50">
+            <h1 className="font-black text-xl text-slate-800">旅遊管家 <span className="text-blue-600">Admin</span></h1>
+            {view === 'list' ? (
+              <button onClick={()=>{setForm({ id:null, title:'', region:'亞洲', price:0, days:1, image:'', description:'' }); setView('edit');}} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 transition shadow-md">＋ 新增行程</button>
+            ) : (
+              <button onClick={()=>setView('list')} className="text-slate-500 hover:text-slate-800 font-bold text-sm">返回列表</button>
+            )}
+          </nav>
+
+          <main className={view === 'list' ? "p-8" : ""}>
+            {view === 'list' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+                {itineraries.map(it => (
+                  <div key={it.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition">
+                    <div className="h-48 bg-slate-100"><img src={it.image} className="w-full h-full object-cover" /></div>
+                    <div className="p-5">
+                      <h4 className="font-bold text-lg mb-2 line-clamp-2">{it.title}</h4>
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">{it.days} 天</span>
+                        <span className="text-red-600 font-black text-lg">${Number(it.price).toLocaleString()}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={()=>{setForm(it); setView('edit');}} className="flex-1 bg-slate-50 text-slate-700 border border-slate-200 py-2 rounded-lg font-bold text-sm hover:bg-slate-100 transition">編輯</button>
+                        <button onClick={()=>handleDelete(it.id)} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg font-bold text-sm hover:bg-red-100 transition">刪除</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {itineraries.length === 0 && (
+                   <div className="col-span-full text-center py-20 text-slate-400 font-bold">目前沒有任何行程，點擊右上角新增行程。</div>
+                )}
+              </div>
+            )}
+
+            {view === 'edit' && (
+              <div className="editor-wrap">
+                <div className="editor-sidebar">
+                  <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-2xl font-black text-slate-800">{form.id ? '編輯行程' : '新增行程'}</h2>
+                    {!form.id && (
+                      <button onClick={()=>fileRef.current.click()} disabled={aiLoading} className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-indigo-100 transition border border-indigo-100">
+                        {aiLoading ? '⏳ AI 讀取中...' : '✨ 上傳圖文自動生成'}
+                      </button>
+                    )}
+                    <input ref={fileRef} type="file" className="hidden" accept="image/*" onChange={handleAI} />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">標題</label>
+                      <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg font-bold outline-none focus:border-blue-500 transition" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="輸入行程標題" />
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">地區</label><select className="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg font-bold outline-none" value={form.region} onChange={e=>setForm({...form, region:e.target.value})}>{['亞洲','歐洲','美洲','國旅','大洋洲','非洲'].map(r=><option key={r}>{r}</option>)}</select></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">天數</label><input type="number" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg font-bold outline-none" value={form.days} onChange={e=>setForm({...form, days:e.target.value})} /></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">售價</label><input type="number" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg font-bold outline-none" value={form.price} onChange={e=>setForm({...form, price:e.target.value})} /></div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">封面圖片網址</label>
+                      <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm font-mono outline-none focus:border-blue-500 transition" value={form.image} onChange={e=>setForm({...form, image:e.target.value})} placeholder="https://..." />
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col">
+                      <label className="block text-xs font-bold text-slate-500 mb-1">行程內容 (Markdown 格式)</label>
+                      <textarea className="w-full flex-1 min-h-[300px] bg-slate-50 border border-slate-200 p-4 rounded-lg outline-none font-medium leading-relaxed resize-none focus:border-blue-500 transition custom-scrollbar" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} placeholder="支援 Markdown 語法，例如：\n### 第一天\n內容..." />
+                    </div>
+                    
+                    <button onClick={handleSave} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-lg shadow-lg hover:bg-blue-700 transition">儲存行程</button>
+                  </div>
+                </div>
+                
+                <div className="editor-preview custom-scrollbar">
+                  <div className="max-w-2xl mx-auto blog-preview">
+                    <p className="text-xs font-bold text-slate-400 mb-4 uppercase tracking-widest bg-slate-100 inline-block px-3 py-1 rounded-full">預覽畫面</p>
+                    {form.image && <img src={form.image} className="w-full h-64 object-cover rounded-2xl mb-6 shadow-sm" />}
+                    <h1 className="text-4xl font-black mb-6 text-slate-900">{form.title || '未命名行程'}</h1>
+                    <div className="flex gap-8 py-4 border-y border-slate-200 mb-8 bg-white px-6 rounded-xl shadow-sm">
+                      <div><p className="text-xs font-bold text-slate-400 mb-1">售價</p><p className="text-2xl font-black text-red-600">NT$ {Number(form.price).toLocaleString()}</p></div>
+                      <div><p className="text-xs font-bold text-slate-400 mb-1">天數</p><p className="text-2xl font-black text-slate-800">{form.days} 天</p></div>
+                      <div><p className="text-xs font-bold text-slate-400 mb-1">地區</p><p className="text-2xl font-black text-slate-800">{form.region}</p></div>
+                    </div>
+                    <div className="blog-content text-slate-700 leading-loose">
+                      {(form.description || '').split('\n').map((l, i) => {
+                        const t = l.trim();
+                        if(t.startsWith('###')) return <h3 key={i} className="text-xl font-black mt-8 mb-4 text-slate-800">{t.replace('###','').trim()}</h3>;
+                        if(t.includes('![Image](')) { const m = t.match(/\!\[.*?\]\((.*?)\)/); return m ? <img key={i} src={m[1]} className="rounded-xl shadow-sm my-6 w-full" /> : null; }
+                        return t ? <p key={i} className="mb-4">{t}</p> : null;
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
