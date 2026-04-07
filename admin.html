@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>智能上稿 - 旗艦穩定版</title>
-  <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js](https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js](https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js](https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js)"></script>
-  <script charset="utf-8" src="[https://static.line-scdn.net/liff/edge/2/sdk.js](https://static.line-scdn.net/liff/edge/2/sdk.js)"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
@@ -21,7 +21,7 @@
 
   <script type="text/babel">
     const { useState, useEffect } = React;
-    const WORKER_URL = '[https://travelkeeper.fangwl591021.workers.dev](https://travelkeeper.fangwl591021.workers.dev)';
+    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
 
     function AdminApp() {
@@ -125,7 +125,6 @@
           </header>
 
           <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-slate-100">
-            {/* 上傳區 */}
             <div className={`relative border-4 border-dashed rounded-[2.5rem] p-16 text-center transition-all ${ocrStatus === 'processing' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-blue-400 group'}`}>
               {ocrStatus === 'processing' ? (
                 <div className="flex flex-col items-center">
@@ -143,7 +142,6 @@
               )}
             </div>
 
-            {/* 結果預覽區 */}
             {draftData && (
               <div className="mt-12 space-y-8 animate-fade-in-up">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
