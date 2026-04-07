@@ -13,24 +13,22 @@
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in-up { animation: fadeInUp 0.35s ease-out forwards; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .line-oa-style { border-radius: 2.5rem; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    .glass-nav { background: rgba(255, 255, 255, 0.88); backdrop-filter: blur(16px); }
     .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .line-oa-style { border-radius: 2.5rem; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-    .glass-nav { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); }
   </style>
 </head>
 <body class="bg-gray-50 font-sans text-slate-800">
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
 
     function App() {
-      // 1. 核心狀態 (已修復 bannerImage 與 filteredResults)
+      // 1. 核心狀態 (修正 bannerImage 與 filteredResults 未定義問題)
       const urlParams = new URLSearchParams(window.location.search);
       const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'home');
       const [isLoading, setIsLoading] = useState(true);
@@ -43,10 +41,14 @@
       const [myOrders, setMyOrders] = useState([]);
       const [crmDistributors, setCrmDistributors] = useState([]); 
       const [selectedTourId, setSelectedTourId] = useState(urlParams.get('t') || null);
+      
       const [searchRegion, setSearchRegion] = useState('');
       const [searchKeyword, setSearchKeyword] = useState('');
       const [bannerImage] = useState('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80');
       const [toast, setToast] = useState(null);
+
+      const [ocrStatus, setOcrStatus] = useState('idle');
+      const [draftData, setDraftData] = useState(null);
 
       // 2. 初始化
       useEffect(() => {
@@ -62,13 +64,14 @@
           await fetchData();
         };
         init();
+        if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
       }, []);
 
       useEffect(() => {
         if (activeTab === 'crm' && isAdmin) fetchCrmData();
       }, [activeTab, isAdmin]);
 
-      // 3. API 呼叫
+      // 3. API 核心
       const checkAuth = async (uid) => {
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
@@ -92,7 +95,7 @@
           const items = Array.isArray(data) ? data : [];
           setItineraries(items); 
           setFilteredResults(items);
-        } catch (e) {}
+        } catch (e) { showToast('資料讀取失敗，請確認網路與試算表設定', 'error'); }
         setIsLoading(false);
       };
 
@@ -128,10 +131,10 @@
           });
           const result = await res.json();
           if (result.success) {
-            showToast(`已更新為 ${newStatus}`);
+            showToast(`已成功核准！`);
             fetchCrmData();
           }
-        } catch (e) { showToast('核准失敗', 'error'); }
+        } catch (e) { showToast('核准操作失敗', 'error'); }
       };
 
       const handleSearch = () => {
@@ -146,7 +149,7 @@
         setTimeout(() => setToast(null), 3000);
       };
 
-      // 4. 渲染導覽列
+      // 4. 渲染組件
       const renderNavBar = () => (
         <nav className="glass-nav sticky top-0 z-50 h-16 flex items-center px-4 justify-between border-b border-gray-100">
           <div className="flex items-center cursor-pointer" onClick={() => { setSelectedTourId(null); setActiveTab('home'); }}>
@@ -154,10 +157,10 @@
             <span className="font-black text-xl text-blue-900 tracking-tight">旅遊管家</span>
           </div>
           <div className="flex items-center space-x-1">
-            <button onClick={() => { setSelectedTourId(null); setActiveTab('home'); }} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-slate-500'}`}>找行程</button>
-            <button onClick={() => setActiveTab('member')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'member' ? 'text-blue-700 bg-blue-50' : 'text-slate-500'}`}>會員中心</button>
-            {isAdmin && <button onClick={() => setActiveTab('crm')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-slate-500'}`}>CRM 管理</button>}
-            {isAdmin && <button onClick={() => window.location.href='admin.html'} className="px-3 py-2 rounded-xl text-sm font-medium text-red-700">智能上稿</button>}
+            <button onClick={() => { setSelectedTourId(null); setActiveTab('home'); }} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-slate-500 hover:bg-gray-50'}`}>找行程</button>
+            <button onClick={() => setActiveTab('member')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'member' ? 'text-blue-700 bg-blue-50' : 'text-slate-500 hover:bg-gray-50'}`}>會員中心</button>
+            {isAdmin && <button onClick={() => setActiveTab('crm')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'crm' ? 'text-purple-700 bg-purple-50' : 'text-slate-500 hover:bg-gray-50'}`}>CRM 管理</button>}
+            {isAdmin && <button onClick={() => setActiveTab('admin')} className={`px-3 py-2 rounded-xl text-sm font-medium transition ${activeTab === 'admin' ? 'text-red-700 bg-red-50' : 'text-slate-500 hover:bg-gray-50'}`}>智能上稿</button>}
             <img src={liffProfile?.pictureUrl || 'https://aiwe.cc/wp-content/uploads/2026/03/avatar_placeholder.jpg'} className="w-8 h-8 rounded-full border shadow-sm ml-2" />
           </div>
         </nav>
@@ -166,7 +169,7 @@
       const renderHomeTab = () => {
         if (selectedTourId) {
           const tour = itineraries.find(i => String(i.id || i.timestamp) === String(selectedTourId));
-          if (!tour) return <div className="p-20 text-center animate-pulse">行程內容載入中...</div>;
+          if (!tour) return <div className="p-20 text-center animate-pulse">載入中...</div>;
           return (
             <div className="animate-fade-in-up pb-20">
               <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white leading-tight">{tour.title}</h1></div></div>
@@ -179,9 +182,9 @@
                   })}
                 </div>
                 <div className="w-full lg:w-96 sticky top-24 self-start bg-white p-8 line-oa-style text-center shadow-xl">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">限時優惠價</p>
+                  <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">限時特惠價</p>
                   <p className="text-5xl font-black text-red-600 my-4">${Number(tour.price).toLocaleString()}</p>
-                  <button className="w-full bg-[#b82337] text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition">立即預約報名</button>
+                  <button className="w-full bg-[#b82337] text-white font-black py-5 rounded-2xl shadow-xl hover:bg-red-700 transition">立即預約行程</button>
                 </div>
               </div>
             </div>
@@ -190,7 +193,7 @@
 
         return (
           <div className="animate-fade-in pb-20">
-            <div className="relative w-full h-[400px] md:h-[500px] overflow-hidden bg-slate-900">
+            <div className="relative w-full h-[400px] md:h-[550px] overflow-hidden bg-slate-900">
                <img src={bannerImage} className="w-full h-full object-cover opacity-60" />
                <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center">
                   <h1 className="text-5xl md:text-8xl font-black mb-6 drop-shadow-2xl animate-fade-in-up tracking-tight">探索世界的美好</h1>
@@ -220,6 +223,7 @@
                   </div>
                 </div>
               ))}
+              {filteredResults.length === 0 && <p className="col-span-full text-center py-20 text-slate-300 font-medium">目前尚無符合條件的行程資料</p>}
             </div>
           </div>
         );
@@ -240,8 +244,8 @@
             {distributorStatus === 'approved' && (
               <section className="space-y-6 animate-fade-in-up">
                 <div className="flex justify-between items-end px-2">
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">我的經銷推廣數據</h3>
-                  <button onClick={() => window.location.href='model.html'} className="text-blue-600 font-bold text-sm bg-blue-50 px-4 py-2 rounded-xl">名片工具箱</button>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">我的經銷業績</h3>
+                  <button onClick={() => window.location.href='model.html'} className="text-blue-600 font-bold text-sm bg-blue-50 px-4 py-2 rounded-xl">開啟名片工具箱</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-emerald-600 p-8 line-oa-style text-white shadow-emerald-100 shadow-xl">
@@ -259,13 +263,13 @@
             <section className="space-y-6">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight px-2">我的預約報名紀錄</h3>
               {myOrders.length === 0 ? (
-                <div className="p-20 bg-white line-oa-style border border-gray-50 text-center text-slate-300 font-bold">您目前尚無預約行程</div>
+                <div className="p-20 bg-white line-oa-style border border-gray-50 text-center text-slate-300 font-bold tracking-widest uppercase">您目前尚無行程預約</div>
               ) : (
                 <div className="grid gap-4">
                   {myOrders.map((o, idx) => (
                     <div key={idx} className="bg-white p-8 line-oa-style border border-gray-50 flex justify-between items-center hover:shadow-md transition">
-                      <div><p className="font-black text-xl text-slate-800 mb-1">{o.tourtitle}</p><p className="text-xs text-slate-400 font-mono">單號: {o.orderid}</p></div>
-                      <div className="text-right"><p className="font-black text-red-600 text-2xl mb-1">${Number(o.totalamount).toLocaleString()}</p><span className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black uppercase">{o.orderstatus}</span></div>
+                      <div><p className="font-black text-xl text-slate-800 mb-1">{o.tourtitle}</p><p className="text-xs text-slate-400 font-mono tracking-tighter">單號: {o.orderid}</p></div>
+                      <div className="text-right"><p className="font-black text-red-600 text-2xl mb-1">${Number(o.totalamount).toLocaleString()}</p><span className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black uppercase tracking-widest">{o.orderstatus}</span></div>
                     </div>
                   ))}
                 </div>
@@ -279,18 +283,18 @@
         <div className="p-4 md:p-10 max-w-6xl mx-auto animate-fade-in space-y-10">
           <header className="px-2">
             <h2 className="text-4xl font-black text-slate-900 tracking-tight">CRM 經銷商管理系統</h2>
-            <p className="text-slate-400 font-medium mt-1 text-sm tracking-wide">管理從 Users 工作表讀取的經銷商狀態</p>
+            <p className="text-slate-400 font-medium mt-1 text-sm tracking-wide">管理 Users 工作表中的經銷身份與核准狀態</p>
           </header>
 
           <div className="bg-white line-oa-style overflow-hidden shadow-2xl">
              <div className="p-6 bg-slate-50/50 border-b border-gray-100 flex justify-between items-center px-8">
-                <span className="font-black text-slate-700 tracking-widest uppercase text-xs">Users 表名單總覽</span>
-                <span className="text-[10px] font-bold text-slate-400">共 {crmDistributors.length} 筆資料</span>
+                <span className="font-black text-slate-700 tracking-widest uppercase text-xs">申請名單總覽 (Users 表)</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">共 {crmDistributors.length} 筆</span>
              </div>
              <div className="overflow-x-auto">
                <table className="w-full text-left">
                   <thead className="bg-gray-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-gray-100">
-                    <tr><th className="p-6">申請人姓名</th><th className="p-6">LINE UID</th><th className="p-6">身份/狀態</th><th className="p-6 text-right">核准控制</th></tr>
+                    <tr><th className="p-6">申請人</th><th className="p-6">LINE UID</th><th className="p-6">狀態</th><th className="p-6 text-right">核准控制</th></tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {crmDistributors.map((d, idx) => (
@@ -302,22 +306,70 @@
                         <td className="p-6 font-mono text-[10px] text-slate-300 break-all max-w-[120px]">{d.uid}</td>
                         <td className="p-6">
                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${String(d.status).toLowerCase() === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
-                             {d.role} / {d.status || '待核'}
+                             {d.status || '待審核'}
                            </span>
                         </td>
                         <td className="p-6 text-right">
                            {String(d.status).toLowerCase() !== 'approved' ? (
                              <button onClick={() => handleDistributorApproval(d.uid, 'approved')} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-lg hover:bg-blue-700 transition">核准加入</button>
                            ) : (
-                             <button onClick={() => handleDistributorApproval(d.uid, 'pending')} className="text-slate-300 hover:text-red-500 transition text-xs font-bold">撤銷權限</button>
+                             <button onClick={() => handleDistributorApproval(d.uid, 'pending')} className="text-slate-300 hover:text-red-500 transition text-xs font-bold">撤銷</button>
                            )}
                         </td>
                       </tr>
                     ))}
-                    {crmDistributors.length === 0 && <tr><td colSpan="4" className="p-20 text-center text-slate-300 font-medium">目前的 Users 表中尚無 distributor 資料</td></tr>}
+                    {crmDistributors.length === 0 && <tr><td colSpan="4" className="p-20 text-center text-slate-300 font-medium tracking-widest">目前 Users 表中尚無經銷商資料</td></tr>}
                   </tbody>
                </table>
              </div>
+          </div>
+        </div>
+      );
+
+      const handleFileUpload = async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        setOcrStatus('processing');
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            const res = await fetch(`${WORKER_URL}/api/upload-dm`, { method: 'POST', body: JSON.stringify({ image: ev.target.result }) });
+            const result = await res.json();
+            if (result.success) { setDraftData(result.data); setOcrStatus('done'); showToast('AI 解析與擴寫成功！'); }
+            else throw new Error(result.error);
+          } catch (e) { setOcrStatus('idle'); showToast('解析失敗: ' + e.message, 'error'); }
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const renderAdminTab = () => (
+        <div className="p-4 md:p-10 max-w-4xl mx-auto animate-fade-in-up">
+          <div className="bg-white line-oa-style p-10 shadow-2xl">
+            <h2 className="text-3xl font-black mb-8 text-slate-900 tracking-tight">🚀 智能上稿系統</h2>
+            <div className={`relative border-4 border-dashed rounded-[3rem] p-16 text-center transition-all ${ocrStatus === 'processing' ? 'border-blue-500 bg-blue-50' : 'border-slate-100 bg-slate-50'}`}>
+              {ocrStatus === 'processing' ? (
+                <div className="flex flex-col items-center"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="font-black text-blue-600 animate-pulse">視覺模型擴寫中...</p></div>
+              ) : (
+                <>
+                  <p className="text-2xl font-black text-slate-600 mb-2">點擊上傳旅遊 DM 圖片</p>
+                  <p className="text-slate-400 font-medium text-sm">AI 將自動產生感性擴寫文案與高清圖片標籤</p>
+                  <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
+                </>
+              )}
+            </div>
+            {draftData && (
+              <div className="mt-12 space-y-8 animate-fade-in-up">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">行程標題</label><input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl bg-slate-50/50 outline-none focus:border-blue-500 transition" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">團費價格</label><input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl text-red-600 bg-slate-50/50" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">天數</label><input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-5 border-2 border-slate-50 rounded-2xl font-black text-xl bg-slate-50/50" /></div>
+                </div>
+                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">詳細腦補內容 (含 16:9 配圖)</label><textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="12" className="w-full p-6 border-2 border-slate-50 rounded-[2rem] leading-relaxed text-slate-600 text-lg bg-slate-50/50 outline-none focus:border-blue-500 transition" /></div>
+                <button onClick={async () => {
+                   await fetch(`${WORKER_URL}/api/itineraries`, { method:'POST', body: JSON.stringify({...draftData, action:'addItinerary'}) });
+                   showToast('行程已成功發布！'); fetchData(); setActiveTab('home');
+                }} className="w-full bg-blue-600 text-white font-black py-6 rounded-[2rem] shadow-2xl text-xl hover:bg-blue-700 transition transform hover:-translate-y-1">確認發布此行程 🚀</button>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -326,11 +378,12 @@
         <div className="min-h-screen flex flex-col bg-gray-50 overflow-x-hidden">
           {renderNavBar()}
           <main className="flex-grow">
-            {isLoading ? <div className="p-40 text-center animate-pulse font-black text-slate-400">系統連接中...</div> : (
+            {isLoading ? <div className="p-40 text-center animate-pulse font-black text-slate-400 uppercase tracking-widest text-xs">Connecting Core System...</div> : (
               <>
                 {activeTab === 'home' && renderHomeTab()}
                 {activeTab === 'member' && renderMemberTab()}
                 {activeTab === 'crm' && isAdmin && renderCrmTab()}
+                {activeTab === 'admin' && isAdmin && renderAdminTab()}
               </>
             )}
           </main>
@@ -338,7 +391,6 @@
         </div>
       );
     }
-
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
