@@ -1,1141 +1,233 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Travelman 行程上稿</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅遊管家 - 管理員後台 (v4.1 旗艦版)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
-    :root{
-      --primary:#06c755;
-      --primary-dark:#05a847;
-      --bg:#f5f6f8;
-      --panel:#ffffff;
-      --border:#d9dee5;
-      --text:#222;
-      --muted:#6b7280;
-      --dark:#1f2937;
-      --info:#2563eb;
-      --warn:#d97706;
-      --danger:#dc2626;
-    }
-    *{box-sizing:border-box}
-    html,body{
-      margin:0;
-      padding:0;
-      font-family:Arial,"Noto Sans TC",sans-serif;
-      background:var(--bg);
-      color:var(--text);
-    }
-    button,input,textarea,select{font:inherit}
-    a{text-decoration:none;color:inherit}
-
-    .page{
-      max-width:1180px;
-      margin:0 auto;
-      padding:18px 14px 40px;
-    }
-
-    .topbar{
-      background:#fff;
-      border:1px solid var(--border);
-      border-radius:12px;
-      padding:14px 16px;
-      margin-bottom:14px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
-    }
-    .topbar-left .tag{
-      display:inline-block;
-      background:var(--primary);
-      color:#fff;
-      padding:4px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-      margin-bottom:8px;
-    }
-    .title{
-      font-size:28px;
-      font-weight:800;
-      line-height:1.2;
-      margin:0;
-    }
-    .sub{
-      color:var(--muted);
-      font-size:13px;
-      margin-top:4px;
-    }
-    .topbar-right{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-
-    .btn{
-      border:1px solid var(--border);
-      background:#fff;
-      color:var(--text);
-      padding:10px 14px;
-      border-radius:10px;
-      cursor:pointer;
-      font-size:14px;
-      font-weight:700;
-    }
-    .btn-primary{
-      background:var(--primary);
-      border-color:var(--primary);
-      color:#fff;
-    }
-    .btn-primary:hover{background:var(--primary-dark)}
-    .btn-dark{
-      background:var(--dark);
-      border-color:var(--dark);
-      color:#fff;
-    }
-    .btn-info{
-      background:#eff6ff;
-      border-color:#bfdbfe;
-      color:#1d4ed8;
-    }
-    .btn-warn{
-      background:#fff7ed;
-      border-color:#fed7aa;
-      color:#9a3412;
-    }
-
-    .card{
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:12px;
-      overflow:hidden;
-      margin-bottom:14px;
-    }
-    .card-head{
-      padding:12px 14px;
-      border-bottom:1px solid var(--border);
-      font-weight:800;
-      background:#fff;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .card-body{
-      padding:14px;
-    }
-
-    .main{
-      display:grid;
-      grid-template-columns:420px 1fr;
-      gap:14px;
-      align-items:start;
-    }
-
-    .field-grid{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
-    }
-    .field{
-      display:grid;
-      gap:6px;
-    }
-    .field.full{
-      grid-column:1 / -1;
-    }
-    .field label{
-      font-size:12px;
-      color:var(--muted);
-      font-weight:700;
-    }
-    .field input,
-    .field textarea,
-    .field select{
-      width:100%;
-      padding:10px 12px;
-      border:1px solid var(--border);
-      border-radius:10px;
-      background:#fff;
-      outline:none;
-      font-size:14px;
-    }
-    .field input:focus,
-    .field textarea:focus,
-    .field select:focus{
-      border-color:var(--primary);
-    }
-
-    .upload-box{
-      border:1px dashed #c7ced8;
-      border-radius:12px;
-      padding:12px;
-      background:#fafbfc;
-    }
-    .upload-zone{
-      min-height:240px;
-      border:1px dashed #c7ced8;
-      border-radius:10px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:#fff;
-      padding:12px;
-      text-align:center;
-      overflow:hidden;
-    }
-    .upload-zone.has-image{
-      border-style:solid;
-    }
-    .upload-hint{
-      color:var(--muted);
-      line-height:1.8;
-      font-size:14px;
-    }
-    .preview-image{
-      width:100%;
-      max-height:420px;
-      object-fit:contain;
-      display:block;
-      border-radius:8px;
-    }
-
-    .actions{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      margin-top:12px;
-    }
-
-    .status-box{
-      background:#111827;
-      color:#d1fae5;
-      border-radius:10px;
-      padding:12px;
-      white-space:pre-wrap;
-      word-break:break-word;
-      font-size:13px;
-      line-height:1.7;
-      font-family:Consolas,Monaco,monospace;
-      min-height:100px;
-      max-height:200px;
-      overflow:auto;
-    }
-
-    .preview{
-      display:grid;
-      grid-template-columns:320px 1fr;
-      gap:14px;
-      align-items:start;
-    }
-    .preview-cover{
-      width:100%;
-      height:230px;
-      object-fit:cover;
-      border:1px solid var(--border);
-      border-radius:10px;
-      background:#eceff3;
-      display:block;
-    }
-    .preview-right{
-      display:grid;
-      gap:10px;
-    }
-    .preview-title{
-      font-size:24px;
-      font-weight:800;
-      line-height:1.35;
-      word-break:break-word;
-    }
-    .preview-meta{
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-    }
-    .pill{
-      background:#eef2ff;
-      color:#334155;
-      padding:5px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-    }
-    .price{
-      font-size:30px;
-      font-weight:800;
-      color:var(--primary);
-    }
-    .desc{
-      color:#4b5563;
-      line-height:1.8;
-      font-size:14px;
-      white-space:pre-wrap;
-      word-break:break-word;
-    }
-    .tag-list{
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-    }
-    .tag-chip{
-      background:#f3f4f6;
-      color:#111827;
-      border:1px solid #e5e7eb;
-      padding:5px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-    }
-
-    .helper{
-      background:#eff6ff;
-      border:1px solid #bfdbfe;
-      color:#1e40af;
-      padding:12px;
-      border-radius:10px;
-      font-size:13px;
-      line-height:1.8;
-    }
-
-    .advanced-wrap{
-      display:none;
-    }
-    .advanced-wrap.open{
-      display:block;
-    }
-
-    .json-box{
-      width:100%;
-      min-height:220px;
-      background:#0f172a;
-      color:#d1fae5;
-      border:1px solid #1e293b;
-      border-radius:12px;
-      padding:12px;
-      white-space:pre-wrap;
-      overflow:auto;
-      font-family:Consolas,Monaco,monospace;
-      font-size:12px;
-      line-height:1.7;
-    }
-
-    .small-note{
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.7;
-    }
-
-    @media (max-width: 980px){
-      .main,
-      .preview,
-      .field-grid{
-        grid-template-columns:1fr;
-      }
-    }
-
-    @media (max-width: 768px){
-      .topbar-right{
-        width:100%;
-      }
-      .topbar-right .btn{
-        flex:1 1 100%;
-      }
-    }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
   </style>
 </head>
-<body>
-  <div class="page">
-    <div class="topbar">
-      <div class="topbar-left">
-        <div class="tag">Travelman 行程上稿</div>
-        <h1 class="title">簡單操作版</h1>
-        <div class="sub">上傳海報 → 確認內容 → 儲存草稿 / 正式發布</div>
-      </div>
-      <div class="topbar-right">
-        <a class="btn" href="./index.html" target="_blank">回首頁</a>
-        <button id="btnOpenTripPreview" class="btn btn-info" type="button">預覽行程頁</button>
-        <button id="btnClearAll" class="btn btn-warn" type="button">清空</button>
-      </div>
-    </div>
+<body class="bg-gray-50 font-sans text-gray-800">
+  <div id="root"></div>
 
-    <div class="main">
-      <div class="left-col">
-        <div class="card">
-          <div class="card-head">第一步：上傳海報</div>
-          <div class="card-body">
-            <div class="field-grid">
-              <div class="field">
-                <label>Worker Base URL</label>
-                <input id="workerUrl" type="text" value="https://travelkeeper-saas-worker.fangwl591021.workers.dev" />
-              </div>
-              <div class="field">
-                <label>tenantId</label>
-                <input id="tenantId" type="text" />
-              </div>
-              <div class="field full">
-                <label>海報圖片檔</label>
-                <input id="posterFile" type="file" accept="image/*" />
-              </div>
-            </div>
+  <script type="text/babel" data-presets="react,env">
+    const { useState, useEffect, useRef } = React;
 
-            <div class="upload-box" style="margin-top:12px;">
-              <div id="uploadZone" class="upload-zone">
-                <div class="upload-hint">
-                  請上傳旅遊海報 / DM。<br>
-                  系統會自動解析標題、價格、天數、亮點等資訊。
-                </div>
-              </div>
+    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8'; 
 
-              <div class="actions">
-                <button id="btnParse" class="btn btn-primary" type="button">開始解析</button>
-                <button id="btnUsePosterAsCover" class="btn" type="button">用海報當封面</button>
-              </div>
-            </div>
-          </div>
-        </div>
+    function AdminApp() {
+      const [isAdmin, setIsAdmin] = useState(false);
+      const [liffProfile, setLiffProfile] = useState(null);
+      const [isLiffReady, setIsLiffReady] = useState(false);
+      const [isLoading, setIsLoading] = useState(true);
+      
+      const [ocrStatus, setOcrStatus] = useState('idle'); // idle, processing, done
+      const [draftData, setDraftData] = useState({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });
+      const [toast, setToast] = useState(null);
 
-        <div class="card">
-          <div class="card-head">系統訊息</div>
-          <div class="card-body">
-            <div id="statusBox" class="status-box">尚未開始</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-head">操作提醒</div>
-          <div class="card-body">
-            <div class="helper">
-              這個頁面只保留少數重點欄位。<br>
-              若要補更多細節，可以按「顯示進階欄位」再展開。
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="right-col">
-        <div class="card">
-          <div class="card-head">
-            <span>第二步：確認內容</span>
-            <span id="draftBadge" class="pill">draftId：--</span>
-          </div>
-          <div class="card-body">
-            <div class="preview">
-              <img id="previewCover" class="preview-cover" src="https://picsum.photos/1000/600" alt="cover" />
-              <div class="preview-right">
-                <div id="previewTitle" class="preview-title">尚未解析</div>
-                <div id="previewMeta" class="preview-meta"></div>
-                <div id="previewPrice" class="price">--</div>
-                <div id="previewDesc" class="desc">請先上傳海報並解析，或手動輸入內容。</div>
-                <div id="previewHighlights" class="tag-list"></div>
-              </div>
-            </div>
-
-            <div class="field-grid" style="margin-top:16px;">
-              <div class="field full">
-                <label>標題</label>
-                <input id="title" type="text" />
-              </div>
-
-              <div class="field">
-                <label>價格</label>
-                <input id="price" type="number" min="0" />
-              </div>
-
-              <div class="field">
-                <label>幣別</label>
-                <input id="currency" type="text" value="TWD" />
-              </div>
-
-              <div class="field">
-                <label>天數</label>
-                <input id="days" type="number" min="1" />
-              </div>
-
-              <div class="field">
-                <label>出發日期</label>
-                <input id="departureDate" type="date" />
-              </div>
-
-              <div class="field full">
-                <label>封面圖片網址</label>
-                <input id="coverImageUrl" type="text" />
-              </div>
-
-              <div class="field full">
-                <label>行程簡介</label>
-                <textarea id="description" rows="6"></textarea>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button id="btnSaveDraft" class="btn btn-dark" type="button">儲存草稿</button>
-              <button id="btnPublish" class="btn btn-primary" type="button">正式發布</button>
-              <button id="btnToggleAdvanced" class="btn btn-info" type="button">顯示進階欄位</button>
-              <button id="btnCopyJson" class="btn" type="button">複製 JSON</button>
-            </div>
-
-            <div class="small-note" style="margin-top:10px;">
-              目前會對接：<b>/api/ai/upload-dm</b> 與 <b>/api/admin/save-itinerary</b>
-            </div>
-          </div>
-        </div>
-
-        <div id="advancedWrap" class="advanced-wrap">
-          <div class="card">
-            <div class="card-head">進階欄位</div>
-            <div class="card-body">
-              <div class="field-grid">
-                <div class="field">
-                  <label>itineraryId</label>
-                  <input id="itineraryId" type="text" />
-                </div>
-
-                <div class="field">
-                  <label>status</label>
-                  <select id="status">
-                    <option value="draft">draft</option>
-                    <option value="published">published</option>
-                    <option value="inactive">inactive</option>
-                  </select>
-                </div>
-
-                <div class="field full">
-                  <label>subtitle</label>
-                  <input id="subtitle" type="text" />
-                </div>
-
-                <div class="field">
-                  <label>region</label>
-                  <input id="region" type="text" />
-                </div>
-
-                <div class="field">
-                  <label>productType</label>
-                  <input id="productType" type="text" value="group_tour" />
-                </div>
-
-                <div class="field">
-                  <label>country</label>
-                  <input id="country" type="text" />
-                </div>
-
-                <div class="field">
-                  <label>city</label>
-                  <input id="city" type="text" />
-                </div>
-
-                <div class="field">
-                  <label>nights</label>
-                  <input id="nights" type="number" min="0" />
-                </div>
-
-                <div class="field">
-                  <label>returnDate</label>
-                  <input id="returnDate" type="date" />
-                </div>
-
-                <div class="field full">
-                  <label>highlightsJson（可貼 JSON 或每行一條）</label>
-                  <textarea id="highlightsInput" rows="4"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>dayByDayJson（可貼 JSON 或每行一條）</label>
-                  <textarea id="dayByDayInput" rows="6"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>includesJson</label>
-                  <textarea id="includesInput" rows="3"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>excludesJson</label>
-                  <textarea id="excludesInput" rows="3"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>noticeJson</label>
-                  <textarea id="noticeInput" rows="3"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>faqJson</label>
-                  <textarea id="faqInput" rows="3"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>tagsJson</label>
-                  <textarea id="tagsInput" rows="3"></textarea>
-                </div>
-
-                <div class="field full">
-                  <label>galleryJson（JSON）</label>
-                  <textarea id="galleryInput" rows="3">[]</textarea>
-                </div>
-
-                <div class="field full">
-                  <label>promoConfigJson（JSON）</label>
-                  <textarea id="promoConfigInput" rows="3">{}</textarea>
-                </div>
-
-                <div class="field">
-                  <label>draftId</label>
-                  <input id="draftId" type="text" />
-                </div>
-
-                <div class="field">
-                  <label>updatedBy</label>
-                  <input id="updatedBy" type="text" value="tony" />
-                </div>
-
-                <div class="field">
-                  <label>createdBy</label>
-                  <input id="createdBy" type="text" value="tony" />
-                </div>
-
-                <div class="field">
-                  <label>sourceType</label>
-                  <input id="sourceType" type="text" value="dm_image" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-head">Payload 預覽</div>
-            <div class="card-body">
-              <pre id="jsonPreview" class="json-box">{}</pre>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const state = {
-      posterBase64: "",
-      posterObjectUrl: "",
-      parsedRaw: null
-    };
-
-    function logStatus(message, append = false) {
-      const el = document.getElementById("statusBox");
-      const stamp = "[" + new Date().toLocaleString("zh-Hant-TW") + "]";
-      const line = stamp + " " + message;
-      el.textContent = append ? (el.textContent + "\\n" + line) : line;
-      el.scrollTop = el.scrollHeight;
-    }
-
-    function parseMaybeJson(value, fallback) {
-      try {
-        if (!value) return fallback;
-        if (Array.isArray(value)) return value;
-        if (typeof value === "object") return value;
-        return JSON.parse(value);
-      } catch (e) {
-        return fallback;
-      }
-    }
-
-    function linesToArray(text) {
-      return String(text || "")
-        .split("\\n")
-        .map(s => s.trim())
-        .filter(Boolean);
-    }
-
-    function valueOf(...args) {
-      for (const item of args) {
-        if (item !== undefined && item !== null && String(item).trim() !== "") {
-          return item;
-        }
-      }
-      return "";
-    }
-
-    function normalizeArrayInput(raw) {
-      if (Array.isArray(raw)) return raw.map(v => String(v).trim()).filter(Boolean);
-
-      if (typeof raw === "string") {
-        const parsed = parseMaybeJson(raw, null);
-        if (Array.isArray(parsed)) {
-          return parsed.map(v => {
-            if (typeof v === "string") return v.trim();
-            if (v && typeof v === "object") {
-              return String(v.title || v.name || v.label || v.content || v.question || "").trim();
+      useEffect(() => {
+        const init = async () => {
+          try {
+            await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+            setIsLiffReady(true);
+            if (liff.isLoggedIn()) {
+              const profile = await liff.getProfile();
+              setLiffProfile(profile);
+              await checkAuth(profile.userId);
+            } else {
+              liff.login();
             }
-            return "";
-          }).filter(Boolean);
-        }
-        return linesToArray(raw);
-      }
+          } catch (e) { console.error(e); }
+          setIsLoading(false);
+        };
+        init();
+        if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      }, []);
 
-      return [];
-    }
-
-    function safeJsonValue(text, fallbackValue) {
-      const trimmed = String(text || "").trim();
-      if (!trimmed) return fallbackValue;
-      const parsed = parseMaybeJson(trimmed, "__PARSE_ERROR__");
-      if (parsed === "__PARSE_ERROR__") return fallbackValue;
-      return parsed;
-    }
-
-    function inferCountry(text) {
-      const t = String(text || "");
-      if (/日本|東京|大阪|北海道|沖繩|九州/.test(t)) return "日本";
-      if (/韓國|首爾|釜山/.test(t)) return "韓國";
-      if (/泰國|曼谷|清邁|普吉/.test(t)) return "泰國";
-      if (/越南|河內|峴港|胡志明/.test(t)) return "越南";
-      if (/新加坡/.test(t)) return "新加坡";
-      if (/馬來西亞|吉隆坡/.test(t)) return "馬來西亞";
-      if (/台灣|台北|台中|高雄|花蓮|台東/.test(t)) return "台灣";
-      return "";
-    }
-
-    function inferCity(text) {
-      const cityList = [
-        "東京","大阪","北海道","沖繩","九州","首爾","釜山","曼谷","清邁","普吉",
-        "河內","峴港","胡志明","新加坡","吉隆坡","台北","台中","高雄","花蓮","台東"
-      ];
-      const t = String(text || "");
-      return cityList.find(c => t.includes(c)) || "";
-    }
-
-    function generateItineraryId() {
-      const d = new Date();
-      const pad = n => String(n).padStart(2, "0");
-      return "it_" +
-        d.getFullYear() +
-        pad(d.getMonth() + 1) +
-        pad(d.getDate()) + "_" +
-        pad(d.getHours()) +
-        pad(d.getMinutes()) +
-        pad(d.getSeconds());
-    }
-
-    function getTenantId() {
-      return document.getElementById("tenantId").value.trim();
-    }
-
-    function buildPayloadFromForm() {
-      return {
-        tenantId: getTenantId(),
-        itineraryId: document.getElementById("itineraryId").value.trim(),
-        title: document.getElementById("title").value.trim(),
-        subtitle: document.getElementById("subtitle").value.trim(),
-        region: document.getElementById("region").value.trim(),
-        country: document.getElementById("country").value.trim(),
-        city: document.getElementById("city").value.trim(),
-        days: Number(document.getElementById("days").value || 0),
-        nights: Number(document.getElementById("nights").value || 0),
-        price: Number(document.getElementById("price").value || 0),
-        currency: document.getElementById("currency").value.trim() || "TWD",
-        departureDate: document.getElementById("departureDate").value.trim(),
-        returnDate: document.getElementById("returnDate").value.trim(),
-        status: document.getElementById("status").value,
-        productType: document.getElementById("productType").value.trim() || "group_tour",
-        coverImageUrl: document.getElementById("coverImageUrl").value.trim(),
-        galleryJson: safeJsonValue(document.getElementById("galleryInput").value, []),
-        highlightsJson: normalizeArrayInput(document.getElementById("highlightsInput").value),
-        description: document.getElementById("description").value.trim(),
-        dayByDayJson: normalizeArrayInput(document.getElementById("dayByDayInput").value),
-        includesJson: normalizeArrayInput(document.getElementById("includesInput").value),
-        excludesJson: normalizeArrayInput(document.getElementById("excludesInput").value),
-        noticeJson: normalizeArrayInput(document.getElementById("noticeInput").value),
-        faqJson: normalizeArrayInput(document.getElementById("faqInput").value),
-        tagsJson: normalizeArrayInput(document.getElementById("tagsInput").value),
-        promoConfigJson: safeJsonValue(document.getElementById("promoConfigInput").value, {}),
-        draftId: document.getElementById("draftId").value.trim(),
-        createdBy: document.getElementById("createdBy").value.trim(),
-        updatedBy: document.getElementById("updatedBy").value.trim()
-      };
-    }
-
-    function refreshJsonPreview() {
-      const payload = buildPayloadFromForm();
-      document.getElementById("jsonPreview").textContent = JSON.stringify(payload, null, 2);
-      refreshPreview(payload);
-    }
-
-    function refreshPreview(payload) {
-      document.getElementById("previewCover").src =
-        payload.coverImageUrl || state.posterObjectUrl || "https://picsum.photos/1000/600";
-
-      document.getElementById("previewTitle").textContent = payload.title || "尚未解析";
-
-      const meta = [];
-      if (payload.region) meta.push("🧭 " + payload.region);
-      if (payload.country) meta.push("🌍 " + payload.country);
-      if (payload.city) meta.push("📍 " + payload.city);
-      if (payload.days) meta.push("🗓️ " + payload.days + " 天");
-      if (payload.departureDate) meta.push("✈️ " + payload.departureDate);
-
-      document.getElementById("previewMeta").innerHTML = meta.length
-        ? meta.map(item => `<span class="pill">${item}</span>`).join("")
-        : "";
-
-      document.getElementById("previewPrice").textContent =
-        payload.price ? ((payload.currency || "TWD") + " " + Number(payload.price).toLocaleString()) : "--";
-
-      document.getElementById("previewDesc").textContent =
-        payload.description || "請先上傳海報並解析，或手動輸入內容。";
-
-      const highlights = Array.isArray(payload.highlightsJson) ? payload.highlightsJson : [];
-      document.getElementById("previewHighlights").innerHTML = highlights.length
-        ? highlights.map(item => `<span class="tag-chip">${item}</span>`).join("")
-        : "";
-
-      document.getElementById("draftBadge").textContent = "draftId：" + (payload.draftId || "--");
-    }
-
-    function fillForm(payload) {
-      document.getElementById("itineraryId").value = payload.itineraryId || generateItineraryId();
-      document.getElementById("title").value = payload.title || "";
-      document.getElementById("subtitle").value = payload.subtitle || "";
-      document.getElementById("region").value = payload.region || "";
-      document.getElementById("country").value = payload.country || "";
-      document.getElementById("city").value = payload.city || "";
-      document.getElementById("days").value = payload.days || "";
-      document.getElementById("nights").value = payload.nights || "";
-      document.getElementById("price").value = payload.price || "";
-      document.getElementById("currency").value = payload.currency || "TWD";
-      document.getElementById("departureDate").value = payload.departureDate || "";
-      document.getElementById("returnDate").value = payload.returnDate || "";
-      document.getElementById("coverImageUrl").value = payload.coverImageUrl || "";
-      document.getElementById("description").value = payload.description || "";
-      document.getElementById("status").value = payload.status || "draft";
-      document.getElementById("productType").value = payload.productType || "group_tour";
-      document.getElementById("highlightsInput").value = JSON.stringify(payload.highlightsJson || [], null, 2);
-      document.getElementById("dayByDayInput").value = JSON.stringify(payload.dayByDayJson || [], null, 2);
-      document.getElementById("includesInput").value = JSON.stringify(payload.includesJson || [], null, 2);
-      document.getElementById("excludesInput").value = JSON.stringify(payload.excludesJson || [], null, 2);
-      document.getElementById("noticeInput").value = JSON.stringify(payload.noticeJson || [], null, 2);
-      document.getElementById("faqInput").value = JSON.stringify(payload.faqJson || [], null, 2);
-      document.getElementById("tagsInput").value = JSON.stringify(payload.tagsJson || [], null, 2);
-      document.getElementById("galleryInput").value = JSON.stringify(payload.galleryJson || [], null, 2);
-      document.getElementById("promoConfigInput").value = JSON.stringify(payload.promoConfigJson || {}, null, 2);
-      document.getElementById("draftId").value = payload.draftId || "";
-      if (payload.createdBy) document.getElementById("createdBy").value = payload.createdBy;
-      if (payload.updatedBy) document.getElementById("updatedBy").value = payload.updatedBy;
-      refreshJsonPreview();
-    }
-
-    function normalizeParseResult(raw) {
-      const parsed = raw?.parsed || raw?.data?.parsed || raw?.data || raw || {};
-      const draftResult = raw?.draftResult || {};
-      const draftData = draftResult?.data?.data || draftResult?.data || draftResult || {};
-      const draftId = valueOf(draftData.draftId, draftData.id, "");
-
-      const textPool = [
-        parsed.title,
-        parsed.subtitle,
-        parsed.description,
-        parsed.region,
-        parsed.country,
-        parsed.city
-      ].join(" ");
-
-      return {
-        itineraryId: generateItineraryId(),
-        title: valueOf(parsed.title, ""),
-        subtitle: valueOf(parsed.subtitle, ""),
-        region: valueOf(parsed.region, ""),
-        country: valueOf(parsed.country, inferCountry(textPool)),
-        city: valueOf(parsed.city, inferCity(textPool)),
-        days: Number(valueOf(parsed.days, 0)) || "",
-        nights: Number(valueOf(parsed.nights, 0)) || "",
-        price: Number(valueOf(parsed.price, 0)) || "",
-        currency: valueOf(parsed.currency, "TWD"),
-        departureDate: valueOf(parsed.departureDate, parsed.startDate, ""),
-        returnDate: valueOf(parsed.returnDate, parsed.endDate, ""),
-        status: "draft",
-        productType: "group_tour",
-        coverImageUrl: state.posterObjectUrl || "",
-        galleryJson: [],
-        highlightsJson: normalizeArrayInput(valueOf(parsed.highlights, parsed.highlightsJson, [])),
-        description: valueOf(parsed.description, ""),
-        dayByDayJson: normalizeArrayInput(valueOf(parsed.dayByDay, parsed.dayByDayJson, [])),
-        includesJson: normalizeArrayInput(valueOf(parsed.includes, parsed.includesJson, [])),
-        excludesJson: normalizeArrayInput(valueOf(parsed.excludes, parsed.excludesJson, [])),
-        noticeJson: normalizeArrayInput(valueOf(parsed.notice, parsed.noticeJson, [])),
-        faqJson: normalizeArrayInput(valueOf(parsed.faq, parsed.faqJson, [])),
-        tagsJson: normalizeArrayInput(valueOf(parsed.tags, parsed.tagsJson, [])),
-        promoConfigJson: {},
-        draftId: draftId,
-        createdBy: document.getElementById("createdBy").value.trim(),
-        updatedBy: document.getElementById("updatedBy").value.trim()
-      };
-    }
-
-    async function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function parsePoster() {
-      const file = document.getElementById("posterFile").files[0];
-      if (!file) {
-        logStatus("請先選擇海報圖片");
-        return;
-      }
-
-      const workerUrl = document.getElementById("workerUrl").value.trim().replace(/\/$/, "");
-      const tenantId = getTenantId();
-
-      if (!tenantId) {
-        logStatus("tenantId 不可為空");
-        return;
-      }
-
-      logStatus("開始讀取海報...");
-      const base64 = await fileToBase64(file);
-      state.posterBase64 = base64;
-
-      if (state.posterObjectUrl) {
-        URL.revokeObjectURL(state.posterObjectUrl);
-      }
-      state.posterObjectUrl = URL.createObjectURL(file);
-
-      const uploadZone = document.getElementById("uploadZone");
-      uploadZone.classList.add("has-image");
-      uploadZone.innerHTML = `<img class="preview-image" src="${state.posterObjectUrl}" alt="poster" />`;
-
-      logStatus("開始呼叫 AI 解析 API...", true);
-
-      const body = {
-        tenantId: tenantId,
-        imageBase64: base64,
-        createdBy: document.getElementById("createdBy").value.trim(),
-        sourceType: document.getElementById("sourceType").value.trim() || "dm_image"
-      };
-
-      try {
-        const res = await fetch(workerUrl + "/api/ai/upload-dm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-
-        const raw = await res.json();
-        state.parsedRaw = raw;
-
-        logStatus("AI 解析回應成功", true);
-        logStatus(JSON.stringify(raw, null, 2), true);
-
-        const payload = normalizeParseResult(raw);
-        fillForm(payload);
-      } catch (err) {
-        logStatus("解析失敗：" + (err.message || String(err)), true);
-      }
-    }
-
-    async function savePayload(statusValue) {
-      const workerUrl = document.getElementById("workerUrl").value.trim().replace(/\/$/, "");
-      document.getElementById("status").value = statusValue;
-      const payload = buildPayloadFromForm();
-
-      if (!payload.tenantId) {
-        logStatus("tenantId 不可為空");
-        return;
-      }
-
-      if (!payload.itineraryId) {
-        logStatus("itineraryId 不可為空");
-        return;
-      }
-
-      if (!payload.title) {
-        logStatus("title 不可為空");
-        return;
-      }
-
-      localStorage.setItem("travelman_tenant_id", payload.tenantId);
-      localStorage.setItem("tk_tenant_id", payload.tenantId);
-      localStorage.setItem("tk_itinerary_id", payload.itineraryId);
-
-      logStatus("開始送出 save-itinerary payload...", true);
-
-      try {
-        const res = await fetch(workerUrl + "/api/admin/save-itinerary", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        const raw = await res.json();
-        logStatus("儲存 API 回應：\\n" + JSON.stringify(raw, null, 2), true);
-      } catch (err) {
-        logStatus("儲存失敗：" + (err.message || String(err)), true);
-      }
-    }
-
-    function toggleAdvanced() {
-      const wrap = document.getElementById("advancedWrap");
-      const btn = document.getElementById("btnToggleAdvanced");
-      const open = wrap.classList.contains("open");
-
-      if (open) {
-        wrap.classList.remove("open");
-        btn.textContent = "顯示進階欄位";
-      } else {
-        wrap.classList.add("open");
-        btn.textContent = "隱藏進階欄位";
-      }
-    }
-
-    function copyJson() {
-      const text = document.getElementById("jsonPreview").textContent;
-
-      if (!navigator.clipboard) {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.top = "0";
-        ta.style.left = "0";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
+      const checkAuth = async (uid) => {
         try {
-          document.execCommand("copy");
-          logStatus("已複製 JSON", true);
-        } catch (e) {
-          logStatus("複製失敗：" + (e.message || String(e)), true);
+          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${Date.now()}`);
+          const data = await res.json();
+          if (data.success && data.data.isAdmin) {
+            setIsAdmin(true);
+          }
+        } catch (e) { console.error(e); }
+      };
+
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+      };
+
+      // --- PDF 轉圖與 AI 傳送邏輯 ---
+      const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setOcrStatus('processing');
+        try {
+          if (file.type === 'application/pdf') {
+            const reader = new FileReader();
+            reader.onload = async function() {
+              const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+              const page = await pdf.getPage(1);
+              const viewport = page.getViewport({ scale: 2 });
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              canvas.width = viewport.width; canvas.height = viewport.height;
+              await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+              sendToAI(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            reader.readAsArrayBuffer(file);
+          } else {
+            const reader = new FileReader();
+            reader.onload = e => sendToAI(e.target.result);
+            reader.readAsDataURL(file);
+          }
+        } catch (err) {
+          setOcrStatus('idle');
+          showToast('檔案解析失敗', 'error');
         }
-        document.body.removeChild(ta);
-        return;
-      }
+      };
 
-      navigator.clipboard.writeText(text)
-        .then(() => logStatus("已複製 JSON", true))
-        .catch(err => logStatus("複製失敗：" + (err.message || String(err)), true));
-    }
+      const sendToAI = async (base64) => {
+        try {
+          const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 })
+          });
+          const result = await res.json();
+          if (result.success) {
+            setDraftData(result.data);
+            setOcrStatus('done');
+            showToast('AI 解析成功！請確認文案內容。');
+          } else {
+            throw new Error();
+          }
+        } catch (e) {
+          setOcrStatus('idle');
+          showToast('AI 解析發生錯誤', 'error');
+        }
+      };
 
-    function clearAll() {
-      state.posterBase64 = "";
-      state.parsedRaw = null;
+      const handleSave = async () => {
+        try {
+          const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...draftData, action: 'addItinerary' })
+          });
+          const result = await res.json();
+          if (result.success) {
+            showToast('🎉 行程已成功上架！');
+            setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });
+            setOcrStatus('idle');
+          }
+        } catch (e) { showToast('儲存失敗', 'error'); }
+      };
 
-      if (state.posterObjectUrl) {
-        URL.revokeObjectURL(state.posterObjectUrl);
-        state.posterObjectUrl = "";
-      }
+      // --- UI 渲染 ---
+      if (isLoading) return <div className="p-20 text-center font-bold text-gray-400">系統驗證中...</div>;
 
-      document.getElementById("posterFile").value = "";
-      document.getElementById("uploadZone").classList.remove("has-image");
-      document.getElementById("uploadZone").innerHTML = `
-        <div class="upload-hint">
-          請上傳旅遊海報 / DM。<br>
-          系統會自動解析標題、價格、天數、亮點等資訊。
+      if (!isAdmin) return (
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="bg-white p-10 rounded-3xl shadow-xl border max-w-md w-full text-center">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 font-black text-4xl">!</div>
+            <h1 className="text-2xl font-black mb-2">ACCESS DENIED</h1>
+            <p className="text-gray-500 text-sm mb-6">您的帳號目前無管理員權限。</p>
+            <div className="bg-gray-50 p-4 rounded-xl border border-dashed mb-6 text-left">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">您的專屬 UID</p>
+              <p className="font-mono text-xs text-blue-600 break-all select-all">{liffProfile?.userId || '正在讀取...'}</p>
+            </div>
+            <p className="text-xs text-gray-400">請將上方 UID 複製並貼入 Google Apps Script 的 adminUIDs 清單中以完成授權。</p>
+          </div>
         </div>
-      `;
+      );
 
-      fillForm({
-        itineraryId: generateItineraryId(),
-        title: "",
-        subtitle: "",
-        region: "",
-        country: "",
-        city: "",
-        days: "",
-        nights: "",
-        price: "",
-        currency: "TWD",
-        departureDate: "",
-        returnDate: "",
-        status: "draft",
-        productType: "group_tour",
-        coverImageUrl: "",
-        galleryJson: [],
-        highlightsJson: [],
-        description: "",
-        dayByDayJson: [],
-        includesJson: [],
-        excludesJson: [],
-        noticeJson: [],
-        faqJson: [],
-        tagsJson: [],
-        promoConfigJson: {},
-        draftId: "",
-        createdBy: document.getElementById("createdBy").value.trim(),
-        updatedBy: document.getElementById("updatedBy").value.trim()
-      });
+      return (
+        <div className="max-w-4xl mx-auto p-4 md:p-10 animate-fade-in">
+          <header className="mb-10 flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-black text-slate-800">智能上稿系統</h1>
+              <p className="text-slate-400 font-bold text-sm">單一企業旗艦版 v4.1</p>
+            </div>
+            <button onClick={() => window.location.href='index.html'} className="text-slate-400 hover:text-slate-800 font-bold text-sm">返回前台</button>
+          </header>
 
-      logStatus("已清空");
+          <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+            {/* 上傳區域 */}
+            <div className="relative border-4 border-dashed border-slate-200 rounded-[2rem] p-16 text-center hover:border-blue-400 transition-all bg-slate-50 group">
+              {ocrStatus === 'processing' ? (
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="font-black text-blue-600 animate-pulse">ChatGPT 視覺解析中...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">📄</div>
+                  <p className="text-xl font-black text-slate-600">點擊上傳 DM 圖片或 PDF</p>
+                  <p className="text-sm text-slate-400 mt-1">系統將自動辨識行程標題、天數、價格與文案</p>
+                  <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*,application/pdf" />
+                </>
+              )}
+            </div>
+
+            {/* 解析結果預覽 */}
+            {ocrStatus === 'done' && (
+              <div className="mt-12 space-y-6 animate-fade-in-up">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">行程標題</label>
+                    <input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-4 border-2 rounded-2xl font-bold bg-white focus:border-blue-500 outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">天數</label>
+                      <input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-4 border-2 rounded-2xl font-bold bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">價格</label>
+                      <input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-4 border-2 rounded-2xl font-bold bg-white" />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2">AI 擴寫行程文案 (可自行微調)</label>
+                  <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="10" className="w-full p-6 border-2 rounded-2xl leading-relaxed text-slate-600 bg-white focus:border-blue-500 outline-none custom-scrollbar" />
+                </div>
+
+                <div className="flex gap-4">
+                  <button onClick={() => setOcrStatus('idle')} className="flex-1 bg-slate-100 py-5 rounded-2xl font-bold text-slate-500">重新解析</button>
+                  <button onClick={handleSave} className="flex-[2] bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl text-xl hover:bg-blue-700 transition">確認發布此行程 🚀</button>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {toast && (
+            <div className={`fixed bottom-10 right-10 z-[100] px-8 py-4 rounded-2xl shadow-2xl font-black animate-fade-in-up ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'}`}>
+              {toast.message}
+            </div>
+          )}
+        </div>
+      );
     }
 
-    function usePosterAsCover() {
-      if (!state.posterObjectUrl) {
-        logStatus("目前沒有海報可當封面");
-        return;
-      }
-      document.getElementById("coverImageUrl").value = state.posterObjectUrl;
-      refreshJsonPreview();
-      logStatus("已使用海報預覽作為封面", true);
-    }
-
-    function openTripPreview() {
-      const tenantId = document.getElementById("tenantId").value.trim();
-      const itineraryId = document.getElementById("itineraryId").value.trim();
-
-      if (!tenantId || !itineraryId) {
-        logStatus("要預覽前，tenantId 與 itineraryId 不可為空", true);
-        return;
-      }
-
-      const url = `./trip.html?tenantId=${encodeURIComponent(tenantId)}&it=${encodeURIComponent(itineraryId)}`;
-      window.open(url, "_blank");
-    }
-
-    function bindPreviewRefresh() {
-      const ids = [
-        "tenantId","itineraryId","title","subtitle","region","country","city","days","nights",
-        "price","currency","departureDate","returnDate","status","productType","coverImageUrl",
-        "description","highlightsInput","dayByDayInput","includesInput","excludesInput",
-        "noticeInput","faqInput","tagsInput","galleryInput","promoConfigInput","draftId",
-        "createdBy","updatedBy"
-      ];
-
-      ids.forEach(id => {
-        document.getElementById(id).addEventListener("input", refreshJsonPreview);
-        document.getElementById(id).addEventListener("change", refreshJsonPreview);
-      });
-    }
-
-    function boot() {
-      const tenantId =
-        new URL(window.location.href).searchParams.get("tenantId") ||
-        localStorage.getItem("travelman_tenant_id") ||
-        localStorage.getItem("tk_tenant_id") ||
-        "t001";
-
-      document.getElementById("tenantId").value = tenantId;
-
-      document.getElementById("btnParse").addEventListener("click", parsePoster);
-      document.getElementById("btnUsePosterAsCover").addEventListener("click", usePosterAsCover);
-      document.getElementById("btnSaveDraft").addEventListener("click", () => savePayload("draft"));
-      document.getElementById("btnPublish").addEventListener("click", () => savePayload("published"));
-      document.getElementById("btnToggleAdvanced").addEventListener("click", toggleAdvanced);
-      document.getElementById("btnCopyJson").addEventListener("click", copyJson);
-      document.getElementById("btnOpenTripPreview").addEventListener("click", openTripPreview);
-      document.getElementById("btnClearAll").addEventListener("click", clearAll);
-
-      bindPreviewRefresh();
-      clearAll();
-      document.getElementById("tenantId").value = tenantId;
-      refreshJsonPreview();
-      logStatus("admin.html 舊模型融合版初始化完成", true);
-    }
-
-    boot();
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AdminApp />);
   </script>
 </body>
 </html>
