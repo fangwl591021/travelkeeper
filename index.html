@@ -3,21 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>旅遊管家 - 旗艦穩定版</title>
+  <title>旅遊管家 - 智能業務系統 (旗艦版)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .line-chat-bg { background-color: #749cbd; }
   </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-800">
@@ -26,13 +23,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    const IconWrapper = ({ children, className = "w-6 h-6" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
-    const Navigation = ({ className }) => <IconWrapper className={className}><polygon points="3 11 22 2 13 21 11 13 3 11"/></IconWrapper>;
-    const Search = ({ className }) => <IconWrapper className={className}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconWrapper>;
-    const UploadCloud = ({ className }) => <IconWrapper className={className}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></IconWrapper>;
-    const RefreshCw = ({ className }) => <IconWrapper className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
-    const ArrowLeft = ({ className }) => <IconWrapper className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconWrapper>;
-
+    const Navigation = () => <svg className="w-8 h-8 text-blue-600 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>;
     const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
 
@@ -40,22 +31,21 @@
       const [activeTab, setActiveTab] = useState('home');
       const [isLoading, setIsLoading] = useState(true);
       const [itineraries, setItineraries] = useState([]);
-      const [filteredResults, setFilteredResults] = useState([]);
+      const [filteredResults, setFilteredResults] = useState([]); // ★ 修正：確保 filteredResults 已定義
       const [liffProfile, setLiffProfile] = useState(null);
       const [isAdmin, setIsAdmin] = useState(false);
       const [distributorStatus, setDistributorStatus] = useState(null);
       const [myOrders, setMyOrders] = useState([]);
       const [selectedTourId, setSelectedTourId] = useState(null);
-      const [toast, setToast] = useState(null);
 
       useEffect(() => {
         const init = async () => {
           try {
             await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
             if (liff.isLoggedIn()) {
-              const profile = await liff.getProfile();
-              setLiffProfile(profile);
-              checkMyStatus(profile.userId);
+              const p = await liff.getProfile();
+              setLiffProfile(p);
+              await checkAuth(p.userId);
             }
           } catch (e) { console.error(e); }
           fetchData();
@@ -63,16 +53,16 @@
         init();
       }, []);
 
-      const checkMyStatus = async (uid) => {
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${Date.now()}`);
-          const data = await res.json();
-          if (data.success) {
-            if (data.data.isAdmin) setIsAdmin(true);
-            if (data.data.role === 'distributor') setDistributorStatus(data.data.status);
-            fetchUserOrders(uid);
-          }
-        } catch (e) {}
+      const checkAuth = async (uid) => {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
+        const data = await res.json();
+        if (data.success) {
+          if (data.data.isAdmin) setIsAdmin(true);
+          if (data.data.role === 'distributor') setDistributorStatus(data.data.status);
+          const ores = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
+          const odata = await ores.json();
+          setMyOrders(odata.data || []);
+        }
       };
 
       const fetchData = async () => {
@@ -86,29 +76,29 @@
         setIsLoading(false);
       };
 
-      const fetchUserOrders = async (uid) => {
-        const res = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
-        const data = await res.json();
-        if (data.success) setMyOrders(data.data || []);
-      };
-
       const renderNavBar = () => {
-        let badge = <span className="bg-gray-100 text-gray-600 text-[11px] px-2 py-0.5 rounded font-bold border">訪客</span>;
-        if (isAdmin) badge = <span className="bg-red-100 text-red-700 text-[11px] px-2 py-0.5 rounded font-bold">👑 管理員</span>;
-        else if (distributorStatus === 'approved') badge = <span className="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded font-bold">💼 經銷商</span>;
+        let badge = <span className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-bold border">訪客</span>;
+        if (isAdmin) badge = <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold">👑 管理員</span>;
+        else if (distributorStatus === 'approved') badge = <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded font-bold">💼 經銷商</span>;
 
         return (
-          <nav className="bg-white shadow-sm sticky top-0 z-50 h-16 flex items-center px-4 justify-between">
+          <nav className="bg-white shadow-sm sticky top-0 z-50 h-16 flex items-center px-4 justify-between border-b">
             <div className="flex items-center cursor-pointer" onClick={() => { setSelectedTourId(null); setActiveTab('home'); }}>
-              <Navigation className="h-8 w-8 text-blue-600 mr-2" />
-              <span className="font-bold text-xl text-blue-900">旅遊管家</span>
+              <Navigation />
+              <span className="font-black text-xl text-blue-900 tracking-wider">旅遊管家</span>
             </div>
             <div className="flex items-center space-x-2">
               <button onClick={() => { setSelectedTourId(null); setActiveTab('home'); }} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'home' ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>找行程</button>
               <button onClick={() => setActiveTab('member')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'member' ? 'text-orange-700 bg-orange-50' : 'text-gray-600'}`}>會員中心</button>
               <button onClick={() => setActiveTab('distributor')} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab === 'distributor' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600'}`}>經銷專區</button>
               {isAdmin && <button onClick={() => window.location.href='admin.html'} className="px-3 py-2 rounded-lg text-sm font-bold text-red-700 bg-red-50">智能上稿</button>}
-              <img src={liffProfile?.pictureUrl || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=100'} className="w-10 h-10 rounded-full border shadow-sm ml-3" />
+              <div className="hidden sm:flex items-center gap-2 pl-3 border-l ml-3">
+                <div className="text-right">
+                  <p className="text-[10px] font-bold leading-none mb-1">{liffProfile?.displayName || '未登入'}</p>
+                  {badge}
+                </div>
+                <img src={liffProfile?.pictureUrl || 'https://aiwe.cc/wp-content/uploads/2026/03/avatar_placeholder.jpg'} className="w-9 h-9 rounded-full border shadow-sm" />
+              </div>
             </div>
           </nav>
         );
@@ -120,7 +110,7 @@
           if (!tour) return <div className="p-20 text-center animate-pulse">載入中...</div>;
           return (
             <div className="animate-fade-in pb-20">
-              <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/40 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white">{tour.title}</h1></div></div>
+              <div className="w-full h-[50vh] relative"><img src={tour.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/30 flex items-end p-10"><h1 className="text-4xl md:text-6xl font-black text-white">{tour.title}</h1></div></div>
               <div className="max-w-7xl mx-auto py-10 px-6 flex flex-col lg:flex-row gap-10">
                 <div className="flex-1 space-y-6 text-lg leading-relaxed text-gray-700 whitespace-pre-wrap">{tour.description}</div>
                 <div className="w-full lg:w-96 sticky top-24 self-start bg-white p-8 rounded-3xl shadow-xl border text-center">
@@ -134,24 +124,27 @@
         }
 
         return (
-          <div className="animate-fade-in pb-20">
-            {/*首頁 Banner*/}
-            <div className="relative w-full h-[300px] md:h-[450px] overflow-hidden bg-gray-900">
-               <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80" className="w-full h-full object-cover opacity-70" />
+          <div className="animate-fade-in">
+            {/* ★ 旗艦 Banner */}
+            <div className="relative w-full h-[350px] md:h-[500px] overflow-hidden bg-slate-900">
+               <img src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1920&q=80" className="w-full h-full object-cover opacity-60" />
                <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center">
-                  <h1 className="text-4xl md:text-6xl font-black mb-4 drop-shadow-lg">探索世界的美好</h1>
-                  <p className="text-lg md:text-2xl font-light tracking-widest drop-shadow-md">發現您的下一個夢幻旅程</p>
+                  <h1 className="text-5xl md:text-7xl font-black mb-6 drop-shadow-2xl">探索世界的美好</h1>
+                  <p className="text-xl md:text-3xl font-light tracking-[0.5em] drop-shadow-lg">發現您的下一個夢幻旅程</p>
                </div>
             </div>
 
             <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
               {filteredResults.map(item => (
-                <div key={item.id} onClick={() => setSelectedTourId(item.id)} className="bg-white rounded-3xl shadow-sm border overflow-hidden cursor-pointer hover:shadow-2xl transition duration-300">
-                  <div className="h-56 overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div>
+                <div key={item.id} onClick={() => setSelectedTourId(item.id)} className="bg-white rounded-3xl shadow-sm border overflow-hidden cursor-pointer hover:shadow-2xl transition duration-500 group">
+                  <div className="h-56 overflow-hidden"><img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" /></div>
                   <div className="p-6">
                     <p className="text-xs font-bold text-blue-500 mb-1">{item.region}</p>
                     <h4 className="font-bold text-lg mb-4 line-clamp-2 h-14">{item.title}</h4>
-                    <div className="flex justify-between items-center border-t pt-4"><span className="text-gray-400 text-sm font-bold">{item.days}天精華</span><span className="text-red-600 font-black text-2xl">${Number(item.price).toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center border-t pt-4">
+                      <span className="text-gray-400 text-sm font-bold">{item.days}天</span>
+                      <span className="text-red-600 font-black text-2xl">${Number(item.price).toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -162,13 +155,13 @@
 
       const renderMemberTab = () => (
         <div className="p-10 max-w-5xl mx-auto animate-fade-in">
-          <h2 className="text-3xl font-black mb-8">我的預約中心</h2>
-          {myOrders.length === 0 ? <p className="text-gray-400 font-bold p-20 text-center">目前無預約報名紀錄</p> : (
+          <h2 className="text-3xl font-black mb-8">預約報名中心</h2>
+          {myOrders.length === 0 ? <p className="text-gray-400 font-bold p-20 text-center">尚無報名紀錄</p> : (
             <div className="grid gap-4">
               {myOrders.map(o => (
                 <div key={o.orderId} className="bg-white p-8 rounded-3xl border flex justify-between items-center shadow-sm">
-                  <div><p className="font-bold text-xl mb-1">{o.tourTitle}</p><p className="text-sm text-gray-400">訂單編號: {o.orderId}</p></div>
-                  <div className="text-right"><p className="font-black text-red-600 text-2xl mb-1">${Number(o.totalAmount).toLocaleString()}</p><span className="text-xs bg-gray-100 px-3 py-1 rounded-full font-bold uppercase">{o.orderStatus}</span></div>
+                  <div><p className="font-bold text-xl mb-1">{o.tourTitle}</p><p className="text-sm text-gray-400">單號: {o.orderId}</p></div>
+                  <div className="text-right"><p className="font-black text-red-600 text-2xl">${Number(o.totalAmount).toLocaleString()}</p><span className="text-xs bg-gray-100 px-3 py-1 rounded-full font-bold uppercase">{o.orderStatus}</span></div>
                 </div>
               ))}
             </div>
@@ -180,15 +173,18 @@
         <div className="min-h-screen flex flex-col bg-gray-50 overflow-x-hidden">
           {renderNavBar()}
           <main className="flex-grow">
-            {isLoading ? <div className="p-40 text-center animate-pulse font-black text-gray-400">系統載入中...</div> : (
+            {isLoading ? <div className="p-40 text-center animate-pulse font-black text-gray-400">核心系統載入中...</div> : (
               <>
                 {activeTab === 'home' && renderHomeTab()}
                 {activeTab === 'member' && renderMemberTab()}
-                {activeTab === 'distributor' && <div className="p-20 text-center font-bold text-gray-400">業績看板載入中...</div>}
+                {activeTab === 'distributor' && (
+                  <div className="p-10 text-center">
+                    <button onClick={()=>window.location.href='model.html'} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black text-xl shadow-xl">開啟推廣工具箱</button>
+                  </div>
+                )}
               </>
             )}
           </main>
-          {toast && (<div className="fixed bottom-10 right-10 z-[100] bg-gray-900 text-white px-10 py-5 rounded-3xl shadow-2xl font-black">{toast}</div>)}
         </div>
       );
     }
