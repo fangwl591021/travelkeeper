@@ -8,7 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
-  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
@@ -104,10 +104,10 @@
         <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
           <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl border max-w-md w-full text-center animate-fade-in-up">
             <div className="text-5xl mb-6">🚫</div>
-            <h1 className="text-2xl font-black mb-2 tracking-tight">ACCESS DENIED</h1>
+            <h1 className="text-2xl font-black mb-2">ACCESS DENIED</h1>
             <p className="text-slate-400 text-sm mb-6">您的帳號目前無管理權限。</p>
             <div className="bg-slate-50 p-4 rounded-2xl border border-dashed text-left">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">您的專屬 UID (貼至 Code.gs)</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">您的專屬 UID</p>
               <p className="font-mono text-xs text-blue-600 break-all select-all">{uid}</p>
             </div>
           </div>
@@ -118,7 +118,7 @@
         <div className="max-w-4xl mx-auto p-4 md:p-10 animate-fade-in-up">
           <header className="mb-10 flex justify-between items-end">
             <div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">智能上稿中心</h1>
+              <h1 className="text-4xl font-black text-slate-900">智能上稿中心</h1>
               <p className="text-slate-400 font-bold mt-1">旗艦單店穩定版 v4.1</p>
             </div>
             <button onClick={() => window.location.href='index.html'} className="text-slate-400 hover:text-blue-600 font-bold text-sm transition">返回首頁</button>
@@ -130,13 +130,11 @@
                 <div className="flex flex-col items-center">
                   <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                   <p className="font-black text-blue-600 animate-pulse text-xl">ChatGPT 深度解析擴寫中...</p>
-                  <p className="text-xs text-blue-400 mt-2">正在腦補行程、搜尋高清圖片並排版</p>
                 </div>
               ) : (
                 <>
                   <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-500">🚀</div>
                   <p className="text-2xl font-black text-slate-600">點擊上傳旅遊 DM 圖片</p>
-                  <p className="text-slate-400 mt-2 font-medium">AI 將自動辨識標題、天數、價格並產生精美內容</p>
                   <input type="file" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
                 </>
               )}
@@ -145,31 +143,14 @@
             {draftData && (
               <div className="mt-12 space-y-8 animate-fade-in-up">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">行程標題</label>
-                    <input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl focus:border-blue-500 outline-none transition" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">團費價格 (TWD)</label>
-                    <input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl text-red-600" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">行程天數</label>
-                    <input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl" />
-                  </div>
+                  <div className="md:col-span-2"><label className="block text-xs font-black text-slate-400 uppercase mb-2">行程標題</label><input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl focus:border-blue-500 outline-none" /></div>
+                  <div><label className="block text-xs font-black text-slate-400 uppercase mb-2">團費價格</label><input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl text-red-600" /></div>
+                  <div><label className="block text-xs font-black text-slate-400 uppercase mb-2">行程天數</label><input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl" /></div>
                 </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2 ml-1">
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">詳細行程內容 (AI 已擴寫)</label>
-                    <span className="text-[10px] font-bold bg-blue-100 text-blue-600 px-2 py-0.5 rounded">內含高清配圖</span>
-                  </div>
-                  <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="15" className="w-full p-6 border-2 rounded-3xl leading-relaxed text-slate-600 focus:border-blue-500 outline-none custom-scrollbar text-lg" />
-                </div>
-
+                <div><label className="block text-xs font-black text-slate-400 uppercase mb-2">詳細腦補內容 (已自動配圖)</label><textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="15" className="w-full p-6 border-2 rounded-3xl leading-relaxed text-slate-600 focus:border-blue-500 outline-none text-lg" /></div>
                 <div className="flex gap-4 pt-4">
-                  <button onClick={() => setDraftData(null)} className="flex-1 bg-slate-100 py-6 rounded-[2rem] font-black text-slate-500 hover:bg-slate-200 transition">清空取消</button>
-                  <button onClick={handleConfirm} className="flex-[2] bg-blue-600 text-white font-black py-6 rounded-[2rem] shadow-2xl text-xl hover:bg-blue-700 transition transform hover:-translate-y-1">確認發布此行程 🚀</button>
+                  <button onClick={() => setDraftData(null)} className="flex-1 bg-slate-100 py-6 rounded-3xl font-black text-slate-500 hover:bg-slate-200 transition">清空取消</button>
+                  <button onClick={handleConfirm} className="flex-[2] bg-blue-600 text-white font-black py-6 rounded-3xl shadow-2xl text-xl hover:bg-blue-700 transition">確認發布 🚀</button>
                 </div>
               </div>
             )}
@@ -183,7 +164,6 @@
         </div>
       );
     }
-
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<AdminApp />);
   </script>
