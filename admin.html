@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>旅遊管家 - 管理員後台 (v4.1 旗艦版)</title>
-  <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js](https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js](https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js](https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js)"></script>
-  <script charset="utf-8" src="[https://static.line-scdn.net/liff/edge/2/sdk.js](https://static.line-scdn.net/liff/edge/2/sdk.js)"></script>
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js](https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js)"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
@@ -23,7 +23,7 @@
   <script type="text/babel" data-presets="react,env">
     const { useState, useEffect, useRef } = React;
 
-    const WORKER_URL = '[https://travelkeeper.fangwl591021.workers.dev](https://travelkeeper.fangwl591021.workers.dev)';
+    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8'; 
 
     function AdminApp() {
@@ -49,14 +49,13 @@
           setIsLoading(false);
         };
         init();
-        if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = '[https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js](https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js)';
+        if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
       }, []);
 
       const checkAuth = async (uid) => {
         try {
           const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}&_t=${Date.now()}`);
           const data = await res.json();
-          // ★ 修正：回歸單店版判斷邏輯，不查 Tenant 表
           if (data.success && data.data.isAdmin) {
             setIsAdmin(true);
           }
@@ -68,18 +67,17 @@
         setTimeout(() => setToast(null), 4000);
       };
 
-      // --- PDF 轉圖與 AI 傳送邏輯 ---
       const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         setOcrStatus('processing');
+        const reader = new FileReader();
+        
         try {
           if (file.type === 'application/pdf') {
-            const reader = new FileReader();
             reader.onload = async function() {
-              const loadingTask = pdfjsLib.getDocument(new Uint8Array(this.result));
-              const pdf = await loadingTask.promise;
+              const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
               const page = await pdf.getPage(1);
               const viewport = page.getViewport({ scale: 2 });
               const canvas = document.createElement('canvas');
@@ -90,13 +88,12 @@
             };
             reader.readAsArrayBuffer(file);
           } else {
-            const reader = new FileReader();
             reader.onload = (ev) => sendToAI(ev.target.result);
             reader.readAsDataURL(file);
           }
         } catch (err) {
           setOcrStatus('idle');
-          showToast('檔案載入失敗：' + err.message, 'error');
+          showToast('檔案讀取失敗', 'error');
         }
       };
 
@@ -108,7 +105,7 @@
             body: JSON.stringify({ image: base64 })
           });
           
-          if (!res.ok) throw new Error('Worker 連線失敗 (' + res.status + ')');
+          if (!res.ok) throw new Error('Worker 響應錯誤');
           
           const result = await res.json();
           if (result.success) {
@@ -116,11 +113,12 @@
             setOcrStatus('done');
             showToast('✅ AI 解析成功！');
           } else {
-            throw new Error(result.error || 'AI 無法解析此圖片');
+            throw new Error(result.error || '解析內容失敗');
           }
         } catch (e) {
+          console.error(e);
           setOcrStatus('idle');
-          showToast('❌ 錯誤：' + e.message, 'error');
+          showToast('❌ AI 解析發生錯誤，請重試', 'error');
         }
       };
 
@@ -133,26 +131,25 @@
           });
           const result = await res.json();
           if (result.success) {
-            showToast('🎉 行程已成功上架！');
+            showToast('🎉 行程已成功發布！');
             setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });
             setOcrStatus('idle');
           }
-        } catch (e) { showToast('儲存失敗', 'error'); }
+        } catch (e) { showToast('發布失敗', 'error'); }
       };
 
-      if (isLoading) return <div className="p-20 text-center font-bold text-gray-400 animate-pulse">權限驗證中...</div>;
+      if (isLoading) return <div className="p-20 text-center font-bold text-gray-400">系統驗證中...</div>;
 
       if (!isAdmin) return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
-          <div className="bg-white p-10 rounded-3xl shadow-xl border max-w-md w-full text-center animate-fade-in-up">
+          <div className="bg-white p-10 rounded-3xl shadow-xl border max-w-md w-full text-center">
             <div className="text-5xl mb-6">🚫</div>
             <h1 className="text-2xl font-black mb-2">ACCESS DENIED</h1>
             <p className="text-gray-500 text-sm mb-6">您的 UID 不在管理員名單內</p>
             <div className="bg-slate-100 p-4 rounded-xl border border-dashed text-left">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">您的 UID (請複製解鎖)</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">您的專屬 UID (請複製解鎖)</p>
               <p className="font-mono text-xs text-blue-600 break-all select-all">{liffProfile?.userId || '讀取中'}</p>
             </div>
-            <p className="text-xs text-gray-400 mt-6">請將上方 UID 貼入 Code.gs 的 adminUIDs 陣列中。</p>
           </div>
         </div>
       );
@@ -161,10 +158,10 @@
         <div className="max-w-4xl mx-auto p-4 md:p-10 animate-fade-in">
           <header className="mb-10 flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-black text-slate-800 tracking-tight">智能上稿中心</h1>
-              <p className="text-slate-400 font-bold text-sm">旗艦單店版 v4.1</p>
+              <h1 className="text-3xl font-black text-slate-800">智能上稿系統</h1>
+              <p className="text-slate-400 font-bold text-sm">旗艦穩定版 v4.1</p>
             </div>
-            <button onClick={() => window.location.href='index.html'} className="text-slate-500 hover:text-blue-600 font-bold text-sm transition">返回首頁</button>
+            <button onClick={() => window.location.href='index.html'} className="bg-white border px-4 py-2 rounded-xl text-slate-500 font-bold text-sm hover:bg-slate-50 transition">返回前台</button>
           </header>
 
           <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100">
@@ -174,11 +171,11 @@
                 <div className="flex flex-col items-center">
                   <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                   <p className="font-black text-blue-600 animate-pulse">ChatGPT 視覺解析中...</p>
-                  <p className="text-xs text-blue-400 mt-2">正在自動擴寫行程並搜尋圖片</p>
+                  <p className="text-xs text-blue-400 mt-2">正在自動拆解文案並美化內容</p>
                 </div>
               ) : (
                 <>
-                  <div className="text-6xl mb-4 group-hover:scale-110 transition-transform">📁</div>
+                  <div className="text-6xl mb-4 group-hover:scale-110 transition-transform">📄</div>
                   <p className="text-xl font-black text-slate-600">點擊上傳 DM 圖片或 PDF</p>
                   <p className="text-sm text-slate-400 mt-1">系統將自動分析並填寫下方表格</p>
                   <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*,application/pdf" />
@@ -195,7 +192,7 @@
                     <input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl focus:border-blue-500 outline-none transition" />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">天數</label>
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">行程天數</label>
                     <input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl" />
                   </div>
                   <div>
@@ -205,12 +202,12 @@
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">詳細行程內容 (AI 已自動擴寫)</label>
-                  <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="12" className="w-full p-6 border-2 rounded-2xl leading-relaxed text-slate-600 focus:border-blue-500 outline-none custom-scrollbar" />
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">行程詳情內容 (AI 擴寫版)</label>
+                  <textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="12" className="w-full p-6 border-2 rounded-2xl leading-relaxed text-gray-600 focus:border-blue-500 outline-none" />
                 </div>
 
                 <div className="flex gap-4 pt-4">
-                  <button onClick={() => {setOcrStatus('idle'); setDraftData({ id: null, title: '', region: '', price: '', days: '', description: '', image: '' });}} className="flex-1 bg-slate-100 py-6 rounded-3xl font-black text-slate-500 hover:bg-slate-200 transition">清空重新上傳</button>
+                  <button onClick={() => setOcrStatus('idle')} className="flex-1 bg-slate-100 py-6 rounded-3xl font-black text-slate-500 hover:bg-slate-200 transition">取消重新上傳</button>
                   <button onClick={handleSave} className="flex-[2] bg-blue-600 text-white font-black py-6 rounded-3xl shadow-2xl text-xl hover:bg-blue-700 transition">確認發布此行程 🚀</button>
                 </div>
               </div>
