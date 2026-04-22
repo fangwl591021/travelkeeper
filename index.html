@@ -691,66 +691,71 @@ function App() {
     <div className="p-4 md:p-10 max-w-5xl mx-auto space-y-8 afu">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-black text-slate-900">CRM 分銷商管理</h2>
-          <p className="text-slate-400 font-medium mt-1">Distributors 工作表 · 共 {crmList.length} 筆</p>
+          <h2 className="text-4xl font-black text-slate-900">CRM 分銷商管理</h2>
+          <p className="text-slate-400 text-base font-medium mt-2">Distributors 工作表 · 共 {crmList.length} 筆</p>
         </div>
-        <button onClick={fetchCrmData} className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">重新整理</button>
+        <button onClick={fetchCrmData} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:bg-blue-700 transition">重新整理</button>
       </div>
 
       {/* 統計 */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label:'全部', num: crmList.length, color:'bg-slate-800' },
+          { label:'全部申請', num: crmList.length, color:'bg-slate-800' },
           { label:'待審核', num: crmList.filter(d => String(d.status||'').toLowerCase()==='pending').length, color:'bg-amber-500' },
           { label:'已核准', num: crmList.filter(d => String(d.status||'').toLowerCase()==='approved').length, color:'bg-emerald-600' },
         ].map(c => (
-          <div key={c.label} className={`${c.color} text-white p-5 rounded-[1.5rem]`}>
-            <p className="text-3xl font-black">{c.num}</p>
-            <p className="text-sm font-bold opacity-80 mt-1">{c.label}</p>
+          <div key={c.label} className={`${c.color} text-white p-6 rounded-[1.5rem]`}>
+            <p className="text-4xl font-black">{c.num}</p>
+            <p className="text-base font-bold opacity-80 mt-2">{c.label}</p>
           </div>
         ))}
       </div>
 
       {/* 申請連結 */}
-      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex justify-between items-center">
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex justify-between items-center">
         <div>
-          <p className="font-black text-blue-900 text-sm">申請入口連結</p>
-          <p className="text-blue-600 text-xs font-medium mt-0.5">分享給想加入的業務夥伴</p>
+          <p className="font-black text-blue-900 text-base">分銷商申請入口連結</p>
+          <p className="text-blue-600 text-sm font-medium mt-1">複製後分享給想加入的業務夥伴</p>
         </div>
         <button onClick={() => {
           const url = `${window.location.origin}${window.location.pathname.replace('index.html','')}register.html?a=demo`;
           navigator.clipboard?.writeText(url).then(() => showToast('連結已複製'));
-        }} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm">複製連結</button>
+        }} className="bg-blue-600 text-white px-5 py-3 rounded-xl font-bold text-base">複製連結</button>
       </div>
 
       {/* 名單 */}
       <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
         {crmList.length === 0 ? (
-          <div className="p-20 text-center text-slate-300 font-bold">目前無申請資料</div>
+          <div className="p-20 text-center text-slate-300 font-bold text-lg">目前無申請資料</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b">
+              <thead className="bg-slate-50 text-sm text-slate-500 font-black border-b">
                 <tr>
-                  {['申請人','公司/品牌','推薦人','累積業績','狀態','操作'].map(h => <th key={h} className="p-5">{h}</th>)}
+                  {['申請人','公司/品牌','推薦人','累積業績','狀態','操作'].map(h => <th key={h} className="px-6 py-4">{h}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {crmList.map((d, i) => (
                   <tr key={i} className="hover:bg-slate-50 transition">
-                    <td className="p-5"><p className="font-black text-slate-800">{d.name||'未填寫'}</p><p className="text-xs text-slate-400">{d.phone||'—'}</p></td>
-                    <td className="p-5 text-sm text-slate-600">{d.companyname||d.companyName||'—'}</td>
-                    <td className="p-5 font-mono text-[10px] text-slate-300 max-w-[80px] truncate">{d.ref_uid||'—'}</td>
-                    <td className="p-5 font-black text-slate-700">${Number(d.salesrevenue||d.salesRevenue||0).toLocaleString()}</td>
-                    <td className="p-5">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${String(d.status||'').toLowerCase()==='approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-600'}`}>
-                        {d.status||'pending'}
+                    <td className="px-6 py-5">
+                      <p className="font-black text-lg text-slate-800">{d.name||'未填寫'}</p>
+                      <p className="text-sm text-slate-400 mt-0.5">{d.phone||'—'}</p>
+                    </td>
+                    <td className="px-6 py-5 text-base text-slate-600 font-medium">{d.companyname||d.companyName||'—'}</td>
+                    <td className="px-6 py-5 font-mono text-xs text-slate-400 max-w-[100px] truncate" title={d.ref_uid||''}>
+                      {d.ref_uid ? d.ref_uid.slice(0,10)+'…' : '—'}
+                    </td>
+                    <td className="px-6 py-5 font-black text-base text-slate-700">${Number(d.salesrevenue||d.salesRevenue||0).toLocaleString()}</td>
+                    <td className="px-6 py-5">
+                      <span className={`px-4 py-1.5 rounded-full text-sm font-black uppercase ${String(d.status||'').toLowerCase()==='approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-600'}`}>
+                        {String(d.status||'').toLowerCase()==='approved' ? '已核准' : '待審核'}
                       </span>
                     </td>
-                    <td className="p-5">
+                    <td className="px-6 py-5">
                       {String(d.status||'').toLowerCase()!=='approved'
-                        ? <button onClick={() => handleApproval(d.uid,'approved')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-emerald-700">核准</button>
-                        : <button onClick={() => handleApproval(d.uid,'pending')} className="text-slate-300 hover:text-red-500 transition text-xs font-bold">撤銷</button>
+                        ? <button onClick={() => handleApproval(d.uid,'approved')} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black hover:bg-emerald-700 transition">核准</button>
+                        : <button onClick={() => handleApproval(d.uid,'pending')} className="text-slate-400 hover:text-red-500 transition text-sm font-bold border border-slate-200 px-4 py-2 rounded-xl hover:border-red-300">撤銷</button>
                       }
                     </td>
                   </tr>
