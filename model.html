@@ -174,7 +174,13 @@ let liffProfile = null;
 let distData    = null;   // distributorData from GAS
 
 // ── 初始化 ────────────────────────────────────────────────────
-(async function init() {
+window.onload = async function() {
+  let retries = 0;
+  while (typeof liff === 'undefined' && retries < 20) {
+    await new Promise(r => setTimeout(r, 200));
+    retries++;
+  }
+  if (typeof liff === 'undefined') { showToast('LIFF SDK 載入失敗，請重新整理', true); return; }
   try {
     await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
     if (!liff.isLoggedIn()) { liff.login(); return; }
@@ -182,7 +188,7 @@ let distData    = null;   // distributorData from GAS
     await fetchDistData();
     await fetchItineraries();
   } catch (e) { showToast('初始化失敗: ' + e.message, true); }
-})();
+};
 
 async function fetchDistData() {
   const res  = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${liffProfile.userId}`);
