@@ -366,7 +366,7 @@ function App() {
                 <p className="text-3xl font-black text-slate-800">{distributorStats.users.length} <span className="text-base font-medium text-slate-400">人</span></p>
               </div>
             </div>
-            <button onClick={() => window.location.href = 'model.html'}
+            <button onClick={() => window.location.href = `model.html?uid=${liffProfile?.userId || ''}`}
               className="w-full bg-blue-50 text-blue-600 font-black py-4 rounded-2xl hover:bg-blue-100 transition">
               開啟推廣工具箱 →
             </button>
