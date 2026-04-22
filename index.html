@@ -589,61 +589,88 @@ function App() {
   );
 
   // ── Home Tab ─────────────────────────────────────────────────
+  const REGIONS = ['所有地區','國旅','亞洲','歐洲','美洲','大洋洲','非洲'];
+  const REGION_EMOJI = { '所有地區':'🌏', '國旅':'🇹🇼', '亞洲':'🗺️', '歐洲':'🏰', '美洲':'🗽', '大洋洲':'🦘', '非洲':'🦁' };
+
+  const applyRegionFilter = (region) => {
+    const r = region === '所有地區' ? '' : region;
+    setSearchRegion(r);
+    let res = itineraries;
+    if (r) res = res.filter(i => String(i.region||'').includes(r));
+    if (searchKeyword) res = res.filter(i => String(i.title||'').toLowerCase().includes(searchKeyword.toLowerCase()));
+    setFilteredResults(res);
+  };
+
+  const activeRegionLabel = searchRegion || '所有地區';
+
   const renderHome = () => (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6 afu">
-      {/* 搜尋 */}
-      <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <select value={searchRegion} onChange={e => setSearchRegion(e.target.value)}
-          className="p-4 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-500 bg-slate-50">
-          <option value="">所有地區</option>
-          {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-4 afu">
+
+      {/* ── 地區標籤列 ── */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" style={{scrollbarWidth:'none'}}>
+        {REGIONS.map(r => {
+          const isActive = r === activeRegionLabel;
+          return (
+            <button key={r} onClick={() => applyRegionFilter(r)}
+              className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-2xl font-bold text-sm transition whitespace-nowrap
+                ${isActive ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-400 hover:text-blue-600'}`}>
+              <span>{REGION_EMOJI[r]}</span>
+              <span>{r}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── 搜尋列 ── */}
+      <div className="flex gap-3">
         <input value={searchKeyword} onChange={e => setSearchKeyword(e.target.value)}
           onKeyDown={e => e.key==='Enter' && handleSearch()}
           placeholder="搜尋行程名稱..."
-          className="p-4 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-blue-500 bg-slate-50" />
+          className="flex-1 p-3.5 border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-blue-500 bg-white text-sm" />
         <button onClick={handleSearch}
-          className="bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition">
-          搜尋行程
+          className="bg-blue-600 text-white font-black px-6 rounded-2xl hover:bg-blue-700 transition text-sm shrink-0">
+          搜尋
         </button>
       </div>
 
-      {/* ★ 推廣工具列 */}
+      {/* ── 推廣工具列 ── */}
       {liffProfile && (
-        <div className={`rounded-[2rem] p-4 flex flex-wrap items-center justify-between gap-3 transition ${promoMode ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-100 shadow-sm'}`}>
+        <div className={`rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 transition
+          ${promoMode ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-100 shadow-sm'}`}>
           <div className="flex items-center gap-3">
             <button onClick={() => { setPromoMode(!promoMode); setPromoSelected(new Set()); }}
-              className={`px-5 py-2.5 rounded-2xl font-black text-sm transition ${promoMode ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
-              {promoMode ? '✕ 取消推廣模式' : '📤 推廣行程'}
+              className={`px-4 py-2 rounded-xl font-black text-sm transition
+                ${promoMode ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+              {promoMode ? '✕ 取消' : '📤 推廣行程'}
             </button>
             {promoMode && (
               <span className="font-bold text-sm">
-                {promoSelected.size === 0 ? '點行程卡片上的 ✓ 勾選（最多8個）' : `已選 ${promoSelected.size} 個行程`}
+                {promoSelected.size === 0 ? '勾選行程（最多8個）' : `已選 ${promoSelected.size} 個`}
               </span>
             )}
           </div>
           {promoMode && promoSelected.size > 0 && (
             <button onClick={() => setPromoModal(true)}
-              className="bg-white text-emerald-700 font-black px-6 py-2.5 rounded-2xl hover:bg-emerald-50 transition shadow-sm">
+              className="bg-white text-emerald-700 font-black px-5 py-2 rounded-xl hover:bg-emerald-50 transition shadow-sm text-sm">
               🚀 發送名片 ({promoSelected.size})
             </button>
           )}
         </div>
       )}
 
-      {/* 行程卡片 */}
+      {/* ── 行程列表（縮圖左、文字右，點擊展開內文）── */}
       <div>
-        <p className="text-sm font-bold text-slate-400 mb-4">共 {filteredResults.length} 個行程</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <p className="text-xs font-bold text-slate-400 mb-3">共 {filteredResults.length} 個行程</p>
+        <div className="space-y-3">
           {filteredResults.map(item => {
-            const id    = String(item.id || item.timestamp || '');
-            const isSel = promoSelected.has(id);
+            const id     = String(item.id || item.timestamp || '');
+            const isSel  = promoSelected.has(id);
+            const isOpen = selectedTour?.id === item.id || selectedTour?.timestamp === item.timestamp;
             return (
               <div key={id}
-                className={`bg-white rounded-[2rem] overflow-hidden shadow-sm border transition duration-300 flex flex-col relative
-                  ${promoMode ? 'cursor-default' : 'cursor-pointer hover:shadow-xl hover:-translate-y-1'}
-                  ${isSel ? 'border-emerald-400 ring-2 ring-emerald-300' : 'border-slate-100'}`}
-                onClick={() => !promoMode && setSelectedTour(item)}>
+                className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden relative
+                  ${isSel ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-100'}
+                  ${!promoMode ? 'hover:shadow-md hover:border-slate-200' : ''}`}>
 
                 {/* ★ 推廣勾選框 */}
                 {promoMode && (
@@ -653,28 +680,56 @@ function App() {
                   </div>
                 )}
 
-                {/* 封面圖 */}
-                <div className="h-48 bg-slate-100 overflow-hidden">
-                  {item.image
-                    ? <img src={item.image} alt={item.title} className="w-full h-full object-cover hover:scale-105 transition duration-500" />
-                    : <div className="w-full h-full flex items-center justify-center text-4xl">✈️</div>
-                  }
-                </div>
+                {/* 橫向列：縮圖左 + 摘要右 */}
+                <div className="flex gap-0 cursor-pointer"
+                  onClick={() => !promoMode && setSelectedTour(isOpen ? null : item)}>
 
-                <div className="p-5 flex flex-col flex-grow">
-                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">{item.region}</span>
-                  <h4 className="font-black text-lg text-slate-900 mb-2 line-clamp-2">{item.title}</h4>
-                  <p className="text-sm text-slate-500 line-clamp-2 flex-grow">{stripMd(item.description)}</p>
-                  <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold">🗓️ {item.days}天</span>
-                    <span className="font-black text-red-600 text-lg">{fmt(item.price)}</span>
+                  {/* 縮圖 */}
+                  <div className="w-28 h-24 shrink-0 bg-slate-100 overflow-hidden rounded-l-2xl">
+                    {item.image
+                      ? <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-3xl">✈️</div>
+                    }
+                  </div>
+
+                  {/* 文字摘要 */}
+                  <div className="flex-1 px-4 py-3 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{item.region}</span>
+                        <h4 className="font-black text-base text-slate-900 leading-tight mt-0.5 line-clamp-2">{item.title}</h4>
+                      </div>
+                      <svg className={`w-4 h-4 shrink-0 text-slate-400 mt-1 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </div>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs text-slate-400 font-medium">🗓️ {item.days}天</span>
+                      <span className="font-black text-red-600 text-base">{fmt(item.price)}</span>
+                    </div>
                   </div>
                 </div>
+
+                {/* 展開內文 */}
+                {isOpen && !promoMode && (
+                  <div className="px-5 pb-5 pt-3 border-t border-slate-100 afu">
+                    {item.image && (
+                      <img src={item.image} className="w-full aspect-video object-cover rounded-xl mb-4" />
+                    )}
+                    <div className="text-sm text-slate-700 space-y-2 leading-relaxed">
+                      {renderDesc(item.description)}
+                    </div>
+                    <button className="mt-5 w-full bg-red-600 text-white font-black py-3 rounded-xl hover:bg-red-700 transition">
+                      立即預約行程
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
           {filteredResults.length === 0 && (
-            <div className="col-span-full py-20 text-center text-slate-300 font-bold">沒有符合條件的行程</div>
+            <div className="py-20 text-center text-slate-300 font-bold">沒有符合條件的行程</div>
           )}
         </div>
       </div>
