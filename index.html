@@ -439,6 +439,14 @@ function App() {
   const [profileModal,      setProfileModal]      = useState(false);
   const [profileForm,       setProfileForm]       = useState({});
 
+  // ★ 展開行程（列表展開，獨立於 selectedTour）
+  const [expandedId,        setExpandedId]        = useState(null);
+
+  // ★ 行程編輯
+  const [editModal,         setEditModal]         = useState(false);
+  const [editForm,          setEditForm]          = useState(null);   // 被編輯的行程資料
+  const [editSaving,        setEditSaving]        = useState(false);
+
   const showToast = (msg, type='success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
@@ -549,6 +557,43 @@ function App() {
     .map(id => filteredResults.find(i => String(i.id||i.timestamp||'') === id))
     .filter(Boolean);
 
+  // ── 儲存行程編輯 ────────────────────────────────────────────
+  const openEdit = (item) => {
+    setEditForm({ ...item });
+    setEditModal(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editForm) return;
+    setEditSaving(true);
+    try {
+      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateItinerary', ...editForm })
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast('行程已更新！');
+        setEditModal(false);
+        await fetchData();   // 重新拉資料
+      } else { showToast('更新失敗：' + (result.error||''), 'error'); }
+    } catch(e) { showToast('更新失敗', 'error'); }
+    setEditSaving(false);
+  };
+
+  const deleteItinerary = async (item) => {
+    if (!confirm(`確定要刪除「${item.title}」嗎？此操作無法復原。`)) return;
+    try {
+      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteItinerary', id: String(item.id || item.timestamp || '') })
+      });
+      const result = await res.json();
+      if (result.success) { showToast('行程已刪除'); await fetchData(); }
+      else showToast('刪除失敗：' + (result.error||''), 'error');
+    } catch(e) { showToast('刪除失敗', 'error'); }
+  };
+
   const saveProfile = async () => {
     try {
       const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
@@ -621,14 +666,19 @@ function App() {
         })}
       </div>
 
-      {/* ── 搜尋列 ── */}
-      <div className="flex gap-3">
+      {/* ── 搜尋列（下拉地區 + 關鍵字 + 搜尋按鈕） ── */}
+      <div className="flex gap-2">
+        <select value={searchRegion} onChange={e => { setSearchRegion(e.target.value); applyRegionFilter(e.target.value || '所有地區'); }}
+          className="border-2 border-slate-200 rounded-2xl px-3 py-3 font-bold text-slate-700 outline-none focus:border-blue-500 bg-white text-sm shrink-0">
+          <option value="">所有地區</option>
+          {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
         <input value={searchKeyword} onChange={e => setSearchKeyword(e.target.value)}
           onKeyDown={e => e.key==='Enter' && handleSearch()}
           placeholder="搜尋行程名稱..."
-          className="flex-1 p-3.5 border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-blue-500 bg-white text-sm" />
+          className="flex-1 p-3 border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-blue-500 bg-white text-sm min-w-0" />
         <button onClick={handleSearch}
-          className="bg-blue-600 text-white font-black px-6 rounded-2xl hover:bg-blue-700 transition text-sm shrink-0">
+          className="bg-blue-600 text-white font-black px-5 rounded-2xl hover:bg-blue-700 transition text-sm shrink-0">
           搜尋
         </button>
       </div>
@@ -661,16 +711,17 @@ function App() {
       {/* ── 行程列表（縮圖左、文字右，點擊展開內文）── */}
       <div>
         <p className="text-xs font-bold text-slate-400 mb-3">共 {filteredResults.length} 個行程</p>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {filteredResults.map(item => {
             const id     = String(item.id || item.timestamp || '');
             const isSel  = promoSelected.has(id);
-            const isOpen = selectedTour?.id === item.id || selectedTour?.timestamp === item.timestamp;
+            const isOpen = expandedId === id;
+
             return (
               <div key={id}
-                className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden relative
-                  ${isSel ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-100'}
-                  ${!promoMode ? 'hover:shadow-md hover:border-slate-200' : ''}`}>
+                className={`bg-white rounded-2xl border overflow-hidden relative transition-all duration-200
+                  ${isSel ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-200'}
+                  ${!promoMode ? 'hover:border-slate-300' : ''}`}>
 
                 {/* ★ 推廣勾選框 */}
                 {promoMode && (
@@ -680,49 +731,64 @@ function App() {
                   </div>
                 )}
 
-                {/* 橫向列：縮圖左 + 摘要右 */}
-                <div className="flex gap-0 cursor-pointer"
-                  onClick={() => !promoMode && setSelectedTour(isOpen ? null : item)}>
+                {/* ── 橫向列：縮圖左 + 摘要右（點擊展開/收合） ── */}
+                <div className="flex cursor-pointer select-none"
+                  onClick={() => !promoMode && setExpandedId(isOpen ? null : id)}>
 
                   {/* 縮圖 */}
-                  <div className="w-28 h-24 shrink-0 bg-slate-100 overflow-hidden rounded-l-2xl">
+                  <div className="w-24 h-20 shrink-0 bg-slate-100 overflow-hidden rounded-l-2xl">
                     {item.image
                       ? <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-3xl">✈️</div>
+                      : <div className="w-full h-full flex items-center justify-center text-2xl">✈️</div>
                     }
                   </div>
 
                   {/* 文字摘要 */}
-                  <div className="flex-1 px-4 py-3 min-w-0">
+                  <div className="flex-1 px-4 py-2.5 min-w-0 flex flex-col justify-center">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{item.region}</span>
-                        <h4 className="font-black text-base text-slate-900 leading-tight mt-0.5 line-clamp-2">{item.title}</h4>
+                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{item.region}</span>
+                        <h4 className="font-black text-sm text-slate-900 leading-snug mt-0.5 line-clamp-2">{item.title}</h4>
                       </div>
-                      <svg className={`w-4 h-4 shrink-0 text-slate-400 mt-1 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      {/* 展開箭頭 */}
+                      <svg className={`w-4 h-4 shrink-0 text-slate-300 mt-1 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                         fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                         <polyline points="6 9 12 15 18 9"/>
                       </svg>
                     </div>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs text-slate-400 font-medium">🗓️ {item.days}天</span>
-                      <span className="font-black text-red-600 text-base">{fmt(item.price)}</span>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <span className="text-[11px] text-slate-400">🗓️ {item.days}天</span>
+                      <span className="font-black text-red-600 text-sm">{fmt(item.price)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* 展開內文 */}
+                {/* ── 展開區：只有文字摘要 + 操作按鈕，不重複大圖 ── */}
                 {isOpen && !promoMode && (
-                  <div className="px-5 pb-5 pt-3 border-t border-slate-100 afu">
-                    {item.image && (
-                      <img src={item.image} className="w-full aspect-video object-cover rounded-xl mb-4" />
-                    )}
-                    <div className="text-sm text-slate-700 space-y-2 leading-relaxed">
-                      {renderDesc(item.description)}
+                  <div className="border-t border-slate-100 px-4 pb-4 pt-3 afu">
+                    {/* 簡短描述（去除 Markdown 圖片語法，只取前3行） */}
+                    <p className="text-sm text-slate-600 leading-relaxed line-clamp-4 mb-3">
+                      {stripMd(item.description)}
+                    </p>
+                    {/* 操作按鈕 */}
+                    <div className="flex gap-2">
+                      <button onClick={e => { e.stopPropagation(); setSelectedTour(item); }}
+                        className="flex-1 bg-red-600 text-white font-black py-2.5 rounded-xl hover:bg-red-700 transition text-sm">
+                        查看詳情 / 預約
+                      </button>
+                      {isAdmin && (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); openEdit(item); }}
+                            className="bg-blue-50 text-blue-700 font-black px-4 py-2.5 rounded-xl hover:bg-blue-100 transition text-sm">
+                            ✏️
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); deleteItinerary(item); }}
+                            className="bg-red-50 text-red-500 font-black px-4 py-2.5 rounded-xl hover:bg-red-100 transition text-sm">
+                            🗑️
+                          </button>
+                        </>
+                      )}
                     </div>
-                    <button className="mt-5 w-full bg-red-600 text-white font-black py-3 rounded-xl hover:bg-red-700 transition">
-                      立即預約行程
-                    </button>
                   </div>
                 )}
               </div>
@@ -979,6 +1045,94 @@ function App() {
           liffProfile={liffProfile}
           onClose={() => { setPromoModal(false); setPromoSelected(new Set()); setPromoMode(false); }}
         />
+      )}
+
+      {/* ★ 行程編輯 Modal */}
+      {editModal && editForm && (
+        <div className="modal-bg afi" onClick={e => e.target.className.includes('modal-bg') && !editSaving && setEditModal(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl afu overflow-hidden flex flex-col" style={{maxHeight:'92vh'}}>
+            {/* Header */}
+            <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100 shrink-0">
+              <h3 className="font-black text-xl text-slate-900">✏️ 編輯行程</h3>
+              <button onClick={() => !editSaving && setEditModal(false)}
+                className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 px-8 py-6 space-y-5">
+              {/* 封面圖預覽 */}
+              {editForm.image && (
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖預覽</label>
+                  <img src={editForm.image} className="w-full aspect-video object-cover rounded-2xl mt-2" />
+                </div>
+              )}
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖 URL</label>
+                <input value={editForm.image||''} onChange={e => setEditForm({...editForm, image:e.target.value})}
+                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 bg-slate-50" />
+              </div>
+
+              {/* 標題 */}
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程標題</label>
+                <input value={editForm.title||''} onChange={e => setEditForm({...editForm, title:e.target.value})}
+                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-base font-black outline-none focus:border-blue-500 bg-slate-50" />
+              </div>
+
+              {/* 地區 / 天數 / 價格 */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">地區</label>
+                  <select value={editForm.region||''} onChange={e => setEditForm({...editForm, region:e.target.value})}
+                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-500 bg-slate-50">
+                    {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">天數</label>
+                  <input type="number" value={editForm.days||''} onChange={e => setEditForm({...editForm, days:e.target.value})}
+                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 bg-slate-50" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">價格</label>
+                  <input type="number" value={editForm.price||''} onChange={e => setEditForm({...editForm, price:e.target.value})}
+                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-red-600 outline-none focus:border-blue-500 bg-slate-50" />
+                </div>
+              </div>
+
+              {/* 描述 */}
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程描述</label>
+                <textarea value={editForm.description||''} onChange={e => setEditForm({...editForm, description:e.target.value})}
+                  rows="12"
+                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500 bg-slate-50 leading-relaxed" />
+                <p className="text-xs text-slate-400 mt-1">{(editForm.description||'').length} 字元</p>
+              </div>
+
+              {/* 備註 */}
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">備註</label>
+                <input value={editForm.notes||''} onChange={e => setEditForm({...editForm, notes:e.target.value})}
+                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 bg-slate-50" />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-8 py-5 border-t border-slate-100 shrink-0 flex gap-3">
+              <button onClick={() => setEditModal(false)} disabled={editSaving}
+                className="flex-1 bg-slate-100 text-slate-600 font-black py-3.5 rounded-2xl hover:bg-slate-200 transition disabled:opacity-50">
+                取消
+              </button>
+              <button onClick={saveEdit} disabled={editSaving}
+                className="flex-[2] bg-blue-600 text-white font-black py-3.5 rounded-2xl hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {editSaving
+                  ? <><span className="spin-anim inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"/>儲存中...</>
+                  : '✅ 儲存變更'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ★ 名片資料編輯 Modal */}
