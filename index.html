@@ -5,1244 +5,819 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    @keyframes fadeInUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
-    @keyframes spin     { to{transform:rotate(360deg)} }
-    .afu { animation: fadeInUp .3s ease both; }
-    .afi { animation: fadeIn .2s ease both; }
-    .spin-anim { animation: spin .7s linear infinite; }
-    .glass { background:rgba(255,255,255,.92); backdrop-filter:blur(16px); }
-
-    /* 推廣模式：行程卡片勾選框 */
-    .promo-check {
-      position:absolute; top:8px; left:8px; z-index:10;
-      width:24px; height:24px; border-radius:7px;
-      border:2.5px solid #fff; background:rgba(0,0,0,.35);
-      display:flex; align-items:center; justify-content:center;
-      cursor:pointer; transition:.15s;
-    }
-    .promo-check.checked { background:#10b981; border-color:#10b981; }
-
-    /* 發送 Modal */
-    .modal-bg { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.6); backdrop-filter:blur(6px);
-      display:flex; align-items:center; justify-content:center; padding:16px; }
-    .modal-box { background:#fff; border-radius:24px; width:100%; max-width:920px; max-height:92vh;
-      overflow:hidden; display:flex; flex-direction:column; animation: fadeInUp .3s ease; }
-    .preview-bg { background:#749cbd; }
-    .preview-bubble { flex:0 0 240px; background:#fff; border-radius:14px; overflow:hidden;
-      scroll-snap-align:start; box-shadow:0 4px 16px rgba(0,0,0,.25); }
-
-    #share-toast { position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
-      background:#1e293b; color:#fff; padding:12px 28px; border-radius:14px;
-      font-size:14px; font-weight:bold; opacity:0; transition:.3s; z-index:999; white-space:nowrap; pointer-events:none; }
-    #share-toast.show { opacity:1; }
-    #share-toast.err  { background:#dc2626; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes spin   { to{transform:rotate(360deg)} }
+    .afu  { animation: fadeUp .25s ease both; }
+    .spin { animation: spin .7s linear infinite; }
+    .glass{ background:rgba(255,255,255,.92); backdrop-filter:blur(16px); }
+    /* 勾選框 */
+    .promo-check { position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:6px;
+      border:2.5px solid #fff;background:rgba(0,0,0,.35);display:flex;align-items:center;
+      justify-content:center;cursor:pointer;transition:.15s;z-index:5; }
+    .promo-check.on { background:#10b981;border-color:#10b981; }
+    /* Modal */
+    .modal-bg { position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);
+      backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px; }
+    .modal-box { background:#fff;border-radius:24px;width:100%;max-width:680px;
+      max-height:92vh;overflow:hidden;display:flex;flex-direction:column; }
+    /* 全螢幕編輯器 */
+    #editor-overlay { position:fixed;inset:0;z-index:300;background:#fff;display:flex;flex-direction:column; }
+    /* toast */
+    #toast { position:fixed;bottom:32px;left:50%;transform:translateX(-50%);
+      background:#1e293b;color:#fff;padding:12px 28px;border-radius:14px;
+      font-size:14px;font-weight:700;opacity:0;transition:.3s;z-index:999;
+      white-space:nowrap;pointer-events:none; }
+    #toast.show{opacity:1} #toast.err{background:#dc2626}
   </style>
 </head>
-<body class="bg-gray-50 font-sans text-slate-800">
-<div id="root"></div>
+<body class="bg-gray-50 text-slate-800 font-sans">
 
-<script type="text/babel">
-const { useState, useEffect, useRef } = React;
+<!-- ════════════════════ NAV ════════════════════ -->
+<nav class="glass sticky top-0 z-50 h-14 flex items-center px-5 justify-between border-b border-slate-200 shadow-sm">
+  <div class="flex items-center gap-2 cursor-pointer" onclick="switchTab('home')">
+    <span class="text-xl">✈️</span>
+    <span class="font-black text-lg text-blue-900 hidden sm:block">旅遊管家</span>
+  </div>
+  <div class="flex items-center gap-1" id="nav-tabs">
+    <button onclick="switchTab('home')"   data-tab="home"   class="nav-btn active">找行程</button>
+    <button onclick="switchTab('member')" data-tab="member" class="nav-btn hidden" id="nav-member">會員</button>
+    <button onclick="switchTab('crm')"    data-tab="crm"    class="nav-btn hidden" id="nav-crm">CRM</button>
+    <button onclick="switchTab('admin')"  data-tab="admin"  class="nav-btn hidden" id="nav-admin">上稿</button>
+    <img id="nav-avatar" src="" class="w-8 h-8 rounded-full border ml-2 hidden" />
+  </div>
+</nav>
+<style>
+  .nav-btn { padding:6px 12px;border-radius:12px;font-size:14px;font-weight:700;transition:.15s;color:#64748b; }
+  .nav-btn:hover { background:#f1f5f9; }
+  .nav-btn.active { background:#2563eb;color:#fff; }
+</style>
 
-const WORKER_URL   = 'https://travelkeeper.fangwl591021.workers.dev';
-const LIFF_ID      = '2009367829-BDZCGti8';
-const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
+<!-- ════════════════════ MAIN ════════════════════ -->
+<main id="main-content">
+  <div class="flex items-center justify-center h-64 gap-3">
+    <div class="spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+    <span class="text-slate-400 font-bold text-sm">初始化中…</span>
+  </div>
+</main>
 
-const fmt = (p) => `$${Number(p||0).toLocaleString()}`;
+<!-- ════════════════════ MODALS ════════════════════ -->
 
-// ── description 渲染（過濾 Markdown 圖片 / 純文字摘要）─────────
-const stripMd  = (t) => String(t||'').replace(/!\[[^\]]*\]\([^)]+\)/g,'').trim();
-function renderDesc(text) {
-  if (!text) return null;
-  return text.split('\n').map((line, i) => {
-    // 圖片 ![alt](url)
-    const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
-    if (imgM) return <img key={i} src={imgM[2]} alt={imgM[1]} className="w-full rounded-2xl my-4 object-cover aspect-video" />;
-    // YouTube [youtube:VIDEO_ID]
-    const ytM = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
-    if (ytM) return (
-      <div key={i} className="aspect-video rounded-2xl overflow-hidden my-4 bg-black shadow-lg">
-        <iframe src={'https://www.youtube.com/embed/' + ytM[1]}
-          className="w-full h-full" allowFullScreen
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+<!-- 行程詳情 Modal -->
+<div id="tour-modal" class="modal-bg hidden" onclick="if(event.target===this)closeTourModal()">
+  <div class="modal-box afu">
+    <div id="tour-modal-body" class="overflow-y-auto flex-1"></div>
+  </div>
+</div>
+
+<!-- 發送名片 Modal -->
+<div id="promo-modal" class="modal-bg hidden" onclick="if(event.target===this)closePromoModal()">
+  <div class="modal-box afu" style="max-width:860px">
+    <div class="p-5 border-b flex justify-between items-center shrink-0">
+      <div>
+        <h3 class="font-black text-lg text-slate-900">🚀 發送推廣名片</h3>
+        <p class="text-xs text-slate-400 mt-0.5" id="promo-subtitle"></p>
       </div>
-    );
-    // 分隔線 ---
-    if (line.trim() === '---') return <hr key={i} className="border-slate-200 my-4" />;
-    // 天標題
-    if (/^第.天/.test(line)) return <h3 key={i} className="font-black text-slate-900 text-lg mt-6 mb-2">{line}</h3>;
-    // 空行
-    if (!line.trim()) return <br key={i}/>;
-    return <p key={i} className="leading-relaxed text-slate-700 mb-2">{line}</p>;
-  });
-}
+      <button onclick="closePromoModal()" class="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">✕</button>
+    </div>
+    <div class="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
+      <!-- 左 -->
+      <div class="flex-1 p-5 overflow-y-auto space-y-5">
+        <div>
+          <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">發送模式</p>
+          <div class="flex gap-2">
+            <button onclick="setPromoMode('single')"   data-pmode="single"   class="pmode-btn active flex-1 py-2 rounded-xl text-xs font-black transition">單張名片</button>
+            <button onclick="setPromoMode('carousel')" data-pmode="carousel" class="pmode-btn flex-1 py-2 rounded-xl text-xs font-black transition">橫向輪播</button>
+            <button onclick="setPromoMode('multi')"    data-pmode="multi"    class="pmode-btn flex-1 py-2 rounded-xl text-xs font-black transition">列表多頁</button>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">聯絡按鈕</p>
+          <div id="soc-options" class="grid grid-cols-2 gap-2"></div>
+        </div>
+        <div>
+          <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">主按鈕文字</p>
+          <input id="cta-text" value="查看行程 / 立即報名"
+            class="w-full border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 bg-slate-50" />
+        </div>
+        <div class="pt-2 border-t space-y-2">
+          <button onclick="copyFlexJson()" class="w-full bg-slate-100 hover:bg-slate-200 py-3 rounded-2xl font-bold text-sm transition">📋 複製 Flex JSON</button>
+          <button onclick="sendFlex()" id="send-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black text-base shadow-lg transition">🚀 立即分享給好友</button>
+        </div>
+      </div>
+      <!-- 右：預覽 -->
+      <div class="w-full md:w-64 shrink-0 bg-[#749cbd] p-4 flex flex-col items-center">
+        <p class="text-white/70 text-[10px] font-bold mb-3 uppercase bg-black/20 px-3 py-1 rounded-full">LINE 預覽</p>
+        <div id="promo-preview" class="w-full space-y-2 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
-// ── Toast (純 DOM，不走 React state，避免 Modal 內閃爍) ─────────
-function showShareToast(msg, isErr=false) {
-  let t = document.getElementById('share-toast');
-  if (!t) { t = document.createElement('div'); t.id='share-toast'; document.body.appendChild(t); }
-  t.innerText = msg;
-  t.className = isErr ? 'err show' : 'show';
-  clearTimeout(t._tm);
-  t._tm = setTimeout(() => { t.className=''; }, 3000);
-}
+<!-- 全螢幕行程編輯器 -->
+<div id="editor-overlay" class="hidden">
+  <div class="shrink-0 border-b border-slate-200 px-5 py-3 flex items-center gap-3 flex-wrap bg-white">
+    <select id="ed-region" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50">
+      <option>國旅</option><option>亞洲</option><option>歐洲</option><option>美洲</option><option>大洋洲</option><option>非洲</option>
+    </select>
+    <input id="ed-days"  type="number" placeholder="天數" class="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50">
+    <input id="ed-price" type="number" placeholder="價格" class="w-32 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-red-600 outline-none bg-slate-50">
+    <div class="ml-auto flex gap-2">
+      <button onclick="closeEditor()" class="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl text-sm">取消</button>
+      <button onclick="saveEdit()" id="ed-save-btn" class="px-5 py-2 bg-blue-600 text-white font-black rounded-xl text-sm">✅ 儲存</button>
+    </div>
+  </div>
+  <input id="ed-title" placeholder="行程標題…" class="shrink-0 px-10 py-4 text-2xl font-black outline-none border-b border-slate-100 placeholder:text-slate-300">
+  <div class="shrink-0 flex items-center gap-3 px-10 py-2 border-b border-slate-100 bg-slate-50">
+    <span class="text-xs font-black text-slate-400 uppercase whitespace-nowrap">封面圖</span>
+    <input id="ed-image" placeholder="https://… 貼上圖片 URL" class="flex-1 text-sm outline-none bg-transparent text-slate-600">
+    <img id="ed-image-preview" src="" class="w-12 h-8 object-cover rounded hidden">
+  </div>
+  <div class="shrink-0 flex items-center gap-2 px-10 py-2 border-b border-slate-100 bg-white flex-wrap">
+    <span class="text-[10px] font-black text-slate-300 uppercase tracking-widest mr-1">插入</span>
+    <button onclick="insertImg()"  class="ed-tool-btn">🖼️ 圖片</button>
+    <button onclick="insertYT()"   class="ed-tool-btn">▶️ YouTube</button>
+    <button onclick="insertDay()"  class="ed-tool-btn">📅 新增天</button>
+    <button onclick="insertHr()"   class="ed-tool-btn">── 分隔線</button>
+    <span id="ed-char-count" class="ml-auto text-xs text-slate-300">0 字</span>
+  </div>
+  <div class="flex flex-1 overflow-hidden">
+    <textarea id="ed-desc" placeholder="第一天 出發！&#10;![圖片](https://...)&#10;&#10;行程描述...&#10;&#10;[youtube:VIDEO_ID]&#10;&#10;第二天 繼續旅程"
+      class="flex-1 px-10 py-6 text-base text-slate-700 outline-none resize-none leading-relaxed"
+      oninput="updateEditorPreview();document.getElementById('ed-char-count').textContent=this.value.length+' 字'">
+    </textarea>
+    <div id="ed-preview" class="w-96 shrink-0 overflow-y-auto bg-gray-50 p-6 hidden lg:block border-l border-slate-100">
+      <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">即時預覽</p>
+      <div id="ed-preview-body"></div>
+    </div>
+  </div>
+</div>
+<style>
+  .ed-tool-btn { display:flex;align-items:center;gap:4px;padding:5px 12px;font-size:11px;font-weight:700;
+    color:#475569;background:#f1f5f9;border-radius:8px;cursor:pointer;transition:.15s; }
+  .ed-tool-btn:hover{background:#e2e8f0}
+  .pmode-btn { background:#f1f5f9;color:#64748b; }
+  .pmode-btn.active { background:#059669;color:#fff; }
+</style>
 
-// ══════════════════════════════════════════════════════════════
-// 推廣發送 Modal（純 JS，不走 React，避免重渲染問題）
-// ══════════════════════════════════════════════════════════════
+<div id="toast"></div>
+
+<!-- ════════════════════ SCRIPT ════════════════════ -->
+<script>
+// ── 常數 ─────────────────────────────────────────
+const WORKER   = 'https://travelkeeper.fangwl591021.workers.dev';
+const LIFF_ID  = '2009367829-BDZCGti8';
+const REGIONS  = ['所有地區','國旅','亞洲','歐洲','美洲','大洋洲','非洲'];
+const REGION_EMOJI = {'所有地區':'🌏','國旅':'🇹🇼','亞洲':'🗺️','歐洲':'🏰','美洲':'🗽','大洋洲':'🦘','非洲':'🦁'};
 const SOC_DEFS = [
-  { key:'phone',  label:'📞 電話',    field:'phone',      prefix:'tel:' },
-  { key:'line',   label:'💬 LINE',    field:'lineLink',   prefix:'' },
-  { key:'lineAt', label:'🟢 LINE@',   field:'lineAtLink', prefix:'' },
-  { key:'fb',     label:'👍 Facebook',field:'fbLink',     prefix:'' },
-  { key:'web',    label:'🌐 網站',    field:'webLink',    prefix:'' },
-  { key:'map',    label:'📍 地圖',    field:'mapLink',    prefix:'' },
-  { key:'tg',     label:'✈️ Telegram',field:'tgToken',   prefix:'' },
+  {key:'phone',label:'📞 電話',   field:'phone'},
+  {key:'line', label:'💬 LINE',   field:'lineLink'},
+  {key:'lineAt',label:'🟢 LINE@', field:'lineAtLink'},
+  {key:'fb',   label:'👍 Facebook',field:'fbLink'},
+  {key:'web',  label:'🌐 網站',   field:'webLink'},
+  {key:'map',  label:'📍 地圖',   field:'mapLink'},
+  {key:'tg',   label:'✈️ Telegram',field:'tgToken'},
 ];
 
-function PromoModal({ items, distData, liffProfile, onClose }) {
-  const [mode,     setMode]     = useState('single');
-  const [ctaText,  setCtaText]  = useState('查看行程 / 立即報名');
-  const [checked,  setChecked]  = useState(() => {
-    const s = new Set();
-    SOC_DEFS.forEach(d => { if (distData?.[d.field]) s.add(d.key); });
-    return s;
+// ── 全域狀態 ─────────────────────────────────────
+let APP = {
+  itineraries: [], user: null, orders: [], distStats: null, crmList: [],
+  liffProfile: null, searchRegion: '', searchKeyword: '',
+  expandedId: null, promoMode: false, promoSelected: new Set(),
+  promoFlexMode: 'single', editItem: null, currentTab: 'home',
+};
+
+// ── 工具 ──────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const el = (tag, cls='', html='') => { const e = document.createElement(tag); e.className=cls; e.innerHTML=html; return e; };
+const fmt = p => '$' + Number(p||0).toLocaleString();
+const stripMd = t => String(t||'').replace(/!\[[^\]]*\]\([^)]+\)/g,'').replace(/\[youtube:[^\]]+\]/g,'').trim();
+function toast(msg, isErr=false) {
+  const t = $('toast'); t.textContent=msg; t.className=isErr?'err show':'show';
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='',3500);
+}
+function api(path, opts={}) { return fetch(WORKER+path, { headers:{'Content-Type':'application/json'}, ...opts }).then(r=>r.json()); }
+
+// ── 初始化 ────────────────────────────────────────
+window.addEventListener('load', async () => {
+  // 等 LIFF
+  for (let i=0; i<30 && typeof liff==='undefined'; i++) await new Promise(r=>setTimeout(r,200));
+  if (typeof liff==='undefined') { renderError('LIFF SDK 載入失敗'); return; }
+
+  try {
+    await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+    if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+    APP.liffProfile = await liff.getProfile();
+  } catch(e) { console.warn('LIFF', e); }
+
+  // 一次拿全部資料
+  try {
+    const uid  = APP.liffProfile?.userId;
+    const data = await api(`/api/app-init${uid ? '?uid='+uid : ''}`);
+    if (data.success) {
+      APP.itineraries = data.itineraries || [];
+      APP.user        = data.user;
+      APP.orders      = data.orders || [];
+      APP.distStats   = data.distStats;
+      APP.crmList     = data.crmList || [];
+    }
+  } catch(e) { toast('資料讀取失敗','err'); }
+
+  setupNav();
+  renderTab('home');
+});
+
+// ── Nav ──────────────────────────────────────────
+function setupNav() {
+  const p = APP.liffProfile;
+  if (p) {
+    $('nav-member').classList.remove('hidden');
+    $('nav-avatar').src = p.pictureUrl;
+    $('nav-avatar').classList.remove('hidden');
+  }
+  if (APP.user?.isAdmin) {
+    $('nav-crm').classList.remove('hidden');
+    $('nav-admin').classList.remove('hidden');
+  }
+}
+
+function switchTab(tab) {
+  APP.currentTab = tab;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderTab(tab);
+}
+
+// ── Tab 渲染 ──────────────────────────────────────
+function renderTab(tab) {
+  const m = $('main-content');
+  m.innerHTML = '';
+  if (tab==='home')   renderHome(m);
+  if (tab==='member') renderMember(m);
+  if (tab==='crm')    renderCrm(m);
+  if (tab==='admin')  renderAdmin(m);
+}
+
+// ══ HOME TAB ══════════════════════════════════════
+function renderHome(container) {
+  const wrap = el('div','w-full px-4 py-5 space-y-4 afu');
+
+  // 地區標籤
+  const tagRow = el('div','flex gap-2 overflow-x-auto pb-1');
+  tagRow.style.cssText = 'scrollbar-width:none;-webkit-overflow-scrolling:touch';
+  REGIONS.forEach(r => {
+    const isActive = (r==='所有地區' && !APP.searchRegion) || r===APP.searchRegion;
+    const btn = el('button',
+      `shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-2xl font-bold text-sm transition whitespace-nowrap border
+       ${isActive ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}`,
+      `${REGION_EMOJI[r]} ${r}`);
+    btn.onclick = () => { APP.searchRegion = r==='所有地區'?'':r; renderTab('home'); };
+    tagRow.appendChild(btn);
   });
-  const [sending,  setSending]  = useState(false);
+  wrap.appendChild(tagRow);
 
-  const uid = liffProfile?.userId || '';
+  // 搜尋列
+  const searchRow = el('div','flex gap-2');
+  const sel = el('select','border-2 border-slate-200 rounded-2xl px-3 py-3 font-bold text-slate-700 outline-none focus:border-blue-500 bg-white text-sm shrink-0');
+  REGIONS.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r==='所有地區'?'':r; opt.textContent = r;
+    if (opt.value === APP.searchRegion) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = e => { APP.searchRegion = e.target.value; renderTab('home'); };
 
-  const toggleSoc = (key) => {
-    setChecked(prev => {
-      const n = new Set(prev);
-      n.has(key) ? n.delete(key) : n.add(key);
-      return n;
-    });
-  };
+  const inp = el('input','flex-1 p-3 border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-blue-500 bg-white text-sm min-w-0');
+  inp.placeholder = '搜尋行程名稱…'; inp.value = APP.searchKeyword;
+  inp.oninput = e => APP.searchKeyword = e.target.value;
+  inp.onkeydown = e => { if(e.key==='Enter') renderTab('home'); };
 
-  const getSocBtns = () => SOC_DEFS
-    .filter(d => checked.has(d.key) && distData?.[d.field])
-    .map(d => ({
-      type:'button', style:'secondary', height:'sm',
-      action:{ type:'uri', label: d.label.replace(/^\S+\s/,''), uri: d.prefix ? `${d.prefix}${distData[d.field]}` : distData[d.field] }
-    }));
+  const srchBtn = el('button','bg-blue-600 text-white font-black px-5 rounded-2xl hover:bg-blue-700 transition text-sm shrink-0','搜尋');
+  srchBtn.onclick = () => renderTab('home');
+  searchRow.append(sel, inp, srchBtn);
+  wrap.appendChild(searchRow);
 
-  const makeBubble = (tour) => {
-    const id  = String(tour.id || tour.timestamp || '');
-    const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
-    return {
-      type:'bubble', size:'mega',
-      hero:{ type:'image', url: tour.image||'https://via.placeholder.com/800x520', size:'full', aspectRatio:'20:13', aspectMode:'cover', action:{type:'uri',uri} },
-      body:{ type:'box', layout:'vertical', spacing:'md', paddingAll:'20px', contents:[
-        { type:'text', text: tour.title, weight:'bold', size:'lg', wrap:true, color:'#0f172a' },
-        { type:'text', text: `${tour.region||''} · ${tour.days}天`, size:'sm', color:'#64748b', margin:'sm' },
-        { type:'text', text: `TWD ${Number(tour.price).toLocaleString()}`, weight:'bold', size:'xl', color:'#b82337', margin:'md' },
-      ]},
-      footer:{ type:'box', layout:'vertical', spacing:'sm', paddingAll:'16px', contents:[
-        { type:'button', style:'primary', color:'#00B900', height:'md', action:{type:'uri', label: ctaText, uri} },
-        ...getSocBtns()
-      ]}
-    };
-  };
-
-  const makeListBubble = (chunk) => {
-    // 縮圖在左、說明在右 — 使用 LINE 合法屬性
-    const rowContents = [];
-    chunk.forEach((tour, idx) => {
-      const id  = String(tour.id || tour.timestamp || '');
-      const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
-      // separator 分隔線（第一筆不加）
-      if (idx > 0) {
-        rowContents.push({ type:'separator', margin:'md' });
-      }
-      rowContents.push({
-        type:'box',
-        layout:'horizontal',
-        margin:'md',
-        spacing:'md',
-        action:{ type:'uri', uri },
-        contents:[
-          // 左：縮圖
-          {
-            type:'image',
-            url: tour.image || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400&h=300&fit=crop',
-            flex:2,
-            aspectRatio:'4:3',
-            aspectMode:'cover',
-            cornerRadius:'8px'
-          },
-          // 右：文字
-          {
-            type:'box',
-            layout:'vertical',
-            flex:3,
-            spacing:'xs',
-            contents:[
-              { type:'text', text: tour.title, weight:'bold', size:'sm', wrap:true, maxLines:2, color:'#0f172a' },
-              { type:'text', text: String(tour.region||'') + ' · ' + String(tour.days) + '天', size:'xxs', color:'#64748b' },
-              { type:'text', text: 'TWD ' + Number(tour.price).toLocaleString(), weight:'bold', size:'sm', color:'#b82337' },
-            ]
-          }
-        ]
-      });
-    });
-
-    const socBtns = getSocBtns();
-    return {
-      type:'bubble',
-      size:'mega',
-      header:{
-        type:'box', layout:'vertical', backgroundColor:'#0f172a', paddingAll:'16px',
-        contents:[
-          { type:'text', text:'✈️ 精選行程推薦', weight:'bold', color:'#ffffff', size:'lg' },
-          { type:'text', text:'共 ' + chunk.length + ' 個行程', color:'#94a3b8', size:'sm', margin:'xs' }
-        ]
-      },
-      body:{
-        type:'box', layout:'vertical', paddingAll:'14px', paddingTop:'8px',
-        contents: rowContents
-      },
-      footer:{
-        type:'box', layout:'vertical', spacing:'sm', paddingAll:'14px',
-        contents: socBtns.length > 0 ? socBtns : [
-          { type:'text', text:'點擊各行程查看詳情', size:'xs', color:'#94a3b8', align:'center' }
-        ]
-      }
-    };
-  };
-
-  const buildFlex = () => {
-    if (mode === 'multi') {
-      const chunks = [];
-      for (let i=0; i<items.length; i+=6) chunks.push(items.slice(i,i+6));
-      const bubbles = chunks.map(makeListBubble);
-      return { type:'flex', altText:`精選行程推薦：${items[0].title} 等${items.length}條`,
-        contents: bubbles.length===1 ? bubbles[0] : { type:'carousel', contents:bubbles } };
+  // 推廣工具列（已登入才顯示）
+  if (APP.liffProfile) {
+    const promoBar = el('div',`rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 transition ${APP.promoMode ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-100 shadow-sm'}`);
+    const promoLeft = el('div','flex items-center gap-3');
+    const promoToggle = el('button',`px-4 py-2 rounded-xl font-black text-sm transition ${APP.promoMode ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`,
+      APP.promoMode ? '✕ 取消' : '📤 推廣行程');
+    promoToggle.onclick = () => { APP.promoMode = !APP.promoMode; APP.promoSelected.clear(); renderTab('home'); };
+    promoLeft.appendChild(promoToggle);
+    if (APP.promoMode) {
+      promoLeft.appendChild(el('span','font-bold text-sm', APP.promoSelected.size===0 ? '勾選行程（最多8個）' : `已選 ${APP.promoSelected.size} 個`));
     }
-    const bubbles = items.map(makeBubble);
-    return { type:'flex', altText:`推薦行程：${items[0].title}`,
-      contents: mode==='carousel' ? { type:'carousel', contents:bubbles } : bubbles[0] };
-  };
-
-  const handleSend = async () => {
-    if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
-    setSending(true);
-    let flexMsg;
-    try {
-      flexMsg = buildFlex();
-      console.log('📤 Flex JSON:', JSON.stringify(flexMsg, null, 2));
-    } catch(buildErr) {
-      showShareToast('❌ 組裝名片失敗：' + buildErr.message, true);
-      setSending(false);
-      return;
+    promoBar.appendChild(promoLeft);
+    if (APP.promoMode && APP.promoSelected.size > 0) {
+      const sendBtn = el('button','bg-white text-emerald-700 font-black px-5 py-2 rounded-xl text-sm hover:bg-emerald-50 transition shadow-sm', `🚀 發送名片 (${APP.promoSelected.size})`);
+      sendBtn.onclick = openPromoModal;
+      promoBar.appendChild(sendBtn);
     }
-    try {
-      const res = await liff.shareTargetPicker([flexMsg]);
-      if (res) { showShareToast('✅ 名片已成功發送！'); onClose(); }
-      else { showShareToast('使用者取消分享'); }
-    } catch(e) {
-      console.error('ShareTargetPicker error:', e);
-      if (e.message?.toLowerCase().includes('not allowed')) {
-        if (confirm('⚠️ 需要重新登入以取得分享權限，是否立即重新登入？')) { liff.logout(); window.location.reload(); }
-      } else if (e.message?.toLowerCase().includes('popup')) {
-        showShareToast('❌ 瀏覽器封鎖彈出視窗！請允許此網站的彈出視窗後重試', true);
+    wrap.appendChild(promoBar);
+  }
+
+  // 行程列表
+  let items = APP.itineraries;
+  if (APP.searchRegion) items = items.filter(i => String(i.region||'').includes(APP.searchRegion));
+  if (APP.searchKeyword) items = items.filter(i => String(i.title||'').toLowerCase().includes(APP.searchKeyword.toLowerCase()));
+
+  wrap.appendChild(el('p','text-xs font-bold text-slate-400',`共 ${items.length} 個行程`));
+
+  const list = el('div','space-y-2');
+  if (items.length===0) {
+    list.appendChild(el('div','py-20 text-center text-slate-300 font-bold','沒有符合條件的行程'));
+  }
+  items.forEach(item => list.appendChild(buildCard(item)));
+  wrap.appendChild(list);
+  container.appendChild(wrap);
+}
+
+function buildCard(item) {
+  const id     = String(item.id || item.timestamp || '');
+  const isSel  = APP.promoSelected.has(id);
+  const isOpen = APP.expandedId === id;
+
+  const card = el('div',`bg-white rounded-2xl border overflow-hidden relative transition-all duration-200 ${isSel?'border-emerald-400 ring-2 ring-emerald-200':'border-slate-200'} ${!APP.promoMode?'hover:border-slate-300':''}`);
+
+  // 推廣勾選框
+  if (APP.promoMode) {
+    const chk = el('div',`promo-check ${isSel?'on':''}`, isSel?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'');
+    chk.onclick = e => { e.stopPropagation(); togglePromoSelect(id); };
+    card.appendChild(chk);
+  }
+
+  // 橫向列
+  const row = el('div','flex cursor-pointer select-none');
+  const thumb = el('div','w-24 h-20 shrink-0 bg-slate-100 overflow-hidden rounded-l-2xl');
+  if (item.image) { const img = document.createElement('img'); img.src=item.image; img.alt=item.title; img.className='w-full h-full object-cover'; thumb.appendChild(img); }
+  else thumb.innerHTML = '<div class="w-full h-full flex items-center justify-center text-2xl">✈️</div>';
+
+  const info = el('div','flex-1 px-4 py-2.5 min-w-0 flex flex-col justify-center');
+  const topRow = el('div','flex items-start justify-between gap-2');
+  const titleWrap = el('div','min-w-0');
+  titleWrap.appendChild(el('span','text-[10px] font-black text-blue-500 uppercase tracking-widest',item.region||''));
+  titleWrap.appendChild(el('h4','font-black text-sm text-slate-900 leading-snug mt-0.5 line-clamp-2',item.title||''));
+  const arrow = el('div',`w-4 h-4 shrink-0 mt-1 transition-transform duration-200 ${isOpen?'rotate-180':''}`,
+    '<svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>');
+  topRow.append(titleWrap, arrow);
+  info.appendChild(topRow);
+  const meta = el('div','flex items-center gap-3 mt-1.5');
+  meta.appendChild(el('span','text-[11px] text-slate-400',`🗓️ ${item.days||''}天`));
+  meta.appendChild(el('span','font-black text-red-600 text-sm',fmt(item.price)));
+  info.appendChild(meta);
+
+  row.append(thumb, info);
+  row.onclick = () => { if(APP.promoMode) return; APP.expandedId = isOpen ? null : id; renderTab('home'); };
+  card.appendChild(row);
+
+  // 展開區
+  if (isOpen && !APP.promoMode) {
+    const expand = el('div','border-t border-slate-100 px-4 pb-4 pt-3 afu');
+    expand.appendChild(el('p','text-sm text-slate-600 leading-relaxed line-clamp-4 mb-3',stripMd(item.description)));
+    const btns = el('div','flex gap-2');
+    const detailBtn = el('button','flex-1 bg-red-600 text-white font-black py-2.5 rounded-xl hover:bg-red-700 transition text-sm','查看詳情 / 預約');
+    detailBtn.onclick = e => { e.stopPropagation(); openTourModal(item); };
+    btns.appendChild(detailBtn);
+    if (APP.user?.isAdmin) {
+      const edBtn = el('button','bg-blue-50 text-blue-700 font-black px-4 py-2.5 rounded-xl hover:bg-blue-100 transition text-sm','✏️');
+      edBtn.onclick = e => { e.stopPropagation(); openEditor(item); };
+      const delBtn = el('button','bg-red-50 text-red-500 font-black px-4 py-2.5 rounded-xl hover:bg-red-100 transition text-sm','🗑️');
+      delBtn.onclick = e => { e.stopPropagation(); deleteItinerary(item); };
+      btns.append(edBtn, delBtn);
+    }
+    expand.appendChild(btns);
+    card.appendChild(expand);
+  }
+  return card;
+}
+
+function togglePromoSelect(id) {
+  if (APP.promoSelected.has(id)) APP.promoSelected.delete(id);
+  else if (APP.promoSelected.size < 8) APP.promoSelected.add(id);
+  else { toast('最多選 8 個行程'); return; }
+  renderTab('home');
+}
+
+// ── 行程詳情 Modal ────────────────────────────────
+function openTourModal(item) {
+  const body = $('tour-modal-body');
+  body.innerHTML = '';
+  if (item.image) { const img = document.createElement('img'); img.src=item.image; img.className='w-full aspect-video object-cover'; body.appendChild(img); }
+  const content = el('div','p-6');
+  const hdr = el('div','flex justify-between items-start mb-4');
+  const titleBlock = el('div');
+  titleBlock.appendChild(el('span','text-[10px] font-black text-blue-600 uppercase tracking-widest',item.region||''));
+  titleBlock.appendChild(el('h2','text-2xl font-black text-slate-900 mt-1',item.title||''));
+  const closeX = el('button','w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0 ml-4 text-slate-500','✕');
+  closeX.onclick = closeTourModal;
+  hdr.append(titleBlock, closeX);
+  content.appendChild(hdr);
+  const tags = el('div','flex gap-3 mb-5');
+  tags.appendChild(el('span','bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-black',`🗓️ ${item.days}天`));
+  tags.appendChild(el('span','bg-red-50 text-red-600 px-4 py-1.5 rounded-full text-sm font-black',fmt(item.price)));
+  content.appendChild(tags);
+  const descDiv = el('div','space-y-3 text-sm text-slate-700 leading-relaxed');
+  renderDescTo(descDiv, item.description);
+  content.appendChild(descDiv);
+  const bookBtn = el('button','mt-6 w-full bg-red-600 text-white font-black py-4 rounded-2xl hover:bg-red-700 transition','立即預約行程');
+  content.appendChild(bookBtn);
+  body.appendChild(content);
+  $('tour-modal').classList.remove('hidden');
+}
+function closeTourModal() { $('tour-modal').classList.add('hidden'); }
+
+function renderDescTo(container, text) {
+  if (!text) return;
+  text.split('\n').forEach(line => {
+    const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+    if (imgM) { const img = document.createElement('img'); img.src=imgM[2]; img.alt=imgM[1]; img.className='w-full rounded-2xl my-3 object-cover aspect-video'; container.appendChild(img); return; }
+    const ytM = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
+    if (ytM) { const wrap=el('div','aspect-video rounded-2xl overflow-hidden my-3 bg-black'); const iframe=document.createElement('iframe'); iframe.src=`https://www.youtube.com/embed/${ytM[1]}`; iframe.className='w-full h-full'; iframe.allowFullscreen=true; wrap.appendChild(iframe); container.appendChild(wrap); return; }
+    if (line.trim()==='---') { container.appendChild(el('hr','border-slate-200 my-3')); return; }
+    if (/^第.天/.test(line)) { container.appendChild(el('h3','font-black text-slate-900 text-base mt-5 mb-1',line)); return; }
+    if (!line.trim()) { container.appendChild(document.createElement('br')); return; }
+    container.appendChild(el('p','leading-relaxed text-slate-700 mb-1',line));
+  });
+}
+
+// ══ MEMBER TAB ════════════════════════════════════
+function renderMember(container) {
+  const w = el('div','p-4 md:p-8 max-w-3xl mx-auto space-y-8 afu');
+  const p = APP.liffProfile;
+  if (p) {
+    const hdr = el('div','flex items-center gap-5 pb-6 border-b border-slate-100');
+    const avatar = document.createElement('img'); avatar.src=p.pictureUrl; avatar.className='w-16 h-16 rounded-full ring-4 ring-white shadow-xl';
+    const info = el('div');
+    info.appendChild(el('h2','text-2xl font-black text-slate-900',p.displayName));
+    const dist = APP.user?.distributorData;
+    info.appendChild(el('p','text-slate-400 font-medium mt-1', dist?.status==='approved'?'✨ 尊榮分銷夥伴':'👤 一般會員'));
+    hdr.append(avatar, info);
+    w.appendChild(hdr);
+  }
+  // 分銷業績
+  const dist = APP.user?.distributorData;
+  if (dist?.status==='approved' && APP.distStats) {
+    const totalSales = (APP.distStats.orders||[]).reduce((s,o)=>s+Number(o.totalamount||0),0);
+    const sec = el('div','space-y-4');
+    sec.appendChild(el('div','flex justify-between items-center',`<h3 class="text-lg font-black text-slate-900">我的分銷業績</h3><button onclick="openProfileEdit()" class="text-sm bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl font-bold hover:bg-emerald-100">✏️ 名片資料</button>`));
+    const stats = el('div','grid grid-cols-2 gap-4');
+    stats.appendChild(el('div','bg-emerald-600 p-5 rounded-[2rem] text-white',`<p class="text-emerald-200 text-xs font-bold uppercase mb-1">累積推廣總額</p><p class="text-3xl font-black">${fmt(totalSales)}</p>`));
+    stats.appendChild(el('div','bg-white p-5 rounded-[2rem] border border-slate-100',`<p class="text-slate-400 text-xs font-bold uppercase mb-1">推薦會員數</p><p class="text-3xl font-black text-slate-800">${(APP.distStats.users||[]).length} <span class="text-base font-medium text-slate-400">人</span></p>`));
+    sec.appendChild(stats);
+    sec.appendChild(el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm text-blue-700 font-medium','💡 至「找行程」點「📤 推廣行程」選取行程後即可發送名片'));
+    w.appendChild(sec);
+  }
+  // 訂單
+  const ordSec = el('div','space-y-3');
+  ordSec.appendChild(el('h3','text-lg font-black text-slate-900','我的預約紀錄'));
+  if (!APP.orders.length) { ordSec.appendChild(el('div','p-12 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200 text-slate-300 font-bold','尚無預約紀錄')); }
+  else APP.orders.forEach(o => {
+    ordSec.appendChild(el('div','bg-white p-5 rounded-[2rem] border border-slate-100 flex justify-between items-center',
+      `<div><p class="font-black text-lg text-slate-800">${o.tourtitle||''}</p><p class="text-xs text-slate-400 font-mono">單號: ${o.orderid||''}</p></div><div class="text-right"><p class="font-black text-red-600 text-xl">${fmt(o.totalamount)}</p><span class="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black">${o.orderstatus||''}</span></div>`));
+  });
+  w.appendChild(ordSec);
+  container.appendChild(w);
+}
+
+// ── 名片資料編輯 ──────────────────────────────────
+function openProfileEdit() {
+  const dist = APP.user?.distributorData || {};
+  const fields = [{key:'phone',label:'電話'},{key:'lineLink',label:'LINE'},{key:'lineAtLink',label:'LINE@'},{key:'fbLink',label:'Facebook'},{key:'webLink',label:'網站'},{key:'mapLink',label:'地圖'},{key:'tgToken',label:'Telegram'}];
+  const html = fields.map(f=>`<div><label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${f.label}</label><input id="pf-${f.key}" value="${dist[f.key]||''}" class="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500 bg-slate-50"></div>`).join('');
+  showSimpleModal('✏️ 名片資料', html, async () => {
+    const updates = {};
+    fields.forEach(f => { updates[f.key] = document.getElementById('pf-'+f.key)?.value?.trim()||''; });
+    const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify({ action:'updateDistributorProfile', uid: APP.liffProfile?.userId, ...updates }) });
+    if (res.success) { Object.assign(APP.user.distributorData, updates); toast('名片資料已儲存'); }
+    else toast('儲存失敗','err');
+  });
+}
+
+// ══ CRM TAB ═══════════════════════════════════════
+function renderCrm(container) {
+  const w = el('div','p-4 md:p-8 max-w-5xl mx-auto space-y-6 afu');
+  const hdr = el('div','flex justify-between items-end');
+  const hdrL = el('div');
+  hdrL.appendChild(el('h2','text-3xl font-black text-slate-900','CRM 分銷商管理'));
+  hdrL.appendChild(el('p','text-slate-400 font-medium mt-1',`Distributors 工作表 · 共 ${APP.crmList.length} 筆`));
+  const refreshBtn = el('button','bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition','重新整理');
+  refreshBtn.onclick = async () => { const r = await api(`/api/itineraries?action=getDistributors`); if(Array.isArray(r)) { APP.crmList=r; renderTab('crm'); } };
+  hdr.append(hdrL, refreshBtn);
+  w.appendChild(hdr);
+
+  // 統計
+  const stats = el('div','grid grid-cols-3 gap-4');
+  const pending  = APP.crmList.filter(d=>String(d.status||'').toLowerCase()==='pending').length;
+  const approved = APP.crmList.filter(d=>String(d.status||'').toLowerCase()==='approved').length;
+  [['全部申請',APP.crmList.length,'bg-slate-800'],['待審核',pending,'bg-amber-500'],['已核准',approved,'bg-emerald-600']].forEach(([label,num,color])=>{
+    stats.appendChild(el('div',`${color} text-white p-5 rounded-[1.5rem]`,`<p class="text-4xl font-black">${num}</p><p class="text-sm font-bold opacity-80 mt-1">${label}</p>`));
+  });
+  w.appendChild(stats);
+
+  // 申請連結
+  const linkBox = el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4 flex justify-between items-center');
+  linkBox.appendChild(el('div','',`<p class="font-black text-blue-900 text-sm">分銷商申請入口</p><p class="text-blue-600 text-xs font-medium mt-0.5">複製後分享給業務夥伴</p>`));
+  const copyBtn = el('button','bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm','複製連結');
+  copyBtn.onclick = () => { const u = location.origin + location.pathname.replace('index.html','')+'register.html?a=demo'; navigator.clipboard?.writeText(u).then(()=>toast('連結已複製')); };
+  linkBox.appendChild(copyBtn);
+  w.appendChild(linkBox);
+
+  // 表格
+  const tableWrap = el('div','bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm overflow-x-auto');
+  if (!APP.crmList.length) { tableWrap.appendChild(el('div','p-16 text-center text-slate-300 font-bold','目前無申請資料')); }
+  else {
+    const table = document.createElement('table'); table.className='w-full text-left';
+    table.innerHTML=`<thead class="bg-slate-50 text-sm text-slate-500 font-black border-b"><tr>${['申請人','公司/品牌','推薦人','累積業績','狀態','操作'].map(h=>`<th class="px-5 py-4">${h}</th>`).join('')}</tr></thead>`;
+    const tbody = document.createElement('tbody'); tbody.className='divide-y divide-slate-100';
+    APP.crmList.forEach(d => {
+      const tr = document.createElement('tr'); tr.className='hover:bg-slate-50 transition';
+      const isApproved = String(d.status||'').toLowerCase()==='approved';
+      tr.innerHTML = `
+        <td class="px-5 py-4"><p class="font-black text-slate-800">${d.name||'未填寫'}</p><p class="text-sm text-slate-400 mt-0.5">${d.phone||'—'}</p></td>
+        <td class="px-5 py-4 text-base text-slate-600">${d.companyname||d.companyName||'—'}</td>
+        <td class="px-5 py-4 font-mono text-xs text-slate-400" title="${d.ref_uid||''}">${d.ref_uid?d.ref_uid.slice(0,10)+'…':'—'}</td>
+        <td class="px-5 py-4 font-black text-base">${fmt(d.salesrevenue||d.salesRevenue)}</td>
+        <td class="px-5 py-4"><span class="px-3 py-1 rounded-full text-sm font-black ${isApproved?'bg-emerald-50 text-emerald-700':'bg-amber-50 text-amber-600'}">${isApproved?'已核准':'待審核'}</span></td>
+        <td class="px-5 py-4" id="crm-action-${d.uid}"></td>`;
+      tbody.appendChild(tr);
+      const cell = tr.querySelector(`#crm-action-${d.uid}`);
+      if (!isApproved) {
+        const btn = el('button','bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-black hover:bg-emerald-700 transition','核准');
+        btn.onclick = () => approveDistributor(d.uid,'approved');
+        cell.appendChild(btn);
       } else {
-        showShareToast('❌ ' + (e.message || '發送失敗，請重試'), true);
+        const btn = el('button','text-slate-400 hover:text-red-500 transition text-sm font-bold border border-slate-200 px-3 py-2 rounded-xl hover:border-red-300','撤銷');
+        btn.onclick = () => approveDistributor(d.uid,'pending');
+        cell.appendChild(btn);
       }
-    } finally { setSending(false); }
-  };
-
-  const handleCopy = () => {
-    const json = JSON.stringify(buildFlex(), null, 2);
-    navigator.clipboard?.writeText(json)
-      .then(() => showShareToast('✅ Flex JSON 已複製'))
-      .catch(() => showShareToast('複製失敗，請手動複製', true));
-  };
-
-  const modeLabels = { single:'單張名片', carousel:'橫向輪播', multi:'列表多頁' };
-
-  return (
-    <div className="modal-bg afi" onClick={e => e.target.className.includes('modal-bg') && onClose()}>
-      <div className="modal-box">
-        {/* Header */}
-        <div className="p-5 border-b flex justify-between items-center shrink-0">
-          <div>
-            <h3 className="font-black text-lg text-slate-900">🚀 發送推廣名片</h3>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">已選 {items.length} 個行程 · 歸屬碼：{uid.slice(0,12)}…</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200">✕</button>
-        </div>
-
-        <div className="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
-          {/* 左：設定 */}
-          <div className="flex-1 p-5 overflow-y-auto space-y-5">
-
-            {/* 模式 */}
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">發送模式</p>
-              <div className="flex gap-2">
-                {['single','carousel','multi'].map(m => (
-                  <button key={m} onClick={() => setMode(m)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-black transition ${mode===m ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                    {modeLabels[m]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 聯絡按鈕 */}
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">聯絡按鈕</p>
-              <div className="grid grid-cols-2 gap-2">
-                {SOC_DEFS.map(d => {
-                  const hasVal = !!(distData?.[d.field]);
-                  const isOn   = checked.has(d.key);
-                  return (
-                    <label key={d.key}
-                      className={`flex items-center gap-2 p-3 border-2 rounded-xl text-xs font-bold cursor-pointer transition
-                        ${!hasVal ? 'opacity-30 border-slate-100 cursor-not-allowed' : isOn ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <input type="checkbox" checked={isOn && hasVal} disabled={!hasVal}
-                        onChange={() => toggleSoc(d.key)} className="w-4 h-4 accent-emerald-500 shrink-0" />
-                      {d.label}
-                      {!hasVal && <span className="text-slate-300 ml-auto text-[10px]">未設定</span>}
-                    </label>
-                  );
-                })}
-              </div>
-              {!distData && (
-                <p className="text-xs text-amber-600 font-bold mt-2 bg-amber-50 px-3 py-2 rounded-xl">
-                  ⚠️ 尚未設定聯絡資料。請至會員中心填寫名片資料後再發送。
-                </p>
-              )}
-            </div>
-
-            {/* CTA 文字 */}
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">主按鈕文字</p>
-              <input value={ctaText} onChange={e => setCtaText(e.target.value)}
-                className="w-full border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-500 bg-slate-50" />
-            </div>
-
-            {/* 操作按鈕 */}
-            <div className="space-y-2 pt-2 border-t">
-              <button onClick={handleCopy}
-                className="w-full bg-slate-100 hover:bg-slate-200 py-3 rounded-2xl font-bold text-sm transition">
-                📋 複製 Flex JSON（貼到 LINE OA）
-              </button>
-              <button onClick={handleSend} disabled={sending}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-base shadow-lg transition flex items-center justify-center gap-2">
-                {sending
-                  ? <><span className="spin-anim inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"/>發送中...</>
-                  : '🚀 立即分享給好友（通訊錄）'}
-              </button>
-            </div>
-          </div>
-
-          {/* 右：LINE 預覽 */}
-          <div className="w-full md:w-[300px] preview-bg p-5 flex flex-col items-center shrink-0">
-            <p className="text-white/70 text-[10px] font-bold mb-3 uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full">LINE 預覽</p>
-            <div className="w-full flex gap-3 overflow-x-auto pb-3" style={{scrollSnapType:'x mandatory'}}>
-              {mode === 'multi'
-                ? (
-                  <div className="bg-white rounded-2xl overflow-hidden shadow-xl" style={{minWidth:'260px',maxWidth:'280px'}}>
-                    <div className="bg-slate-900 px-4 py-3">
-                      <p className="text-white font-black text-sm">✈️ 精選行程推薦</p>
-                      <p className="text-slate-400 text-[10px] mt-0.5">共 {items.length} 個行程</p>
-                    </div>
-                    {items.map((tour,i) => (
-                      <div key={i} className={`flex gap-2 p-3 ${i>0?'border-t border-slate-100':''}`}>
-                        {tour.image
-                          ? <img src={tour.image} className="w-16 h-12 object-cover rounded-lg shrink-0" />
-                          : <div className="w-16 h-12 bg-slate-100 rounded-lg shrink-0 flex items-center justify-center text-lg">✈️</div>
-                        }
-                        <div className="min-w-0 flex flex-col justify-center">
-                          <p className="text-[11px] font-black text-slate-900 line-clamp-2 leading-tight">{tour.title}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{tour.region||''} · {tour.days}天</p>
-                          <p className="text-[10px] text-red-600 font-black">TWD {Number(tour.price).toLocaleString()}</p>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="p-2 border-t border-slate-100 bg-slate-50">
-                      <p className="text-[10px] text-slate-400 text-center">點擊各行程查看詳情</p>
-                    </div>
-                  </div>
-                )
-                : items.map((tour,i) => (
-                    <div key={i} className="preview-bubble">
-                      {tour.image && <img src={tour.image} className="w-full aspect-[20/13] object-cover" />}
-                      <div className="p-3 space-y-1">
-                        <p className="text-[11px] font-black text-slate-900 line-clamp-2">{tour.title}</p>
-                        <p className="text-[11px] font-black text-red-600">TWD {Number(tour.price).toLocaleString()}</p>
-                        <div className="bg-[#00B900] text-white text-center py-1.5 rounded-lg text-[10px] font-black mt-1">{ctaText}</div>
-                      </div>
-                    </div>
-                  ))
-              }
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════
-// 行程詳情 Modal
-// ══════════════════════════════════════════════════════════════
-function TourModal({ tour, onClose }) {
-  if (!tour) return null;
-  return (
-    <div className="modal-bg afi" onClick={e => e.target.className.includes('modal-bg') && onClose()}>
-      <div className="bg-white rounded-[2rem] w-full max-w-2xl my-8 overflow-hidden afu max-h-[90vh] overflow-y-auto">
-        {tour.image && <div className="w-full aspect-video overflow-hidden"><img src={tour.image} className="w-full h-full object-cover" /></div>}
-        <div className="p-8">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{tour.region}</span>
-              <h2 className="text-2xl font-black text-slate-900 mt-1">{tour.title}</h2>
-            </div>
-            <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 ml-4">✕</button>
-          </div>
-          <div className="flex gap-3 mb-6">
-            <span className="bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-black">🗓️ {tour.days}天</span>
-            <span className="bg-red-50 text-red-600 px-4 py-1.5 rounded-full text-sm font-black">{fmt(tour.price)}</span>
-          </div>
-          <div>{renderDesc(tour.description)}</div>
-          <button className="mt-8 w-full bg-red-600 text-white font-black py-4 rounded-2xl text-lg shadow-lg hover:bg-red-700 transition">
-            立即預約行程
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════
-// 主應用
-// ══════════════════════════════════════════════════════════════
-function App() {
-  const urlParams = new URLSearchParams(window.location.search);
-
-  const [activeTab,         setActiveTab]         = useState(urlParams.get('tab') || 'home');
-  const [isLoading,         setIsLoading]         = useState(true);
-  const [itineraries,       setItineraries]       = useState([]);
-  const [filteredResults,   setFilteredResults]   = useState([]);
-  const [liffProfile,       setLiffProfile]       = useState(null);
-  const [isAdmin,           setIsAdmin]           = useState(false);
-  const [distStatus,        setDistStatus]        = useState(null);
-  const [distData,          setDistData]          = useState(null);
-  const [distStats,         setDistStats]         = useState({ users:[], orders:[] });
-  const [myOrders,          setMyOrders]          = useState([]);
-  const [crmList,           setCrmList]           = useState([]);
-  const [selectedTour,      setSelectedTour]      = useState(null);
-  const [searchRegion,      setSearchRegion]      = useState('');
-  const [searchKeyword,     setSearchKeyword]     = useState('');
-  const [toast,             setToast]             = useState(null);
-
-  // ★ 推廣功能狀態
-  const [promoMode,         setPromoMode]         = useState(false);   // 勾選模式開關
-  const [promoSelected,     setPromoSelected]     = useState(new Set()); // 已勾選的 id
-  const [promoModal,        setPromoModal]        = useState(false);   // 發送 Modal
-
-  // ── 名片資料編輯
-  const [profileModal,      setProfileModal]      = useState(false);
-  const [profileForm,       setProfileForm]       = useState({});
-
-  // ★ 展開行程（列表展開，獨立於 selectedTour）
-  const [expandedId,        setExpandedId]        = useState(null);
-
-  // ★ 行程編輯
-  const [editModal,         setEditModal]         = useState(false);
-  const [editForm,          setEditForm]          = useState(null);   // 被編輯的行程資料
-  const [editSaving,        setEditSaving]        = useState(false);
-
-  const showToast = (msg, type='success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  // ── 初始化 ──────────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-        if (liff.isLoggedIn()) {
-          const p = await liff.getProfile();
-          setLiffProfile(p);
-          await checkAuth(p.userId);
-        }
-      } catch(e) { console.error('LIFF', e); }
-      await fetchData();
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'crm' && isAdmin) fetchCrmData();
-  }, [activeTab, isAdmin]);
-
-  // ── API ─────────────────────────────────────────────────────
-  const checkAuth = async (uid) => {
-    try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
-      const data = await res.json();
-      if (!data.success) return;
-      if (data.data.isAdmin) setIsAdmin(true);
-      if (data.data.role === 'distributor') {
-        setDistStatus(data.data.distributorData?.status);
-        setDistData(data.data.distributorData);
-        setProfileForm(data.data.distributorData || {});
-        fetchDistStats(uid);
-      }
-      fetchUserOrders(uid);
-    } catch(e) {}
-  };
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?_t=${Date.now()}`);
-      const arr  = await res.json();
-      const items = Array.isArray(arr) ? arr : [];
-      setItineraries(items);
-      setFilteredResults(items);
-    } catch(e) { showToast('資料讀取失敗', 'error'); }
-    setIsLoading(false);
-  };
-
-  const fetchUserOrders = async (uid) => {
-    try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
-      const data = await res.json();
-      if (data.success) setMyOrders(data.data || []);
-    } catch(e) {}
-  };
-
-  const fetchDistStats = async (uid) => {
-    try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributorPerformance&uid=${uid}`);
-      const data = await res.json();
-      if (data.success) setDistStats({ users: data.users||[], orders: data.orders||[] });
-    } catch(e) {}
-  };
-
-  const fetchCrmData = async () => {
-    try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`);
-      const data = await res.json();
-      setCrmList(Array.isArray(data) ? data : []);
-    } catch(e) {}
-  };
-
-  const handleApproval = async (uid, status) => {
-    try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateDistributorStatus', uid, status })
-      });
-      const result = await res.json();
-      if (result.success) { showToast(status==='approved' ? '已核准' : '已撤銷'); fetchCrmData(); }
-    } catch(e) { showToast('操作失敗','error'); }
-  };
-
-  const handleSearch = () => {
-    let res = itineraries;
-    if (searchRegion)  res = res.filter(i => String(i.region||'').includes(searchRegion));
-    if (searchKeyword) res = res.filter(i => String(i.title||'').toLowerCase().includes(searchKeyword.toLowerCase()));
-    setFilteredResults(res);
-  };
-
-  // ── 推廣勾選邏輯 ────────────────────────────────────────────
-  const togglePromoSelect = (id) => {
-    setPromoSelected(prev => {
-      const n = new Set(prev);
-      if (n.has(id)) { n.delete(id); }
-      else if (n.size < 8) { n.add(id); }
-      else { showToast('最多選 8 個行程'); }
-      return n;
     });
-  };
-
-  const promoItems = Array.from(promoSelected)
-    .map(id => filteredResults.find(i => String(i.id||i.timestamp||'') === id))
-    .filter(Boolean);
-
-  // ── 儲存行程編輯 ────────────────────────────────────────────
-  const openEdit = (item) => {
-    setEditForm({ ...item });
-    setEditModal(true);
-  };
-
-  const saveEdit = async () => {
-    if (!editForm) return;
-    setEditSaving(true);
-    try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'updateItinerary', ...editForm })
-      });
-      const result = await res.json();
-      if (result.success) {
-        showToast('行程已更新！');
-        setEditModal(false);
-        await fetchData();   // 重新拉資料
-      } else { showToast('更新失敗：' + (result.error||''), 'error'); }
-    } catch(e) { showToast('更新失敗', 'error'); }
-    setEditSaving(false);
-  };
-
-  const deleteItinerary = async (item) => {
-    if (!confirm(`確定要刪除「${item.title}」嗎？此操作無法復原。`)) return;
-    try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteItinerary', id: String(item.id || item.timestamp || '') })
-      });
-      const result = await res.json();
-      if (result.success) { showToast('行程已刪除'); await fetchData(); }
-      else showToast('刪除失敗：' + (result.error||''), 'error');
-    } catch(e) { showToast('刪除失敗', 'error'); }
-  };
-
-  const saveProfile = async () => {
-    try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateDistributorProfile', uid: liffProfile?.userId, ...profileForm })
-      });
-      const result = await res.json();
-      if (result.success) {
-        setDistData({ ...(distData||{}), ...profileForm });
-        showToast('名片資料已儲存');
-        setProfileModal(false);
-      }
-    } catch(e) { showToast('儲存失敗','error'); }
-  };
-
-  // ── Nav ──────────────────────────────────────────────────────
-  const renderNav = () => (
-    <nav className="glass sticky top-0 z-50 h-16 flex items-center px-4 md:px-8 justify-between border-b border-gray-100">
-      <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('home'); setPromoMode(false); setPromoSelected(new Set()); }}>
-        <span className="text-2xl">✈️</span>
-        <span className="font-black text-xl text-blue-900 hidden sm:block">旅遊管家</span>
-      </div>
-      <div className="flex items-center gap-1 flex-wrap">
-        {[
-          { id:'home',   label:'找行程', show: true },
-          { id:'member', label:'會員',   show: !!liffProfile },
-          { id:'crm',    label:'CRM',    show: isAdmin },
-          { id:'admin',  label:'上稿',   show: isAdmin },
-        ].filter(t => t.show).map(t => (
-          <button key={t.id} onClick={() => { setActiveTab(t.id); setPromoMode(false); setPromoSelected(new Set()); }}
-            className={`px-3 py-2 rounded-xl text-sm font-bold transition ${activeTab===t.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-            {t.label}
-          </button>
-        ))}
-        {liffProfile && <img src={liffProfile.pictureUrl} className="w-8 h-8 rounded-full border ml-2" />}
-      </div>
-    </nav>
-  );
-
-  // ── Home Tab ─────────────────────────────────────────────────
-  const REGIONS = ['所有地區','國旅','亞洲','歐洲','美洲','大洋洲','非洲'];
-  const REGION_EMOJI = { '所有地區':'🌏', '國旅':'🇹🇼', '亞洲':'🗺️', '歐洲':'🏰', '美洲':'🗽', '大洋洲':'🦘', '非洲':'🦁' };
-
-  const applyRegionFilter = (region) => {
-    const r = region === '所有地區' ? '' : region;
-    setSearchRegion(r);
-    let res = itineraries;
-    if (r) res = res.filter(i => String(i.region||'').includes(r));
-    if (searchKeyword) res = res.filter(i => String(i.title||'').toLowerCase().includes(searchKeyword.toLowerCase()));
-    setFilteredResults(res);
-  };
-
-  const activeRegionLabel = searchRegion || '所有地區';
-
-  const renderHome = () => (
-    <div className="w-full px-6 py-6 space-y-4 afu">
-
-      {/* ── 地區標籤列 ── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" style={{scrollbarWidth:'none'}}>
-        {REGIONS.map(r => {
-          const isActive = r === activeRegionLabel;
-          return (
-            <button key={r} onClick={() => applyRegionFilter(r)}
-              className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-2xl font-bold text-sm transition whitespace-nowrap
-                ${isActive ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-400 hover:text-blue-600'}`}>
-              <span>{REGION_EMOJI[r]}</span>
-              <span>{r}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── 搜尋列（下拉地區 + 關鍵字 + 搜尋按鈕） ── */}
-      <div className="flex gap-2">
-        <select value={searchRegion} onChange={e => { setSearchRegion(e.target.value); applyRegionFilter(e.target.value || '所有地區'); }}
-          className="border-2 border-slate-200 rounded-2xl px-3 py-3 font-bold text-slate-700 outline-none focus:border-blue-500 bg-white text-sm shrink-0">
-          <option value="">所有地區</option>
-          {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <input value={searchKeyword} onChange={e => setSearchKeyword(e.target.value)}
-          onKeyDown={e => e.key==='Enter' && handleSearch()}
-          placeholder="搜尋行程名稱..."
-          className="flex-1 p-3 border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-blue-500 bg-white text-sm min-w-0" />
-        <button onClick={handleSearch}
-          className="bg-blue-600 text-white font-black px-5 rounded-2xl hover:bg-blue-700 transition text-sm shrink-0">
-          搜尋
-        </button>
-      </div>
-
-      {/* ── 推廣工具列 ── */}
-      {liffProfile && (
-        <div className={`rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 transition
-          ${promoMode ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-100 shadow-sm'}`}>
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setPromoMode(!promoMode); setPromoSelected(new Set()); }}
-              className={`px-4 py-2 rounded-xl font-black text-sm transition
-                ${promoMode ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
-              {promoMode ? '✕ 取消' : '📤 推廣行程'}
-            </button>
-            {promoMode && (
-              <span className="font-bold text-sm">
-                {promoSelected.size === 0 ? '勾選行程（最多8個）' : `已選 ${promoSelected.size} 個`}
-              </span>
-            )}
-          </div>
-          {promoMode && promoSelected.size > 0 && (
-            <button onClick={() => setPromoModal(true)}
-              className="bg-white text-emerald-700 font-black px-5 py-2 rounded-xl hover:bg-emerald-50 transition shadow-sm text-sm">
-              🚀 發送名片 ({promoSelected.size})
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── 行程列表（縮圖左、文字右，點擊展開內文）── */}
-      <div>
-        <p className="text-xs font-bold text-slate-400 mb-3">共 {filteredResults.length} 個行程</p>
-        <div className="space-y-2">
-          {filteredResults.map(item => {
-            const id     = String(item.id || item.timestamp || '');
-            const isSel  = promoSelected.has(id);
-            const isOpen = expandedId === id;
-
-            return (
-              <div key={id}
-                className={`bg-white rounded-2xl border overflow-hidden relative transition-all duration-200
-                  ${isSel ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-200'}
-                  ${!promoMode ? 'hover:border-slate-300' : ''}`}>
-
-                {/* ★ 推廣勾選框 */}
-                {promoMode && (
-                  <div className={`promo-check ${isSel ? 'checked' : ''}`}
-                    onClick={e => { e.stopPropagation(); togglePromoSelect(id); }}>
-                    {isSel && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
-                  </div>
-                )}
-
-                {/* ── 橫向列：縮圖左 + 摘要右（點擊展開/收合） ── */}
-                <div className="flex cursor-pointer select-none"
-                  onClick={() => !promoMode && setExpandedId(isOpen ? null : id)}>
-
-                  {/* 縮圖 */}
-                  <div className="w-24 h-20 shrink-0 bg-slate-100 overflow-hidden rounded-l-2xl">
-                    {item.image
-                      ? <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-2xl">✈️</div>
-                    }
-                  </div>
-
-                  {/* 文字摘要 */}
-                  <div className="flex-1 px-4 py-2.5 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{item.region}</span>
-                        <h4 className="font-black text-sm text-slate-900 leading-snug mt-0.5 line-clamp-2">{item.title}</h4>
-                      </div>
-                      {/* 展開箭頭 */}
-                      <svg className={`w-4 h-4 shrink-0 text-slate-300 mt-1 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                        fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                        <polyline points="6 9 12 15 18 9"/>
-                      </svg>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span className="text-[11px] text-slate-400">🗓️ {item.days}天</span>
-                      <span className="font-black text-red-600 text-sm">{fmt(item.price)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── 展開區：只有文字摘要 + 操作按鈕，不重複大圖 ── */}
-                {isOpen && !promoMode && (
-                  <div className="border-t border-slate-100 px-4 pb-4 pt-3 afu">
-                    {/* 簡短描述（去除 Markdown 圖片語法，只取前3行） */}
-                    <p className="text-sm text-slate-600 leading-relaxed line-clamp-4 mb-3">
-                      {stripMd(item.description)}
-                    </p>
-                    {/* 操作按鈕 */}
-                    <div className="flex gap-2">
-                      <button onClick={e => { e.stopPropagation(); setSelectedTour(item); }}
-                        className="flex-1 bg-red-600 text-white font-black py-2.5 rounded-xl hover:bg-red-700 transition text-sm">
-                        查看詳情 / 預約
-                      </button>
-                      {isAdmin && (
-                        <>
-                          <button onClick={e => { e.stopPropagation(); openEdit(item); }}
-                            className="bg-blue-50 text-blue-700 font-black px-4 py-2.5 rounded-xl hover:bg-blue-100 transition text-sm">
-                            ✏️
-                          </button>
-                          <button onClick={e => { e.stopPropagation(); deleteItinerary(item); }}
-                            className="bg-red-50 text-red-500 font-black px-4 py-2.5 rounded-xl hover:bg-red-100 transition text-sm">
-                            🗑️
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {filteredResults.length === 0 && (
-            <div className="py-20 text-center text-slate-300 font-bold">沒有符合條件的行程</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Member Tab ───────────────────────────────────────────────
-  const PROFILE_FIELDS = [
-    { key:'phone',      label:'聯絡電話',       placeholder:'0912-345-678' },
-    { key:'lineLink',   label:'LINE 個人連結',  placeholder:'https://line.me/ti/p/~xxx' },
-    { key:'lineAtLink', label:'LINE@ 連結',     placeholder:'https://line.me/R/ti/p/@xxx' },
-    { key:'fbLink',     label:'Facebook',       placeholder:'https://facebook.com/yourpage' },
-    { key:'webLink',    label:'網站',           placeholder:'https://yoursite.com' },
-    { key:'mapLink',    label:'Google 地圖',    placeholder:'https://maps.app.goo.gl/xxx' },
-    { key:'tgToken',    label:'Telegram',       placeholder:'https://t.me/username' },
-  ];
-
-  const renderMember = () => {
-    const totalSales = distStats.orders.reduce((s,o) => s + Number(o.totalamount||0), 0);
-    return (
-      <div className="p-4 md:p-10 max-w-4xl mx-auto space-y-10 afu">
-        {liffProfile && (
-          <div className="flex items-center gap-5 pb-8 border-b border-slate-100">
-            <img src={liffProfile.pictureUrl} className="w-20 h-20 rounded-full ring-4 ring-white shadow-xl" />
-            <div>
-              <h2 className="text-3xl font-black text-slate-900">{liffProfile.displayName}</h2>
-              <p className="text-slate-400 font-medium mt-1">{distStatus==='approved' ? '✨ 尊榮分銷夥伴' : '👤 一般會員'}</p>
-            </div>
-          </div>
-        )}
-
-        {/* 分銷商業績 */}
-        {distStatus === 'approved' && (
-          <section className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black text-slate-900">我的分銷業績</h3>
-              <button onClick={() => setProfileModal(true)}
-                className="text-sm bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl font-bold hover:bg-emerald-100 transition">
-                ✏️ 編輯名片資料
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-emerald-600 p-6 rounded-[2rem] text-white">
-                <p className="text-emerald-200 text-xs font-bold uppercase mb-1">累積推廣總額</p>
-                <p className="text-3xl font-black">{fmt(totalSales)}</p>
-              </div>
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-100">
-                <p className="text-slate-400 text-xs font-bold uppercase mb-1">推薦會員數</p>
-                <p className="text-3xl font-black text-slate-800">{distStats.users.length} <span className="text-base font-medium text-slate-400">人</span></p>
-              </div>
-            </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm text-blue-700 font-medium">
-              💡 點首頁的「📤 推廣行程」按鈕，勾選行程後即可發送推廣名片給好友
-            </div>
-          </section>
-        )}
-
-        {/* 訂單 */}
-        <section className="space-y-4">
-          <h3 className="text-xl font-black text-slate-900">我的預約紀錄</h3>
-          {myOrders.length === 0 ? (
-            <div className="p-16 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200">
-              <p className="text-slate-300 font-bold">尚無預約紀錄</p>
-            </div>
-          ) : myOrders.map((o,i) => (
-            <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-center">
-              <div>
-                <p className="font-black text-lg text-slate-800">{o.tourtitle}</p>
-                <p className="text-xs text-slate-400 font-mono">單號: {o.orderid}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-black text-red-600 text-xl">{fmt(o.totalamount)}</p>
-                <span className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black">{o.orderstatus}</span>
-              </div>
-            </div>
-          ))}
-        </section>
-      </div>
-    );
-  };
-
-  // ── CRM Tab ──────────────────────────────────────────────────
-  const renderCrm = () => (
-    <div className="p-4 md:p-10 max-w-5xl mx-auto space-y-8 afu">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-4xl font-black text-slate-900">CRM 分銷商管理</h2>
-          <p className="text-slate-400 text-base font-medium mt-2">Distributors 工作表 · 共 {crmList.length} 筆</p>
-        </div>
-        <button onClick={fetchCrmData} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold text-base hover:bg-blue-700 transition">重新整理</button>
-      </div>
-
-      {/* 統計 */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label:'全部申請', num: crmList.length, color:'bg-slate-800' },
-          { label:'待審核', num: crmList.filter(d => String(d.status||'').toLowerCase()==='pending').length, color:'bg-amber-500' },
-          { label:'已核准', num: crmList.filter(d => String(d.status||'').toLowerCase()==='approved').length, color:'bg-emerald-600' },
-        ].map(c => (
-          <div key={c.label} className={`${c.color} text-white p-6 rounded-[1.5rem]`}>
-            <p className="text-4xl font-black">{c.num}</p>
-            <p className="text-base font-bold opacity-80 mt-2">{c.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* 申請連結 */}
-      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex justify-between items-center">
-        <div>
-          <p className="font-black text-blue-900 text-base">分銷商申請入口連結</p>
-          <p className="text-blue-600 text-sm font-medium mt-1">複製後分享給想加入的業務夥伴</p>
-        </div>
-        <button onClick={() => {
-          const url = `${window.location.origin}${window.location.pathname.replace('index.html','')}register.html?a=demo`;
-          navigator.clipboard?.writeText(url).then(() => showToast('連結已複製'));
-        }} className="bg-blue-600 text-white px-5 py-3 rounded-xl font-bold text-base">複製連結</button>
-      </div>
-
-      {/* 名單 */}
-      <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
-        {crmList.length === 0 ? (
-          <div className="p-20 text-center text-slate-300 font-bold text-lg">目前無申請資料</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-sm text-slate-500 font-black border-b">
-                <tr>
-                  {['申請人','公司/品牌','推薦人','累積業績','狀態','操作'].map(h => <th key={h} className="px-6 py-4">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {crmList.map((d, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition">
-                    <td className="px-6 py-5">
-                      <p className="font-black text-lg text-slate-800">{d.name||'未填寫'}</p>
-                      <p className="text-sm text-slate-400 mt-0.5">{d.phone||'—'}</p>
-                    </td>
-                    <td className="px-6 py-5 text-base text-slate-600 font-medium">{d.companyname||d.companyName||'—'}</td>
-                    <td className="px-6 py-5 font-mono text-xs text-slate-400 max-w-[100px] truncate" title={d.ref_uid||''}>
-                      {d.ref_uid ? d.ref_uid.slice(0,10)+'…' : '—'}
-                    </td>
-                    <td className="px-6 py-5 font-black text-base text-slate-700">${Number(d.salesrevenue||d.salesRevenue||0).toLocaleString()}</td>
-                    <td className="px-6 py-5">
-                      <span className={`px-4 py-1.5 rounded-full text-sm font-black uppercase ${String(d.status||'').toLowerCase()==='approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-600'}`}>
-                        {String(d.status||'').toLowerCase()==='approved' ? '已核准' : '待審核'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      {String(d.status||'').toLowerCase()!=='approved'
-                        ? <button onClick={() => handleApproval(d.uid,'approved')} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black hover:bg-emerald-700 transition">核准</button>
-                        : <button onClick={() => handleApproval(d.uid,'pending')} className="text-slate-400 hover:text-red-500 transition text-sm font-bold border border-slate-200 px-4 py-2 rounded-xl hover:border-red-300">撤銷</button>
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Admin Tab ────────────────────────────────────────────────
-  const [ocrStatus,  setOcrStatus]  = useState('idle');
-  const [draftData,  setDraftData]  = useState(null);
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    setOcrStatus('processing');
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        const res    = await fetch(`${WORKER_URL}/api/upload-dm`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image: ev.target.result }) });
-        const result = await res.json();
-        if (result.success) { setDraftData(result.data); setOcrStatus('done'); showToast('AI 解析成功！'); }
-        else throw new Error(result.error);
-      } catch(e) { setOcrStatus('idle'); showToast('解析失敗: '+e.message,'error'); }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handlePublish = async () => {
-    try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...draftData, action:'addItinerary' }) });
-      const result = await res.json();
-      if (result.success) { showToast('行程已發布！'); await fetchData(); setDraftData(null); setOcrStatus('idle'); setActiveTab('home'); }
-    } catch(e) { showToast('發布失敗','error'); }
-  };
-
-  const renderAdmin = () => (
-    <div className="p-4 md:p-10 max-w-3xl mx-auto afu">
-      <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-        <h2 className="text-3xl font-black mb-2 text-slate-900">🚀 智能上稿系統</h2>
-        <p className="text-slate-400 mb-8">上傳旅遊 DM 圖片，AI 自動生成行程文案</p>
-        <div className={`relative border-4 border-dashed rounded-[3rem] p-16 text-center transition-all ${ocrStatus==='processing' ? 'border-blue-500 bg-blue-50' : 'border-slate-100 bg-slate-50'}`}>
-          {ocrStatus==='processing'
-            ? <div className="flex flex-col items-center"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full spin-anim mb-4"/><p className="font-black text-blue-600">視覺模型分析中...</p></div>
-            : <><p className="text-xl font-black text-slate-600 mb-2">點擊上傳旅遊 DM 圖片</p><p className="text-slate-400 text-sm">支援 JPG / PNG</p><input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" /></>
-          }
-        </div>
-        {draftData && (
-          <div className="mt-8 space-y-5">
-            {draftData.image && <div><label className="text-xs font-black text-slate-400 uppercase">封面圖</label><img src={draftData.image} className="w-full aspect-video object-cover rounded-2xl mt-2" /></div>}
-            {[['標題','title','text'],['地區','region','text'],['價格','price','number'],['天數','days','number']].map(([label,key,type]) => (
-              <div key={key}><label className="text-xs font-black text-slate-400 uppercase">{label}</label>
-                <input type={type} value={draftData[key]||''} onChange={e => setDraftData({...draftData,[key]:e.target.value})}
-                  className="w-full p-4 border-2 border-slate-100 rounded-2xl font-bold mt-1 outline-none focus:border-blue-500" /></div>
-            ))}
-            <div><label className="text-xs font-black text-slate-400 uppercase">描述</label>
-              <textarea value={draftData.description||''} onChange={e => setDraftData({...draftData,description:e.target.value})}
-                rows="10" className="w-full p-4 border-2 border-slate-100 rounded-2xl text-base mt-1 outline-none focus:border-blue-500" /></div>
-            <div className="flex gap-4">
-              <button onClick={() => { setDraftData(null); setOcrStatus('idle'); }} className="flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-600 hover:bg-slate-200">取消</button>
-              <button onClick={handlePublish} className="flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-blue-700">確認發布 🚀</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Render ───────────────────────────────────────────────────
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {renderNav()}
-      <main>
-        {isLoading
-          ? <div className="p-40 text-center"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full spin-anim mx-auto mb-4"/><p className="font-black text-slate-400 text-xs uppercase tracking-widest">載入中...</p></div>
-          : <>
-              {activeTab==='home'   && renderHome()}
-              {activeTab==='member' && renderMember()}
-              {activeTab==='crm'    && isAdmin && renderCrm()}
-              {activeTab==='admin'  && isAdmin && renderAdmin()}
-            </>
-        }
-      </main>
-
-      {/* 行程詳情 */}
-      {selectedTour && <TourModal tour={selectedTour} onClose={() => setSelectedTour(null)} />}
-
-      {/* ★ 推廣發送 Modal */}
-      {promoModal && (
-        <PromoModal
-          items={promoItems}
-          distData={distData}
-          liffProfile={liffProfile}
-          onClose={() => { setPromoModal(false); setPromoSelected(new Set()); setPromoMode(false); }}
-        />
-      )}
-
-      {/* ★ 行程編輯 Modal — 全螢幕部落格編輯器 */}
-      {editModal && editForm && (
-        <div className="fixed inset-0 z-[300] bg-white flex flex-col afi">
-
-          {/* ── 頂部工具列 ── */}
-          <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-3 flex items-center gap-3 flex-wrap">
-            {/* 左：基本資訊 */}
-            <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
-              <select value={editForm.region||''} onChange={e => setEditForm({...editForm, region:e.target.value})}
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50">
-                {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <input type="number" value={editForm.days||''} onChange={e => setEditForm({...editForm, days:e.target.value})}
-                placeholder="天數" className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50" />
-              <input type="number" value={editForm.price||''} onChange={e => setEditForm({...editForm, price:e.target.value})}
-                placeholder="價格" className="w-32 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-red-600 outline-none bg-slate-50" />
-            </div>
-            {/* 右：儲存/關閉 */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => setEditModal(false)} disabled={editSaving}
-                className="px-5 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition text-sm">
-                取消
-              </button>
-              <button onClick={saveEdit} disabled={editSaving}
-                className="px-6 py-2 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition text-sm flex items-center gap-2 disabled:opacity-50">
-                {editSaving ? <><span className="spin-anim inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"/>儲存中...</> : '✅ 儲存'}
-              </button>
-            </div>
-          </div>
-
-          {/* ── 編輯器主體：左右雙欄 ── */}
-          <div className="flex flex-1 overflow-hidden">
-
-            {/* 左：內容編輯區 */}
-            <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-100">
-
-              {/* 標題輸入 */}
-              <input value={editForm.title||''} onChange={e => setEditForm({...editForm, title:e.target.value})}
-                placeholder="行程標題..."
-                className="shrink-0 px-10 py-5 text-2xl font-black text-slate-900 outline-none border-b border-slate-100 placeholder:text-slate-300" />
-
-              {/* 封面圖 URL */}
-              <div className="shrink-0 flex items-center gap-3 px-10 py-3 border-b border-slate-100 bg-slate-50">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">封面圖</span>
-                <input value={editForm.image||''} onChange={e => setEditForm({...editForm, image:e.target.value})}
-                  placeholder="https://... 貼上圖片 URL"
-                  className="flex-1 text-sm text-slate-600 outline-none bg-transparent" />
-                {editForm.image && <img src={editForm.image} className="w-12 h-8 object-cover rounded" />}
-              </div>
-
-              {/* 工具列：插入圖片 / YouTube */}
-              <div className="shrink-0 flex items-center gap-1 px-10 py-2 border-b border-slate-100 bg-white flex-wrap">
-                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest mr-2">插入</span>
-                <button onClick={() => {
-                  const url = prompt('圖片 URL：');
-                  if (url) setEditForm(f => ({ ...f, description: (f.description||'') + '
-![圖片](' + url + ')
-' }));
-                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
-                  🖼️ 圖片
-                </button>
-                <button onClick={() => {
-                  const url = prompt('YouTube 網址（例如 https://youtu.be/xxxxx）：');
-                  if (!url) return;
-                  const m = url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/);
-                  const vid = m ? m[1] : null;
-                  if (!vid) { alert('無法解析 YouTube 連結'); return; }
-                  setEditForm(f => ({ ...f, description: (f.description||'') + '
-[youtube:' + vid + ']
-' }));
-                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
-                  ▶️ YouTube
-                </button>
-                <button onClick={() => {
-                  const day = (editForm.description||'').split('
-').filter(l => l.startsWith('第')).length + 1;
-                  setEditForm(f => ({ ...f, description: (f.description||'') + '
-第' + day + '天 行程標題
-' }));
-                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
-                  📅 新增天
-                </button>
-                <button onClick={() => {
-                  const hr = '
----
-';
-                  setEditForm(f => ({ ...f, description: (f.description||'') + hr }));
-                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
-                  ── 分隔線
-                </button>
-                <span className="ml-auto text-xs text-slate-300">{(editForm.description||'').length} 字</span>
-              </div>
-
-              {/* 主編輯區 */}
-              <textarea
-                value={editForm.description||''}
-                onChange={e => setEditForm({...editForm, description:e.target.value})}
-                placeholder={'第一天 出發！
-![圖片](https://...)
-
-行程內文描述...
-
-[youtube:影片ID]
-
-第二天 繼續旅程
-...'}
-                className="flex-1 px-10 py-6 text-base text-slate-700 outline-none resize-none leading-relaxed font-sans"
-                style={{fontFamily:'inherit'}}
-              />
-            </div>
-
-            {/* 右：即時預覽 */}
-            <div className="w-[420px] shrink-0 overflow-y-auto bg-gray-50 hidden lg:block">
-              <div className="p-6">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">即時預覽</p>
-                {editForm.image && <img src={editForm.image} className="w-full aspect-video object-cover rounded-2xl mb-4" />}
-                <h2 className="text-2xl font-black text-slate-900 mb-2">{editForm.title||'行程標題'}</h2>
-                <div className="flex gap-3 mb-5">
-                  <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">{editForm.region}</span>
-                  <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">🗓️ {editForm.days}天</span>
-                  <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-bold">${Number(editForm.price||0).toLocaleString()}</span>
-                </div>
-                <div className="space-y-3 text-sm text-slate-700 leading-relaxed">
-                  {(editForm.description||'').split('
-').map((line, i) => {
-                    const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
-                    if (imgM) return <img key={i} src={imgM[2]} className="w-full rounded-xl aspect-video object-cover" />;
-                    const ytM  = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
-                    if (ytM)  return (
-                      <div key={i} className="aspect-video rounded-xl overflow-hidden bg-black">
-                        <iframe src={'https://www.youtube.com/embed/' + ytM[1]} className="w-full h-full" allowFullScreen />
-                      </div>
-                    );
-                    if (line === '---') return <hr key={i} className="border-slate-200 my-2" />;
-                    if (!line.trim()) return <br key={i} />;
-                    if (/^第.天/.test(line)) return <p key={i} className="font-black text-slate-900 text-base mt-4">{line}</p>;
-                    return <p key={i}>{line}</p>;
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ★ 名片資料編輯 Modal */}
-      {profileModal && (
-        <div className="modal-bg afi" onClick={e => e.target.className.includes('modal-bg') && setProfileModal(false)}>
-          <div className="bg-white rounded-[2rem] w-full max-w-md p-8 afu max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-black text-xl">✏️ 名片資料</h3>
-              <button onClick={() => setProfileModal(false)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">✕</button>
-            </div>
-            <div className="space-y-4">
-              {PROFILE_FIELDS.map(f => (
-                <div key={f.key}>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{f.label}</label>
-                  <input value={profileForm[f.key]||''} onChange={e => setProfileForm({...profileForm,[f.key]:e.target.value})}
-                    placeholder={f.placeholder}
-                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500 bg-slate-50" />
-                </div>
-              ))}
-            </div>
-            <button onClick={saveProfile} className="w-full mt-6 bg-emerald-600 text-white font-black py-4 rounded-2xl hover:bg-emerald-700 transition">儲存名片資料</button>
-          </div>
-        </div>
-      )}
-
-      {/* React Toast */}
-      {toast && (
-        <div className={`fixed bottom-8 right-8 z-[300] px-8 py-4 rounded-[2rem] shadow-2xl font-bold afu ${toast.type==='error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'}`}>
-          {toast.msg}
-        </div>
-      )}
-
-      <div id="share-toast"></div>
-    </div>
-  );
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+  }
+  w.appendChild(tableWrap);
+  container.appendChild(w);
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+async function approveDistributor(uid, status) {
+  const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify({ action:'updateDistributorStatus', uid, status }) });
+  if (res.success) {
+    toast(status==='approved'?'已核准':'已撤銷');
+    const idx = APP.crmList.findIndex(d=>d.uid===uid);
+    if (idx>=0) APP.crmList[idx].status = status;
+    renderTab('crm');
+  } else toast('操作失敗','err');
+}
+
+// ══ ADMIN TAB ═════════════════════════════════════
+function renderAdmin(container) {
+  const w = el('div','p-4 md:p-8 max-w-3xl mx-auto afu');
+  const box = el('div','bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100');
+  box.appendChild(el('h2','text-3xl font-black mb-2 text-slate-900','🚀 智能上稿系統'));
+  box.appendChild(el('p','text-slate-400 mb-6','上傳旅遊 DM 圖片，AI 自動生成行程文案'));
+  const dropzone = el('div','relative border-4 border-dashed border-slate-100 bg-slate-50 rounded-[3rem] p-16 text-center','<p class="text-xl font-black text-slate-600 mb-2">點擊上傳旅遊 DM 圖片</p><p class="text-slate-400 text-sm">支援 JPG / PNG</p>');
+  const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*'; fileInput.className='absolute inset-0 opacity-0 cursor-pointer';
+  fileInput.onchange = handleDmUpload;
+  dropzone.appendChild(fileInput);
+  box.appendChild(dropzone);
+  box.id = 'admin-box';
+  w.appendChild(box);
+  container.appendChild(w);
+}
+
+async function handleDmUpload(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const box = $('admin-box');
+  box.innerHTML = '<div class="flex flex-col items-center justify-center p-20 gap-4"><div class="spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full"></div><p class="font-black text-blue-600">視覺模型分析中…</p></div>';
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const res = await api('/api/upload-dm', { method:'POST', body: JSON.stringify({ image: ev.target.result }) });
+      if (res.success) { toast('AI 解析成功！'); renderAdminDraft(res.data); }
+      else throw new Error(res.error||'解析失敗');
+    } catch(err) { toast('解析失敗: '+err.message,'err'); renderAdmin($('main-content')); }
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderAdminDraft(data) {
+  const m = $('main-content'); m.innerHTML='';
+  const w = el('div','p-4 md:p-8 max-w-3xl mx-auto space-y-5 afu');
+  w.appendChild(el('h2','text-2xl font-black text-slate-900','✍️ 確認並發布'));
+  if(data.image) { const img=document.createElement('img'); img.src=data.image; img.className='w-full aspect-video object-cover rounded-2xl'; w.appendChild(img); }
+  const fields = [['title','行程標題','text'],['region','地區','text'],['price','價格','number'],['days','天數','number']];
+  fields.forEach(([key,label,type]) => {
+    const d = el('div');
+    d.appendChild(el('label','text-xs font-black text-slate-400 uppercase tracking-widest',label));
+    const inp = document.createElement('input'); inp.type=type; inp.value=data[key]||''; inp.id='draft-'+key;
+    inp.className='w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 font-bold outline-none focus:border-blue-500';
+    d.appendChild(inp); w.appendChild(d);
+  });
+  const descDiv = el('div');
+  descDiv.appendChild(el('label','text-xs font-black text-slate-400 uppercase tracking-widest','行程描述'));
+  const ta = document.createElement('textarea'); ta.id='draft-desc'; ta.rows=10; ta.value=data.description||'';
+  ta.className='w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500';
+  descDiv.appendChild(ta); w.appendChild(descDiv);
+  const btnRow = el('div','flex gap-4');
+  const cancel = el('button','flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-600 hover:bg-slate-200','取消');
+  cancel.onclick = () => renderTab('admin');
+  const pub = el('button','flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-lg','確認發布 🚀');
+  pub.onclick = async () => {
+    const body = { action:'addItinerary', title: $('draft-title').value, region: $('draft-region').value,
+      price: $('draft-price').value, days: $('draft-days').value, description: $('draft-desc').value, image: data.image, notes:'' };
+    const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify(body) });
+    if(res.success) { toast('行程已發布！'); const r=await api('/api/app-init'+(APP.liffProfile?'?uid='+APP.liffProfile.userId:'')); if(r.success) APP.itineraries=r.itineraries||[]; renderTab('home'); }
+    else toast('發布失敗','err');
+  };
+  btnRow.append(cancel, pub); w.appendChild(btnRow);
+  m.appendChild(w);
+}
+
+// ══ 行程編輯器 ════════════════════════════════════
+function openEditor(item) {
+  APP.editItem = item;
+  $('ed-title').value      = item.title||'';
+  $('ed-region').value     = item.region||'亞洲';
+  $('ed-days').value       = item.days||'';
+  $('ed-price').value      = item.price||'';
+  $('ed-image').value      = item.image||'';
+  $('ed-desc').value       = item.description||'';
+  $('ed-char-count').textContent = ($('ed-desc').value.length)+' 字';
+  updateEditorPreview();
+  const prevImg = $('ed-image-preview');
+  if(item.image) { prevImg.src=item.image; prevImg.classList.remove('hidden'); } else prevImg.classList.add('hidden');
+  $('ed-image').oninput = e => { if(e.target.value) { prevImg.src=e.target.value; prevImg.classList.remove('hidden'); } else prevImg.classList.add('hidden'); };
+  $('editor-overlay').classList.remove('hidden');
+}
+
+function closeEditor() { $('editor-overlay').classList.add('hidden'); APP.editItem=null; }
+
+async function saveEdit() {
+  const btn = $('ed-save-btn'); btn.disabled=true; btn.textContent='儲存中…';
+  const item = APP.editItem;
+  const body = { action:'updateItinerary',
+    id: String(item.id||item.timestamp||''),
+    title: $('ed-title').value, region: $('ed-region').value,
+    days: $('ed-days').value, price: $('ed-price').value,
+    image: $('ed-image').value, description: $('ed-desc').value,
+  };
+  const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify(body) });
+  if (res.success) {
+    toast('行程已更新！');
+    closeEditor();
+    const r = await api('/api/app-init'+(APP.liffProfile?'?uid='+APP.liffProfile.userId:''));
+    if(r.success) APP.itineraries=r.itineraries||[];
+    renderTab('home');
+  } else { toast('更新失敗: '+(res.error||''),'err'); btn.disabled=false; btn.textContent='✅ 儲存'; }
+}
+
+async function deleteItinerary(item) {
+  if (!confirm(`確定刪除「${item.title}」？`)) return;
+  const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify({ action:'deleteItinerary', id: String(item.id||item.timestamp||'') }) });
+  if (res.success) { toast('已刪除'); APP.itineraries=APP.itineraries.filter(i=>String(i.id||i.timestamp||'')!==String(item.id||item.timestamp||'')); renderTab('home'); }
+  else toast('刪除失敗','err');
+}
+
+// 編輯器插入工具
+function insertAtCursor(text) {
+  const ta = $('ed-desc');
+  const s=ta.selectionStart, e=ta.selectionEnd;
+  ta.value = ta.value.slice(0,s)+text+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+text.length;
+  ta.focus(); updateEditorPreview();
+}
+function insertImg()  { const url=prompt('圖片 URL：'); if(url) insertAtCursor('\n![圖片]('+url+')\n'); }
+function insertYT()   { const url=prompt('YouTube 網址：'); if(!url) return; const m=url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/); if(!m) { alert('無法解析'); return; } insertAtCursor('\n[youtube:'+m[1]+']\n'); }
+function insertDay()  { const n=$('ed-desc').value.split('\n').filter(l=>/^第.天/.test(l)).length+1; insertAtCursor('\n第'+n+'天 行程標題\n'); }
+function insertHr()   { insertAtCursor('\n---\n'); }
+
+function updateEditorPreview() {
+  const body = $('ed-preview-body'); if(!body) return;
+  body.innerHTML='';
+  const img = $('ed-image').value;
+  if(img) { const i=document.createElement('img'); i.src=img; i.className='w-full aspect-video object-cover rounded-2xl mb-3'; body.appendChild(i); }
+  body.appendChild(el('h2','text-xl font-black text-slate-900 mb-3',$('ed-title').value||'行程標題'));
+  renderDescTo(body, $('ed-desc').value);
+}
+
+// ══ 推廣 Modal ════════════════════════════════════
+function openPromoModal() {
+  const uid  = APP.liffProfile?.userId||'';
+  const dist = APP.user?.distributorData||{};
+  $('promo-subtitle').textContent = `已選 ${APP.promoSelected.size} 個行程 · UID: ${uid.slice(0,10)}…`;
+  // 聯絡按鈕
+  const socDiv = $('soc-options'); socDiv.innerHTML='';
+  SOC_DEFS.forEach(d => {
+    const val = dist[d.field]||'';
+    const has = !!val;
+    const lbl = el('label',`flex items-center gap-2 p-3 border-2 rounded-xl text-xs font-bold cursor-pointer transition ${!has?'opacity-30 border-slate-100':'border-slate-200 hover:border-emerald-400'}`);
+    const chk = document.createElement('input'); chk.type='checkbox'; chk.id='sc-'+d.key;
+    chk.checked=has; chk.disabled=!has; chk.className='w-4 h-4 accent-emerald-500 shrink-0';
+    chk.onchange = buildPromoPreview;
+    lbl.append(chk, document.createTextNode(d.label));
+    if(!has) lbl.appendChild(el('span','text-slate-300 ml-auto text-[10px]','未設定'));
+    socDiv.appendChild(lbl);
+  });
+  buildPromoPreview();
+  $('promo-modal').classList.remove('hidden');
+}
+
+function closePromoModal() { $('promo-modal').classList.add('hidden'); }
+
+function setPromoMode(m) {
+  APP.promoFlexMode = m;
+  document.querySelectorAll('.pmode-btn').forEach(b => b.classList.toggle('active', b.dataset.pmode===m));
+  buildPromoPreview();
+}
+
+function buildPromoPreview() {
+  const items = Array.from(APP.promoSelected).map(id=>APP.itineraries.find(i=>String(i.id||i.timestamp||'')===id)).filter(Boolean);
+  const prev  = $('promo-preview'); prev.innerHTML='';
+  const mode  = APP.promoFlexMode;
+  if (mode==='multi') {
+    const box = el('div','bg-white rounded-2xl overflow-hidden shadow-xl');
+    box.appendChild(el('div','bg-slate-900 px-4 py-3',`<p class="text-white font-black text-sm">✈️ 精選行程推薦</p><p class="text-slate-400 text-[10px] mt-0.5">共 ${items.length} 個行程</p>`));
+    items.forEach((tour,i) => {
+      const row = el('div',`flex gap-2 p-3 ${i>0?'border-t border-slate-100':''}`);
+      if(tour.image) { const img=document.createElement('img'); img.src=tour.image; img.className='w-16 h-12 object-cover rounded-lg shrink-0'; row.appendChild(img); }
+      const txt = el('div','min-w-0 flex flex-col justify-center');
+      txt.appendChild(el('p','text-[11px] font-black text-slate-900 line-clamp-2',tour.title));
+      txt.appendChild(el('p','text-[10px] text-slate-400 mt-0.5',(tour.region||'')+' · '+tour.days+'天'));
+      txt.appendChild(el('p','text-[10px] text-red-600 font-black','TWD '+Number(tour.price).toLocaleString()));
+      row.appendChild(txt); box.appendChild(row);
+    });
+    prev.appendChild(box);
+  } else {
+    items.forEach(tour => {
+      const bub = el('div','bg-white rounded-2xl overflow-hidden shadow-xl mb-2');
+      if(tour.image) { const img=document.createElement('img'); img.src=tour.image; img.className='w-full aspect-[20/13] object-cover'; bub.appendChild(img); }
+      const body = el('div','p-3 space-y-1');
+      body.appendChild(el('p','text-[11px] font-black text-slate-900 line-clamp-2',tour.title));
+      body.appendChild(el('p','text-[11px] font-black text-red-600','TWD '+Number(tour.price).toLocaleString()));
+      body.appendChild(el('div','bg-[#00B900] text-white text-center py-1.5 rounded-lg text-[10px] font-black mt-1',$('cta-text').value));
+      bub.appendChild(body); prev.appendChild(bub);
+    });
+  }
+}
+
+async function sendFlex() {
+  if (!liff.isLoggedIn()) { liff.login({redirectUri:location.href}); return; }
+  const btn=$('send-btn'); btn.disabled=true; btn.textContent='組裝中…';
+  try {
+    const ids      = Array.from(APP.promoSelected);
+    const uid      = APP.liffProfile?.userId||'';
+    const dist     = APP.user?.distributorData||{};
+    const ctaText  = $('cta-text').value;
+    const socFields= {};
+    SOC_DEFS.forEach(d => { const chk=document.getElementById('sc-'+d.key); if(chk?.checked) socFields[d.field]=dist[d.field]||''; });
+
+    // 讓 Worker 組裝 Flex JSON
+    const res = await api('/api/build-flex', { method:'POST', body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields }) });
+    if (!res.success) throw new Error(res.error||'組裝失敗');
+
+    btn.textContent='發送中…';
+    const result = await liff.shareTargetPicker([res.flex]);
+    if (result) { toast('✅ 名片已成功發送！'); closePromoModal(); APP.promoSelected.clear(); APP.promoMode=false; renderTab('home'); }
+    else toast('使用者取消分享');
+  } catch(e) {
+    if (e.message?.toLowerCase().includes('not allowed')) {
+      if(confirm('⚠️ 需要重新登入以取得分享權限，是否立即重新登入？')) { liff.logout(); location.reload(); }
+    } else toast('❌ '+e.message, true);
+  } finally { btn.disabled=false; btn.textContent='🚀 立即分享給好友'; }
+}
+
+async function copyFlexJson() {
+  const ids     = Array.from(APP.promoSelected);
+  const uid     = APP.liffProfile?.userId||'';
+  const dist    = APP.user?.distributorData||{};
+  const ctaText = $('cta-text').value;
+  const socFields={};
+  SOC_DEFS.forEach(d=>{ const chk=document.getElementById('sc-'+d.key); if(chk?.checked) socFields[d.field]=dist[d.field]||''; });
+  const res = await api('/api/build-flex',{ method:'POST', body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields }) });
+  if(!res.success) { toast('組裝失敗','err'); return; }
+  navigator.clipboard?.writeText(JSON.stringify(res.flex,null,2)).then(()=>toast('✅ Flex JSON 已複製'));
+}
+
+// ── 簡易 Modal 工具 ───────────────────────────────
+function showSimpleModal(title, bodyHtml, onConfirm) {
+  const overlay = el('div','modal-bg afi');
+  overlay.onclick = e => { if(e.target===overlay) document.body.removeChild(overlay); };
+  const box = el('div','bg-white rounded-[2rem] w-full p-8 afu space-y-5','');
+  box.style.cssText='max-width:480px;max-height:92vh;overflow-y:auto';
+  box.appendChild(el('h3','font-black text-xl',title));
+  const bodyDiv = el('div','space-y-4'); bodyDiv.innerHTML=bodyHtml; box.appendChild(bodyDiv);
+  const row = el('div','flex gap-3 pt-2');
+  const cancel=el('button','flex-1 bg-slate-100 py-3 rounded-2xl font-black text-slate-600','取消');
+  cancel.onclick=()=>document.body.removeChild(overlay);
+  const ok=el('button','flex-[2] bg-emerald-600 text-white py-3 rounded-2xl font-black','儲存');
+  ok.onclick=async()=>{ await onConfirm(); document.body.removeChild(overlay); };
+  row.append(cancel,ok); box.appendChild(row);
+  overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
+function renderError(msg) {
+  $('main-content').innerHTML=`<div class="flex flex-col items-center justify-center h-64 gap-3"><div class="text-4xl">⚠️</div><p class="font-black text-slate-600">${msg}</p><button onclick="location.reload()" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">重新整理</button></div>`;
+}
 </script>
 </body>
 </html>
