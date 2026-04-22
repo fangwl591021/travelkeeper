@@ -136,30 +136,47 @@ function PromoModal({ items, distData, liffProfile, onClose }) {
     };
   };
 
-  const makeListBubble = (chunk) => ({
-    type:'bubble', size:'mega',
-    header:{ type:'box', layout:'vertical', backgroundColor:'#0f172a', paddingAll:'20px', contents:[
-      { type:'text', text:'✈️ 精選行程推薦', weight:'bold', color:'#ffffff', size:'lg' },
-      { type:'text', text:`共 ${chunk.length} 條行程`, color:'#94a3b8', size:'sm', margin:'sm' }
-    ]},
-    body:{ type:'box', layout:'vertical', spacing:'md', paddingAll:'16px',
-      contents: chunk.map(tour => {
-        const id  = String(tour.id || tour.timestamp || '');
-        const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
-        return { type:'box', layout:'horizontal', spacing:'md', action:{type:'uri',uri}, contents:[
-          { type:'image', url: tour.image||'https://via.placeholder.com/200x140', flex:2, aspectRatio:'4:3', aspectMode:'cover', cornerRadius:'8px' },
-          { type:'box', layout:'vertical', flex:3, spacing:'xs', contents:[
-            { type:'text', text: tour.title, weight:'bold', size:'sm', wrap:true, maxLines:2, color:'#0f172a' },
-            { type:'text', text: `${tour.region||''} · ${tour.days}天`, size:'xxs', color:'#64748b' },
-            { type:'text', text: `TWD ${Number(tour.price).toLocaleString()}`, weight:'bold', size:'sm', color:'#b82337' },
-          ]}
-        ]};
-      })
-    },
-    footer:{ type:'box', layout:'vertical', spacing:'sm', paddingAll:'16px',
-      contents: getSocBtns().length ? getSocBtns() : [{ type:'text', text:'點擊各行程查看詳情', size:'xs', color:'#94a3b8', align:'center' }]
-    }
-  });
+  const makeListBubble = (chunk) => {
+    // 每筆行程垂直排列：圖片橫幅在上，標題+價格在下，中間分隔線
+    const rowContents = [];
+    chunk.forEach((tour, idx) => {
+      const id  = String(tour.id || tour.timestamp || '');
+      const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
+      // 分隔線（第一筆不加）
+      if (idx > 0) rowContents.push({ type:'separator', margin:'md', color:'#f1f5f9' });
+      rowContents.push({
+        type:'box', layout:'vertical', margin: idx===0 ? 'none' : 'md',
+        action:{ type:'uri', uri },
+        contents:[
+          // 橫幅圖片
+          { type:'image', url: tour.image||'https://via.placeholder.com/800x400',
+            size:'full', aspectRatio:'20:9', aspectMode:'cover', cornerRadius:'12px' },
+          // 文字區
+          { type:'box', layout:'vertical', paddingTop:'10px', spacing:'xs', contents:[
+            { type:'text', text: tour.title, weight:'bold', size:'md', wrap:true, maxLines:2, color:'#0f172a' },
+            { type:'box', layout:'horizontal', margin:'xs', contents:[
+              { type:'text', text:`${tour.region||''} · ${tour.days}天`, size:'xs', color:'#64748b', flex:1 },
+              { type:'text', text:`TWD ${Number(tour.price).toLocaleString()}`, weight:'bold', size:'sm', color:'#b82337', align:'end' },
+            ]},
+          ]},
+        ]
+      });
+    });
+
+    return {
+      type:'bubble', size:'mega',
+      header:{ type:'box', layout:'vertical', backgroundColor:'#0f172a', paddingAll:'20px', contents:[
+        { type:'text', text:'✈️ 精選行程推薦', weight:'bold', color:'#ffffff', size:'lg' },
+        { type:'text', text:`共 ${chunk.length} 個行程`, color:'#94a3b8', size:'sm', margin:'sm' }
+      ]},
+      body:{ type:'box', layout:'vertical', paddingAll:'16px', contents: rowContents },
+      footer:{ type:'box', layout:'vertical', spacing:'sm', paddingAll:'16px',
+        contents: getSocBtns().length ? getSocBtns() : [
+          { type:'text', text:'點擊各行程查看詳情', size:'xs', color:'#94a3b8', align:'center' }
+        ]
+      }
+    };
+  };
 
   const buildFlex = () => {
     if (mode === 'multi') {
@@ -278,16 +295,30 @@ function PromoModal({ items, distData, liffProfile, onClose }) {
             <p className="text-white/70 text-[10px] font-bold mb-3 uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full">LINE 預覽</p>
             <div className="w-full flex gap-3 overflow-x-auto pb-3" style={{scrollSnapType:'x mandatory'}}>
               {mode === 'multi'
-                ? items.map((tour,i) => (
-                    <div key={i} className="preview-bubble-multi w-full flex gap-3 p-3 bg-white rounded-xl mb-2">
-                      {tour.image && <img src={tour.image} className="w-16 h-12 object-cover rounded-lg shrink-0" />}
-                      <div className="min-w-0">
-                        <p className="text-xs font-black text-slate-900 line-clamp-1">{tour.title}</p>
-                        <p className="text-[10px] text-red-600 font-black">{fmt(tour.price)}</p>
-                        <p className="text-[10px] text-slate-400">{tour.days}天 · {tour.region||''}</p>
-                      </div>
+                ? (
+                  <div className="w-full bg-white rounded-2xl overflow-hidden shadow-xl" style={{minWidth:'240px'}}>
+                    {/* header */}
+                    <div className="bg-slate-900 px-4 py-3">
+                      <p className="text-white font-black text-sm">✈️ 精選行程推薦</p>
+                      <p className="text-slate-400 text-[10px] mt-0.5">共 {items.length} 個行程</p>
                     </div>
-                  ))
+                    {/* 每筆行程 */}
+                    {items.map((tour,i) => (
+                      <div key={i} className={`p-3 ${i>0?'border-t border-slate-100':''}`}>
+                        {tour.image && <img src={tour.image} className="w-full aspect-[20/9] object-cover rounded-xl mb-2" />}
+                        <p className="text-[11px] font-black text-slate-900 line-clamp-2">{tour.title}</p>
+                        <div className="flex justify-between items-center mt-1">
+                          <p className="text-[10px] text-slate-400">{tour.region||''} · {tour.days}天</p>
+                          <p className="text-[10px] text-red-600 font-black">TWD {Number(tour.price).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {/* footer */}
+                    <div className="p-3 border-t border-slate-100 bg-slate-50">
+                      <p className="text-[10px] text-slate-400 text-center font-bold">點擊各行程查看詳情</p>
+                    </div>
+                  </div>
+                )
                 : items.map((tour,i) => (
                     <div key={i} className="preview-bubble">
                       {tour.image && <img src={tour.image} className="w-full aspect-[20/13] object-cover" />}
