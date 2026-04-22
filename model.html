@@ -43,6 +43,13 @@
 </head>
 <body class="bg-gray-50 pb-28">
 
+<!-- ── 全頁 Loading 遮罩（初始化完成前顯示） ── -->
+<div id="app-loading" style="position:fixed;inset:0;z-index:999;background:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="width:48px;height:48px;border:4px solid #d1fae5;border-top-color:#10b981;border-radius:50%;animation:spin .7s linear infinite;"></div>
+  <p id="loading-msg" style="font-family:'Noto Sans TC',sans-serif;font-weight:700;color:#94a3b8;font-size:14px;">初始化中，請稍候…</p>
+  <p style="font-family:'Noto Sans TC',sans-serif;font-weight:500;color:#cbd5e1;font-size:12px;">旅遊管家 · 推廣工具箱</p>
+</div>
+
 <!-- ── Nav ── -->
 <nav class="sticky top-0 z-40 bg-white/92 backdrop-blur border-b border-slate-200 shadow-sm h-16 flex items-center px-4 justify-between gap-4">
   <div class="flex items-center gap-2 shrink-0">
@@ -174,20 +181,47 @@ let liffProfile = null;
 let distData    = null;   // distributorData from GAS
 
 // ── 初始化 ────────────────────────────────────────────────────
+function setLoadingMsg(msg) {
+  const el = document.getElementById('loading-msg');
+  if (el) el.innerText = msg;
+}
+function hideLoading() {
+  const el = document.getElementById('app-loading');
+  if (el) { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(() => el.remove(), 400); }
+}
+function showLoadingError(msg) {
+  const el = document.getElementById('app-loading');
+  if (!el) return;
+  el.innerHTML = `<div style="text-align:center;padding:32px;font-family:'Noto Sans TC',sans-serif;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><p style="font-weight:900;color:#0f172a;font-size:18px;margin-bottom:8px;">${msg}</p><p style="color:#94a3b8;font-size:13px;margin-bottom:24px;">請確認已登入 LINE，或在 LINE 內開啟此頁面</p><button onclick="location.reload()" style="background:#10b981;color:#fff;padding:12px 32px;border-radius:12px;font-weight:900;border:none;cursor:pointer;font-size:15px;">重新整理</button></div>`;
+}
+
 window.onload = async function() {
+  setLoadingMsg('載入 LIFF SDK…');
   let retries = 0;
   while (typeof liff === 'undefined' && retries < 20) {
     await new Promise(r => setTimeout(r, 200));
     retries++;
   }
-  if (typeof liff === 'undefined') { showToast('LIFF SDK 載入失敗，請重新整理', true); return; }
+  if (typeof liff === 'undefined') { showLoadingError('LIFF SDK 載入失敗'); return; }
   try {
+    setLoadingMsg('身份驗證中…');
     await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+    if (!liff.isLoggedIn()) {
+      setLoadingMsg('導向 LINE 登入…');
+      liff.login({ redirectUri: window.location.href });
+      return;
+    }
+    setLoadingMsg('取得用戶資料…');
     liffProfile = await liff.getProfile();
+    setLoadingMsg('載入分銷商資料…');
     await fetchDistData();
+    setLoadingMsg('載入行程資料…');
     await fetchItineraries();
-  } catch (e) { showToast('初始化失敗: ' + e.message, true); }
+    hideLoading();
+  } catch (e) {
+    console.error('Init error:', e);
+    showLoadingError('初始化失敗：' + e.message);
+  }
 };
 
 async function fetchDistData() {
@@ -466,12 +500,20 @@ async function sendTargetPicker() {
     .filter(Boolean);
   if (items.length === 0) { showToast('請先選取行程'); return; }
 
+  // 確保已登入（PC 外部瀏覽器也支援，SDK 會自動用 POST 換 OTT 開小視窗）
+  if (!liff.isLoggedIn()) {
+    liff.login({ redirectUri: window.location.href });
+    return;
+  }
+
   const flexMsg = buildFinalFlex(items);
   const btn = document.getElementById('send-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"></span>發送中...';
 
   try {
+    // 完全信任官方 SDK：不論手機或 PC，SDK 自動用 POST 換 OTT，
+    // 即使是 10 頁 Carousel 也能正常運作。
     const res = await liff.shareTargetPicker([flexMsg]);
     if (res) {
       showToast('✅ 名片已成功發送！');
@@ -479,7 +521,19 @@ async function sendTargetPicker() {
       clearSelection();
     }
   } catch (e) {
-    showToast('❌ 發送失敗：' + (e.message || '請在 LINE 中開啟'), true);
+    console.error('ShareTargetPicker error:', e);
+
+    // 終極防呆：若報 not allowed，99% 是瀏覽器快取了舊 Token
+    // 後台剛開啟 Share Target Picker 權限時最常發生
+    if (e.message && e.message.toLowerCase().includes('not allowed')) {
+      if (confirm('⚠️ 系統權限已更新，需要重新登入以取得最新權限。
+是否立即重新登入？')) {
+        liff.logout();
+        window.location.reload();
+      }
+    } else {
+      showToast('發送取消或發生未知錯誤：' + e.message, true);
+    }
   } finally {
     btn.disabled = false;
     btn.innerHTML = '🚀 立即分享給好友（通訊錄）';
