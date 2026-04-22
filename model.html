@@ -180,6 +180,11 @@ let mode        = 'single';
 let liffProfile = null;
 let distData    = null;   // distributorData from GAS
 
+// ★ 從 URL 取得分銷商 UID（index.html 帶入，作為 Flex Message ?r= 歸屬碼）
+// 格式：model.html?uid=Uxxxxxxxxxxxx
+const URL_PARAMS    = new URLSearchParams(window.location.search);
+const REFERRER_UID  = URL_PARAMS.get('uid') || '';  // 分銷商自己的 UID
+
 // ── 初始化 ────────────────────────────────────────────────────
 function setLoadingMsg(msg) {
   const el = document.getElementById('loading-msg');
@@ -344,7 +349,7 @@ function buildSocOptions() {
 
 // 取得勾選的聯絡按鈕，回傳 LINE Flex button 陣列
 function getCheckedSocButtons() {
-  const uid = liffProfile?.userId || '';
+  const uid = REFERRER_UID || liffProfile?.userId || '';
   return SOC_DEFS
     .filter(opt => {
       const el = document.getElementById(`check-${opt.key}`);
@@ -395,7 +400,8 @@ function renderPreview() {
 
 // ── 組裝最終 Flex JSON ────────────────────────────────────────
 function buildFinalFlex(items) {
-  const uid      = liffProfile?.userId || '';
+  // REFERRER_UID 優先（從 URL ?uid= 帶入），確保分享連結帶正確歸屬碼
+  const uid      = REFERRER_UID || liffProfile?.userId || '';
   const cta      = document.getElementById('cta-text')?.value || '查看行程 / 立即報名';
   const socBtns  = getCheckedSocButtons();
 
