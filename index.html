@@ -137,39 +137,65 @@ function PromoModal({ items, distData, liffProfile, onClose }) {
   };
 
   const makeListBubble = (chunk) => {
-    // 縮圖在左、說明在右的水平列表
+    // 縮圖在左、說明在右 — 使用 LINE 合法屬性
     const rowContents = [];
     chunk.forEach((tour, idx) => {
       const id  = String(tour.id || tour.timestamp || '');
       const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
-      if (idx > 0) rowContents.push({ type:'separator', margin:'sm', color:'#f1f5f9' });
+      // separator 分隔線（第一筆不加）
+      if (idx > 0) {
+        rowContents.push({ type:'separator', margin:'md' });
+      }
       rowContents.push({
-        type:'box', layout:'horizontal', margin: idx===0 ? 'none' : 'sm',
-        spacing:'md', action:{ type:'uri', uri },
+        type:'box',
+        layout:'horizontal',
+        margin:'md',
+        spacing:'md',
+        action:{ type:'uri', uri },
         contents:[
           // 左：縮圖
-          { type:'image',
-            url: tour.image || 'https://via.placeholder.com/200x150',
-            flex:2, aspectRatio:'4:3', aspectMode:'cover', cornerRadius:'8px' },
+          {
+            type:'image',
+            url: tour.image || 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400&h=300&fit=crop',
+            flex:2,
+            aspectRatio:'4:3',
+            aspectMode:'cover',
+            cornerRadius:'8px'
+          },
           // 右：文字
-          { type:'box', layout:'vertical', flex:3, justifyContent:'center', spacing:'xs', contents:[
-            { type:'text', text: tour.title, weight:'bold', size:'sm', wrap:true, maxLines:2, color:'#0f172a' },
-            { type:'text', text:`${tour.region||''} · ${tour.days}天`, size:'xxs', color:'#64748b' },
-            { type:'text', text:`TWD ${Number(tour.price).toLocaleString()}`, weight:'bold', size:'sm', color:'#b82337', margin:'xs' },
-          ]}
+          {
+            type:'box',
+            layout:'vertical',
+            flex:3,
+            spacing:'xs',
+            contents:[
+              { type:'text', text: tour.title, weight:'bold', size:'sm', wrap:true, maxLines:2, color:'#0f172a' },
+              { type:'text', text: String(tour.region||'') + ' · ' + String(tour.days) + '天', size:'xxs', color:'#64748b' },
+              { type:'text', text: 'TWD ' + Number(tour.price).toLocaleString(), weight:'bold', size:'sm', color:'#b82337' },
+            ]
+          }
         ]
       });
     });
 
+    const socBtns = getSocBtns();
     return {
-      type:'bubble', size:'mega',
-      header:{ type:'box', layout:'vertical', backgroundColor:'#0f172a', paddingAll:'16px', contents:[
-        { type:'text', text:'✈️ 精選行程推薦', weight:'bold', color:'#ffffff', size:'lg' },
-        { type:'text', text:`共 ${chunk.length} 個行程`, color:'#94a3b8', size:'sm', margin:'xs' }
-      ]},
-      body:{ type:'box', layout:'vertical', paddingAll:'14px', spacing:'none', contents: rowContents },
-      footer:{ type:'box', layout:'vertical', spacing:'sm', paddingAll:'14px',
-        contents: getSocBtns().length ? getSocBtns() : [
+      type:'bubble',
+      size:'mega',
+      header:{
+        type:'box', layout:'vertical', backgroundColor:'#0f172a', paddingAll:'16px',
+        contents:[
+          { type:'text', text:'✈️ 精選行程推薦', weight:'bold', color:'#ffffff', size:'lg' },
+          { type:'text', text:'共 ' + chunk.length + ' 個行程', color:'#94a3b8', size:'sm', margin:'xs' }
+        ]
+      },
+      body:{
+        type:'box', layout:'vertical', paddingAll:'14px', paddingTop:'8px',
+        contents: rowContents
+      },
+      footer:{
+        type:'box', layout:'vertical', spacing:'sm', paddingAll:'14px',
+        contents: socBtns.length > 0 ? socBtns : [
           { type:'text', text:'點擊各行程查看詳情', size:'xs', color:'#94a3b8', align:'center' }
         ]
       }
@@ -192,13 +218,28 @@ function PromoModal({ items, distData, liffProfile, onClose }) {
   const handleSend = async () => {
     if (!liff.isLoggedIn()) { liff.login({ redirectUri: window.location.href }); return; }
     setSending(true);
+    let flexMsg;
     try {
-      const res = await liff.shareTargetPicker([buildFlex()]);
+      flexMsg = buildFlex();
+      console.log('📤 Flex JSON:', JSON.stringify(flexMsg, null, 2));
+    } catch(buildErr) {
+      showShareToast('❌ 組裝名片失敗：' + buildErr.message, true);
+      setSending(false);
+      return;
+    }
+    try {
+      const res = await liff.shareTargetPicker([flexMsg]);
       if (res) { showShareToast('✅ 名片已成功發送！'); onClose(); }
+      else { showShareToast('使用者取消分享'); }
     } catch(e) {
+      console.error('ShareTargetPicker error:', e);
       if (e.message?.toLowerCase().includes('not allowed')) {
         if (confirm('⚠️ 需要重新登入以取得分享權限，是否立即重新登入？')) { liff.logout(); window.location.reload(); }
-      } else { showShareToast('發送取消或發生未知錯誤', true); }
+      } else if (e.message?.toLowerCase().includes('popup')) {
+        showShareToast('❌ 瀏覽器封鎖彈出視窗！請允許此網站的彈出視窗後重試', true);
+      } else {
+        showShareToast('❌ ' + (e.message || '發送失敗，請重試'), true);
+      }
     } finally { setSending(false); }
   };
 
