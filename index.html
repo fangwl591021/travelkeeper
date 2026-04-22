@@ -61,8 +61,23 @@ const stripMd  = (t) => String(t||'').replace(/!\[[^\]]*\]\([^)]+\)/g,'').trim()
 function renderDesc(text) {
   if (!text) return null;
   return text.split('\n').map((line, i) => {
-    const m = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
-    if (m) return <img key={i} src={m[2]} alt={m[1]} className="w-full rounded-2xl my-3 object-cover aspect-video" />;
+    // 圖片 ![alt](url)
+    const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+    if (imgM) return <img key={i} src={imgM[2]} alt={imgM[1]} className="w-full rounded-2xl my-4 object-cover aspect-video" />;
+    // YouTube [youtube:VIDEO_ID]
+    const ytM = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
+    if (ytM) return (
+      <div key={i} className="aspect-video rounded-2xl overflow-hidden my-4 bg-black shadow-lg">
+        <iframe src={'https://www.youtube.com/embed/' + ytM[1]}
+          className="w-full h-full" allowFullScreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+      </div>
+    );
+    // 分隔線 ---
+    if (line.trim() === '---') return <hr key={i} className="border-slate-200 my-4" />;
+    // 天標題
+    if (/^第.天/.test(line)) return <h3 key={i} className="font-black text-slate-900 text-lg mt-6 mb-2">{line}</h3>;
+    // 空行
     if (!line.trim()) return <br key={i}/>;
     return <p key={i} className="leading-relaxed text-slate-700 mb-2">{line}</p>;
   });
@@ -649,7 +664,7 @@ function App() {
   const activeRegionLabel = searchRegion || '所有地區';
 
   const renderHome = () => (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-4 afu">
+    <div className="w-full px-6 py-6 space-y-4 afu">
 
       {/* ── 地區標籤列 ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" style={{scrollbarWidth:'none'}}>
@@ -1047,89 +1062,146 @@ function App() {
         />
       )}
 
-      {/* ★ 行程編輯 Modal */}
+      {/* ★ 行程編輯 Modal — 全螢幕部落格編輯器 */}
       {editModal && editForm && (
-        <div className="modal-bg afi" onClick={e => e.target.className.includes('modal-bg') && !editSaving && setEditModal(false)}>
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl afu overflow-hidden flex flex-col" style={{maxHeight:'92vh'}}>
-            {/* Header */}
-            <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100 shrink-0">
-              <h3 className="font-black text-xl text-slate-900">✏️ 編輯行程</h3>
-              <button onClick={() => !editSaving && setEditModal(false)}
-                className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200">✕</button>
+        <div className="fixed inset-0 z-[300] bg-white flex flex-col afi">
+
+          {/* ── 頂部工具列 ── */}
+          <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-3 flex items-center gap-3 flex-wrap">
+            {/* 左：基本資訊 */}
+            <div className="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
+              <select value={editForm.region||''} onChange={e => setEditForm({...editForm, region:e.target.value})}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50">
+                {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <input type="number" value={editForm.days||''} onChange={e => setEditForm({...editForm, days:e.target.value})}
+                placeholder="天數" className="w-20 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50" />
+              <input type="number" value={editForm.price||''} onChange={e => setEditForm({...editForm, price:e.target.value})}
+                placeholder="價格" className="w-32 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-red-600 outline-none bg-slate-50" />
             </div>
-
-            {/* Body */}
-            <div className="overflow-y-auto flex-1 px-8 py-6 space-y-5">
-              {/* 封面圖預覽 */}
-              {editForm.image && (
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖預覽</label>
-                  <img src={editForm.image} className="w-full aspect-video object-cover rounded-2xl mt-2" />
-                </div>
-              )}
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖 URL</label>
-                <input value={editForm.image||''} onChange={e => setEditForm({...editForm, image:e.target.value})}
-                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 bg-slate-50" />
-              </div>
-
-              {/* 標題 */}
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程標題</label>
-                <input value={editForm.title||''} onChange={e => setEditForm({...editForm, title:e.target.value})}
-                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-base font-black outline-none focus:border-blue-500 bg-slate-50" />
-              </div>
-
-              {/* 地區 / 天數 / 價格 */}
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">地區</label>
-                  <select value={editForm.region||''} onChange={e => setEditForm({...editForm, region:e.target.value})}
-                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-500 bg-slate-50">
-                    {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">天數</label>
-                  <input type="number" value={editForm.days||''} onChange={e => setEditForm({...editForm, days:e.target.value})}
-                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 bg-slate-50" />
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">價格</label>
-                  <input type="number" value={editForm.price||''} onChange={e => setEditForm({...editForm, price:e.target.value})}
-                    className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-red-600 outline-none focus:border-blue-500 bg-slate-50" />
-                </div>
-              </div>
-
-              {/* 描述 */}
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程描述</label>
-                <textarea value={editForm.description||''} onChange={e => setEditForm({...editForm, description:e.target.value})}
-                  rows="12"
-                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500 bg-slate-50 leading-relaxed" />
-                <p className="text-xs text-slate-400 mt-1">{(editForm.description||'').length} 字元</p>
-              </div>
-
-              {/* 備註 */}
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">備註</label>
-                <input value={editForm.notes||''} onChange={e => setEditForm({...editForm, notes:e.target.value})}
-                  className="w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-blue-500 bg-slate-50" />
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-8 py-5 border-t border-slate-100 shrink-0 flex gap-3">
+            {/* 右：儲存/關閉 */}
+            <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => setEditModal(false)} disabled={editSaving}
-                className="flex-1 bg-slate-100 text-slate-600 font-black py-3.5 rounded-2xl hover:bg-slate-200 transition disabled:opacity-50">
+                className="px-5 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition text-sm">
                 取消
               </button>
               <button onClick={saveEdit} disabled={editSaving}
-                className="flex-[2] bg-blue-600 text-white font-black py-3.5 rounded-2xl hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
-                {editSaving
-                  ? <><span className="spin-anim inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"/>儲存中...</>
-                  : '✅ 儲存變更'}
+                className="px-6 py-2 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition text-sm flex items-center gap-2 disabled:opacity-50">
+                {editSaving ? <><span className="spin-anim inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"/>儲存中...</> : '✅ 儲存'}
               </button>
+            </div>
+          </div>
+
+          {/* ── 編輯器主體：左右雙欄 ── */}
+          <div className="flex flex-1 overflow-hidden">
+
+            {/* 左：內容編輯區 */}
+            <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-100">
+
+              {/* 標題輸入 */}
+              <input value={editForm.title||''} onChange={e => setEditForm({...editForm, title:e.target.value})}
+                placeholder="行程標題..."
+                className="shrink-0 px-10 py-5 text-2xl font-black text-slate-900 outline-none border-b border-slate-100 placeholder:text-slate-300" />
+
+              {/* 封面圖 URL */}
+              <div className="shrink-0 flex items-center gap-3 px-10 py-3 border-b border-slate-100 bg-slate-50">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">封面圖</span>
+                <input value={editForm.image||''} onChange={e => setEditForm({...editForm, image:e.target.value})}
+                  placeholder="https://... 貼上圖片 URL"
+                  className="flex-1 text-sm text-slate-600 outline-none bg-transparent" />
+                {editForm.image && <img src={editForm.image} className="w-12 h-8 object-cover rounded" />}
+              </div>
+
+              {/* 工具列：插入圖片 / YouTube */}
+              <div className="shrink-0 flex items-center gap-1 px-10 py-2 border-b border-slate-100 bg-white flex-wrap">
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest mr-2">插入</span>
+                <button onClick={() => {
+                  const url = prompt('圖片 URL：');
+                  if (url) setEditForm(f => ({ ...f, description: (f.description||'') + '
+![圖片](' + url + ')
+' }));
+                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                  🖼️ 圖片
+                </button>
+                <button onClick={() => {
+                  const url = prompt('YouTube 網址（例如 https://youtu.be/xxxxx）：');
+                  if (!url) return;
+                  const m = url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/);
+                  const vid = m ? m[1] : null;
+                  if (!vid) { alert('無法解析 YouTube 連結'); return; }
+                  setEditForm(f => ({ ...f, description: (f.description||'') + '
+[youtube:' + vid + ']
+' }));
+                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                  ▶️ YouTube
+                </button>
+                <button onClick={() => {
+                  const day = (editForm.description||'').split('
+').filter(l => l.startsWith('第')).length + 1;
+                  setEditForm(f => ({ ...f, description: (f.description||'') + '
+第' + day + '天 行程標題
+' }));
+                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                  📅 新增天
+                </button>
+                <button onClick={() => {
+                  const hr = '
+---
+';
+                  setEditForm(f => ({ ...f, description: (f.description||'') + hr }));
+                }} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                  ── 分隔線
+                </button>
+                <span className="ml-auto text-xs text-slate-300">{(editForm.description||'').length} 字</span>
+              </div>
+
+              {/* 主編輯區 */}
+              <textarea
+                value={editForm.description||''}
+                onChange={e => setEditForm({...editForm, description:e.target.value})}
+                placeholder={'第一天 出發！
+![圖片](https://...)
+
+行程內文描述...
+
+[youtube:影片ID]
+
+第二天 繼續旅程
+...'}
+                className="flex-1 px-10 py-6 text-base text-slate-700 outline-none resize-none leading-relaxed font-sans"
+                style={{fontFamily:'inherit'}}
+              />
+            </div>
+
+            {/* 右：即時預覽 */}
+            <div className="w-[420px] shrink-0 overflow-y-auto bg-gray-50 hidden lg:block">
+              <div className="p-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">即時預覽</p>
+                {editForm.image && <img src={editForm.image} className="w-full aspect-video object-cover rounded-2xl mb-4" />}
+                <h2 className="text-2xl font-black text-slate-900 mb-2">{editForm.title||'行程標題'}</h2>
+                <div className="flex gap-3 mb-5">
+                  <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">{editForm.region}</span>
+                  <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">🗓️ {editForm.days}天</span>
+                  <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-bold">${Number(editForm.price||0).toLocaleString()}</span>
+                </div>
+                <div className="space-y-3 text-sm text-slate-700 leading-relaxed">
+                  {(editForm.description||'').split('
+').map((line, i) => {
+                    const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+                    if (imgM) return <img key={i} src={imgM[2]} className="w-full rounded-xl aspect-video object-cover" />;
+                    const ytM  = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
+                    if (ytM)  return (
+                      <div key={i} className="aspect-video rounded-xl overflow-hidden bg-black">
+                        <iframe src={'https://www.youtube.com/embed/' + ytM[1]} className="w-full h-full" allowFullScreen />
+                      </div>
+                    );
+                    if (line === '---') return <hr key={i} className="border-slate-200 my-2" />;
+                    if (!line.trim()) return <br key={i} />;
+                    if (/^第.天/.test(line)) return <p key={i} className="font-black text-slate-900 text-base mt-4">{line}</p>;
+                    return <p key={i}>{line}</p>;
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
