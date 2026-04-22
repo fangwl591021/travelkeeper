@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅遊管家 CRM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .anim { animation: fadeInUp .3s ease both; }
+    .glass { background:rgba(255,255,255,.92); backdrop-filter:blur(16px); }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+const LIFF_ID    = '2009367829-BDZCGti8';
+
+// ── 狀態徽章 ──────────────────────────────────────────────────
+const StatusBadge = ({ status }) => {
+  const s = String(status || 'pending').toLowerCase();
+  const map = {
+    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    active:   'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    pending:  'bg-amber-50  text-amber-600  border border-amber-200',
+    rejected: 'bg-red-50    text-red-600    border border-red-200',
+  };
+  const labels = { approved:'已核准', active:'已啟用', pending:'待審核', rejected:'已拒絕' };
+  return (
+    <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${map[s] || map.pending}`}>
+      {labels[s] || status}
+    </span>
+  );
+};
+
+// ── 分銷商詳情 Modal ──────────────────────────────────────────
+function DistModal({ dist, onClose, onApprove, onReject }) {
+  if (!dist) return null;
+  const fields = [
+    ['LINE UID',   dist.uid],
+    ['姓名',       dist.name],
+    ['電話',       dist.phone],
+    ['公司/品牌',  dist.companyname  || dist.companyName],
+    ['統一編號',   dist.taxid        || dist.taxId],
+    ['LINE 個人',  dist.linelink     || dist.lineLink],
+    ['LINE@',      dist.lineatlink   || dist.lineAtLink],
+    ['Facebook',   dist.fblink       || dist.fbLink],
+    ['網站',       dist.weblink      || dist.webLink],
+    ['地圖連結',   dist.maplink      || dist.mapLink],
+    ['佣金比例',   dist.commission   ? `${dist.commission}%` : '—'],
+    ['累積業績',   dist.salesrevenue || dist.salesRevenue ? `$${Number(dist.salesrevenue||dist.salesRevenue).toLocaleString()}` : '$0'],
+    ['加入時間',   dist.joindate     || dist.joinDate],
+    ['推薦人 UID', dist.ref_uid],
+    ['備註',       dist.note],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-[2rem] w-full max-w-lg max-h-[90vh] overflow-y-auto anim">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+          <div>
+            <h3 className="font-black text-xl text-slate-900">{dist.name || '未填寫'}</h3>
+            <StatusBadge status={dist.status} />
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">✕</button>
+        </div>
+
+        <div className="p-6 space-y-3">
+          {fields.map(([label, val]) => val ? (
+            <div key={label} className="flex gap-3">
+              <span className="text-xs font-black text-slate-400 uppercase w-24 shrink-0 pt-0.5">{label}</span>
+              <span className="text-sm font-medium text-slate-700 break-all">{String(val)}</span>
+            </div>
+          ) : null)}
+        </div>
+
+        <div className="p-6 pt-0 flex gap-3">
+          {String(dist.status).toLowerCase() !== 'approved' ? (
+            <button onClick={() => onApprove(dist.uid)}
+              className="flex-1 bg-emerald-600 text-white font-black py-3 rounded-2xl hover:bg-emerald-700 transition">
+              ✅ 核准加入
+            </button>
+          ) : (
+            <button onClick={() => onReject(dist.uid)}
+              className="flex-1 bg-slate-100 text-slate-500 font-black py-3 rounded-2xl hover:bg-red-50 hover:text-red-500 transition">
+              撤銷資格
+            </button>
+          )}
+          <button onClick={onClose}
+            className="px-6 bg-slate-100 text-slate-600 font-black py-3 rounded-2xl hover:bg-slate-200 transition">
+            關閉
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 主畫面 ────────────────────────────────────────────────────
+function CRMApp() {
+  const [distributors, setDistributors] = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [selected,     setSelected]     = useState(null);
+  const [toast,        setToast]        = useState(null);
+  const [filter,       setFilter]       = useState('all');
+  const [search,       setSearch]       = useState('');
+
+  const showToast = (msg, type='success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`);
+      const data = await res.json();
+      setDistributors(Array.isArray(data) ? data : []);
+    } catch (e) { showToast('讀取失敗', 'error'); }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const handleApprove = async (uid) => {
+    try {
+      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateDistributorStatus', uid, status: 'approved' })
+      });
+      const result = await res.json();
+      if (result.success) { showToast('✅ 已核准'); fetchData(); setSelected(null); }
+      else showToast('更新失敗', 'error');
+    } catch (e) { showToast('操作失敗', 'error'); }
+  };
+
+  const handleReject = async (uid) => {
+    try {
+      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateDistributorStatus', uid, status: 'pending' })
+      });
+      const result = await res.json();
+      if (result.success) { showToast('已撤銷資格'); fetchData(); setSelected(null); }
+    } catch (e) { showToast('操作失敗', 'error'); }
+  };
+
+  const filtered = distributors.filter(d => {
+    const matchStatus = filter === 'all' || String(d.status).toLowerCase() === filter;
+    const matchSearch = !search ||
+      String(d.name  || '').toLowerCase().includes(search.toLowerCase()) ||
+      String(d.phone || '').includes(search) ||
+      String(d.companyname || d.companyName || '').toLowerCase().includes(search.toLowerCase());
+    return matchStatus && matchSearch;
+  });
+
+  const counts = {
+    all:      distributors.length,
+    pending:  distributors.filter(d => String(d.status).toLowerCase() === 'pending').length,
+    approved: distributors.filter(d => String(d.status).toLowerCase() === 'approved').length,
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="glass sticky top-0 z-40 border-b border-slate-200 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="font-black text-2xl text-slate-900">CRM 分銷商管理</h1>
+            <p className="text-slate-400 text-sm font-medium">Distributors 工作表</p>
+          </div>
+          <button onClick={fetchData}
+            className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+            重新整理
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+
+        {/* 統計卡片 */}
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label:'全部申請', key:'all',      color:'bg-slate-800',  num: counts.all },
+            { label:'待審核',   key:'pending',  color:'bg-amber-500',  num: counts.pending },
+            { label:'已核准',   key:'approved', color:'bg-emerald-600',num: counts.approved },
+          ].map(c => (
+            <button key={c.key} onClick={() => setFilter(c.key)}
+              className={`${c.color} text-white p-5 rounded-[1.5rem] text-left transition ${filter===c.key ? 'ring-4 ring-offset-2 ring-slate-400' : 'opacity-90 hover:opacity-100'}`}>
+              <p className="text-3xl font-black">{c.num}</p>
+              <p className="text-sm font-bold opacity-80 mt-1">{c.label}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* 搜尋 */}
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="搜尋姓名、電話、公司..."
+          className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
+
+        {/* 名單 */}
+        <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
+          {loading ? (
+            <div className="p-20 text-center">
+              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+              <p className="text-slate-400 font-bold text-sm">載入中...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="p-20 text-center text-slate-300 font-bold">
+              {search || filter !== 'all' ? '無符合條件的資料' : '目前無申請資料'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                  <tr>
+                    <th className="p-5">申請人</th>
+                    <th className="p-5">公司/品牌</th>
+                    <th className="p-5">推薦人</th>
+                    <th className="p-5">累積業績</th>
+                    <th className="p-5">狀態</th>
+                    <th className="p-5 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map((d, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
+                      onClick={() => setSelected(d)}>
+                      <td className="p-5">
+                        <p className="font-black text-slate-800">{d.name || '未填寫'}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{d.phone || '無電話'}</p>
+                      </td>
+                      <td className="p-5 text-sm text-slate-600">{d.companyname || d.companyName || '—'}</td>
+                      <td className="p-5 font-mono text-[10px] text-slate-300 max-w-[80px] truncate"
+                        title={d.ref_uid}>{d.ref_uid || '—'}</td>
+                      <td className="p-5 font-black text-slate-700">
+                        ${Number(d.salesrevenue || d.salesRevenue || 0).toLocaleString()}
+                      </td>
+                      <td className="p-5"><StatusBadge status={d.status} /></td>
+                      <td className="p-5 text-right" onClick={e => e.stopPropagation()}>
+                        {String(d.status).toLowerCase() !== 'approved' ? (
+                          <button onClick={() => handleApprove(d.uid)}
+                            className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 transition">
+                            核准
+                          </button>
+                        ) : (
+                          <button onClick={() => handleReject(d.uid)}
+                            className="text-slate-300 hover:text-red-500 transition text-xs font-bold px-2">
+                            撤銷
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* 申請入口連結 */}
+        <div className="bg-blue-50 border border-blue-100 rounded-[1.5rem] p-6 flex justify-between items-center">
+          <div>
+            <p className="font-black text-blue-900">分銷商申請入口</p>
+            <p className="text-blue-600 text-sm font-medium mt-1">分享此連結給想申請的業務夥伴</p>
+          </div>
+          <button onClick={() => {
+            const url = `${window.location.origin}${window.location.pathname.replace('index.html','')}register.html?a=demo`;
+            navigator.clipboard.writeText(url).then(() => showToast('連結已複製！'));
+          }} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
+            複製申請連結
+          </button>
+        </div>
+
+      </div>
+
+      {/* 詳情 Modal */}
+      {selected && (
+        <DistModal
+          dist={selected}
+          onClose={() => setSelected(null)}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-8 right-8 z-[200] px-6 py-4 rounded-[1.5rem] shadow-2xl font-bold text-white anim ${
+          toast.type === 'error' ? 'bg-red-600' : 'bg-slate-900'
+        }`}>{toast.msg}</div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<CRMApp />);
+</script>
+</body>
+</html>
