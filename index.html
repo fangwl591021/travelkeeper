@@ -820,28 +820,66 @@ function buildPromoPreview() {
 
 async function sendFlex() {
   if (!liff.isLoggedIn()) { liff.login({redirectUri:location.href}); return; }
-  const btn=$('send-btn'); btn.disabled=true; btn.textContent='組裝中…';
+  const btn = $('send-btn'); btn.disabled=true; btn.textContent='組裝中…';
+
   try {
-    const ids      = Array.from(APP.promoSelected);
-    const uid      = APP.liffProfile?.userId||'';
-    const dist     = APP.user?.distributorData||{};
-    const ctaText  = $('cta-text').value;
-    const socFields= {};
-    SOC_DEFS.forEach(d => { const chk=document.getElementById('sc-'+d.key); if(chk?.checked) socFields[d.field]=dist[d.field]||''; });
+    const ids       = Array.from(APP.promoSelected);
+    const uid       = APP.liffProfile?.userId||'';
+    const dist      = APP.user?.distributorData||{};
+    const ctaText   = $('cta-text').value;
+    const socFields = {};
+    SOC_DEFS.forEach(d => {
+      const chk = document.getElementById('sc-'+d.key);
+      if (chk?.checked) socFields[d.field] = dist[d.field]||'';
+    });
 
-    // 讓 Worker 組裝 Flex JSON
-    const res = await api('/api/build-flex', { method:'POST', body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields }) });
-    if (!res.success) throw new Error(res.error||'組裝失敗');
+    const res = await api('/api/build-flex', {
+      method: 'POST',
+      body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields, agencySlug: 'demo' })
+    });
+    if (!res.success) throw new Error(res.error || '組裝失敗');
 
-    btn.textContent='發送中…';
-    const result = await liff.shareTargetPicker([res.flex]);
-    if (result) { toast('✅ 名片已成功發送！'); closePromoModal(); APP.promoSelected.clear(); APP.promoMode=false; renderTab('home'); }
-    else toast('使用者取消分享');
-  } catch(e) {
+    console.log('[sendFlex] payload:', JSON.stringify(res.flex, null, 2));
+
+    if (!liff.isApiAvailable('shareTargetPicker')) {
+      throw new Error('此環境不支援分享給好友（請從 LINE 內開啟）');
+    }
+
+    btn.textContent = '發送中…';
+
+    let result;
+    try {
+      result = await liff.shareTargetPicker([res.flex]);
+      console.log('[sendFlex] shareTargetPicker result:', result);
+    } catch (shareErr) {
+      console.error('[sendFlex] share error:', shareErr);
+      throw shareErr;
+    }
+
+    if (result && result.status === 'cancel') {
+      toast('使用者取消分享');
+    } else {
+      toast('✅ 已開啟分享視窗，請確認對方是否收到');
+      closePromoModal();
+      APP.promoSelected.clear();
+      APP.promoMode = false;
+      renderTab('home');
+    }
+
+  } catch (e) {
+    console.error('[sendFlex] error:', e);
     if (e.message?.toLowerCase().includes('not allowed')) {
-      if(confirm('⚠️ 需要重新登入以取得分享權限，是否立即重新登入？')) { liff.logout(); location.reload(); }
-    } else toast('❌ '+e.message, true);
-  } finally { btn.disabled=false; btn.textContent='🚀 立即分享給好友'; }
+      if (confirm('⚠️ 需要重新登入以取得分享權限，是否立即重新登入？')) {
+        liff.logout();
+        location.reload();
+      }
+    } else {
+      toast('❌ ' + (e.message || '發送失敗'), true);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 立即分享給好友';
+  }
 }
 
 async function copyFlexJson() {
