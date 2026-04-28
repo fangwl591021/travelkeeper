@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行程詳情 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Noto Sans TC', sans-serif; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+    .afu  { animation: fadeUp .4s ease both; }
+    .spin { animation: spin .7s linear infinite; }
+
+    /* 浮動預約 bar */
+    .book-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(255,255,255,.97);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid #e2e8f0;
+      padding: 12px 16px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,.08);
+      z-index: 50;
+      display: flex; gap: 12px; align-items: center;
+    }
+    .book-bar-price { flex: 1; min-width: 0; }
+    .book-bar-btn {
+      flex: 0 0 auto;
+      background: linear-gradient(135deg, #b82337, #991b1b);
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: 14px;
+      font-weight: 900;
+      font-size: 16px;
+      box-shadow: 0 8px 20px rgba(184,35,55,.3);
+      transition: transform .15s;
+    }
+    .book-bar-btn:active { transform: scale(0.97); }
+
+    body { padding-bottom: 88px; background: #f8fafc; }
+  </style>
+</head>
+<body>
+
+<div id="root">
+  <!-- Loading 預設畫面 -->
+  <div class="flex items-center justify-center h-screen flex-col gap-4">
+    <div class="spin w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full"></div>
+    <p class="text-slate-400 font-bold">載入行程資料中…</p>
+  </div>
+</div>
+
+<script>
+const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+// ── URL 參數
+const params = new URLSearchParams(window.location.search);
+const tourId      = params.get('t')  || '';
+const refUid      = params.get('r')  || '';   // 分銷商 uid（佣金歸屬）
+const agencySlug  = params.get('a')  || 'demo';
+
+// ── 工具
+const fmt = (n) => '$' + Number(n||0).toLocaleString();
+
+// ── 行程描述渲染（支援圖片 / YouTube / 天數標題 / 分隔線）
+function renderDesc(text, container) {
+  if (!text) return;
+  text.split('\n').forEach(line => {
+    // 圖片
+    const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+    if (imgM) {
+      const img = document.createElement('img');
+      img.src = imgM[2]; img.alt = imgM[1] || '';
+      img.className = 'w-full rounded-2xl my-4 object-cover aspect-video shadow-md';
+      container.appendChild(img);
+      return;
+    }
+    // YouTube
+    const ytM = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
+    if (ytM) {
+      const wrap = document.createElement('div');
+      wrap.className = 'aspect-video rounded-2xl overflow-hidden my-4 bg-black shadow-md';
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube.com/embed/${ytM[1]}`;
+      iframe.className = 'w-full h-full';
+      iframe.allowFullscreen = true;
+      wrap.appendChild(iframe);
+      container.appendChild(wrap);
+      return;
+    }
+    // 分隔線
+    if (line.trim() === '---') {
+      const hr = document.createElement('hr');
+      hr.className = 'border-slate-200 my-6';
+      container.appendChild(hr);
+      return;
+    }
+    // 天數標題（第N天 ...）
+    if (/^第.天/.test(line)) {
+      const h = document.createElement('h3');
+      h.className = 'font-black text-slate-900 text-xl mt-8 mb-3 pl-3 border-l-4 border-emerald-500';
+      h.textContent = line;
+      container.appendChild(h);
+      return;
+    }
+    // 空行
+    if (!line.trim()) {
+      container.appendChild(document.createElement('br'));
+      return;
+    }
+    // 一般段落
+    const p = document.createElement('p');
+    p.className = 'leading-relaxed text-slate-700 mb-2 text-base';
+    p.textContent = line;
+    container.appendChild(p);
+  });
+}
+
+// ── 載入並渲染
+(async function init() {
+  if (!tourId) {
+    showError('連結缺少行程編號');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&_t=${Date.now()}`);
+    const arr = await res.json();
+    const items = Array.isArray(arr) ? arr : [];
+    const tour = items.find(i => String(i.id || i.timestamp || '') === String(tourId));
+
+    if (!tour) {
+      showError('找不到此行程，可能已下架');
+      return;
+    }
+
+    renderTour(tour);
+  } catch (e) {
+    console.error(e);
+    showError('載入失敗，請稍後再試');
+  }
+})();
+
+function renderTour(tour) {
+  const root = document.getElementById('root');
+  root.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'afu';
+
+  // ── 封面圖
+  if (tour.image) {
+    const heroWrap = document.createElement('div');
+    heroWrap.className = 'w-full bg-slate-200 overflow-hidden';
+    heroWrap.style.aspectRatio = '20/13';
+    const heroImg = document.createElement('img');
+    heroImg.src = tour.image;
+    heroImg.className = 'w-full h-full object-cover';
+    heroWrap.appendChild(heroImg);
+    wrap.appendChild(heroWrap);
+  }
+
+  // ── 主資訊區
+  const main = document.createElement('div');
+  main.className = 'max-w-2xl mx-auto px-5 py-6';
+
+  // 地區標籤
+  if (tour.region) {
+    const tag = document.createElement('span');
+    tag.className = 'inline-block text-xs font-black text-blue-600 uppercase tracking-widest mb-2';
+    tag.textContent = tour.region;
+    main.appendChild(tag);
+  }
+
+  // 標題
+  const title = document.createElement('h1');
+  title.className = 'text-2xl md:text-3xl font-black text-slate-900 leading-tight mb-3';
+  title.textContent = tour.title || '行程';
+  main.appendChild(title);
+
+  // 天數 + 價格 chip 區
+  const chips = document.createElement('div');
+  chips.className = 'flex flex-wrap gap-2 mb-6';
+  if (tour.days) {
+    const c = document.createElement('span');
+    c.className = 'bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-black';
+    c.textContent = `🗓️ ${tour.days} 天`;
+    chips.appendChild(c);
+  }
+  if (tour.region) {
+    const c = document.createElement('span');
+    c.className = 'bg-slate-100 text-slate-600 px-4 py-1.5 rounded-full text-sm font-black';
+    c.textContent = `📍 ${tour.region}`;
+    chips.appendChild(c);
+  }
+  const priceChip = document.createElement('span');
+  priceChip.className = 'bg-red-50 text-red-700 px-4 py-1.5 rounded-full text-sm font-black';
+  priceChip.textContent = `💰 ${fmt(tour.price)}`;
+  chips.appendChild(priceChip);
+  main.appendChild(chips);
+
+  // 描述
+  const descBox = document.createElement('div');
+  descBox.className = 'space-y-1';
+  renderDesc(tour.description, descBox);
+  main.appendChild(descBox);
+
+  // 備註
+  if (tour.notes && String(tour.notes).trim()) {
+    const notesBox = document.createElement('div');
+    notesBox.className = 'mt-8 p-5 bg-amber-50 border-l-4 border-amber-400 rounded-r-2xl';
+    const notesTitle = document.createElement('p');
+    notesTitle.className = 'text-xs font-black text-amber-700 uppercase tracking-widest mb-2';
+    notesTitle.textContent = '⚠️ 行程注意事項';
+    notesBox.appendChild(notesTitle);
+    String(tour.notes).split('\n').forEach(line => {
+      if (!line.trim()) return;
+      const p = document.createElement('p');
+      p.className = 'text-sm text-amber-900 leading-relaxed';
+      p.textContent = line;
+      notesBox.appendChild(p);
+    });
+    main.appendChild(notesBox);
+  }
+
+  wrap.appendChild(main);
+  root.appendChild(wrap);
+
+  // ── 浮動預約 bar
+  const bar = document.createElement('div');
+  bar.className = 'book-bar';
+  bar.innerHTML = `
+    <div class="book-bar-price">
+      <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">行程費用</p>
+      <p class="text-2xl font-black text-red-600 leading-none mt-0.5">${fmt(tour.price)}</p>
+    </div>
+    <button class="book-bar-btn" id="book-btn">立即預約 →</button>
+  `;
+  document.body.appendChild(bar);
+
+  document.getElementById('book-btn').onclick = () => {
+    // 導向 booking.html，帶完整參數讓佣金歸屬給原分銷商
+    const bookingUrl = `booking.html?a=${encodeURIComponent(agencySlug)}&itinerary=${encodeURIComponent(tourId)}&ref=${encodeURIComponent(refUid)}`;
+    window.location.href = bookingUrl;
+  };
+}
+
+function showError(msg) {
+  const root = document.getElementById('root');
+  root.innerHTML = `
+    <div class="flex flex-col items-center justify-center h-screen gap-4 p-8 text-center">
+      <div class="text-6xl">😕</div>
+      <h2 class="text-xl font-black text-slate-700">${msg}</h2>
+      <p class="text-slate-400 text-sm">請聯絡您的業務專員確認</p>
+    </div>
+  `;
+}
+</script>
+
+</body>
+</html>
