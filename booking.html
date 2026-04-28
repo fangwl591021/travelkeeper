@@ -129,15 +129,18 @@
             setForm(f => ({ ...f, customer_name: prof.displayName }));
 
             // 3. 載入行程資料（用既有 itineraries API）
-            const itRes = await fetch(`${WORKER_URL}/api/itineraries?a=${agencySlug}`);
-            const itData = await itRes.json();
-            if (itData.success && Array.isArray(itData.data)) {
-              const found = itData.data.find(x => String(x.id) === String(itineraryId));
-              if (found) setItinerary(found);
-              else { setErr('找不到此行程'); setStep('error'); return; }
-            } else {
-              setStep('error'); return;
-            }
+            // 3. 載入行程資料（GAS 直接回 array，不是 {success, data}）
+const itRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`);
+const itData = await itRes.json();
+const itList = Array.isArray(itData) ? itData : (itData.data || itData.itineraries || []);
+const found = itList.find(x => String(x.id || x.timestamp || '') === String(itineraryId));
+if (found) {
+  setItinerary(found);
+} else {
+  setErr('找不到此行程');
+  setStep('error');
+  return;
+}
 
             setStep('form');
           } catch (e) {
