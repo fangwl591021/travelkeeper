@@ -105,46 +105,67 @@
       useEffect(() => {
         (async () => {
           try {
+            console.log('[booking] 🚀 init start', { agencySlug, itineraryId, distributorUid });
+
             if (!itineraryId || !distributorUid) {
+              console.error('[booking] ❌ 缺少參數', { itineraryId, distributorUid });
               setErr('缺少必要參數，請從推廣連結進入');
               setStep('error');
               return;
             }
 
             // 1. 載入租戶設定 + LIFF ID
+            console.log('[booking] 1️⃣ fetching config...');
             const cfgRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
             const cfgData = await cfgRes.json();
-            if (!cfgData.success) { setStep('error'); return; }
+            console.log('[booking] 1️⃣ config response:', cfgData);
+            if (!cfgData.success) {
+              console.error('[booking] ❌ config failed:', cfgData);
+              setErr('租戶設定載入失敗：' + (cfgData.error || '未知錯誤'));
+              setStep('error');
+              return;
+            }
             setTenant(cfgData.data);
 
             // 2. LIFF 初始化
+            console.log('[booking] 2️⃣ liff.init with ID:', cfgData.data.liff_id);
             await liff.init({ liffId: cfgData.data.liff_id });
             if (!liff.isLoggedIn()) {
+              console.log('[booking] 2️⃣ not logged in, redirecting to login...');
               liff.login({ redirectUri: window.location.href });
               return;
             }
 
             const prof = await liff.getProfile();
+            console.log('[booking] 2️⃣ profile:', prof.displayName);
             setProfile(prof);
             setForm(f => ({ ...f, customer_name: prof.displayName }));
 
-            // 3. 載入行程資料（用既有 itineraries API）
             // 3. 載入行程資料（GAS 直接回 array，不是 {success, data}）
-const itRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`);
-const itData = await itRes.json();
-const itList = Array.isArray(itData) ? itData : (itData.data || itData.itineraries || []);
-const found = itList.find(x => String(x.id || x.timestamp || '') === String(itineraryId));
-if (found) {
-  setItinerary(found);
-} else {
-  setErr('找不到此行程');
-  setStep('error');
-  return;
-}
+            console.log('[booking] 3️⃣ fetching itineraries...');
+            const itRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`);
+            const itData = await itRes.json();
+            const itList = Array.isArray(itData) ? itData : (itData.data || itData.itineraries || []);
+            console.log('[booking] 3️⃣ itineraries count:', itList.length);
+            console.log('[booking] 3️⃣ looking for id:', itineraryId);
+            console.log('[booking] 3️⃣ available ids:', itList.map(x => String(x.id || x.timestamp || '')));
 
+            const found = itList.find(x => String(x.id || x.timestamp || '') === String(itineraryId));
+            if (found) {
+              console.log('[booking] ✅ found itinerary:', found.title);
+              setItinerary(found);
+            } else {
+              console.error('[booking] ❌ itinerary not found in list');
+              setErr(`找不到行程 ID: ${itineraryId}`);
+              setStep('error');
+              return;
+            }
+
+            console.log('[booking] ✅ all checks passed, showing form');
             setStep('form');
           } catch (e) {
-            console.error(e);
+            console.error('[booking] 💥 caught exception:', e);
+            setErr(e.message || '未知錯誤');
             setStep('error');
           }
         })();
@@ -191,8 +212,15 @@ if (found) {
         <Shell tenant={null}>
           <div style={{textAlign:'center',padding:'40px 0'}}>
             <div style={{fontSize:64,marginBottom:16}}>⛔</div>
-            <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:8}}>無法載入</h2>
-            <p style={{color:'#94a3b8',fontWeight:600}}>{errMsg || '請確認連結是否正確'}</p>
+            <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:12}}>無法載入</h2>
+            <p style={{color:'#dc2626',fontWeight:700,fontSize:13,
+              background:'#fef2f2',padding:'10px 16px',borderRadius:10,
+              fontFamily:'monospace',wordBreak:'break-all',margin:'0 auto',maxWidth:'90%'}}>
+              {errMsg || '未知錯誤'}
+            </p>
+            <p style={{color:'#94a3b8',fontWeight:600,fontSize:12,marginTop:14}}>
+              請截圖此畫面並聯絡業務人員
+            </p>
           </div>
         </Shell>
       );
