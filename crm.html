@@ -292,7 +292,19 @@ function CRMApp() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    (async () => {
+      // 先 LIFF init（給 handleToggleUpload 用）
+      try {
+        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+      } catch(e) { console.warn('LIFF init', e); }
+      fetchAll();
+    })();
+  }, []);
 
   // ── 分銷商操作 ──
   const handleApprove = async (uid) => {
@@ -338,6 +350,38 @@ function CRMApp() {
         showToast('更新失敗：' + (result.error || ''), 'error');
       }
     } catch (e) { showToast('操作失敗', 'error'); }
+  };
+
+  // ── 切換分銷商上稿權 ──
+  const handleToggleUpload = async (uid, canUpload) => {
+    try {
+      // 取當前 LIFF profile uid（管理員）
+      let operatorUid = '';
+      try {
+        if (liff.isLoggedIn()) {
+          const p = await liff.getProfile();
+          operatorUid = p.userId;
+        }
+      } catch(e) {}
+
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          action:'grantUploadPermission',
+          uid, canUpload,
+          operatorUid
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast(canUpload ? '✅ 已授權上稿' : '已撤銷上稿權');
+        setDistributors(prev => prev.map(d =>
+          d.uid === uid ? { ...d, canupload: canUpload ? 'Y' : 'N', canUpload: canUpload ? 'Y' : 'N' } : d
+        ));
+      } else {
+        showToast('操作失敗：' + (result.error || ''), 'error');
+      }
+    } catch(e) { showToast('網路錯誤', 'error'); }
   };
 
   // ── 篩選邏輯 ──
@@ -475,40 +519,60 @@ function CRMApp() {
                         <th className="p-5">公司/品牌</th>
                         <th className="p-5">推薦人</th>
                         <th className="p-5">累積業績</th>
+                        <th className="p-5">上稿權</th>
                         <th className="p-5">狀態</th>
                         <th className="p-5 text-right">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredDist.map((d, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
-                          onClick={() => setSelDist(d)}>
-                          <td className="p-5">
-                            <p className="font-black text-slate-800">{d.name || '未填寫'}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{d.phone || '無電話'}</p>
-                          </td>
-                          <td className="p-5 text-sm text-slate-600">{d.companyname || d.companyName || '—'}</td>
-                          <td className="p-5 font-mono text-[10px] text-slate-300 max-w-[80px] truncate"
-                            title={d.ref_uid}>{d.ref_uid || '—'}</td>
-                          <td className="p-5 font-black text-slate-700">
-                            ${Number(d.salesrevenue || d.salesRevenue || 0).toLocaleString()}
-                          </td>
-                          <td className="p-5"><StatusBadge status={d.status} /></td>
-                          <td className="p-5 text-right" onClick={e => e.stopPropagation()}>
-                            {String(d.status).toLowerCase() !== 'approved' ? (
-                              <button onClick={() => handleApprove(d.uid)}
-                                className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 transition">
-                                核准
-                              </button>
-                            ) : (
-                              <button onClick={() => handleReject(d.uid)}
-                                className="text-slate-300 hover:text-red-500 transition text-xs font-bold px-2">
-                                撤銷
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredDist.map((d, idx) => {
+                        const canUp = String(d.canupload || d.canUpload || '').toUpperCase() === 'Y';
+                        const isApproved = String(d.status).toLowerCase() === 'approved';
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
+                            onClick={() => setSelDist(d)}>
+                            <td className="p-5">
+                              <p className="font-black text-slate-800">{d.name || '未填寫'}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{d.phone || '無電話'}</p>
+                            </td>
+                            <td className="p-5 text-sm text-slate-600">{d.companyname || d.companyName || '—'}</td>
+                            <td className="p-5 font-mono text-[10px] text-slate-300 max-w-[80px] truncate"
+                              title={d.ref_uid}>{d.ref_uid || '—'}</td>
+                            <td className="p-5 font-black text-slate-700">
+                              ${Number(d.salesrevenue || d.salesRevenue || 0).toLocaleString()}
+                            </td>
+                            <td className="p-5" onClick={e => e.stopPropagation()}>
+                              {isApproved ? (
+                                <button onClick={() => handleToggleUpload(d.uid, !canUp)}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                                    canUp ? 'bg-blue-600' : 'bg-slate-300'
+                                  }`}
+                                  title={canUp ? '已授權上稿（點擊撤銷）' : '未授權（點擊授權）'}>
+                                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                                    canUp ? 'translate-x-6' : 'translate-x-1'
+                                  }`}/>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="p-5"><StatusBadge status={d.status} /></td>
+                            <td className="p-5 text-right" onClick={e => e.stopPropagation()}>
+                              {!isApproved ? (
+                                <button onClick={() => handleApprove(d.uid)}
+                                  className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 transition">
+                                  核准
+                                </button>
+                              ) : (
+                                <button onClick={() => handleReject(d.uid)}
+                                  className="text-slate-300 hover:text-red-500 transition text-xs font-bold px-2">
+                                  撤銷
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
