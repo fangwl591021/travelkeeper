@@ -22,7 +22,9 @@ const { useState, useEffect } = React;
 const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 const LIFF_ID    = '2009367829-BDZCGti8';
 
-// ── 狀態徽章 ──────────────────────────────────────────────────
+const fmt = (n) => '$' + Number(n||0).toLocaleString();
+
+// ── 狀態徽章（分銷商）────────────────────────────────────────
 const StatusBadge = ({ status }) => {
   const s = String(status || 'pending').toLowerCase();
   const map = {
@@ -35,6 +37,23 @@ const StatusBadge = ({ status }) => {
   return (
     <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${map[s] || map.pending}`}>
       {labels[s] || status}
+    </span>
+  );
+};
+
+// ── 訂單狀態徽章 ──────────────────────────────────────────────
+const ORDER_STATUS = {
+  pending:   { label: '待處理',   color: 'bg-amber-50  text-amber-600  border-amber-200' },
+  confirmed: { label: '已確認',   color: 'bg-blue-50   text-blue-600   border-blue-200' },
+  completed: { label: '已完成',   color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cancelled: { label: '已取消',   color: 'bg-slate-100 text-slate-500  border-slate-200' },
+};
+const OrderStatusBadge = ({ status }) => {
+  const s = String(status || 'pending').toLowerCase();
+  const cfg = ORDER_STATUS[s] || ORDER_STATUS.pending;
+  return (
+    <span className={`px-3 py-1 rounded-full text-[11px] font-black border ${cfg.color}`}>
+      {cfg.label}
     </span>
   );
 };
@@ -103,191 +122,534 @@ function DistModal({ dist, onClose, onApprove, onReject }) {
   );
 }
 
-// ── 主畫面 ────────────────────────────────────────────────────
+// ── 訂單詳情 Modal ────────────────────────────────────────────
+function OrderModal({ order, onClose, onUpdateStatus }) {
+  const [updating, setUpdating] = useState(false);
+  if (!order) return null;
+
+  const handleStatusChange = async (newStatus) => {
+    if (newStatus === order.status) return;
+    if (!confirm(`確定要將狀態變更為「${ORDER_STATUS[newStatus]?.label || newStatus}」？`)) return;
+    setUpdating(true);
+    await onUpdateStatus(order.orderid, newStatus);
+    setUpdating(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-[2rem] w-full max-w-xl max-h-[90vh] overflow-y-auto anim">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">訂單編號</p>
+            <h3 className="font-black text-lg text-slate-900 font-mono">{order.orderid}</h3>
+            <div className="mt-2"><OrderStatusBadge status={order.status} /></div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">✕</button>
+        </div>
+
+        {/* 行程資訊 */}
+        <div className="p-6 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">預訂行程</p>
+          <h4 className="font-black text-xl text-slate-900 mb-3">{order.itinerarytitle || '—'}</h4>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">行程費用</p>
+              <p className="font-black text-red-600 text-xl mt-1">{fmt(order.price)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">人數</p>
+              <p className="font-black text-slate-900 text-xl mt-1">{order.travelers || 1} 人</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">出發日</p>
+              <p className="font-bold text-slate-900 text-sm mt-1.5">{order.traveldate || '未指定'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 客戶資訊 */}
+        <div className="p-6 border-b border-slate-100">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">客戶資訊</p>
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">姓名</span>
+              <span className="text-sm font-bold text-slate-900">{order.customername || '—'}</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">電話</span>
+              <a href={`tel:${order.customerphone}`}
+                className="text-sm font-bold text-blue-600 hover:underline">
+                {order.customerphone || '—'}
+              </a>
+            </div>
+            {order.customerlineuid && (
+              <div className="flex gap-3">
+                <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">LINE UID</span>
+                <span className="text-xs font-mono text-slate-500 break-all">{order.customerlineuid}</span>
+              </div>
+            )}
+            {order.note && (
+              <div className="flex gap-3">
+                <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">備註</span>
+                <span className="text-sm text-slate-700">{order.note}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 業務資訊 */}
+        <div className="p-6 border-b border-slate-100">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">業務歸屬</p>
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">分銷商</span>
+              <span className="text-xs font-mono text-slate-500 break-all">{order.distributoruid || '—'}</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">應付佣金</span>
+              <span className="text-sm font-black text-emerald-600">{fmt(order.commissionamount)}</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">建立時間</span>
+              <span className="text-xs text-slate-500">{order.createdat || '—'}</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">最後更新</span>
+              <span className="text-xs text-slate-500">{order.updatedat || '—'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 狀態流轉 */}
+        <div className="p-6 bg-slate-50">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">變更訂單狀態</p>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(ORDER_STATUS).map(([key, cfg]) => {
+              const isCurrent = String(order.status).toLowerCase() === key;
+              return (
+                <button key={key} onClick={() => handleStatusChange(key)}
+                  disabled={isCurrent || updating}
+                  className={`py-3 rounded-xl font-black text-sm transition border-2 ${
+                    isCurrent
+                      ? 'bg-slate-200 text-slate-400 border-slate-200 cursor-default'
+                      : 'bg-white border-slate-200 hover:border-blue-400 text-slate-700'
+                  }`}>
+                  {isCurrent ? '✓ ' : ''}{cfg.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-6 pt-3">
+          <button onClick={onClose}
+            className="w-full bg-slate-100 text-slate-600 font-black py-3 rounded-2xl hover:bg-slate-200 transition">
+            關閉
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 主畫面
+// ══════════════════════════════════════════════════════════════
 function CRMApp() {
+  const [tab,          setTab]          = useState('distributors');  // distributors | orders
+
+  // 分銷商
   const [distributors, setDistributors] = useState([]);
+  const [selDist,      setSelDist]      = useState(null);
+  const [distFilter,   setDistFilter]   = useState('all');
+  const [distSearch,   setDistSearch]   = useState('');
+
+  // 訂單
+  const [orders,       setOrders]       = useState([]);
+  const [selOrder,     setSelOrder]     = useState(null);
+  const [orderFilter,  setOrderFilter]  = useState('all');
+  const [orderSearch,  setOrderSearch]  = useState('');
+
   const [loading,      setLoading]      = useState(true);
-  const [selected,     setSelected]     = useState(null);
   const [toast,        setToast]        = useState(null);
-  const [filter,       setFilter]       = useState('all');
-  const [search,       setSearch]       = useState('');
 
   const showToast = (msg, type='success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  const fetchData = async () => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`);
-      const data = await res.json();
-      setDistributors(Array.isArray(data) ? data : []);
+      const [distRes, orderRes] = await Promise.all([
+        fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
+        fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
+      ]);
+      setDistributors(Array.isArray(distRes) ? distRes : []);
+      setOrders(orderRes?.data || []);
     } catch (e) { showToast('讀取失敗', 'error'); }
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
+  // ── 分銷商操作 ──
   const handleApprove = async (uid) => {
     try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'updateDistributorStatus', uid, status: 'approved' })
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'updateDistributorStatus', uid, status:'approved' })
       });
       const result = await res.json();
-      if (result.success) { showToast('✅ 已核准'); fetchData(); setSelected(null); }
+      if (result.success) { showToast('✅ 已核准'); fetchAll(); setSelDist(null); }
       else showToast('更新失敗', 'error');
     } catch (e) { showToast('操作失敗', 'error'); }
   };
 
   const handleReject = async (uid) => {
     try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'updateDistributorStatus', uid, status: 'pending' })
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'updateDistributorStatus', uid, status:'pending' })
       });
       const result = await res.json();
-      if (result.success) { showToast('已撤銷資格'); fetchData(); setSelected(null); }
+      if (result.success) { showToast('已撤銷資格'); fetchAll(); setSelDist(null); }
     } catch (e) { showToast('操作失敗', 'error'); }
   };
 
-  const filtered = distributors.filter(d => {
-    const matchStatus = filter === 'all' || String(d.status).toLowerCase() === filter;
-    const matchSearch = !search ||
-      String(d.name  || '').toLowerCase().includes(search.toLowerCase()) ||
-      String(d.phone || '').includes(search) ||
-      String(d.companyname || d.companyName || '').toLowerCase().includes(search.toLowerCase());
+  // ── 訂單狀態流轉 ──
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'updateOrderStatus', order_id: orderId, status: newStatus })
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast(`✅ 已更新為「${ORDER_STATUS[newStatus]?.label || newStatus}」`);
+        // 更新本地 state（避免重新載入）
+        setOrders(prev => prev.map(o =>
+          o.orderid === orderId ? { ...o, status: newStatus, updatedat: new Date().toISOString() } : o
+        ));
+        // 如果 modal 開著，也更新 selOrder
+        setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, status: newStatus } : prev);
+      } else {
+        showToast('更新失敗：' + (result.error || ''), 'error');
+      }
+    } catch (e) { showToast('操作失敗', 'error'); }
+  };
+
+  // ── 篩選邏輯 ──
+  const filteredDist = distributors.filter(d => {
+    const matchStatus = distFilter === 'all' || String(d.status).toLowerCase() === distFilter;
+    const matchSearch = !distSearch ||
+      String(d.name  || '').toLowerCase().includes(distSearch.toLowerCase()) ||
+      String(d.phone || '').includes(distSearch) ||
+      String(d.companyname || d.companyName || '').toLowerCase().includes(distSearch.toLowerCase());
     return matchStatus && matchSearch;
   });
 
-  const counts = {
+  const filteredOrders = orders.filter(o => {
+    const matchStatus = orderFilter === 'all' || String(o.status).toLowerCase() === orderFilter;
+    const matchSearch = !orderSearch ||
+      String(o.orderid || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+      String(o.itinerarytitle || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+      String(o.customername || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+      String(o.customerphone || '').includes(orderSearch);
+    return matchStatus && matchSearch;
+  });
+
+  // ── 統計 ──
+  const distCounts = {
     all:      distributors.length,
     pending:  distributors.filter(d => String(d.status).toLowerCase() === 'pending').length,
     approved: distributors.filter(d => String(d.status).toLowerCase() === 'approved').length,
   };
 
+  // 訂單統計（本月）
+  const thisMonth = new Date().toISOString().slice(0, 7);  // YYYY-MM
+  const monthOrders = orders.filter(o => String(o.createdat || '').startsWith(thisMonth));
+  const orderStats = {
+    pendingCount:    orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
+    monthRevenue:    monthOrders.reduce((s, o) => s + Number(o.price || 0), 0),
+    monthCommission: monthOrders.reduce((s, o) => s + Number(o.commissionamount || 0), 0),
+    totalCount:      orders.length,
+  };
+
+  const orderCounts = {
+    all:       orders.length,
+    pending:   orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
+    confirmed: orders.filter(o => String(o.status).toLowerCase() === 'confirmed').length,
+    completed: orders.filter(o => String(o.status).toLowerCase() === 'completed').length,
+    cancelled: orders.filter(o => String(o.status).toLowerCase() === 'cancelled').length,
+  };
+
+  // ════════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="glass sticky top-0 z-40 border-b border-slate-200 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="font-black text-2xl text-slate-900">CRM 分銷商管理</h1>
-            <p className="text-slate-400 text-sm font-medium">Distributors 工作表</p>
+      {/* Header + Tabs */}
+      <div className="glass sticky top-0 z-40 border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-6 pt-4 pb-0">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h1 className="font-black text-2xl text-slate-900">CRM 管理中心</h1>
+              <p className="text-slate-400 text-xs font-medium">分銷商 + 訂單一站管理</p>
+            </div>
+            <button onClick={fetchAll}
+              className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+              重新整理
+            </button>
           </div>
-          <button onClick={fetchData}
-            className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
-            重新整理
-          </button>
+          {/* Tabs */}
+          <div className="flex gap-1 -mb-px">
+            <button onClick={() => setTab('distributors')}
+              className={`px-5 py-3 font-black text-sm transition border-b-2 ${
+                tab === 'distributors'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}>
+              👥 分銷商管理
+              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{distCounts.all}</span>
+            </button>
+            <button onClick={() => setTab('orders')}
+              className={`px-5 py-3 font-black text-sm transition border-b-2 ${
+                tab === 'orders'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}>
+              📦 訂單管理
+              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{orderCounts.all}</span>
+              {orderCounts.pending > 0 && (
+                <span className="ml-1 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                  {orderCounts.pending} 待處理
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
-        {/* 統計卡片 */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label:'全部申請', key:'all',      color:'bg-slate-800',  num: counts.all },
-            { label:'待審核',   key:'pending',  color:'bg-amber-500',  num: counts.pending },
-            { label:'已核准',   key:'approved', color:'bg-emerald-600',num: counts.approved },
-          ].map(c => (
-            <button key={c.key} onClick={() => setFilter(c.key)}
-              className={`${c.color} text-white p-5 rounded-[1.5rem] text-left transition ${filter===c.key ? 'ring-4 ring-offset-2 ring-slate-400' : 'opacity-90 hover:opacity-100'}`}>
-              <p className="text-3xl font-black">{c.num}</p>
-              <p className="text-sm font-bold opacity-80 mt-1">{c.label}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* 搜尋 */}
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="搜尋姓名、電話、公司..."
-          className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
-
-        {/* 名單 */}
-        <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
-          {loading ? (
-            <div className="p-20 text-center">
-              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
-              <p className="text-slate-400 font-bold text-sm">載入中...</p>
+        {/* ════ 分銷商 Tab ════ */}
+        {tab === 'distributors' && (
+          <>
+            {/* 統計卡片 */}
+            <div className="grid grid-cols-3 gap-4 anim">
+              {[
+                { label:'全部申請', key:'all',      color:'bg-slate-800',  num: distCounts.all },
+                { label:'待審核',   key:'pending',  color:'bg-amber-500',  num: distCounts.pending },
+                { label:'已核准',   key:'approved', color:'bg-emerald-600',num: distCounts.approved },
+              ].map(c => (
+                <button key={c.key} onClick={() => setDistFilter(c.key)}
+                  className={`${c.color} text-white p-5 rounded-[1.5rem] text-left transition ${distFilter===c.key ? 'ring-4 ring-offset-2 ring-slate-400' : 'opacity-90 hover:opacity-100'}`}>
+                  <p className="text-3xl font-black">{c.num}</p>
+                  <p className="text-sm font-bold opacity-80 mt-1">{c.label}</p>
+                </button>
+              ))}
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="p-20 text-center text-slate-300 font-bold">
-              {search || filter !== 'all' ? '無符合條件的資料' : '目前無申請資料'}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                  <tr>
-                    <th className="p-5">申請人</th>
-                    <th className="p-5">公司/品牌</th>
-                    <th className="p-5">推薦人</th>
-                    <th className="p-5">累積業績</th>
-                    <th className="p-5">狀態</th>
-                    <th className="p-5 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filtered.map((d, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
-                      onClick={() => setSelected(d)}>
-                      <td className="p-5">
-                        <p className="font-black text-slate-800">{d.name || '未填寫'}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{d.phone || '無電話'}</p>
-                      </td>
-                      <td className="p-5 text-sm text-slate-600">{d.companyname || d.companyName || '—'}</td>
-                      <td className="p-5 font-mono text-[10px] text-slate-300 max-w-[80px] truncate"
-                        title={d.ref_uid}>{d.ref_uid || '—'}</td>
-                      <td className="p-5 font-black text-slate-700">
-                        ${Number(d.salesrevenue || d.salesRevenue || 0).toLocaleString()}
-                      </td>
-                      <td className="p-5"><StatusBadge status={d.status} /></td>
-                      <td className="p-5 text-right" onClick={e => e.stopPropagation()}>
-                        {String(d.status).toLowerCase() !== 'approved' ? (
-                          <button onClick={() => handleApprove(d.uid)}
-                            className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 transition">
-                            核准
-                          </button>
-                        ) : (
-                          <button onClick={() => handleReject(d.uid)}
-                            className="text-slate-300 hover:text-red-500 transition text-xs font-bold px-2">
-                            撤銷
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
 
-        {/* 申請入口連結 */}
-        <div className="bg-blue-50 border border-blue-100 rounded-[1.5rem] p-6 flex justify-between items-center">
-          <div>
-            <p className="font-black text-blue-900">分銷商申請入口</p>
-            <p className="text-blue-600 text-sm font-medium mt-1">分享此連結給想申請的業務夥伴</p>
-          </div>
-          <button onClick={() => {
-            const url = `${window.location.origin}${window.location.pathname.replace('index.html','')}register.html?a=demo`;
-            navigator.clipboard.writeText(url).then(() => showToast('連結已複製！'));
-          }} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
-            複製申請連結
-          </button>
-        </div>
+            {/* 搜尋 */}
+            <input value={distSearch} onChange={e => setDistSearch(e.target.value)}
+              placeholder="搜尋姓名、電話、公司..."
+              className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
 
+            {/* 名單 */}
+            <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
+              {loading ? (
+                <div className="p-20 text-center">
+                  <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+                  <p className="text-slate-400 font-bold text-sm">載入中...</p>
+                </div>
+              ) : filteredDist.length === 0 ? (
+                <div className="p-20 text-center text-slate-300 font-bold">
+                  {distSearch || distFilter !== 'all' ? '無符合條件的資料' : '目前無申請資料'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                      <tr>
+                        <th className="p-5">申請人</th>
+                        <th className="p-5">公司/品牌</th>
+                        <th className="p-5">推薦人</th>
+                        <th className="p-5">累積業績</th>
+                        <th className="p-5">狀態</th>
+                        <th className="p-5 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredDist.map((d, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
+                          onClick={() => setSelDist(d)}>
+                          <td className="p-5">
+                            <p className="font-black text-slate-800">{d.name || '未填寫'}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{d.phone || '無電話'}</p>
+                          </td>
+                          <td className="p-5 text-sm text-slate-600">{d.companyname || d.companyName || '—'}</td>
+                          <td className="p-5 font-mono text-[10px] text-slate-300 max-w-[80px] truncate"
+                            title={d.ref_uid}>{d.ref_uid || '—'}</td>
+                          <td className="p-5 font-black text-slate-700">
+                            ${Number(d.salesrevenue || d.salesRevenue || 0).toLocaleString()}
+                          </td>
+                          <td className="p-5"><StatusBadge status={d.status} /></td>
+                          <td className="p-5 text-right" onClick={e => e.stopPropagation()}>
+                            {String(d.status).toLowerCase() !== 'approved' ? (
+                              <button onClick={() => handleApprove(d.uid)}
+                                className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-emerald-700 transition">
+                                核准
+                              </button>
+                            ) : (
+                              <button onClick={() => handleReject(d.uid)}
+                                className="text-slate-300 hover:text-red-500 transition text-xs font-bold px-2">
+                                撤銷
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* 申請入口連結 */}
+            <div className="bg-blue-50 border border-blue-100 rounded-[1.5rem] p-6 flex justify-between items-center">
+              <div>
+                <p className="font-black text-blue-900">分銷商申請入口</p>
+                <p className="text-blue-600 text-sm font-medium mt-1">分享此連結給想申請的業務夥伴</p>
+              </div>
+              <button onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname.replace('crm.html','').replace('index.html','')}register.html?a=demo`;
+                navigator.clipboard.writeText(url).then(() => showToast('連結已複製！'));
+              }} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
+                複製申請連結
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ════ 訂單 Tab ════ */}
+        {tab === 'orders' && (
+          <>
+            {/* 訂單統計 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 anim">
+              <div className="bg-amber-500 text-white p-5 rounded-[1.5rem]">
+                <p className="text-3xl font-black">{orderStats.pendingCount}</p>
+                <p className="text-sm font-bold opacity-90 mt-1">待處理訂單</p>
+              </div>
+              <div className="bg-blue-600 text-white p-5 rounded-[1.5rem]">
+                <p className="text-2xl font-black">{fmt(orderStats.monthRevenue)}</p>
+                <p className="text-sm font-bold opacity-90 mt-1">本月成交金額</p>
+              </div>
+              <div className="bg-emerald-600 text-white p-5 rounded-[1.5rem]">
+                <p className="text-2xl font-black">{fmt(orderStats.monthCommission)}</p>
+                <p className="text-sm font-bold opacity-90 mt-1">本月佣金支出</p>
+              </div>
+              <div className="bg-slate-800 text-white p-5 rounded-[1.5rem]">
+                <p className="text-3xl font-black">{orderStats.totalCount}</p>
+                <p className="text-sm font-bold opacity-90 mt-1">訂單總數</p>
+              </div>
+            </div>
+
+            {/* 篩選 + 搜尋 */}
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 overflow-x-auto">
+                {[
+                  { key:'all',       label:'全部' },
+                  { key:'pending',   label:'待處理' },
+                  { key:'confirmed', label:'已確認' },
+                  { key:'completed', label:'已完成' },
+                  { key:'cancelled', label:'已取消' },
+                ].map(f => (
+                  <button key={f.key} onClick={() => setOrderFilter(f.key)}
+                    className={`px-3 py-2 rounded-lg text-xs font-black whitespace-nowrap transition ${
+                      orderFilter === f.key
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}>
+                    {f.label} <span className="ml-1 opacity-70">{orderCounts[f.key] || 0}</span>
+                  </button>
+                ))}
+              </div>
+              <input value={orderSearch} onChange={e => setOrderSearch(e.target.value)}
+                placeholder="搜尋訂單號、行程、客戶姓名、電話..."
+                className="flex-1 p-3 border-2 border-slate-200 rounded-xl font-medium outline-none focus:border-blue-500 bg-white" />
+            </div>
+
+            {/* 訂單列表 */}
+            <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
+              {loading ? (
+                <div className="p-20 text-center">
+                  <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+                  <p className="text-slate-400 font-bold text-sm">載入中...</p>
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="p-20 text-center text-slate-300 font-bold">
+                  {orderSearch || orderFilter !== 'all' ? '無符合條件的訂單' : '目前無訂單資料'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                      <tr>
+                        <th className="p-4">訂單號 / 時間</th>
+                        <th className="p-4">行程 / 客戶</th>
+                        <th className="p-4">人數 / 出發日</th>
+                        <th className="p-4 text-right">金額</th>
+                        <th className="p-4 text-right">佣金</th>
+                        <th className="p-4">狀態</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredOrders.map((o, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
+                          onClick={() => setSelOrder(o)}>
+                          <td className="p-4">
+                            <p className="font-mono text-xs font-bold text-slate-700">{o.orderid}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{o.createdat || '—'}</p>
+                          </td>
+                          <td className="p-4 max-w-[200px]">
+                            <p className="font-black text-sm text-slate-800 line-clamp-1">{o.itinerarytitle || '—'}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {o.customername || '—'}
+                              {o.customerphone && ` · ${o.customerphone}`}
+                            </p>
+                          </td>
+                          <td className="p-4 text-sm">
+                            <p className="font-bold text-slate-700">{o.travelers || 1} 人</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{o.traveldate || '未指定'}</p>
+                          </td>
+                          <td className="p-4 text-right font-black text-red-600">{fmt(o.price)}</td>
+                          <td className="p-4 text-right font-bold text-emerald-600 text-sm">{fmt(o.commissionamount)}</td>
+                          <td className="p-4"><OrderStatusBadge status={o.status} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* 詳情 Modal */}
-      {selected && (
+      {/* 詳情 Modals */}
+      {selDist && (
         <DistModal
-          dist={selected}
-          onClose={() => setSelected(null)}
+          dist={selDist}
+          onClose={() => setSelDist(null)}
           onApprove={handleApprove}
           onReject={handleReject}
+        />
+      )}
+      {selOrder && (
+        <OrderModal
+          order={selOrder}
+          onClose={() => setSelOrder(null)}
+          onUpdateStatus={handleUpdateOrderStatus}
         />
       )}
 
