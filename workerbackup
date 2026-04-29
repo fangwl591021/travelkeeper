@@ -1,0 +1,474 @@
+// ============================================================
+// TravelKeeper BFF Worker
+// 職責：聚合 API、組裝 Flex Message、R2 圖片上傳、AI 解析、訂單建立
+// 前端只需打一支 API 拿到所需全部資料
+// ============================================================
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+const R2_PUBLIC = 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev';
+const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS },
+  });
+
+const gasGet  = (env, params) => fetch(`${env.GAS_WEBAPP_URL}?${new URLSearchParams(params)}`, { redirect: 'follow' }).then(r => r.json());
+const gasPost = (env, body)   => fetch(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), redirect: 'follow' }).then(r => r.json());
+
+export default {
+  async fetch(request, env) {
+    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+    const url  = new URL(request.url);
+    const path = url.pathname;
+
+    try {
+
+      // ══════════════════════════════════════════════════════════
+      // GET /api/app-init?uid=xxx
+      // ★ 前端初始化一次打這支，拿到所有需要的資料
+      //   回傳：{ itineraries, user, orders, distStats? }
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/app-init' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid');
+
+        // 並行拉取：行程列表 + 用戶狀態
+        const [itinRaw, userRaw] = await Promise.all([
+          gasGet(env, { action: 'getItineraries' }),
+          uid ? gasGet(env, { action: 'checkUserStatus', uid }) : Promise.resolve(null),
+        ]);
+
+        const itineraries = Array.isArray(itinRaw) ? itinRaw : [];
+        const user        = userRaw?.success ? userRaw.data : null;
+
+        // 若是分銷商，額外拿業績；若是管理員，拿 CRM 名單
+        let orders    = [];
+        let distStats = null;
+        let crmList   = [];
+
+        if (uid && user) {
+          const extras = await Promise.all([
+            gasGet(env, { action: 'getUserOrders', uid }),
+            user.role === 'distributor'
+              ? gasGet(env, { action: 'getDistributorPerformance', uid })
+              : Promise.resolve(null),
+            user.isAdmin
+              ? gasGet(env, { action: 'getDistributors' })
+              : Promise.resolve(null),
+          ]);
+          orders    = extras[0]?.data || [];
+          distStats = extras[1]?.success ? { users: extras[1].users || [], orders: extras[1].orders || [] } : null;
+          crmList   = Array.isArray(extras[2]) ? extras[2] : [];
+        }
+
+        return json({ success: true, itineraries, user, orders, distStats, crmList });
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // POST /api/build-flex
+      // ★ 前端傳入行程 IDs + 設定，Worker 回傳組裝好的 Flex JSON
+      //   body: { ids, mode, uid, ctaText, socFields, agencySlug }
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/build-flex' && request.method === 'POST') {
+        const { ids = [], mode = 'single', uid = '', ctaText = '查看行程 / 立即報名', socFields = {}, agencySlug = 'demo' } = await request.json();
+
+        // 拉取這幾筆行程
+        const itinRaw = await gasGet(env, { action: 'getItineraries' });
+        const all     = Array.isArray(itinRaw) ? itinRaw : [];
+        const items   = ids.map(id => all.find(i => String(i.id || i.timestamp || '') === String(id))).filter(Boolean);
+
+        if (items.length === 0) return json({ success: false, error: '找不到指定行程' }, 400);
+
+        // LIFF ID 從 config 拿，作為預約按鈕 URL 的一部分
+        const cfgRes = await gasGet(env, { action: 'getConfig', a: agencySlug });
+        const liffId = cfgRes?.data?.liff_id || '';
+
+        // 聯絡按鈕
+        const SOC_DEFS = [
+          { key: 'phone',      label: '電話',    prefix: 'tel:',  field: 'phone'      },
+          { key: 'line',       label: 'LINE',    prefix: '',      field: 'lineLink'   },
+          { key: 'lineAt',     label: 'LINE@',   prefix: '',      field: 'lineAtLink' },
+          { key: 'fb',         label: 'Facebook',prefix: '',      field: 'fbLink'     },
+          { key: 'web',        label: '網站',    prefix: '',      field: 'webLink'    },
+          { key: 'map',        label: '地圖',    prefix: '',      field: 'mapLink'    },
+          { key: 'tg',         label: 'Telegram',prefix: '',      field: 'tgToken'    },
+        ];
+        const socBtns = SOC_DEFS
+          .filter(d => socFields[d.key] && socFields[d.field] !== undefined ? socFields[d.field] : socFields[d.field])
+          .filter(d => {
+            const val = socFields[d.field] || socFields[d.key];
+            return !!val;
+          })
+          .map(d => {
+            const raw = socFields[d.field] || socFields[d.key] || '';
+            return { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: d.label, uri: d.prefix ? `${d.prefix}${raw}` : raw } };
+          });
+
+        // 預約按鈕 URL（LIFF）
+        const buildBookingUri = (itineraryId) =>
+          liffId
+            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}`
+            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}`;
+
+        // ★ 行程詳情頁 URL — 客戶瀏覽用 tour.html（純詳情頁，不是業務工具）
+        const buildDetailUri = (itineraryId) =>
+          `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}`;
+
+        // ── 單張 / 橫向輪播 用：完整大卡（hero 圖 + 詳細資訊 + 立即預約）
+        const makeBubble = (tour) => {
+          const id  = String(tour.id || tour.timestamp || '');
+          const detailUri = buildDetailUri(id);
+          const bookUri = buildBookingUri(id);
+          return {
+            type: 'bubble', size: 'mega',
+            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', action: { type: 'uri', uri: detailUri } },
+            body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', contents: [
+              { type: 'text', text: tour.title, weight: 'bold', size: 'lg', wrap: true, color: '#0f172a' },
+              { type: 'text', text: `${tour.region || ''} · ${tour.days}天`, size: 'sm', color: '#64748b', margin: 'sm' },
+              { type: 'text', text: `TWD ${Number(tour.price).toLocaleString()}`, weight: 'bold', size: 'xl', color: '#b82337', margin: 'md' },
+            ]},
+            footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', contents: [
+              { type: 'button', style: 'primary', color: '#b82337', height: 'md', action: { type: 'uri', label: '立即預約', uri: bookUri } },
+              { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: ctaText, uri: detailUri } },
+              ...socBtns
+            ]}
+          };
+        };
+
+        // ── 列表模式：完全照 LINE 官方 list bubble 範例結構
+        //   每個行程 = 一個獨立的 box，內含：縮圖 + 標題 + 副資訊 + 價格
+        //   ★ 方案 A：整塊點擊進「詳情頁」(model.html)，預約靠詳情頁裡的按鈕
+        const makeListItem = (tour) => {
+          const id  = String(tour.id || tour.timestamp || '');
+          const detailUri = buildDetailUri(id);
+          return {
+            type: 'box',
+            layout: 'horizontal',
+            spacing: 'md',
+            action: { type: 'uri', uri: detailUri },
+            contents: [
+              {
+                type: 'image',
+                url: tour.image || 'https://via.placeholder.com/200x150',
+                size: 'sm',
+                aspectRatio: '4:3',
+                aspectMode: 'cover',
+                flex: 2
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                flex: 5,
+                contents: [
+                  {
+                    type: 'text',
+                    text: tour.title || '行程',
+                    weight: 'bold',
+                    size: 'sm',
+                    wrap: true,
+                    color: '#0f172a'
+                  },
+                  {
+                    type: 'text',
+                    text: `${tour.region || ''}  ·  ${tour.days || ''}天`,
+                    size: 'xs',
+                    color: '#64748b',
+                    margin: 'sm'
+                  },
+                  {
+                    type: 'text',
+                    text: `TWD ${Number(tour.price || 0).toLocaleString()}`,
+                    weight: 'bold',
+                    size: 'md',
+                    color: '#b82337',
+                    margin: 'sm'
+                  }
+                ]
+              }
+            ]
+          };
+        };
+
+        let flex;
+        if (mode === 'multi') {
+          // ★ 列表模式：單一 bubble，每筆行程之間用 separator 分隔
+          const itemContents = [];
+          items.forEach((tour, idx) => {
+            if (idx > 0) itemContents.push({ type: 'separator', margin: 'lg' });
+            const wrapper = {
+              type: 'box',
+              layout: 'vertical',
+              margin: idx === 0 ? 'none' : 'lg',
+              contents: [makeListItem(tour)]
+            };
+            itemContents.push(wrapper);
+          });
+
+          const listBubble = {
+            type: 'bubble',
+            size: 'mega',
+            header: {
+              type: 'box',
+              layout: 'vertical',
+              backgroundColor: '#0f172a',
+              paddingAll: '16px',
+              contents: [
+                { type: 'text', text: '✈️ 精選行程推薦', weight: 'bold', color: '#ffffff', size: 'lg' },
+                { type: 'text', text: `共 ${items.length} 個行程`, color: '#94a3b8', size: 'sm', margin: 'xs' }
+              ]
+            },
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'md',
+              paddingAll: '16px',
+              contents: itemContents
+            }
+          };
+
+          if (socBtns.length) {
+            listBubble.footer = {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'sm',
+              paddingAll: '14px',
+              contents: socBtns
+            };
+          }
+
+          flex = {
+            type: 'flex',
+            altText: `精選行程推薦：${items[0].title} 等${items.length}條`,
+            contents: listBubble
+          };
+        } else {
+          const bubbles = items.map(makeBubble);
+          flex = { type: 'flex', altText: `推薦行程：${items[0].title}`, contents: mode === 'carousel' ? { type: 'carousel', contents: bubbles } : bubbles[0] };
+        }
+
+        return json({ success: true, flex });
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // POST /api/orders/create
+      // ★ booking.html 送出預約 → 寫 Sheets → 發 Telegram 給分銷商
+      //   body: { itinerary_id, distributor_uid, customer_*, travelers, travel_date, note }
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/orders/create' && request.method === 'POST') {
+        const body       = await request.json();
+        const agencySlug = url.searchParams.get('a') || 'demo';
+
+        // 基本驗證
+        const required = ['itinerary_id', 'distributor_uid', 'customer_name', 'customer_phone'];
+        for (const f of required) {
+          if (!body[f]) return json({ success: false, error: `缺少欄位：${f}` }, 400);
+        }
+
+        // 1. 呼叫 GAS 寫訂單（GAS 端會查行程、查分銷商、算佣金、寫 Orders）
+        const result = await gasPost(env, {
+          action: 'createOrder',
+          agency_slug: agencySlug,
+          itinerary_id: body.itinerary_id,
+          distributor_uid: body.distributor_uid,
+          customer_line_uid: body.customer_line_uid || '',
+          customer_name: body.customer_name,
+          customer_phone: body.customer_phone,
+          travelers: Number(body.travelers) || 1,
+          travel_date: body.travel_date || '',
+          note: body.note || '',
+        });
+
+        if (!result.success) {
+          return json({ success: false, error: result.error || '訂單建立失敗' }, 500);
+        }
+
+        // 2. 發 Telegram 通知（用該分銷商自己的 Bot；失敗不擋訂單）
+        const dist  = result.data.distributor;
+        const order = result.data.order;
+        const tgToken  = dist?.tgToken  || dist?.tgtoken  || '';
+        const tgChatId = dist?.tgChatId || dist?.tgchatid || '';
+        if (tgToken && tgChatId) {
+          try {
+            await sendTelegramNotification(tgToken, tgChatId, order);
+          } catch (tgErr) {
+            console.error('Telegram notify failed:', tgErr.message);
+            // 訂單已成立，通知失敗只記 log
+          }
+        }
+
+        return json({
+          success: true,
+          data: { order_id: order.order_id }
+        });
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // POST /api/upload-image  （R2 圖片上傳）
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/upload-image' && request.method === 'POST') {
+        const { base64, filename } = await request.json();
+        const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer     = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+        const ext        = (filename || 'image.jpg').split('.').pop().toLowerCase();
+        const ctMap      = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+        const key        = `tours/${Date.now()}_${filename || 'image.jpg'}`;
+        await env.TRAVEL.put(key, buffer, { httpMetadata: { contentType: ctMap[ext] || 'image/jpeg' } });
+        return json({ success: true, url: `${R2_PUBLIC}/${key}` });
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // POST /api/upload-dm  （AI DM 解析）
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/upload-dm' && request.method === 'POST') {
+        const { image } = await request.json();
+        const gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+          body: JSON.stringify({
+            model: 'gpt-4o', response_format: { type: 'json_object' }, max_tokens: 4000, temperature: 0.7,
+            messages: [{ role: 'user', content: [
+              { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 並深度擴寫。回傳標準 JSON：
+{"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
+description 中圖片語法使用景點英文關鍵字而非URL，系統會自動替換。` },
+              { type: 'image_url', image_url: { url: image } }
+            ]}]
+          })
+        });
+        const gptData = await gptResp.json();
+        if (gptData.error) throw new Error(gptData.error.message);
+
+        let content = gptData.choices[0].message.content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        const match = content.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('無法解析 GPT 回應');
+        const parsed = JSON.parse(match[0]);
+
+        // 封面圖：Unsplash → 上傳 R2
+        const coverUrl = await fetchUnsplashUrl(parsed.imageKeyword || 'travel', env);
+        parsed.image   = await uploadUrlToR2(coverUrl, `cover_${Date.now()}.jpg`, env);
+
+        // 內文圖片關鍵字替換為 R2 URL
+        if (parsed.description) {
+          parsed.description = await replaceImageKeywords(parsed.description, env);
+        }
+
+        return json({ success: true, data: parsed });
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // POST /api/partner/register
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/partner/register' && request.method === 'POST') {
+        const body       = await request.json();
+        const agencySlug = url.searchParams.get('a') || 'demo';
+        const result     = await gasPost(env, { action: 'registerDistributor', ...body, agency_slug: agencySlug });
+        if (!result.success) {
+          const msgMap = { already_approved: '您已是核准分銷商', already_pending: '申請已送出，請等待審核' };
+          return json({ success: false, error: msgMap[result.error] || result.error });
+        }
+        return json(result);
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // GET /api/config
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/config' && request.method === 'GET') {
+        const slug   = url.searchParams.get('a') || 'demo';
+        const result = await gasGet(env, { action: 'getConfig', a: slug });
+        return json(result);
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // GET/POST /api/itineraries  （GAS 通用代理，向下相容）
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/itineraries') {
+        if (request.method === 'GET') {
+          const result = await gasGet(env, Object.fromEntries(url.searchParams));
+          return json(result);
+        }
+        const body   = await request.json();
+        const result = await gasPost(env, body);
+        return json(result);
+      }
+
+      return json({ error: 'Not Found' }, 404);
+
+    } catch (err) {
+      console.error('Worker Error:', err);
+      return json({ success: false, error: err.message, ts: new Date().toISOString() }, 500);
+    }
+  }
+};
+
+// ── Telegram 通知 ─────────────────────────────────────────────
+
+async function sendTelegramNotification(token, chatId, order) {
+  const text =
+    `🎉 *新訂單通知*\n\n` +
+    `📋 訂單：\`${order.order_id}\`\n` +
+    `🏝️ 行程：${order.itinerary_title}\n` +
+    `💰 金額：NT$ ${Number(order.price).toLocaleString()}\n` +
+    `💵 您的佣金：NT$ ${Number(order.commission_amount).toLocaleString()}\n\n` +
+    `👤 客戶：${order.customer_name}\n` +
+    `📞 電話：${order.customer_phone}\n` +
+    `👥 人數：${order.travelers} 人\n` +
+    `📅 出發日：${order.travel_date || '未指定'}\n` +
+    (order.note ? `📝 備註：${order.note}\n` : '') +
+    `\n⏰ ${order.created_at}\n\n請盡快聯繫客戶 🙏`;
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+  });
+  if (!res.ok) throw new Error(`Telegram API: ${await res.text()}`);
+}
+
+// ── 圖片工具 ─────────────────────────────────────────────────
+
+async function fetchUnsplashUrl(keyword, env) {
+  try {
+    if (env.UNSPLASH_API_KEY) {
+      const res  = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&orientation=landscape&per_page=1`, { headers: { Authorization: `Client-ID ${env.UNSPLASH_API_KEY}` } });
+      const data = await res.json();
+      if (data.results?.[0]?.urls?.raw) return `${data.results[0].urls.raw}&w=1600&h=900&fit=crop&q=80`;
+    }
+  } catch (e) { console.warn('Unsplash failed:', e.message); }
+  return `https://loremflickr.com/1600/900/${encodeURIComponent(keyword)}`;
+}
+
+async function uploadUrlToR2(imageUrl, filename, env) {
+  try {
+    const res    = await fetch(imageUrl);
+    if (!res.ok) throw new Error('fetch failed');
+    const buffer = await res.arrayBuffer();
+    const ct     = res.headers.get('content-type') || 'image/jpeg';
+    const key    = `tours/${filename}`;
+    await env.TRAVEL.put(key, buffer, { httpMetadata: { contentType: ct } });
+    return `${R2_PUBLIC}/${key}`;
+  } catch (e) {
+    console.warn('R2 upload failed:', e.message);
+    return imageUrl;
+  }
+}
+
+async function replaceImageKeywords(text, env) {
+  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const replacements = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const keyword = match[2];
+    if (keyword.startsWith('http')) continue;
+    const unsplashUrl = await fetchUnsplashUrl(keyword, env);
+    const r2Url       = await uploadUrlToR2(unsplashUrl, `scene_${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`, env);
+    replacements.push({ original: match[0], replacement: `![${match[1]}](${r2Url})` });
+  }
+  let result = text;
+  for (let i = replacements.length - 1; i >= 0; i--) result = result.replace(replacements[i].original, replacements[i].replacement);
+  return result;
+}
