@@ -3,169 +3,580 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>智能上稿 - 旗艦穩定版</title>
+  <title>上稿 + 審核中心 | 旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
-    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .anim { animation: fadeUp .3s ease both; }
+    .spin { animation: spin .7s linear infinite; }
+    .glass { background: rgba(255,255,255,.92); backdrop-filter: blur(16px); }
   </style>
 </head>
-<body class="bg-gray-50 font-sans text-slate-800">
-  <div id="root"></div>
+<body class="bg-slate-50 min-h-screen font-sans">
+<div id="root">
+  <div class="flex items-center justify-center h-screen flex-col gap-3">
+    <div class="spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+    <p class="text-slate-400 font-bold text-sm">驗證身份中…</p>
+  </div>
+</div>
 
-  <script type="text/babel">
-    const { useState, useEffect } = React;
-    const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
-    const LIFF_ID = '2009367829-BDZCGti8'; 
+<script type="text/babel">
+const { useState, useEffect } = React;
+const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+const LIFF_ID    = '2009367829-BDZCGti8';
+const fmt = (n) => '$' + Number(n||0).toLocaleString();
 
-    function AdminApp() {
-      const [isAdmin, setIsAdmin] = useState(false);
-      const [ocrStatus, setOcrStatus] = useState('idle');
-      const [draftData, setDraftData] = useState(null);
-      const [uid, setUid] = useState('');
-      const [toast, setToast] = useState(null);
+// ══════════════════════════════════════════════════════════════
+// 上稿/編輯表單（共用）
+// ══════════════════════════════════════════════════════════════
+function ItineraryForm({ initial, onSave, onCancel, saving }) {
+  const [data, setData] = useState(initial || {
+    title: '', region: '亞洲', price: '', days: '',
+    image: '', description: '', notes: ''
+  });
 
-      useEffect(() => {
-        liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true }).then(() => {
-          if (liff.isLoggedIn()) {
-            liff.getProfile().then(p => {
-              setUid(p.userId);
-              checkAuth(p.userId);
-            });
-          } else liff.login();
+  const handleAIUpload = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      const btn = e.target.parentElement;
+      btn.innerHTML = '<span class="spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span> AI 解析中…';
+      try {
+        const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ image: ev.target.result })
         });
-      }, []);
+        const result = await res.json();
+        if (result.success) {
+          setData(prev => ({ ...prev, ...result.data }));
+        }
+      } catch(err) { alert('AI 解析失敗：' + err.message); }
+      btn.innerHTML = '🤖 AI 解析 DM';
+    };
+    reader.readAsDataURL(file);
+  };
 
-      const showToast = (msg, type = 'success') => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 4000);
-      };
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const res = await fetch(`${WORKER_URL}/api/upload-image`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ base64: ev.target.result, filename: file.name })
+        });
+        const result = await res.json();
+        if (result.success) setData(prev => ({ ...prev, image: result.url }));
+      } catch(err) { alert('上傳失敗'); }
+    };
+    reader.readAsDataURL(file);
+  };
 
-      const checkAuth = async (userId) => {
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${userId}`);
-          const data = await res.json();
-          if (data.success && data.data.isAdmin) setIsAdmin(true);
-        } catch(e) {}
-      };
-
-      const handleFile = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        setOcrStatus('processing');
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-          try {
-            const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: ev.target.result })
-            });
-            
-            if (!res.ok) throw new Error('Worker 響應錯誤 (500)');
-            
-            const result = await res.json();
-            if (result.success) {
-              setDraftData(result.data);
-              setOcrStatus('done');
-              showToast('✅ AI 解析擴寫成功！');
-            } else {
-              throw new Error(result.error || '解析失敗');
-            }
-          } catch (e) {
-            setOcrStatus('idle');
-            showToast('❌ 解析失敗：' + e.message, 'error');
-          }
-        };
-        reader.readAsDataURL(file);
-      };
-
-      const handleConfirm = async () => {
-        try {
-          const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...draftData, action: 'addItinerary' })
-          });
-          const result = await res.json();
-          if (result.success) {
-            showToast('🎉 行程已成功發布！');
-            setTimeout(() => window.location.href = 'index.html', 1500);
-          }
-        } catch (e) { showToast('上傳失敗', 'error'); }
-      };
-
-      if (!isAdmin && uid) return (
-        <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
-          <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl border max-w-md w-full text-center animate-fade-in-up">
-            <div className="text-5xl mb-6">🚫</div>
-            <h1 className="text-2xl font-black mb-2">ACCESS DENIED</h1>
-            <p className="text-slate-400 text-sm mb-6">您的帳號目前無管理權限。</p>
-            <div className="bg-slate-50 p-4 rounded-2xl border border-dashed text-left">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">您的專屬 UID</p>
-              <p className="font-mono text-xs text-blue-600 break-all select-all">{uid}</p>
-            </div>
-          </div>
+  return (
+    <div className="space-y-5">
+      {/* AI 解析按鈕 */}
+      <label className="block">
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-2xl text-center font-black cursor-pointer hover:opacity-90 transition">
+          🤖 AI 解析 DM
         </div>
-      );
+        <input type="file" accept="image/*" onChange={handleAIUpload} className="hidden" />
+      </label>
+      <p className="text-xs text-center text-slate-400 font-medium -mt-3">上傳旅遊 DM 圖片，AI 自動填表</p>
 
-      return (
-        <div className="max-w-4xl mx-auto p-4 md:p-10 animate-fade-in-up">
-          <header className="mb-10 flex justify-between items-end">
+      {/* 封面圖 */}
+      <div>
+        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖</label>
+        {data.image && (
+          <img src={data.image} className="w-full aspect-video object-cover rounded-2xl mt-2 mb-2" />
+        )}
+        <div className="flex gap-2 mt-1">
+          <input value={data.image||''} onChange={e=>setData({...data,image:e.target.value})}
+            placeholder="https://…"
+            className="flex-1 p-3 border-2 border-slate-100 rounded-xl text-sm font-medium outline-none focus:border-blue-500 bg-slate-50" />
+          <label className="bg-slate-200 hover:bg-slate-300 px-4 py-3 rounded-xl text-sm font-bold cursor-pointer">
+            📁
+            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+          </label>
+        </div>
+      </div>
+
+      {/* 基本欄位 */}
+      <div>
+        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程標題</label>
+        <input value={data.title||''} onChange={e=>setData({...data,title:e.target.value})}
+          className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl font-bold outline-none focus:border-blue-500" />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest">地區</label>
+          <select value={data.region||'亞洲'} onChange={e=>setData({...data,region:e.target.value})}
+            className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl font-bold outline-none focus:border-blue-500 bg-white">
+            {['國旅','亞洲','歐洲','美洲','大洋洲','非洲'].map(r=><option key={r}>{r}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest">天數</label>
+          <input type="number" value={data.days||''} onChange={e=>setData({...data,days:e.target.value})}
+            className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl font-bold outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest">價格</label>
+          <input type="number" value={data.price||''} onChange={e=>setData({...data,price:e.target.value})}
+            className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl font-bold text-red-600 outline-none focus:border-blue-500" />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程描述</label>
+        <textarea rows="10" value={data.description||''} onChange={e=>setData({...data,description:e.target.value})}
+          className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl text-sm outline-none focus:border-blue-500 leading-relaxed" />
+      </div>
+
+      <div>
+        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">注意事項</label>
+        <textarea rows="3" value={data.notes||''} onChange={e=>setData({...data,notes:e.target.value})}
+          className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl text-sm outline-none focus:border-blue-500" />
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <button onClick={onCancel}
+          className="flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-600 hover:bg-slate-200">取消</button>
+        <button onClick={() => onSave(data)} disabled={saving || !data.title}
+          className="flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+          {saving ? '儲存中…' : '提交'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 主應用
+// ══════════════════════════════════════════════════════════════
+function App() {
+  const [authState,    setAuthState]    = useState('checking');  // checking | denied | ready
+  const [profile,      setProfile]      = useState(null);
+  const [isAdmin,      setIsAdmin]      = useState(false);
+  const [canUpload,    setCanUpload]    = useState(false);
+  const [tab,          setTab]          = useState('mine');      // mine | review | new
+  const [myItems,      setMyItems]      = useState([]);
+  const [pendingItems, setPendingItems] = useState([]);
+  const [editing,      setEditing]      = useState(null);  // 編輯中的行程
+  const [creating,     setCreating]     = useState(false); // 新增中
+  const [reviewing,    setReviewing]    = useState(null);  // 審核中的行程
+  const [reviewNote,   setReviewNote]   = useState('');
+  const [saving,       setSaving]       = useState(false);
+  const [toast,        setToast]        = useState(null);
+
+  const showToast = (msg, type='success') => {
+    setToast({ msg, type });
+    setTimeout(()=>setToast(null), 3000);
+  };
+
+  // ── 初始化 ──
+  useEffect(() => {
+    (async () => {
+      try {
+        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+        if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+        const p = await liff.getProfile();
+        setProfile(p);
+
+        // 檢查身份
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`);
+        const data = await res.json();
+        if (!data.success) { setAuthState('denied'); return; }
+
+        const _isAdmin = data.data.isAdmin;
+        const _canUpload = data.data.canUpload;
+        setIsAdmin(_isAdmin);
+        setCanUpload(_canUpload);
+
+        if (!_isAdmin && !_canUpload) {
+          setAuthState('denied');
+          return;
+        }
+
+        // 載入資料
+        await fetchMine(p.userId, _isAdmin);
+        if (_isAdmin) await fetchPending();
+
+        setAuthState('ready');
+      } catch(e) {
+        console.error(e);
+        setAuthState('denied');
+      }
+    })();
+  }, []);
+
+  const fetchMine = async (uid, asAdmin) => {
+    // 管理員看全部，分銷商只看自己上稿的
+    const url = asAdmin
+      ? `${WORKER_URL}/api/itineraries?action=getItineraries&all=1`
+      : `${WORKER_URL}/api/itineraries?action=getItineraries&owner=${uid}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    setMyItems(Array.isArray(data) ? data : []);
+  };
+
+  const fetchPending = async () => {
+    const res = await fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`);
+    const data = await res.json();
+    setPendingItems(data?.data || []);
+  };
+
+  const reload = async () => {
+    if (profile) await fetchMine(profile.userId, isAdmin);
+    if (isAdmin) await fetchPending();
+  };
+
+  // ── 新增/編輯儲存 ──
+  const handleSave = async (data) => {
+    setSaving(true);
+    try {
+      const isEdit = !!editing;
+      const body = {
+        action: isEdit ? 'updateItinerary' : 'addItinerary',
+        ...data,
+        ownerUid: profile.userId,
+        ownerName: profile.displayName,
+        operatorUid: profile.userId,  // updateItinerary 權限檢查用
+      };
+      if (isEdit) body.id = editing.id || editing.timestamp;
+
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      const result = await res.json();
+      if (result.success) {
+        const msg = isAdmin
+          ? (isEdit ? '行程已更新' : '行程已上架')
+          : (isEdit ? '已修改，待管理員重新審核' : '已提交，待管理員審核');
+        showToast('✅ ' + msg);
+        setEditing(null);
+        setCreating(false);
+        await reload();
+      } else {
+        showToast('儲存失敗：' + (result.error||''), 'error');
+      }
+    } catch(e) {
+      showToast('網路錯誤', 'error');
+    }
+    setSaving(false);
+  };
+
+  // ── 刪除 ──
+  const handleDelete = async (item) => {
+    if (!confirm(`確定刪除「${item.title}」？`)) return;
+    try {
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'deleteItinerary', id: String(item.id||item.timestamp) })
+      });
+      const result = await res.json();
+      if (result.success) { showToast('已刪除'); await reload(); }
+      else showToast('刪除失敗', 'error');
+    } catch(e) { showToast('操作失敗', 'error'); }
+  };
+
+  // ── 審核 ──
+  const handleReview = async (status) => {
+    if (!reviewing) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          action:'reviewItinerary',
+          id: String(reviewing.id || reviewing.timestamp),
+          reviewStatus: status,
+          reviewNote: reviewNote || '',
+          operatorUid: profile.userId,
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast(status === 'published' ? '✅ 已核准上架' : '已駁回');
+        setReviewing(null); setReviewNote('');
+        await reload();
+      } else {
+        showToast('審核失敗：' + (result.error||''), 'error');
+      }
+    } catch(e) { showToast('網路錯誤', 'error'); }
+    setSaving(false);
+  };
+
+  // ════════════════════════════════════════════════════════════
+  if (authState === 'checking') {
+    return (
+      <div className="flex items-center justify-center h-screen flex-col gap-3">
+        <div className="spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"/>
+        <p className="text-slate-400 font-bold text-sm">驗證身份中…</p>
+      </div>
+    );
+  }
+
+  if (authState === 'denied') {
+    return (
+      <div className="flex items-center justify-center h-screen flex-col gap-3 p-8 text-center">
+        <div className="text-6xl">🔒</div>
+        <h2 className="text-2xl font-black text-slate-700">無上稿權限</h2>
+        <p className="text-slate-400 max-w-md">
+          您尚未取得上稿權限。請聯絡管理員授權後再使用。
+        </p>
+        <a href="index.html" className="mt-4 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700">
+          返回首頁
+        </a>
+      </div>
+    );
+  }
+
+  // ════ 主介面 ════
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="glass sticky top-0 z-40 border-b border-slate-200">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            {profile && <img src={profile.pictureUrl} className="w-10 h-10 rounded-full" />}
             <div>
-              <h1 className="text-4xl font-black text-slate-900">智能上稿中心</h1>
-              <p className="text-slate-400 font-bold mt-1">旗艦單店穩定版 v4.1</p>
+              <h1 className="font-black text-xl text-slate-900">
+                {isAdmin ? '🛠️ 管理員上稿中心' : '📝 我的上稿管理'}
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">{profile?.displayName}</p>
             </div>
-            <button onClick={() => window.location.href='index.html'} className="text-slate-400 hover:text-blue-600 font-bold text-sm transition">返回首頁</button>
-          </header>
-
-          <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-slate-100">
-            <div className={`relative border-4 border-dashed rounded-[2.5rem] p-16 text-center transition-all ${ocrStatus === 'processing' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-blue-400 group'}`}>
-              {ocrStatus === 'processing' ? (
-                <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="font-black text-blue-600 animate-pulse text-xl">ChatGPT 深度解析擴寫中...</p>
-                </div>
-              ) : (
-                <>
-                  <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-500">🚀</div>
-                  <p className="text-2xl font-black text-slate-600">點擊上傳旅遊 DM 圖片</p>
-                  <input type="file" onChange={handleFile} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
-                </>
-              )}
-            </div>
-
-            {draftData && (
-              <div className="mt-12 space-y-8 animate-fade-in-up">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="md:col-span-2"><label className="block text-xs font-black text-slate-400 uppercase mb-2">行程標題</label><input value={draftData.title} onChange={e=>setDraftData({...draftData, title:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl focus:border-blue-500 outline-none" /></div>
-                  <div><label className="block text-xs font-black text-slate-400 uppercase mb-2">團費價格</label><input type="number" value={draftData.price} onChange={e=>setDraftData({...draftData, price:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl text-red-600" /></div>
-                  <div><label className="block text-xs font-black text-slate-400 uppercase mb-2">行程天數</label><input type="number" value={draftData.days} onChange={e=>setDraftData({...draftData, days:e.target.value})} className="w-full p-5 border-2 rounded-2xl font-bold text-xl" /></div>
-                </div>
-                <div><label className="block text-xs font-black text-slate-400 uppercase mb-2">詳細腦補內容 (已自動配圖)</label><textarea value={draftData.description} onChange={e=>setDraftData({...draftData, description:e.target.value})} rows="15" className="w-full p-6 border-2 rounded-3xl leading-relaxed text-slate-600 focus:border-blue-500 outline-none text-lg" /></div>
-                <div className="flex gap-4 pt-4">
-                  <button onClick={() => setDraftData(null)} className="flex-1 bg-slate-100 py-6 rounded-3xl font-black text-slate-500 hover:bg-slate-200 transition">清空取消</button>
-                  <button onClick={handleConfirm} className="flex-[2] bg-blue-600 text-white font-black py-6 rounded-3xl shadow-2xl text-xl hover:bg-blue-700 transition">確認發布 🚀</button>
-                </div>
-              </div>
-            )}
           </div>
-          
-          {toast && (
-            <div className={`fixed bottom-10 right-10 z-[100] px-10 py-5 rounded-[2rem] shadow-2xl font-black animate-fade-in-up ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'}`}>
-              {toast.msg}
-            </div>
+          <button onClick={()=>{ setCreating(true); setEditing(null); }}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
+            + 新增行程
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="max-w-5xl mx-auto px-6 flex gap-1">
+          <button onClick={()=>setTab('mine')}
+            className={`px-5 py-3 font-black text-sm border-b-2 transition ${
+              tab==='mine' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}>
+            📦 {isAdmin ? '全部行程' : '我的行程'}
+            <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{myItems.length}</span>
+          </button>
+          {isAdmin && (
+            <button onClick={()=>setTab('review')}
+              className={`px-5 py-3 font-black text-sm border-b-2 transition ${
+                tab==='review' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}>
+              ⚠️ 待審核
+              {pendingItems.length > 0 && (
+                <span className="ml-2 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                  {pendingItems.length}
+                </span>
+              )}
+            </button>
           )}
         </div>
-      );
-    }
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<AdminApp />);
-  </script>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-8">
+
+        {/* ════ 我的行程 / 全部行程 ════ */}
+        {tab === 'mine' && (
+          <div className="space-y-3 anim">
+            {myItems.length === 0 ? (
+              <div className="p-20 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200">
+                <p className="text-slate-300 font-bold mb-2">尚無行程</p>
+                <button onClick={()=>setCreating(true)}
+                  className="text-blue-600 font-black hover:underline">+ 新增第一個行程</button>
+              </div>
+            ) : myItems.map(item => {
+              const status = String(item.reviewstatus || 'published').toLowerCase();
+              const statusCfg = {
+                published:      { label:'已上架', cls:'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                pending_review: { label:'待審核', cls:'bg-amber-50 text-amber-600 border-amber-200' },
+                rejected:       { label:'已駁回', cls:'bg-red-50 text-red-600 border-red-200' },
+              }[status] || { label:'已上架', cls:'bg-emerald-50 text-emerald-700 border-emerald-200' };
+
+              return (
+                <div key={item.id||item.timestamp} className="bg-white rounded-[2rem] border border-slate-100 p-4 flex gap-4 hover:shadow-md transition">
+                  {item.image && (
+                    <img src={item.image} className="w-32 h-24 object-cover rounded-xl shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-black text-slate-900 line-clamp-1">{item.title}</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {item.region} · {item.days}天 · {fmt(item.price)}
+                        </p>
+                        {isAdmin && item.ownername && (
+                          <p className="text-xs text-slate-500 mt-1">📝 上稿者：{item.ownername}</p>
+                        )}
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-black border shrink-0 ${statusCfg.cls}`}>
+                        {statusCfg.label}
+                      </span>
+                    </div>
+                    {status === 'rejected' && item.reviewnote && (
+                      <p className="text-xs text-red-600 mt-2 bg-red-50 px-3 py-2 rounded-lg">
+                        ⚠️ 駁回理由：{item.reviewnote}
+                      </p>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button onClick={()=>{ setEditing(item); setCreating(false); }}
+                        className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg text-xs font-bold">
+                        ✏️ 編輯
+                      </button>
+                      <button onClick={()=>handleDelete(item)}
+                        className="text-red-500 hover:bg-red-50 px-3 py-1 rounded-lg text-xs font-bold">
+                        🗑️ 刪除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ════ 待審核 (管理員) ════ */}
+        {tab === 'review' && isAdmin && (
+          <div className="space-y-3 anim">
+            {pendingItems.length === 0 ? (
+              <div className="p-20 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200">
+                <p className="text-slate-300 font-bold">🎉 沒有待審核的行程</p>
+              </div>
+            ) : pendingItems.map(item => (
+              <div key={item.id||item.timestamp} className="bg-white rounded-[2rem] border-2 border-amber-200 p-4 flex gap-4 hover:shadow-md transition cursor-pointer"
+                onClick={()=>{ setReviewing(item); setReviewNote(''); }}>
+                {item.image && (
+                  <img src={item.image} className="w-32 h-24 object-cover rounded-xl shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black text-slate-900 line-clamp-1">{item.title}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {item.region} · {item.days}天 · {fmt(item.price)}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1">📝 上稿者：{item.ownername || '(未提供)'}</p>
+                  <p className="text-xs text-slate-400 line-clamp-2 mt-2">
+                    {String(item.description||'').replace(/!\[[^\]]*\]\([^)]+\)/g,'').slice(0, 100)}…
+                  </p>
+                  <button className="mt-3 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-black hover:bg-blue-700">
+                    🔍 開始審核
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+
+      {/* ════ 新增/編輯 Modal ════ */}
+      {(creating || editing) && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={e => e.target===e.currentTarget && (saving ? null : (setCreating(false), setEditing(null)))}>
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto anim">
+            <div className="p-6 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
+              <h2 className="font-black text-xl">
+                {editing ? '✏️ 編輯行程' : '📝 新增行程'}
+              </h2>
+              <button onClick={()=>{ if(saving) return; setCreating(false); setEditing(null); }}
+                className="w-9 h-9 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+            <div className="p-6">
+              {!isAdmin && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 mb-5 text-xs font-bold text-amber-700">
+                  ℹ️ 您是分銷商，{editing ? '修改' : '新增'}的行程需經管理員審核才會上架
+                </div>
+              )}
+              <ItineraryForm
+                initial={editing}
+                onSave={handleSave}
+                onCancel={()=>{ if(saving) return; setCreating(false); setEditing(null); }}
+                saving={saving}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ 審核 Modal ════ */}
+      {reviewing && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={e => e.target===e.currentTarget && setReviewing(null)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto anim">
+            <div className="p-6 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
+              <h2 className="font-black text-xl">🔍 審核行程</h2>
+              <button onClick={()=>setReviewing(null)}
+                className="w-9 h-9 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              {reviewing.image && (
+                <img src={reviewing.image} className="w-full aspect-video object-cover rounded-2xl" />
+              )}
+              <div>
+                <h3 className="font-black text-2xl text-slate-900">{reviewing.title}</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  {reviewing.region} · {reviewing.days}天 · {fmt(reviewing.price)}
+                </p>
+                <p className="text-sm text-slate-600 mt-2">📝 上稿者：{reviewing.ownername}</p>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-4 max-h-64 overflow-y-auto">
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">行程內容</p>
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {String(reviewing.description||'').replace(/!\[([^\]]*)\]\([^)]+\)/g,'[圖片：$1]')}
+                </p>
+              </div>
+              {reviewing.notes && (
+                <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-xl">
+                  <p className="text-xs font-black text-amber-700 uppercase mb-1">注意事項</p>
+                  <p className="text-sm text-amber-900">{reviewing.notes}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">審核備註（駁回時必填）</label>
+                <textarea rows="2" value={reviewNote} onChange={e=>setReviewNote(e.target.value)}
+                  placeholder="駁回時請說明原因…"
+                  className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl text-sm outline-none focus:border-blue-500" />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={()=>{
+                  if (!reviewNote.trim()) { alert('駁回需要填寫理由'); return; }
+                  if (confirm('確定駁回此行程？')) handleReview('rejected');
+                }} disabled={saving}
+                  className="flex-1 bg-red-50 text-red-600 font-black py-3 rounded-2xl hover:bg-red-100 transition disabled:opacity-50">
+                  ❌ 駁回
+                </button>
+                <button onClick={()=>{ if (confirm('確定核准上架？')) handleReview('published'); }}
+                  disabled={saving}
+                  className="flex-[2] bg-emerald-600 text-white font-black py-3 rounded-2xl hover:bg-emerald-700 transition disabled:opacity-50">
+                  ✅ 核准上架
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-8 right-8 z-[200] px-6 py-4 rounded-2xl shadow-2xl font-bold text-white anim ${
+          toast.type==='error' ? 'bg-red-600' : 'bg-slate-900'
+        }`}>{toast.msg}</div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
 </body>
 </html>
