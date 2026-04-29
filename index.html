@@ -12,21 +12,17 @@
     .afu  { animation: fadeUp .25s ease both; }
     .spin { animation: spin .7s linear infinite; }
     .glass{ background:rgba(255,255,255,.92); backdrop-filter:blur(16px); }
-    /* 勾選框 */
     .promo-check { position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:6px;
       border:2.5px solid #fff;background:rgba(0,0,0,.35);display:flex;align-items:center;
       justify-content:center;cursor:pointer;transition:.15s;z-index:5; }
     .promo-check.on { background:#10b981;border-color:#10b981; }
-    /* Modal */
     .modal-bg { position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);
       backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:16px; }
     .modal-bg:not(.hidden) { display:flex; }
     .modal-box { background:#fff;border-radius:24px;width:100%;max-width:680px;
       max-height:92vh;overflow:hidden;display:flex;flex-direction:column; }
-    /* 全螢幕編輯器 */
     #editor-overlay { position:fixed;inset:0;z-index:300;background:#fff;flex-direction:column; }
     #editor-overlay:not(.hidden) { display:flex; }
-    /* toast */
     #toast { position:fixed;bottom:32px;left:50%;transform:translateX(-50%);
       background:#1e293b;color:#fff;padding:12px 28px;border-radius:14px;
       font-size:14px;font-weight:700;opacity:0;transition:.3s;z-index:999;
@@ -36,7 +32,6 @@
 </head>
 <body class="bg-gray-50 text-slate-800 font-sans">
 
-<!-- ════════════════════ NAV ════════════════════ -->
 <nav class="glass sticky top-0 z-50 h-14 flex items-center px-5 justify-between border-b border-slate-200 shadow-sm">
   <div class="flex items-center gap-2 cursor-pointer" onclick="switchTab('home')">
     <span class="text-xl">✈️</span>
@@ -45,8 +40,8 @@
   <div class="flex items-center gap-1" id="nav-tabs">
     <button onclick="switchTab('home')"   data-tab="home"   class="nav-btn active">找行程</button>
     <button onclick="switchTab('member')" data-tab="member" class="nav-btn hidden" id="nav-member">會員</button>
-    <button onclick="switchTab('crm')"    data-tab="crm"    class="nav-btn hidden" id="nav-crm">CRM</button>
-    <button onclick="switchTab('admin')"  data-tab="admin"  class="nav-btn hidden" id="nav-admin">上稿</button>
+    <a href="crm.html" class="nav-btn hidden" id="nav-crm" style="text-decoration:none">CRM</a>
+    <a href="admin.html" class="nav-btn hidden" id="nav-admin" style="text-decoration:none">上稿</a>
     <img id="nav-avatar" src="" class="w-8 h-8 rounded-full border ml-2 hidden" />
   </div>
 </nav>
@@ -56,7 +51,6 @@
   .nav-btn.active { background:#2563eb;color:#fff; }
 </style>
 
-<!-- ════════════════════ MAIN ════════════════════ -->
 <main id="main-content">
   <div class="flex items-center justify-center h-64 gap-3">
     <div class="spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
@@ -64,16 +58,12 @@
   </div>
 </main>
 
-<!-- ════════════════════ MODALS ════════════════════ -->
-
-<!-- 行程詳情 Modal -->
 <div id="tour-modal" class="modal-bg hidden" onclick="if(event.target===this)closeTourModal()">
   <div class="modal-box afu">
     <div id="tour-modal-body" class="overflow-y-auto flex-1"></div>
   </div>
 </div>
 
-<!-- 發送名片 Modal -->
 <div id="promo-modal" class="modal-bg hidden" onclick="if(event.target===this)closePromoModal()">
   <div class="modal-box afu" style="max-width:860px">
     <div class="p-5 border-b flex justify-between items-center shrink-0">
@@ -84,7 +74,6 @@
       <button onclick="closePromoModal()" class="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">✕</button>
     </div>
     <div class="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
-      <!-- 左 -->
       <div class="flex-1 p-5 overflow-y-auto space-y-5">
         <div>
           <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">發送模式</p>
@@ -108,7 +97,6 @@
           <button onclick="sendFlex()" id="send-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black text-base shadow-lg transition">🚀 立即分享給好友</button>
         </div>
       </div>
-      <!-- 右：預覽 -->
       <div class="w-full md:w-64 shrink-0 bg-[#749cbd] p-4 flex flex-col items-center">
         <p class="text-white/70 text-[10px] font-bold mb-3 uppercase bg-black/20 px-3 py-1 rounded-full">LINE 預覽</p>
         <div id="promo-preview" class="w-full space-y-2 overflow-y-auto"></div>
@@ -117,7 +105,6 @@
   </div>
 </div>
 
-<!-- 全螢幕行程編輯器 -->
 <div id="editor-overlay" class="hidden">
   <div class="shrink-0 border-b border-slate-200 px-5 py-3 flex items-center gap-3 flex-wrap bg-white">
     <select id="ed-region" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none bg-slate-50">
@@ -171,9 +158,7 @@
 
 <div id="toast"></div>
 
-<!-- ════════════════════ SCRIPT ════════════════════ -->
 <script>
-// ── 常數 ─────────────────────────────────────────
 const WORKER   = 'https://travelkeeper.fangwl591021.workers.dev';
 const LIFF_ID  = '2009367829-BDZCGti8';
 const REGIONS  = ['所有地區','國旅','亞洲','歐洲','美洲','大洋洲','非洲'];
@@ -188,7 +173,6 @@ const SOC_DEFS = [
   {key:'tg',   label:'✈️ Telegram',field:'tgToken'},
 ];
 
-// ── 全域狀態 ─────────────────────────────────────
 let APP = {
   itineraries: [], user: null, orders: [], distStats: null, crmList: [],
   liffProfile: null, searchRegion: '', searchKeyword: '',
@@ -196,7 +180,6 @@ let APP = {
   promoFlexMode: 'single', editItem: null, currentTab: 'home',
 };
 
-// ── 工具 ──────────────────────────────────────────
 const $  = id => document.getElementById(id);
 const el = (tag, cls='', html='') => { const e = document.createElement(tag); e.className=cls; e.innerHTML=html; return e; };
 const fmt = p => '$' + Number(p||0).toLocaleString();
@@ -207,9 +190,7 @@ function toast(msg, isErr=false) {
 }
 function api(path, opts={}) { return fetch(WORKER+path, { headers:{'Content-Type':'application/json'}, ...opts }).then(r=>r.json()); }
 
-// ── 初始化 ────────────────────────────────────────
 window.addEventListener('load', async () => {
-  // 等 LIFF
   for (let i=0; i<30 && typeof liff==='undefined'; i++) await new Promise(r=>setTimeout(r,200));
   if (typeof liff==='undefined') { renderError('LIFF SDK 載入失敗'); return; }
 
@@ -219,7 +200,6 @@ window.addEventListener('load', async () => {
     APP.liffProfile = await liff.getProfile();
   } catch(e) { console.warn('LIFF', e); }
 
-  // 一次拿全部資料
   try {
     const uid  = APP.liffProfile?.userId;
     const data = await api(`/api/app-init${uid ? '?uid='+uid : ''}`);
@@ -236,7 +216,6 @@ window.addEventListener('load', async () => {
   renderTab('home');
 });
 
-// ── Nav ──────────────────────────────────────────
 function setupNav() {
   const p = APP.liffProfile;
   if (p) {
@@ -256,7 +235,6 @@ function switchTab(tab) {
   renderTab(tab);
 }
 
-// ── Tab 渲染 ──────────────────────────────────────
 function renderTab(tab) {
   const m = $('main-content');
   m.innerHTML = '';
@@ -266,11 +244,9 @@ function renderTab(tab) {
   if (tab==='admin')  renderAdmin(m);
 }
 
-// ══ HOME TAB ══════════════════════════════════════
 function renderHome(container) {
   const wrap = el('div','w-full px-4 py-5 space-y-4 afu');
 
-  // 地區標籤
   const tagRow = el('div','flex gap-2 overflow-x-auto pb-1');
   tagRow.style.cssText = 'scrollbar-width:none;-webkit-overflow-scrolling:touch';
   REGIONS.forEach(r => {
@@ -284,7 +260,6 @@ function renderHome(container) {
   });
   wrap.appendChild(tagRow);
 
-  // 搜尋列
   const searchRow = el('div','flex gap-2');
   const sel = el('select','border-2 border-slate-200 rounded-2xl px-3 py-3 font-bold text-slate-700 outline-none focus:border-blue-500 bg-white text-sm shrink-0');
   REGIONS.forEach(r => {
@@ -305,7 +280,6 @@ function renderHome(container) {
   searchRow.append(sel, inp, srchBtn);
   wrap.appendChild(searchRow);
 
-  // 推廣工具列（已登入才顯示）
   if (APP.liffProfile) {
     const promoBar = el('div',`rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 transition ${APP.promoMode ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-100 shadow-sm'}`);
     const promoLeft = el('div','flex items-center gap-3');
@@ -325,7 +299,6 @@ function renderHome(container) {
     wrap.appendChild(promoBar);
   }
 
-  // 行程列表
   let items = APP.itineraries;
   if (APP.searchRegion) items = items.filter(i => String(i.region||'').includes(APP.searchRegion));
   if (APP.searchKeyword) items = items.filter(i => String(i.title||'').toLowerCase().includes(APP.searchKeyword.toLowerCase()));
@@ -348,14 +321,12 @@ function buildCard(item) {
 
   const card = el('div',`bg-white rounded-2xl border overflow-hidden relative transition-all duration-200 ${isSel?'border-emerald-400 ring-2 ring-emerald-200':'border-slate-200'} ${!APP.promoMode?'hover:border-slate-300':''}`);
 
-  // 推廣勾選框
   if (APP.promoMode) {
     const chk = el('div',`promo-check ${isSel?'on':''}`, isSel?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>':'');
     chk.onclick = e => { e.stopPropagation(); togglePromoSelect(id); };
     card.appendChild(chk);
   }
 
-  // 橫向列
   const row = el('div','flex cursor-pointer select-none');
   const thumb = el('div','w-24 h-20 shrink-0 bg-slate-100 overflow-hidden rounded-l-2xl');
   if (item.image) { const img = document.createElement('img'); img.src=item.image; img.alt=item.title; img.className='w-full h-full object-cover'; thumb.appendChild(img); }
@@ -379,7 +350,6 @@ function buildCard(item) {
   row.onclick = () => { if(APP.promoMode) return; APP.expandedId = isOpen ? null : id; renderTab('home'); };
   card.appendChild(row);
 
-  // 展開區
   if (isOpen && !APP.promoMode) {
     const expand = el('div','border-t border-slate-100 px-4 pb-4 pt-3 afu');
     expand.appendChild(el('p','text-sm text-slate-600 leading-relaxed line-clamp-4 mb-3',stripMd(item.description)));
@@ -407,7 +377,6 @@ function togglePromoSelect(id) {
   renderTab('home');
 }
 
-// ── 行程詳情 Modal ────────────────────────────────
 function openTourModal(item) {
   const body = $('tour-modal-body');
   body.innerHTML = '';
@@ -449,7 +418,6 @@ function renderDescTo(container, text) {
   });
 }
 
-// ══ MEMBER TAB ════════════════════════════════════
 function renderMember(container) {
   const w = el('div','p-4 md:p-8 max-w-3xl mx-auto space-y-8 afu');
   const p = APP.liffProfile;
@@ -463,10 +431,9 @@ function renderMember(container) {
     hdr.append(avatar, info);
     w.appendChild(hdr);
   }
-  // 分銷業績
   const dist = APP.user?.distributorData;
   if (dist?.status==='approved' && APP.distStats) {
-    const totalSales = (APP.distStats.orders||[]).reduce((s,o)=>s+Number(o.totalamount||0),0);
+    const totalSales = (APP.distStats.orders||[]).reduce((s,o)=>s+Number(o.price||o.totalamount||0),0);
     const sec = el('div','space-y-4');
     sec.appendChild(el('div','flex justify-between items-center',`<h3 class="text-lg font-black text-slate-900">我的分銷業績</h3><button onclick="openProfileEdit()" class="text-sm bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl font-bold hover:bg-emerald-100">✏️ 名片資料</button>`));
     const stats = el('div','grid grid-cols-2 gap-4');
@@ -476,19 +443,63 @@ function renderMember(container) {
     sec.appendChild(el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm text-blue-700 font-medium','💡 至「找行程」點「📤 推廣行程」選取行程後即可發送名片'));
     w.appendChild(sec);
   }
-  // 訂單
+  // 訂單列表：顯示最近 5 筆，看更多 → crm.html
   const ordSec = el('div','space-y-3');
-  ordSec.appendChild(el('h3','text-lg font-black text-slate-900','我的預約紀錄'));
-  if (!APP.orders.length) { ordSec.appendChild(el('div','p-12 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200 text-slate-300 font-bold','尚無預約紀錄')); }
-  else APP.orders.forEach(o => {
-    ordSec.appendChild(el('div','bg-white p-5 rounded-[2rem] border border-slate-100 flex justify-between items-center',
-      `<div><p class="font-black text-lg text-slate-800">${o.tourtitle||''}</p><p class="text-xs text-slate-400 font-mono">單號: ${o.orderid||''}</p></div><div class="text-right"><p class="font-black text-red-600 text-xl">${fmt(o.totalamount)}</p><span class="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black">${o.orderstatus||''}</span></div>`));
-  });
+
+  // 標題列（含「看更多」link）
+  const ordHdr = el('div','flex justify-between items-center');
+  ordHdr.appendChild(el('h3','text-lg font-black text-slate-900','最近預約紀錄'));
+  if (APP.orders.length > 0) {
+    const moreLink = el('a','text-sm font-bold text-blue-600 hover:text-blue-700');
+    moreLink.href = 'crm.html';
+    moreLink.textContent = `看全部 (${APP.orders.length}) →`;
+    ordHdr.appendChild(moreLink);
+  }
+  ordSec.appendChild(ordHdr);
+
+  if (!APP.orders.length) {
+    ordSec.appendChild(el('div','p-12 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200 text-slate-300 font-bold','尚無預約紀錄'));
+  } else {
+    // 狀態徽章顏色對照
+    const STATUS_BADGE = {
+      pending:   { label:'待處理', cls:'bg-amber-50 text-amber-600' },
+      confirmed: { label:'已確認', cls:'bg-blue-50 text-blue-600' },
+      completed: { label:'已完成', cls:'bg-emerald-50 text-emerald-700' },
+      cancelled: { label:'已取消', cls:'bg-slate-100 text-slate-500' },
+    };
+
+    // 只顯示最近 5 筆（getUserOrders 已按 createdat 降序）
+    APP.orders.slice(0, 5).forEach(o => {
+      const title = o.itinerarytitle || o.tourtitle || '—';
+      const amt   = o.price || o.totalamount || 0;
+      const oid   = o.orderid || '';
+      const statKey = String(o.status || o.orderstatus || 'pending').toLowerCase();
+      const sb = STATUS_BADGE[statKey] || STATUS_BADGE.pending;
+      const created = o.createdat || '';
+      const travelers = o.travelers || '';
+      const traveldate = o.traveldate || '';
+
+      const meta = [
+        travelers ? `${travelers}人` : '',
+        traveldate ? `出發 ${traveldate}` : '',
+      ].filter(Boolean).join(' · ');
+
+      ordSec.appendChild(el('div','bg-white p-5 rounded-[2rem] border border-slate-100 flex justify-between items-center',
+        `<div class="min-w-0 flex-1">
+           <p class="font-black text-lg text-slate-800 line-clamp-1">${title}</p>
+           <p class="text-xs text-slate-400 font-mono mt-0.5">單號: ${oid}</p>
+           ${meta ? `<p class="text-xs text-slate-500 mt-1">${meta}</p>` : ''}
+         </div>
+         <div class="text-right shrink-0 ml-3">
+           <p class="font-black text-red-600 text-xl">${fmt(amt)}</p>
+           <span class="inline-block text-[10px] ${sb.cls} px-3 py-1 rounded-full font-black mt-1">${sb.label}</span>
+         </div>`));
+    });
+  }
   w.appendChild(ordSec);
   container.appendChild(w);
 }
 
-// ── 名片資料編輯 ──────────────────────────────────
 function openProfileEdit() {
   const dist = APP.user?.distributorData || {};
   const fields = [{key:'phone',label:'電話'},{key:'lineLink',label:'LINE'},{key:'lineAtLink',label:'LINE@'},{key:'fbLink',label:'Facebook'},{key:'webLink',label:'網站'},{key:'mapLink',label:'地圖'},{key:'tgToken',label:'Telegram'}];
@@ -502,7 +513,6 @@ function openProfileEdit() {
   });
 }
 
-// ══ CRM TAB ═══════════════════════════════════════
 function renderCrm(container) {
   const w = el('div','p-4 md:p-8 max-w-5xl mx-auto space-y-6 afu');
   const hdr = el('div','flex justify-between items-end');
@@ -514,7 +524,6 @@ function renderCrm(container) {
   hdr.append(hdrL, refreshBtn);
   w.appendChild(hdr);
 
-  // 統計
   const stats = el('div','grid grid-cols-3 gap-4');
   const pending  = APP.crmList.filter(d=>String(d.status||'').toLowerCase()==='pending').length;
   const approved = APP.crmList.filter(d=>String(d.status||'').toLowerCase()==='approved').length;
@@ -523,7 +532,6 @@ function renderCrm(container) {
   });
   w.appendChild(stats);
 
-  // 申請連結
   const linkBox = el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4 flex justify-between items-center');
   linkBox.appendChild(el('div','',`<p class="font-black text-blue-900 text-sm">分銷商申請入口</p><p class="text-blue-600 text-xs font-medium mt-0.5">複製後分享給業務夥伴</p>`));
   const copyBtn = el('button','bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm','複製連結');
@@ -531,7 +539,6 @@ function renderCrm(container) {
   linkBox.appendChild(copyBtn);
   w.appendChild(linkBox);
 
-  // 表格
   const tableWrap = el('div','bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm overflow-x-auto');
   if (!APP.crmList.length) { tableWrap.appendChild(el('div','p-16 text-center text-slate-300 font-bold','目前無申請資料')); }
   else {
@@ -577,7 +584,6 @@ async function approveDistributor(uid, status) {
   } else toast('操作失敗','err');
 }
 
-// ══ ADMIN TAB ═════════════════════════════════════
 function renderAdmin(container) {
   const w = el('div','p-4 md:p-8 max-w-3xl mx-auto afu');
   const box = el('div','bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100');
@@ -641,7 +647,6 @@ function renderAdminDraft(data) {
   m.appendChild(w);
 }
 
-// ══ 行程編輯器 ════════════════════════════════════
 function openEditor(item) {
   APP.editItem = item;
   $('ed-title').value      = item.title||'';
@@ -686,7 +691,6 @@ async function deleteItinerary(item) {
   else toast('刪除失敗','err');
 }
 
-// 編輯器插入工具
 function insertAtCursor(text) {
   const ta = $('ed-desc');
   const s=ta.selectionStart, e=ta.selectionEnd;
@@ -723,7 +727,6 @@ function triggerImgUpload() { $('ed-img-file').click(); }
 function insertImgUrl() { const url=prompt('圖片 URL：'); if(url) insertAtCursor('\n![圖片]('+url+')\n'); }
 async function handleEditorImgUpload(e) {
   const file = e.target.files[0]; if(!file) return;
-  // 顯示上傳中提示
   const btn = document.querySelector('[onclick="triggerImgUpload()"]');
   const origText = btn.innerHTML;
   btn.innerHTML = '⏳ 上傳中…'; btn.disabled = true;
@@ -758,12 +761,10 @@ function updateEditorPreview() {
   renderDescTo(body, $('ed-desc').value);
 }
 
-// ══ 推廣 Modal ════════════════════════════════════
 function openPromoModal() {
   const uid  = APP.liffProfile?.userId||'';
   const dist = APP.user?.distributorData||{};
   $('promo-subtitle').textContent = `已選 ${APP.promoSelected.size} 個行程 · UID: ${uid.slice(0,10)}…`;
-  // 聯絡按鈕
   const socDiv = $('soc-options'); socDiv.innerHTML='';
   SOC_DEFS.forEach(d => {
     const val = dist[d.field]||'';
@@ -818,6 +819,9 @@ function buildPromoPreview() {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// ★ 修正版 sendFlex：支援新舊 LIFF SDK + 詳細 console log
+// ════════════════════════════════════════════════════════════
 async function sendFlex() {
   if (!liff.isLoggedIn()) { liff.login({redirectUri:location.href}); return; }
   const btn = $('send-btn'); btn.disabled=true; btn.textContent='組裝中…';
@@ -882,19 +886,56 @@ async function sendFlex() {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// ★ 修正版 copyFlexJson：加 fallback 解決 NotAllowedError
+// ════════════════════════════════════════════════════════════
 async function copyFlexJson() {
-  const ids     = Array.from(APP.promoSelected);
-  const uid     = APP.liffProfile?.userId||'';
-  const dist    = APP.user?.distributorData||{};
-  const ctaText = $('cta-text').value;
-  const socFields={};
-  SOC_DEFS.forEach(d=>{ const chk=document.getElementById('sc-'+d.key); if(chk?.checked) socFields[d.field]=dist[d.field]||''; });
-  const res = await api('/api/build-flex',{ method:'POST', body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields }) });
-  if(!res.success) { toast('組裝失敗','err'); return; }
-  navigator.clipboard?.writeText(JSON.stringify(res.flex,null,2)).then(()=>toast('✅ Flex JSON 已複製'));
+  const ids       = Array.from(APP.promoSelected);
+  const uid       = APP.liffProfile?.userId||'';
+  const dist      = APP.user?.distributorData||{};
+  const ctaText   = $('cta-text').value;
+  const socFields = {};
+  SOC_DEFS.forEach(d => {
+    const chk = document.getElementById('sc-'+d.key);
+    if (chk?.checked) socFields[d.field] = dist[d.field]||'';
+  });
+  const res = await api('/api/build-flex', {
+    method: 'POST',
+    body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields, agencySlug: 'demo' })
+  });
+  if (!res.success) { toast('組裝失敗','err'); return; }
+
+  const text = JSON.stringify(res.flex, null, 2);
+
+  try {
+    if (document.hasFocus() && navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      toast('✅ Flex JSON 已複製');
+      return;
+    }
+  } catch (e) {
+    console.warn('clipboard API failed, fallback', e);
+  }
+
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) toast('✅ Flex JSON 已複製');
+    else toast('❌ 複製失敗，請手動選取', true);
+  } catch (e) {
+    console.error('fallback copy failed:', e);
+    toast('❌ 複製失敗', true);
+  }
 }
 
-// ── 簡易 Modal 工具 ───────────────────────────────
 function showSimpleModal(title, bodyHtml, onConfirm) {
   const overlay = el('div','modal-bg afi');
   overlay.onclick = e => { if(e.target===overlay) document.body.removeChild(overlay); };
