@@ -16,13 +16,60 @@
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen font-sans">
-<div id="root"></div>
+<div id="root">
+  <div class="flex items-center justify-center h-screen flex-col gap-3">
+    <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    <p class="text-slate-400 font-bold text-sm">驗證身份中…</p>
+  </div>
+</div>
 <script type="text/babel">
 const { useState, useEffect } = React;
 const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 const LIFF_ID    = '2009367829-BDZCGti8';
 
 const fmt = (n) => '$' + Number(n||0).toLocaleString();
+
+// ── 日期格式化：今天 14:30 / 昨天 09:15 / 11/21 14:30 / 2025/11/21（跨年）
+//    輸入是 GAS 寫入的 'yyyy-MM-dd HH:mm:ss' 字串，或 ISO 字串
+const fmtDate = (raw) => {
+  if (!raw) return '—';
+  const s = String(raw).trim();
+  // 把 'yyyy-MM-dd HH:mm:ss' 換成可被 Date parse 的格式
+  const d = new Date(s.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return s;  // 解析失敗就原樣顯示
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - target) / 86400000);
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  if (diffDays === 0) return `今天 ${hhmm}`;
+  if (diffDays === 1) return `昨天 ${hhmm}`;
+  if (diffDays > 1 && diffDays <= 6) return `${diffDays} 天前`;
+
+  // 跨年要顯示年份
+  if (d.getFullYear() !== now.getFullYear()) {
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${hhmm}`;
+  }
+  return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${hhmm}`;
+};
+
+// ── 出發日格式化（純日期，不需要時間）
+const fmtTravelDate = (raw) => {
+  if (!raw) return '未指定';
+  const s = String(raw).trim();
+  const d = new Date(s.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return s;
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  if (d.getFullYear() !== now.getFullYear()) {
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+  }
+  return `${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+};
 
 // ── 狀態徽章（分銷商）────────────────────────────────────────
 const StatusBadge = ({ status }) => {
@@ -74,7 +121,7 @@ function DistModal({ dist, onClose, onApprove, onReject }) {
     ['地圖連結',   dist.maplink      || dist.mapLink],
     ['佣金比例',   dist.commission   ? `${dist.commission}%` : '—'],
     ['累積業績',   dist.salesrevenue || dist.salesRevenue ? `$${Number(dist.salesrevenue||dist.salesRevenue).toLocaleString()}` : '$0'],
-    ['加入時間',   dist.joindate     || dist.joinDate],
+    ['加入時間',   fmtDate(dist.joindate || dist.joinDate)],
     ['推薦人 UID', dist.ref_uid],
     ['備註',       dist.note],
   ];
@@ -123,7 +170,7 @@ function DistModal({ dist, onClose, onApprove, onReject }) {
 }
 
 // ── 訂單詳情 Modal ────────────────────────────────────────────
-function OrderModal({ order, onClose, onUpdateStatus }) {
+function OrderModal({ order, onClose, onUpdateStatus, canEditStatus }) {
   const [updating, setUpdating] = useState(false);
   if (!order) return null;
 
@@ -163,7 +210,7 @@ function OrderModal({ order, onClose, onUpdateStatus }) {
             </div>
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase">出發日</p>
-              <p className="font-bold text-slate-900 text-sm mt-1.5">{order.traveldate || '未指定'}</p>
+              <p className="font-bold text-slate-900 text-sm mt-1.5">{fmtTravelDate(order.traveldate)}</p>
             </div>
           </div>
         </div>
@@ -212,35 +259,37 @@ function OrderModal({ order, onClose, onUpdateStatus }) {
             </div>
             <div className="flex gap-3">
               <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">建立時間</span>
-              <span className="text-xs text-slate-500">{order.createdat || '—'}</span>
+              <span className="text-xs text-slate-500">{fmtDate(order.createdat)}</span>
             </div>
             <div className="flex gap-3">
               <span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">最後更新</span>
-              <span className="text-xs text-slate-500">{order.updatedat || '—'}</span>
+              <span className="text-xs text-slate-500">{fmtDate(order.updatedat)}</span>
             </div>
           </div>
         </div>
 
-        {/* 狀態流轉 */}
-        <div className="p-6 bg-slate-50">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">變更訂單狀態</p>
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(ORDER_STATUS).map(([key, cfg]) => {
-              const isCurrent = String(order.status).toLowerCase() === key;
-              return (
-                <button key={key} onClick={() => handleStatusChange(key)}
-                  disabled={isCurrent || updating}
-                  className={`py-3 rounded-xl font-black text-sm transition border-2 ${
-                    isCurrent
-                      ? 'bg-slate-200 text-slate-400 border-slate-200 cursor-default'
-                      : 'bg-white border-slate-200 hover:border-blue-400 text-slate-700'
-                  }`}>
-                  {isCurrent ? '✓ ' : ''}{cfg.label}
-                </button>
-              );
-            })}
+        {/* 狀態流轉 — 只有管理員可以改 */}
+        {canEditStatus && (
+          <div className="p-6 bg-slate-50">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">變更訂單狀態</p>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(ORDER_STATUS).map(([key, cfg]) => {
+                const isCurrent = String(order.status).toLowerCase() === key;
+                return (
+                  <button key={key} onClick={() => handleStatusChange(key)}
+                    disabled={isCurrent || updating}
+                    className={`py-3 rounded-xl font-black text-sm transition border-2 ${
+                      isCurrent
+                        ? 'bg-slate-200 text-slate-400 border-slate-200 cursor-default'
+                        : 'bg-white border-slate-200 hover:border-blue-400 text-slate-700'
+                    }`}>
+                    {isCurrent ? '✓ ' : ''}{cfg.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="p-6 pt-3">
           <button onClick={onClose}
@@ -257,7 +306,13 @@ function OrderModal({ order, onClose, onUpdateStatus }) {
 // 主畫面
 // ══════════════════════════════════════════════════════════════
 function CRMApp() {
-  const [tab,          setTab]          = useState('distributors');  // distributors | orders
+  // 身份感知
+  const [authState,    setAuthState]    = useState('checking');  // checking | denied | ready
+  const [profile,      setProfile]      = useState(null);
+  const [isAdmin,      setIsAdmin]      = useState(false);
+  const [isDistApproved, setIsDistApproved] = useState(false);
+
+  const [tab,          setTab]          = useState('orders');  // distributors | orders（分銷商只有 orders）
 
   // 分銷商
   const [distributors, setDistributors] = useState([]);
@@ -276,37 +331,73 @@ function CRMApp() {
 
   const showToast = (msg, type='success') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const fetchAll = async () => {
-    setLoading(true);
-    try {
-      const [distRes, orderRes] = await Promise.all([
-        fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
-        fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
-      ]);
-      setDistributors(Array.isArray(distRes) ? distRes : []);
-      setOrders(orderRes?.data || []);
-    } catch (e) { showToast('讀取失敗', 'error'); }
-    setLoading(false);
-  };
-
+  // ── 初始化身份 ──
   useEffect(() => {
     (async () => {
-      // 先 LIFF init（給 handleToggleUpload 用）
       try {
         await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
         if (!liff.isLoggedIn()) {
           liff.login({ redirectUri: location.href });
           return;
         }
-      } catch(e) { console.warn('LIFF init', e); }
-      fetchAll();
+        const p = await liff.getProfile();
+        setProfile(p);
+
+        // 查身份
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`);
+        const data = await res.json();
+        if (!data.success) { setAuthState('denied'); return; }
+
+        const _isAdmin = !!data.data.isAdmin;
+        const _isDist  = data.data.role === 'distributor' && String(data.data.status).toLowerCase() === 'approved';
+        setIsAdmin(_isAdmin);
+        setIsDistApproved(_isDist);
+
+        if (!_isAdmin && !_isDist) {
+          setAuthState('denied');
+          return;
+        }
+
+        // 管理員預設看分銷商管理；分銷商只能看訂單
+        setTab(_isAdmin ? 'distributors' : 'orders');
+        setAuthState('ready');
+
+        // 載入資料
+        await fetchData(p.userId, _isAdmin);
+      } catch(e) {
+        console.error(e);
+        setAuthState('denied');
+      }
     })();
   }, []);
 
-  // ── 分銷商操作 ──
+  const fetchData = async (uid, asAdmin) => {
+    setLoading(true);
+    try {
+      if (asAdmin) {
+        // 管理員：撈分銷商 + 全部訂單
+        const [distRes, orderRes] = await Promise.all([
+          fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r => r.json()),
+          fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r => r.json()),
+        ]);
+        setDistributors(Array.isArray(distRes) ? distRes : []);
+        setOrders(orderRes?.data || []);
+      } else {
+        // 分銷商：只撈自己的訂單
+        const orderRes = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`).then(r => r.json());
+        const myOrders = (orderRes?.data || []).filter(o => String(o.distributoruid) === String(uid));
+        setOrders(myOrders);
+      }
+    } catch (e) { showToast('讀取失敗', 'error'); }
+    setLoading(false);
+  };
+
+  const handleRefresh = () => { if (profile) fetchData(profile.userId, isAdmin); };
+
+  // ── 分銷商操作（管理員專用）──
   const handleApprove = async (uid) => {
     try {
       const res = await fetch(`${WORKER_URL}/api/itineraries`, {
@@ -314,7 +405,7 @@ function CRMApp() {
         body: JSON.stringify({ action:'updateDistributorStatus', uid, status:'approved' })
       });
       const result = await res.json();
-      if (result.success) { showToast('✅ 已核准'); fetchAll(); setSelDist(null); }
+      if (result.success) { showToast('✅ 已核准'); handleRefresh(); setSelDist(null); }
       else showToast('更新失敗', 'error');
     } catch (e) { showToast('操作失敗', 'error'); }
   };
@@ -326,11 +417,11 @@ function CRMApp() {
         body: JSON.stringify({ action:'updateDistributorStatus', uid, status:'pending' })
       });
       const result = await res.json();
-      if (result.success) { showToast('已撤銷資格'); fetchAll(); setSelDist(null); }
+      if (result.success) { showToast('已撤銷資格'); handleRefresh(); setSelDist(null); }
     } catch (e) { showToast('操作失敗', 'error'); }
   };
 
-  // ── 訂單狀態流轉 ──
+  // ── 訂單狀態流轉（管理員專用）──
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
       const res = await fetch(`${WORKER_URL}/api/itineraries`, {
@@ -340,36 +431,26 @@ function CRMApp() {
       const result = await res.json();
       if (result.success) {
         showToast(`✅ 已更新為「${ORDER_STATUS[newStatus]?.label || newStatus}」`);
-        // 更新本地 state（避免重新載入）
+        const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
         setOrders(prev => prev.map(o =>
-          o.orderid === orderId ? { ...o, status: newStatus, updatedat: new Date().toISOString() } : o
+          o.orderid === orderId ? { ...o, status: newStatus, updatedat: nowIso } : o
         ));
-        // 如果 modal 開著，也更新 selOrder
-        setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, status: newStatus } : prev);
+        setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, status: newStatus, updatedat: nowIso } : prev);
       } else {
         showToast('更新失敗：' + (result.error || ''), 'error');
       }
     } catch (e) { showToast('操作失敗', 'error'); }
   };
 
-  // ── 切換分銷商上稿權 ──
+  // ── 切換分銷商上稿權（管理員專用）──
   const handleToggleUpload = async (uid, canUpload) => {
     try {
-      // 取當前 LIFF profile uid（管理員）
-      let operatorUid = '';
-      try {
-        if (liff.isLoggedIn()) {
-          const p = await liff.getProfile();
-          operatorUid = p.userId;
-        }
-      } catch(e) {}
-
       const res = await fetch(`${WORKER_URL}/api/itineraries`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           action:'grantUploadPermission',
           uid, canUpload,
-          operatorUid
+          operatorUid: profile?.userId || ''
         })
       });
       const result = await res.json();
@@ -404,21 +485,26 @@ function CRMApp() {
     return matchStatus && matchSearch;
   });
 
-  // ── 統計 ──
+  // ── 統計（分銷商管理）──
   const distCounts = {
     all:      distributors.length,
     pending:  distributors.filter(d => String(d.status).toLowerCase() === 'pending').length,
     approved: distributors.filter(d => String(d.status).toLowerCase() === 'approved').length,
   };
 
-  // 訂單統計（本月）
+  // ── 統計（訂單）──
   const thisMonth = new Date().toISOString().slice(0, 7);  // YYYY-MM
   const monthOrders = orders.filter(o => String(o.createdat || '').startsWith(thisMonth));
+  // 管理員看的是「佣金支出」；分銷商看的是「自己賺到的佣金」（同個欄位，視角不同）
   const orderStats = {
     pendingCount:    orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
     monthRevenue:    monthOrders.reduce((s, o) => s + Number(o.price || 0), 0),
     monthCommission: monthOrders.reduce((s, o) => s + Number(o.commissionamount || 0), 0),
     totalCount:      orders.length,
+    // 已完成的累積佣金（分銷商視角更看重）
+    completedCommission: orders
+      .filter(o => String(o.status).toLowerCase() === 'completed')
+      .reduce((s, o) => s + Number(o.commissionamount || 0), 0),
   };
 
   const orderCounts = {
@@ -430,54 +516,89 @@ function CRMApp() {
   };
 
   // ════════════════════════════════════════════════════════════
+  if (authState === 'checking') {
+    return (
+      <div className="flex items-center justify-center h-screen flex-col gap-3">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"/>
+        <p className="text-slate-400 font-bold text-sm">驗證身份中…</p>
+      </div>
+    );
+  }
+
+  if (authState === 'denied') {
+    return (
+      <div className="flex items-center justify-center h-screen flex-col gap-3 p-8 text-center">
+        <div className="text-6xl">🔒</div>
+        <h2 className="text-2xl font-black text-slate-700">無 CRM 存取權限</h2>
+        <p className="text-slate-400 max-w-md">
+          需要管理員身份或已核准的分銷商身份才能進入此頁。
+        </p>
+        <a href="index.html" className="mt-4 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700">
+          返回首頁
+        </a>
+      </div>
+    );
+  }
+
+  // ════ 主介面 ════
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header + Tabs */}
       <div className="glass sticky top-0 z-40 border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 pt-4 pb-0">
           <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="font-black text-2xl text-slate-900">CRM 管理中心</h1>
-              <p className="text-slate-400 text-xs font-medium">分銷商 + 訂單一站管理</p>
+            <div className="flex items-center gap-3">
+              {profile && <img src={profile.pictureUrl} className="w-10 h-10 rounded-full" />}
+              <div>
+                <h1 className="font-black text-2xl text-slate-900">
+                  {isAdmin ? 'CRM 管理中心' : '我的業務 CRM'}
+                </h1>
+                <p className="text-slate-400 text-xs font-medium">
+                  {isAdmin ? '分銷商 + 訂單一站管理' : `${profile?.displayName || ''} · 分銷商視角`}
+                </p>
+              </div>
             </div>
-            <button onClick={fetchAll}
+            <button onClick={handleRefresh}
               className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
               重新整理
             </button>
           </div>
-          {/* Tabs */}
-          <div className="flex gap-1 -mb-px">
-            <button onClick={() => setTab('distributors')}
-              className={`px-5 py-3 font-black text-sm transition border-b-2 ${
-                tab === 'distributors'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}>
-              👥 分銷商管理
-              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{distCounts.all}</span>
-            </button>
-            <button onClick={() => setTab('orders')}
-              className={`px-5 py-3 font-black text-sm transition border-b-2 ${
-                tab === 'orders'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}>
-              📦 訂單管理
-              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{orderCounts.all}</span>
-              {orderCounts.pending > 0 && (
-                <span className="ml-1 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                  {orderCounts.pending} 待處理
-                </span>
-              )}
-            </button>
-          </div>
+
+          {/* Tabs — 分銷商只有訂單一個 tab，所以不顯示 tab bar */}
+          {isAdmin && (
+            <div className="flex gap-1 -mb-px">
+              <button onClick={() => setTab('distributors')}
+                className={`px-5 py-3 font-black text-sm transition border-b-2 ${
+                  tab === 'distributors'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}>
+                👥 分銷商管理
+                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{distCounts.all}</span>
+              </button>
+              <button onClick={() => setTab('orders')}
+                className={`px-5 py-3 font-black text-sm transition border-b-2 ${
+                  tab === 'orders'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}>
+                📦 訂單管理
+                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{orderCounts.all}</span>
+                {orderCounts.pending > 0 && (
+                  <span className="ml-1 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                    {orderCounts.pending} 待處理
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
-        {/* ════ 分銷商 Tab ════ */}
-        {tab === 'distributors' && (
+        {/* ════ 分銷商 Tab（管理員專用）════ */}
+        {isAdmin && tab === 'distributors' && (
           <>
             {/* 統計卡片 */}
             <div className="grid grid-cols-3 gap-4 anim">
@@ -595,10 +716,10 @@ function CRMApp() {
           </>
         )}
 
-        {/* ════ 訂單 Tab ════ */}
+        {/* ════ 訂單 Tab（管理員 + 分銷商共用）════ */}
         {tab === 'orders' && (
           <>
-            {/* 訂單統計 */}
+            {/* 訂單統計 — 管理員 vs 分銷商視角不同 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 anim">
               <div className="bg-amber-500 text-white p-5 rounded-[1.5rem]">
                 <p className="text-3xl font-black">{orderStats.pendingCount}</p>
@@ -606,11 +727,11 @@ function CRMApp() {
               </div>
               <div className="bg-blue-600 text-white p-5 rounded-[1.5rem]">
                 <p className="text-2xl font-black">{fmt(orderStats.monthRevenue)}</p>
-                <p className="text-sm font-bold opacity-90 mt-1">本月成交金額</p>
+                <p className="text-sm font-bold opacity-90 mt-1">{isAdmin ? '本月成交金額' : '本月推廣金額'}</p>
               </div>
               <div className="bg-emerald-600 text-white p-5 rounded-[1.5rem]">
-                <p className="text-2xl font-black">{fmt(orderStats.monthCommission)}</p>
-                <p className="text-sm font-bold opacity-90 mt-1">本月佣金支出</p>
+                <p className="text-2xl font-black">{fmt(isAdmin ? orderStats.monthCommission : orderStats.completedCommission)}</p>
+                <p className="text-sm font-bold opacity-90 mt-1">{isAdmin ? '本月佣金支出' : '已賺取佣金（已完成）'}</p>
               </div>
               <div className="bg-slate-800 text-white p-5 rounded-[1.5rem]">
                 <p className="text-3xl font-black">{orderStats.totalCount}</p>
@@ -652,7 +773,7 @@ function CRMApp() {
                 </div>
               ) : filteredOrders.length === 0 ? (
                 <div className="p-20 text-center text-slate-300 font-bold">
-                  {orderSearch || orderFilter !== 'all' ? '無符合條件的訂單' : '目前無訂單資料'}
+                  {orderSearch || orderFilter !== 'all' ? '無符合條件的訂單' : (isAdmin ? '目前無訂單資料' : '您尚未推廣出任何訂單')}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -663,7 +784,7 @@ function CRMApp() {
                         <th className="p-4">行程 / 客戶</th>
                         <th className="p-4">人數 / 出發日</th>
                         <th className="p-4 text-right">金額</th>
-                        <th className="p-4 text-right">佣金</th>
+                        <th className="p-4 text-right">{isAdmin ? '應付佣金' : '我的佣金'}</th>
                         <th className="p-4">狀態</th>
                       </tr>
                     </thead>
@@ -673,7 +794,7 @@ function CRMApp() {
                           onClick={() => setSelOrder(o)}>
                           <td className="p-4">
                             <p className="font-mono text-xs font-bold text-slate-700">{o.orderid}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{o.createdat || '—'}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{fmtDate(o.createdat)}</p>
                           </td>
                           <td className="p-4 max-w-[200px]">
                             <p className="font-black text-sm text-slate-800 line-clamp-1">{o.itinerarytitle || '—'}</p>
@@ -684,7 +805,7 @@ function CRMApp() {
                           </td>
                           <td className="p-4 text-sm">
                             <p className="font-bold text-slate-700">{o.travelers || 1} 人</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{o.traveldate || '未指定'}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{fmtTravelDate(o.traveldate)}</p>
                           </td>
                           <td className="p-4 text-right font-black text-red-600">{fmt(o.price)}</td>
                           <td className="p-4 text-right font-bold text-emerald-600 text-sm">{fmt(o.commissionamount)}</td>
@@ -714,6 +835,7 @@ function CRMApp() {
           order={selOrder}
           onClose={() => setSelOrder(null)}
           onUpdateStatus={handleUpdateOrderStatus}
+          canEditStatus={isAdmin}  // ★ 只有管理員能改狀態
         />
       )}
 
