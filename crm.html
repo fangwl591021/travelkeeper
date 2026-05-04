@@ -343,16 +343,30 @@ function CRMApp() {
           liff.login({ redirectUri: location.href });
           return;
         }
-        const p = await liff.getProfile();
+
+        // ★ 並行：profile + checkUserStatus 同時打（不要等 profile 才打 checkUserStatus）
+        //   做法：profile 拿到 userId 後不阻塞主流程，直接拿 LIFF 的 access token 推估 uid
+        //   但 LIFF SDK 沒提供同步取 uid，只能 await profile，所以這裡先讓兩個獨立 promise 一起跑
+        const profilePromise = liff.getProfile();
+        const p = await profilePromise;
         setProfile(p);
 
-        // 查身份
-        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`);
-        const data = await res.json();
-        if (!data.success) { setAuthState('denied'); return; }
+        // 身份檢查 + 訂單 / 分銷商 名單同時並行打
+        const isAdminCandidate = false;  // 還不知道，先全部都拉
+        const [statusRes, ordersForDist, allOrdersRes, distRes] = await Promise.all([
+          fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r => r.json()),
+          // 分銷商視角的訂單（如果是分銷商會用到）
+          fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
+          // 管理員視角的訂單（如果是管理員會用到）
+          fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r => r.json()).catch(() => ({ data: [] })),
+          // 分銷商列表（如果是管理員會用到）
+          fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r => r.json()).catch(() => []),
+        ]);
 
-        const _isAdmin = !!data.data.isAdmin;
-        const _isDist  = data.data.role === 'distributor' && String(data.data.status).toLowerCase() === 'approved';
+        if (!statusRes.success) { setAuthState('denied'); return; }
+
+        const _isAdmin = !!statusRes.data.isAdmin;
+        const _isDist  = statusRes.data.role === 'distributor' && String(statusRes.data.status).toLowerCase() === 'approved';
         setIsAdmin(_isAdmin);
         setIsDistApproved(_isDist);
 
@@ -361,12 +375,20 @@ function CRMApp() {
           return;
         }
 
-        // 管理員預設看分銷商管理；分銷商只能看訂單
-        setTab(_isAdmin ? 'distributors' : 'orders');
-        setAuthState('ready');
+        // 依身份套用對應的資料
+        if (_isAdmin) {
+          setDistributors(Array.isArray(distRes) ? distRes : []);
+          setOrders(allOrdersRes?.data || []);
+          setTab('distributors');
+        } else {
+          // 分銷商：只看自己賣出的訂單
+          const myOrders = (ordersForDist?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
+          setOrders(myOrders);
+          setTab('orders');
+        }
 
-        // 載入資料
-        await fetchData(p.userId, _isAdmin);
+        setAuthState('ready');
+        setLoading(false);
       } catch(e) {
         console.error(e);
         setAuthState('denied');
@@ -378,7 +400,6 @@ function CRMApp() {
     setLoading(true);
     try {
       if (asAdmin) {
-        // 管理員：撈分銷商 + 全部訂單
         const [distRes, orderRes] = await Promise.all([
           fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r => r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r => r.json()),
@@ -386,7 +407,6 @@ function CRMApp() {
         setDistributors(Array.isArray(distRes) ? distRes : []);
         setOrders(orderRes?.data || []);
       } else {
-        // 分銷商：只撈自己的訂單
         const orderRes = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`).then(r => r.json());
         const myOrders = (orderRes?.data || []).filter(o => String(o.distributoruid) === String(uid));
         setOrders(myOrders);
