@@ -92,11 +92,14 @@
       const agencySlug = p.get('a') || 'demo';
       const itineraryId = p.get('itinerary') || '';
       const distributorUid = p.get('ref') || '';
+      // ★ v3：推薦碼（新版優先；統一轉大寫，避開大小寫差異）
+      const inviteCode = (p.get('invite') || '').trim().toUpperCase();
 
       const [step, setStep] = useState('loading');
       const [tenant, setTenant] = useState(null);
       const [profile, setProfile] = useState(null);
       const [itinerary, setItinerary] = useState(null);
+      const [referrer, setReferrer] = useState(null);  // ★ v3：推薦人資訊
       const [form, setForm] = useState({
         customer_name:'', customer_phone:'', travelers:2, travel_date:'', note:''
       });
@@ -105,19 +108,26 @@
       useEffect(() => {
         (async () => {
           try {
-            console.log('[booking] 🚀 init start', { agencySlug, itineraryId, distributorUid });
+            console.log('[booking] 🚀 init start', { agencySlug, itineraryId, distributorUid, inviteCode });
 
-            if (!itineraryId || !distributorUid) {
-              console.error('[booking] ❌ 缺少參數', { itineraryId, distributorUid });
+            // ★ v3：歸屬驗證 — invite OR ref 任一存在即可
+            if (!itineraryId || (!distributorUid && !inviteCode)) {
+              console.error('[booking] ❌ 缺少參數', { itineraryId, distributorUid, inviteCode });
               setErr('缺少必要參數，請從推廣連結進入');
               setStep('error');
               return;
             }
 
-            // 1. 載入租戶設定 + LIFF ID
-            console.log('[booking] 1️⃣ fetching config...');
-            const cfgRes = await fetch(`${WORKER_URL}/api/config?a=${agencySlug}`);
-            const cfgData = await cfgRes.json();
+            // 1. 載入租戶設定 + 推薦碼解析（並行）
+            console.log('[booking] 1️⃣ fetching config + invite resolve in parallel...');
+            const tasks = [
+              fetch(`${WORKER_URL}/api/config?a=${agencySlug}`).then(r => r.json()),
+              inviteCode
+                ? fetch(`${WORKER_URL}/api/resolve-invite?code=${encodeURIComponent(inviteCode)}`).then(r => r.json())
+                : Promise.resolve(null),
+            ];
+            const [cfgData, inviteData] = await Promise.all(tasks);
+
             console.log('[booking] 1️⃣ config response:', cfgData);
             if (!cfgData.success) {
               console.error('[booking] ❌ config failed:', cfgData);
@@ -126,6 +136,12 @@
               return;
             }
             setTenant(cfgData.data);
+
+            // ★ v3：推薦碼解析結果（解不到就靜默忽略，仍可走 ref fallback）
+            if (inviteData?.success && inviteData.data?.uid) {
+              console.log('[booking] 1️⃣ invite resolved:', inviteData.data);
+              setReferrer({ name: inviteData.data.name || '夥伴' });
+            }
 
             // 2. LIFF 初始化
             console.log('[booking] 2️⃣ liff.init with ID:', cfgData.data.liff_id);
@@ -147,8 +163,6 @@
             const itData = await itRes.json();
             const itList = Array.isArray(itData) ? itData : (itData.data || itData.itineraries || []);
             console.log('[booking] 3️⃣ itineraries count:', itList.length);
-            console.log('[booking] 3️⃣ looking for id:', itineraryId);
-            console.log('[booking] 3️⃣ available ids:', itList.map(x => String(x.id || x.timestamp || '')));
 
             const found = itList.find(x => String(x.id || x.timestamp || '') === String(itineraryId));
             if (found) {
@@ -169,7 +183,7 @@
             setStep('error');
           }
         })();
-      }, [agencySlug, itineraryId]);
+      }, [agencySlug, itineraryId, distributorUid, inviteCode]);
 
       const handleSubmit = async (e) => {
         e.preventDefault();
@@ -178,19 +192,24 @@
         setErr(''); setStep('submitting');
 
         try {
+          // ★ v3：送單時把 invite_code 也帶上；worker 會優先用它解析業務 uid
+          //   兩個都帶，worker 內部 invite_code 優先，distributor_uid 為 fallback
+          const body = {
+            itinerary_id: itineraryId,
+            customer_line_uid: profile.userId,
+            customer_name: form.customer_name,
+            customer_phone: form.customer_phone,
+            travelers: Number(form.travelers) || 1,
+            travel_date: form.travel_date,
+            note: form.note,
+          };
+          if (inviteCode)      body.invite_code     = inviteCode;
+          if (distributorUid)  body.distributor_uid = distributorUid;
+
           const res = await fetch(`${WORKER_URL}/api/orders/create?a=${agencySlug}`, {
             method:'POST',
             headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({
-              itinerary_id: itineraryId,
-              distributor_uid: distributorUid,
-              customer_line_uid: profile.userId,
-              customer_name: form.customer_name,
-              customer_phone: form.customer_phone,
-              travelers: Number(form.travelers) || 1,
-              travel_date: form.travel_date,
-              note: form.note,
-            })
+            body: JSON.stringify(body),
           });
           const result = await res.json();
           if (result.success) { setStep('success'); }
@@ -252,6 +271,17 @@
       return (
         <Shell tenant={tenant}>
           <form onSubmit={handleSubmit} className="fade-up">
+
+            {/* ★ v3：推薦人 banner */}
+            {referrer && (
+              <div style={{background:'#ecfdf5',border:'2px solid #bbf7d0',borderRadius:14,
+                padding:'12px 16px',marginBottom:22,fontSize:13,textAlign:'center'}}>
+                <span style={{color:'#15803d',fontWeight:700}}>您是</span>
+                <span style={{color:'#14532d',fontWeight:900,margin:'0 6px'}}>{referrer.name}</span>
+                <span style={{color:'#15803d',fontWeight:700}}>推薦的客人 🎉</span>
+              </div>
+            )}
+
             {/* 行程資訊卡 */}
             {itinerary && (
               <div style={{background:'linear-gradient(135deg,#f0fdf4,#ecfdf5)',
