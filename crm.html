@@ -17,9 +17,23 @@
 </head>
 <body class="bg-slate-50 min-h-screen font-sans">
 <div id="root">
-  <div class="flex items-center justify-center h-screen flex-col gap-3">
-    <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-    <p class="text-slate-400 font-bold text-sm">驗證身份中…</p>
+  <!-- 預設骨架（React mount 前的 placeholder） -->
+  <div class="min-h-screen bg-slate-50">
+    <div class="bg-white/90 sticky top-0 border-b border-slate-200">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-slate-200 animate-pulse"></div>
+        <div class="space-y-2">
+          <div class="h-5 w-32 bg-slate-200 rounded animate-pulse"></div>
+          <div class="h-3 w-20 bg-slate-100 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+    </div>
   </div>
 </div>
 <script type="text/babel">
@@ -342,6 +356,8 @@ function CRMApp() {
   };
 
   // ── 初始化身份 ──
+  //   階段 1：LIFF + checkUserStatus → setAuthState('ready')，版面立刻渲染
+  //   階段 2：所有資料並行拉 → setLoading(false)，骨架填數字
   useEffect(() => {
     (async () => {
       try {
@@ -351,27 +367,11 @@ function CRMApp() {
           return;
         }
 
-        // ★ 並行：profile + checkUserStatus 同時打（不要等 profile 才打 checkUserStatus）
-        //   做法：profile 拿到 userId 後不阻塞主流程，直接拿 LIFF 的 access token 推估 uid
-        //   但 LIFF SDK 沒提供同步取 uid，只能 await profile，所以這裡先讓兩個獨立 promise 一起跑
-        const profilePromise = liff.getProfile();
-        const p = await profilePromise;
+        const p = await liff.getProfile();
         setProfile(p);
 
-        // 身份檢查 + 訂單 / 分銷商 名單同時並行打
-        const isAdminCandidate = false;  // 還不知道，先全部都拉
-        const [statusRes, ordersForDist, allOrdersRes, distRes, myCustRes] = await Promise.all([
-          fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r => r.json()),
-          // 分銷商視角的訂單（如果是分銷商會用到）
-          fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
-          // 管理員視角的訂單（如果是管理員會用到）
-          fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r => r.json()).catch(() => ({ data: [] })),
-          // 分銷商列表（如果是管理員會用到）
-          fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r => r.json()).catch(() => []),
-          // ★ v2：分銷商視角的客戶名單（管理員不會用到，但先搶先贏一起拉）
-          fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
-        ]);
-
+        // 階段 1：身份檢查（先決定權限）
+        const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r => r.json());
         if (!statusRes.success) { setAuthState('denied'); return; }
 
         const _isAdmin = !!statusRes.data.isAdmin;
@@ -384,20 +384,28 @@ function CRMApp() {
           return;
         }
 
-        // 依身份套用對應的資料
+        // ★ 身份就緒 → 版面立刻渲染（這時資料還沒到，骨架顯示中）
+        setTab(_isAdmin ? 'distributors' : 'orders');
+        setAuthState('ready');
+
+        // 階段 2：依身份拉資料
         if (_isAdmin) {
+          const [allOrdersRes, distRes] = await Promise.all([
+            fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r => r.json()).catch(() => ({ data: [] })),
+            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r => r.json()).catch(() => []),
+          ]);
           setDistributors(Array.isArray(distRes) ? distRes : []);
           setOrders(allOrdersRes?.data || []);
-          setTab('distributors');
         } else {
-          // 分銷商：只看自己賣出的訂單 + 自己歸屬的客戶
+          const [ordersForDist, myCustRes] = await Promise.all([
+            fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
+            fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
+          ]);
           const myOrders = (ordersForDist?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
           setOrders(myOrders);
           setCustomers(myCustRes?.data || []);
-          setTab('orders');
         }
 
-        setAuthState('ready');
         setLoading(false);
       } catch(e) {
         console.error(e);
@@ -575,9 +583,25 @@ function CRMApp() {
   // ════════════════════════════════════════════════════════════
   if (authState === 'checking') {
     return (
-      <div className="flex items-center justify-center h-screen flex-col gap-3">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"/>
-        <p className="text-slate-400 font-bold text-sm">驗證身份中…</p>
+      <div className="min-h-screen bg-slate-50">
+        <div className="glass sticky top-0 z-40 border-b border-slate-200">
+          <div className="max-w-6xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-slate-200 animate-pulse"/>
+              <div className="space-y-2">
+                <div className="h-5 w-32 bg-slate-200 rounded animate-pulse"/>
+                <div className="h-3 w-20 bg-slate-100 rounded animate-pulse"/>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"/>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -615,10 +639,16 @@ function CRMApp() {
                 </p>
               </div>
             </div>
-            <button onClick={handleRefresh}
-              className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
-              重新整理
-            </button>
+            <div className="flex items-center gap-2">
+              <a href="admin.html"
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm transition">
+                ← 儀表板
+              </a>
+              <button onClick={handleRefresh}
+                className="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+                重新整理
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -631,7 +661,7 @@ function CRMApp() {
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}>
                 👥 分銷商管理
-                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{distCounts.all}</span>
+                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{loading ? "…" : distCounts.all}</span>
               </button>
             )}
             <button onClick={() => setTab('orders')}
@@ -641,7 +671,7 @@ function CRMApp() {
                   : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}>
               📦 {isAdmin ? '訂單管理' : '我的訂單'}
-              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{orderCounts.all}</span>
+              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{loading ? "…" : orderCounts.all}</span>
               {orderCounts.pending > 0 && (
                 <span className="ml-1 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
                   {orderCounts.pending} 待處理
@@ -657,7 +687,7 @@ function CRMApp() {
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}>
                 👤 我的客戶
-                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{customers.length}</span>
+                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{loading ? "…" : customers.length}</span>
               </button>
             )}
           </div>
@@ -678,7 +708,9 @@ function CRMApp() {
               ].map(c => (
                 <button key={c.key} onClick={() => setDistFilter(c.key)}
                   className={`${c.color} text-white p-5 rounded-[1.5rem] text-left transition ${distFilter===c.key ? 'ring-4 ring-offset-2 ring-slate-400' : 'opacity-90 hover:opacity-100'}`}>
-                  <p className="text-3xl font-black">{c.num}</p>
+                  {loading
+                    ? <span className="inline-block bg-white/30 rounded animate-pulse w-12 h-9"/>
+                    : <p className="text-3xl font-black">{c.num}</p>}
                   <p className="text-sm font-bold opacity-80 mt-1">{c.label}</p>
                 </button>
               ))}
@@ -791,19 +823,27 @@ function CRMApp() {
             {/* 訂單統計 — 管理員 vs 分銷商視角不同 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 anim">
               <div className="bg-amber-500 text-white p-5 rounded-[1.5rem]">
-                <p className="text-3xl font-black">{orderStats.pendingCount}</p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-12 h-9"/>
+                  : <p className="text-3xl font-black">{orderStats.pendingCount}</p>}
                 <p className="text-sm font-bold opacity-90 mt-1">待處理訂單</p>
               </div>
               <div className="bg-blue-600 text-white p-5 rounded-[1.5rem]">
-                <p className="text-2xl font-black">{fmt(orderStats.monthRevenue)}</p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-20 h-8"/>
+                  : <p className="text-2xl font-black">{fmt(orderStats.monthRevenue)}</p>}
                 <p className="text-sm font-bold opacity-90 mt-1">{isAdmin ? '本月成交金額' : '本月推廣金額'}</p>
               </div>
               <div className="bg-emerald-600 text-white p-5 rounded-[1.5rem]">
-                <p className="text-2xl font-black">{fmt(isAdmin ? orderStats.monthCommission : orderStats.completedCommission)}</p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-20 h-8"/>
+                  : <p className="text-2xl font-black">{fmt(isAdmin ? orderStats.monthCommission : orderStats.completedCommission)}</p>}
                 <p className="text-sm font-bold opacity-90 mt-1">{isAdmin ? '本月佣金支出' : '已賺取佣金（已完成）'}</p>
               </div>
               <div className="bg-slate-800 text-white p-5 rounded-[1.5rem]">
-                <p className="text-3xl font-black">{orderStats.totalCount}</p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-12 h-9"/>
+                  : <p className="text-3xl font-black">{orderStats.totalCount}</p>}
                 <p className="text-sm font-bold opacity-90 mt-1">訂單總數</p>
               </div>
             </div>
@@ -895,24 +935,30 @@ function CRMApp() {
             {/* 統計卡片：客戶總數 / 累計貢獻 / 平均單價 */}
             <div className="grid grid-cols-3 gap-4 anim">
               <div className="bg-blue-600 text-white p-5 rounded-[1.5rem]">
-                <p className="text-3xl font-black">{customers.length}</p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-12 h-9"/>
+                  : <p className="text-3xl font-black">{customers.length}</p>}
                 <p className="text-sm font-bold opacity-90 mt-1">累計客戶數</p>
               </div>
               <div className="bg-emerald-600 text-white p-5 rounded-[1.5rem]">
-                <p className="text-2xl font-black">
-                  {fmt(customers.reduce((s, c) => s + Number(c.totalamount || 0), 0))}
-                </p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-20 h-8"/>
+                  : <p className="text-2xl font-black">
+                      {fmt(customers.reduce((s, c) => s + Number(c.totalamount || 0), 0))}
+                    </p>}
                 <p className="text-sm font-bold opacity-90 mt-1">客戶累計貢獻</p>
               </div>
               <div className="bg-slate-800 text-white p-5 rounded-[1.5rem]">
-                <p className="text-2xl font-black">
-                  {customers.length > 0
-                    ? fmt(Math.round(
-                        customers.reduce((s, c) => s + Number(c.totalamount || 0), 0)
-                        / customers.reduce((s, c) => s + Number(c.totalorders || 0), 0)
-                      ))
-                    : '$0'}
-                </p>
+                {loading
+                  ? <span className="inline-block bg-white/30 rounded animate-pulse w-20 h-8"/>
+                  : <p className="text-2xl font-black">
+                      {customers.length > 0
+                        ? fmt(Math.round(
+                            customers.reduce((s, c) => s + Number(c.totalamount || 0), 0)
+                            / customers.reduce((s, c) => s + Number(c.totalorders || 0), 0)
+                          ))
+                        : '$0'}
+                    </p>}
                 <p className="text-sm font-bold opacity-90 mt-1">平均單價</p>
               </div>
             </div>
