@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
@@ -39,7 +38,7 @@
   </div>
 </div>
 
-<script type="text/babel">
+<script type="text/jsx-cached" id="app-source">
 const { useState, useEffect } = React;
 const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 const LIFF_ID    = '2009367829-BDZCGti8';
@@ -922,5 +921,85 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
+<!-- ★ JSX 編譯快取載入器（替代 babel-standalone 的 type="text/babel" 自動執行）
+     首次：載 babel-standalone → 編譯 → 存 localStorage → eval
+     之後：localStorage 命中 → 直接 eval（省下載 babel + 省編譯時間）
+     JSX 內容變了 → hash 不同 → 自動 invalidate -->
+<script>
+(function(){
+  const CACHE_KEY_PREFIX = 'tk-jsx-cache-v1:';
+  const BABEL_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js';
+
+  // djb2 hash（簡單夠用，碰撞機率極低）
+  function hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
+
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function execCode(code){
+    // 用 new Function 而非 eval，避免污染 strict mode；同時要能存取全域 React/ReactDOM
+    // 但 new Function 是非 strict、全域 scope 的——React、ReactDOM 等都能讀到
+    new Function(code)();
+  }
+
+  async function boot(){
+    const src = document.getElementById('app-source')?.textContent || '';
+    if (!src.trim()) { console.error('[jsx-loader] no #app-source'); return; }
+
+    const key = CACHE_KEY_PREFIX + hash(src);
+
+    // 1. 試讀快取
+    try {
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        console.log('[jsx-loader] cache HIT, exec compiled code');
+        execCode(cached);
+        return;
+      }
+    } catch(e) { console.warn('[jsx-loader] localStorage read failed', e); }
+
+    // 2. 沒快取 → 載 babel + 編譯
+    console.log('[jsx-loader] cache MISS, loading babel...');
+    const t0 = performance.now();
+    try {
+      await loadScript(BABEL_CDN);
+      const t1 = performance.now();
+      console.log('[jsx-loader] babel loaded in', (t1-t0).toFixed(0), 'ms; compiling...');
+      const compiled = Babel.transform(src, { presets: ['react','env'] }).code;
+      const t2 = performance.now();
+      console.log('[jsx-loader] compiled in', (t2-t1).toFixed(0), 'ms');
+
+      // 3. 存快取（失敗就算了，下次再編譯）
+      try { localStorage.setItem(key, compiled); }
+      catch(e) {
+        // localStorage 滿了 → 清掉所有舊版本快取再試一次
+        try {
+          for (let i=localStorage.length-1; i>=0; i--) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(CACHE_KEY_PREFIX)) localStorage.removeItem(k);
+          }
+          localStorage.setItem(key, compiled);
+        } catch(_) { console.warn('[jsx-loader] cache write failed', e); }
+      }
+
+      execCode(compiled);
+    } catch(e) {
+      console.error('[jsx-loader] babel load/compile failed:', e);
+      document.getElementById('root').innerHTML =
+        '<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>載入失敗</h2><p style="color:#888">請重新整理頁面，或清除瀏覽器快取</p></div>';
+    }
+  }
+
+  // 等 React/ReactDOM 載完才執行
+  if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined') boot();
+  else window.addEventListener('load', boot);
+})();
+</script>
+
 </body>
 </html>
