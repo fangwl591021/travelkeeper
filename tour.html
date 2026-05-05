@@ -38,6 +38,15 @@
     }
     .book-bar-btn:active { transform: scale(0.97); }
 
+    /* ★ v3：推薦人 banner */
+    .invite-banner {
+      background: #ecfdf5;
+      border-bottom: 1px solid #bbf7d0;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 13px;
+    }
+
     body { padding-bottom: 88px; background: #f8fafc; }
   </style>
 </head>
@@ -57,7 +66,8 @@ const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
 // ── URL 參數
 const params = new URLSearchParams(window.location.search);
 const tourId      = params.get('t')  || '';
-const refUid      = params.get('r')  || '';   // 分銷商 uid（佣金歸屬）
+const refUid      = params.get('r')  || '';   // 分銷商 uid（舊版佣金歸屬）
+const inviteCode  = (params.get('invite') || '').trim().toUpperCase();  // ★ v3：推薦碼（新版優先）
 const agencySlug  = params.get('a')  || 'demo';
 
 // ── 工具
@@ -117,6 +127,27 @@ function renderDesc(text, container) {
   });
 }
 
+// ── ★ v3：解析推薦碼（並行執行，不阻塞主流程）
+async function resolveInvite() {
+  if (!inviteCode) return null;
+  try {
+    const r = await fetch(`${WORKER_URL}/api/resolve-invite?code=${encodeURIComponent(inviteCode)}`);
+    const data = await r.json();
+    return data.success ? data.data : null;
+  } catch (e) { console.warn('resolveInvite failed:', e); return null; }
+}
+
+// ── ★ v3：顯示推薦人 banner
+function showInviteBanner(referrer) {
+  if (!referrer?.name) return;
+  const banner = document.createElement('div');
+  banner.className = 'invite-banner';
+  banner.innerHTML = `<span class="text-emerald-700 font-bold">您是</span>
+    <span class="text-emerald-900 font-black mx-1">${referrer.name}</span>
+    <span class="text-emerald-700 font-bold">推薦的客人 🎉</span>`;
+  document.body.insertBefore(banner, document.body.firstChild);
+}
+
 // ── 載入並渲染
 (async function init() {
   if (!tourId) {
@@ -125,9 +156,13 @@ function renderDesc(text, container) {
   }
 
   try {
-    const res = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&_t=${Date.now()}`);
-    const arr = await res.json();
-    const items = Array.isArray(arr) ? arr : [];
+    // ★ v3：行程資料 + 推薦碼解析並行執行
+    const [arrRaw, referrer] = await Promise.all([
+      fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&_t=${Date.now()}`).then(r => r.json()),
+      resolveInvite(),
+    ]);
+
+    const items = Array.isArray(arrRaw) ? arrRaw : [];
     const tour = items.find(i => String(i.id || i.timestamp || '') === String(tourId));
 
     if (!tour) {
@@ -135,6 +170,7 @@ function renderDesc(text, container) {
       return;
     }
 
+    if (referrer) showInviteBanner(referrer);
     renderTour(tour);
   } catch (e) {
     console.error(e);
@@ -240,9 +276,14 @@ function renderTour(tour) {
   document.body.appendChild(bar);
 
   document.getElementById('book-btn').onclick = () => {
-    // 導向 booking.html，帶完整參數讓佣金歸屬給原分銷商
-    const bookingUrl = `booking.html?a=${encodeURIComponent(agencySlug)}&itinerary=${encodeURIComponent(tourId)}&ref=${encodeURIComponent(refUid)}`;
-    window.location.href = bookingUrl;
+    // ★ v3：導向 booking.html 時，invite 優先（v2+），ref 為向下相容 fallback
+    const bookingParams = new URLSearchParams({
+      a: agencySlug,
+      itinerary: tourId,
+    });
+    if (inviteCode) bookingParams.set('invite', inviteCode);
+    if (refUid)     bookingParams.set('ref', refUid);
+    window.location.href = `booking.html?${bookingParams.toString()}`;
   };
 }
 
