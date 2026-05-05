@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>上稿 + 審核中心 | 旅遊管家</title>
+  <title>儀表板 | 旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -32,7 +32,7 @@ const LIFF_ID    = '2009367829-BDZCGti8';
 const fmt = (n) => '$' + Number(n||0).toLocaleString();
 
 // ══════════════════════════════════════════════════════════════
-// 上稿/編輯表單（共用）
+// 上稿/編輯表單（共用，從原 admin.html 完整搬移）
 // ══════════════════════════════════════════════════════════════
 function ItineraryForm({ initial, onSave, onCancel, saving }) {
   const [data, setData] = useState(initial || {
@@ -79,7 +79,6 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
 
   return (
     <div className="space-y-5">
-      {/* AI 解析按鈕 */}
       <label className="block">
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-2xl text-center font-black cursor-pointer hover:opacity-90 transition">
           🤖 AI 解析 DM
@@ -88,7 +87,6 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
       </label>
       <p className="text-xs text-center text-slate-400 font-medium -mt-3">上傳旅遊 DM 圖片，AI 自動填表</p>
 
-      {/* 封面圖 */}
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖</label>
         {data.image && (
@@ -105,7 +103,6 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
         </div>
       </div>
 
-      {/* 基本欄位 */}
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程標題</label>
         <input value={data.title||''} onChange={e=>setData({...data,title:e.target.value})}
@@ -157,19 +154,67 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 主應用
+// 數字卡片（儀表板用）
+// ══════════════════════════════════════════════════════════════
+function StatCard({ color, num, label, hint }) {
+  return (
+    <div className={`${color} text-white p-5 rounded-[1.5rem]`}>
+      <p className="text-3xl font-black leading-tight">{num}</p>
+      <p className="text-sm font-bold opacity-90 mt-1">{label}</p>
+      {hint && <p className="text-[10px] opacity-70 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 快速導航卡
+// ══════════════════════════════════════════════════════════════
+function NavCard({ href, onClick, icon, title, subtitle, badge }) {
+  const isButton = !!onClick;
+  const Tag = isButton ? 'button' : 'a';
+  const props = isButton
+    ? { onClick, type: 'button' }
+    : { href };
+  return (
+    <Tag {...props}
+      className="block w-full text-left bg-white p-5 rounded-[1.5rem] border border-slate-100 hover:border-blue-300 hover:shadow-md transition relative">
+      {badge != null && badge > 0 && (
+        <span className="absolute top-3 right-3 bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-full">
+          {badge}
+        </span>
+      )}
+      <div className="text-3xl mb-2">{icon}</div>
+      <p className="font-black text-slate-900">{title}</p>
+      <p className="text-xs text-slate-400 font-medium mt-0.5">{subtitle}</p>
+    </Tag>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 主應用 — 統一儀表板
 // ══════════════════════════════════════════════════════════════
 function App() {
-  const [authState,    setAuthState]    = useState('checking');  // checking | denied | ready
-  const [profile,      setProfile]      = useState(null);
-  const [isAdmin,      setIsAdmin]      = useState(false);
-  const [canUpload,    setCanUpload]    = useState(false);
-  const [tab,          setTab]          = useState('mine');      // mine | review | new
+  // 身份
+  const [authState, setAuthState] = useState('checking');  // checking | denied | ready
+  const [profile,   setProfile]   = useState(null);
+  const [isAdmin,   setIsAdmin]   = useState(false);
+  const [canUpload, setCanUpload] = useState(false);
+  const [isDistApproved, setIsDistApproved] = useState(false);
+  const [distData,  setDistData]  = useState(null);  // 含 inviteCode、commission
+
+  // 儀表板數字
+  const [stats, setStats] = useState(null);          // 業務視角：getMyStats 回傳
+  const [allOrders, setAllOrders] = useState([]);    // 管理員視角
+  const [allDist, setAllDist] = useState([]);        // 管理員視角
+  const [myCustomers, setMyCustomers] = useState([]); // 業務視角
+
+  // 上稿/審核（原 admin.html 功能）
+  const [tab,          setTab]          = useState('overview');  // overview | mine | review | new
   const [myItems,      setMyItems]      = useState([]);
   const [pendingItems, setPendingItems] = useState([]);
-  const [editing,      setEditing]      = useState(null);  // 編輯中的行程
-  const [creating,     setCreating]     = useState(false); // 新增中
-  const [reviewing,    setReviewing]    = useState(null);  // 審核中的行程
+  const [editing,      setEditing]      = useState(null);
+  const [creating,     setCreating]     = useState(false);
+  const [reviewing,    setReviewing]    = useState(null);
   const [reviewNote,   setReviewNote]   = useState('');
   const [saving,       setSaving]       = useState(false);
   const [toast,        setToast]        = useState(null);
@@ -179,7 +224,7 @@ function App() {
     setTimeout(()=>setToast(null), 3000);
   };
 
-  // ── 初始化 ──
+  // ── 初始化（一次拉所有需要的資料）──
   useEffect(() => {
     (async () => {
       try {
@@ -188,24 +233,52 @@ function App() {
         const p = await liff.getProfile();
         setProfile(p);
 
-        // 檢查身份
-        const res = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`);
-        const data = await res.json();
-        if (!data.success) { setAuthState('denied'); return; }
+        // 身份檢查（先打這個，決定後續要拉什麼）
+        const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r=>r.json());
+        if (!statusRes.success) { setAuthState('denied'); return; }
 
-        const _isAdmin = data.data.isAdmin;
-        const _canUpload = data.data.canUpload;
+        const _isAdmin = !!statusRes.data.isAdmin;
+        const _canUpload = !!statusRes.data.canUpload;
+        const _isDist = statusRes.data.role === 'distributor' && String(statusRes.data.status).toLowerCase() === 'approved';
         setIsAdmin(_isAdmin);
         setCanUpload(_canUpload);
+        setIsDistApproved(_isDist);
+        setDistData(statusRes.data.distributorData);
 
-        if (!_isAdmin && !_canUpload) {
+        // 任何已認證身份都可進入（管理員 OR 已核准分銷商）
+        if (!_isAdmin && !_isDist) {
           setAuthState('denied');
           return;
         }
 
-        // 載入資料
-        await fetchMine(p.userId, _isAdmin);
-        if (_isAdmin) await fetchPending();
+        // 並行拉資料 — 依角色拉不同
+        if (_isAdmin) {
+          const [pendingRes, allOrdersRes, distRes, myItemsRes] = await Promise.all([
+            fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
+            fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
+            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
+            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+          ]);
+          setPendingItems(pendingRes?.data || []);
+          setAllOrders(allOrdersRes?.data || []);
+          setAllDist(Array.isArray(distRes) ? distRes : []);
+          setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
+        } else {
+          // 已核准分銷商 — 拉個人業績、客戶、上稿（如果有權）
+          const tasks = [
+            fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:null})),
+            fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
+          ];
+          if (_canUpload) {
+            tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${p.userId}`).then(r=>r.json()).catch(()=>[]));
+          }
+          const results = await Promise.all(tasks);
+          setStats(results[0]?.data || null);
+          setMyCustomers(results[1]?.data || []);
+          if (_canUpload) {
+            setMyItems(Array.isArray(results[2]) ? results[2] : []);
+          }
+        }
 
         setAuthState('ready');
       } catch(e) {
@@ -215,28 +288,23 @@ function App() {
     })();
   }, []);
 
-  const fetchMine = async (uid, asAdmin) => {
-    // 管理員看全部，分銷商只看自己上稿的
-    const url = asAdmin
-      ? `${WORKER_URL}/api/itineraries?action=getItineraries&all=1`
-      : `${WORKER_URL}/api/itineraries?action=getItineraries&owner=${uid}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    setMyItems(Array.isArray(data) ? data : []);
-  };
-
-  const fetchPending = async () => {
-    const res = await fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`);
-    const data = await res.json();
-    setPendingItems(data?.data || []);
-  };
-
+  // ── reload（部分資料）──
   const reload = async () => {
-    if (profile) await fetchMine(profile.userId, isAdmin);
-    if (isAdmin) await fetchPending();
+    if (!profile) return;
+    if (isAdmin) {
+      const [pendingRes, myItemsRes] = await Promise.all([
+        fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
+        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+      ]);
+      setPendingItems(pendingRes?.data || []);
+      setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
+    } else if (canUpload) {
+      const myItemsRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json());
+      setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
+    }
   };
 
-  // ── 新增/編輯儲存 ──
+  // ── 新增/編輯儲存（原 admin.html 邏輯）──
   const handleSave = async (data) => {
     setSaving(true);
     try {
@@ -246,7 +314,7 @@ function App() {
         ...data,
         ownerUid: profile.userId,
         ownerName: profile.displayName,
-        operatorUid: profile.userId,  // updateItinerary 權限檢查用
+        operatorUid: profile.userId,
       };
       if (isEdit) body.id = editing.id || editing.timestamp;
 
@@ -272,7 +340,6 @@ function App() {
     setSaving(false);
   };
 
-  // ── 刪除 ──
   const handleDelete = async (item) => {
     if (!confirm(`確定刪除「${item.title}」？`)) return;
     try {
@@ -286,7 +353,6 @@ function App() {
     } catch(e) { showToast('操作失敗', 'error'); }
   };
 
-  // ── 審核 ──
   const handleReview = async (status) => {
     if (!reviewing) return;
     setSaving(true);
@@ -313,6 +379,21 @@ function App() {
     setSaving(false);
   };
 
+  // 複製推薦連結（業務用）
+  const copyInviteLink = () => {
+    const code = distData?.inviteCode;
+    if (!code) { showToast('尚無推薦碼', 'error'); return; }
+    const base = window.location.origin + window.location.pathname.replace(/admin\.html$/, '');
+    const url = `${base}index.html?invite=${code}`;
+    navigator.clipboard.writeText(url).then(() => showToast('✅ 推薦連結已複製'));
+  };
+
+  const copyInviteCode = () => {
+    const code = distData?.inviteCode;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => showToast('✅ 推薦碼已複製：' + code));
+  };
+
   // ════════════════════════════════════════════════════════════
   if (authState === 'checking') {
     return (
@@ -327,9 +408,9 @@ function App() {
     return (
       <div className="flex items-center justify-center h-screen flex-col gap-3 p-8 text-center">
         <div className="text-6xl">🔒</div>
-        <h2 className="text-2xl font-black text-slate-700">無上稿權限</h2>
+        <h2 className="text-2xl font-black text-slate-700">無存取權限</h2>
         <p className="text-slate-400 max-w-md">
-          您尚未取得上稿權限。請聯絡管理員授權後再使用。
+          需要管理員身份或已核准的分銷商身份才能進入此頁。
         </p>
         <a href="index.html" className="mt-4 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700">
           返回首頁
@@ -338,56 +419,260 @@ function App() {
     );
   }
 
+  // ── 管理員儀表板數字 ──
+  const adminStats = (() => {
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const monthOrders = allOrders.filter(o => String(o.createdat||'').startsWith(thisMonth));
+    return {
+      pendingReview: pendingItems.length,
+      pendingOrders: allOrders.filter(o => String(o.status).toLowerCase() === 'pending').length,
+      monthRevenue: monthOrders.reduce((s,o) => s + Number(o.price||0), 0),
+      monthCommission: monthOrders.reduce((s,o) => s + Number(o.commissionamount||0), 0),
+      totalDist: allDist.length,
+      pendingDist: allDist.filter(d => String(d.status).toLowerCase() === 'pending').length,
+      totalOrders: allOrders.length,
+      totalItems: myItems.length,
+    };
+  })();
+
   // ════ 主介面 ════
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* ════ Header ════ */}
       <div className="glass sticky top-0 z-40 border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            {profile && <img src={profile.pictureUrl} className="w-10 h-10 rounded-full" />}
-            <div>
-              <h1 className="font-black text-xl text-slate-900">
-                {isAdmin ? '🛠️ 管理員上稿中心' : '📝 我的上稿管理'}
-              </h1>
-              <p className="text-xs text-slate-400 font-medium">{profile?.displayName}</p>
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {profile && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full shrink-0" />}
+              <div className="min-w-0">
+                <h1 className="font-black text-xl text-slate-900 truncate">
+                  {isAdmin ? '🛠️ 管理員儀表板' : '👤 我的儀表板'}
+                </h1>
+                <p className="text-xs text-slate-400 font-medium truncate">
+                  {profile?.displayName} · {isAdmin ? '管理員' : (canUpload ? '分銷商（可上稿）' : '分銷商')}
+                </p>
+              </div>
             </div>
+            <a href="index.html"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm transition shrink-0">
+              ← 會員中心
+            </a>
           </div>
-          <button onClick={()=>{ setCreating(true); setEditing(null); }}
-            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
-            + 新增行程
-          </button>
-        </div>
 
-        {/* Tabs */}
-        <div className="max-w-5xl mx-auto px-6 flex gap-1">
-          <button onClick={()=>setTab('mine')}
-            className={`px-5 py-3 font-black text-sm border-b-2 transition ${
-              tab==='mine' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}>
-            📦 {isAdmin ? '全部行程' : '我的行程'}
-            <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{myItems.length}</span>
-          </button>
-          {isAdmin && (
-            <button onClick={()=>setTab('review')}
-              className={`px-5 py-3 font-black text-sm border-b-2 transition ${
-                tab==='review' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+          {/* Tabs */}
+          <div className="flex gap-1 mt-3 -mb-px overflow-x-auto">
+            <button onClick={()=>setTab('overview')}
+              className={`px-5 py-3 font-black text-sm border-b-2 transition whitespace-nowrap ${
+                tab==='overview' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}>
-              ⚠️ 待審核
-              {pendingItems.length > 0 && (
-                <span className="ml-2 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                  {pendingItems.length}
-                </span>
-              )}
+              📊 總覽
             </button>
-          )}
+            {(isAdmin || canUpload) && (
+              <button onClick={()=>setTab('mine')}
+                className={`px-5 py-3 font-black text-sm border-b-2 transition whitespace-nowrap ${
+                  tab==='mine' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}>
+                📦 {isAdmin ? '全部行程' : '我的行程'}
+                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{myItems.length}</span>
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={()=>setTab('review')}
+                className={`px-5 py-3 font-black text-sm border-b-2 transition whitespace-nowrap ${
+                  tab==='review' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}>
+                ⚠️ 待審核
+                {pendingItems.length > 0 && (
+                  <span className="ml-2 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                    {pendingItems.length}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* ════ 我的行程 / 全部行程 ════ */}
-        {tab === 'mine' && (
+        {/* ════ 總覽 Tab ════ */}
+        {tab === 'overview' && (
+          <div className="space-y-8 anim">
+
+            {/* 業務專屬：推薦碼卡片 */}
+            {!isAdmin && distData?.inviteCode && (
+              <div className="bg-gradient-to-br from-blue-600 to-purple-600 text-white p-6 rounded-[2rem] shadow-lg">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold opacity-80 uppercase tracking-widest mb-1">我的推薦碼</p>
+                    <p className="text-4xl font-black tracking-widest font-mono">{distData.inviteCode}</p>
+                    <p className="text-xs opacity-80 mt-2">
+                      佣金率：{distData.commission || 0}% · 透過此碼成交的客戶會自動歸入您的客戶名單
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={copyInviteCode}
+                      className="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-4 py-2.5 rounded-xl font-black text-sm transition">
+                      複製碼
+                    </button>
+                    <button onClick={copyInviteLink}
+                      className="bg-white text-blue-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-black text-sm transition shadow-lg">
+                      複製推廣連結
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 數字儀表板 — 管理員 vs 業務 */}
+            {isAdmin ? (
+              <div>
+                <h2 className="font-black text-lg text-slate-900 mb-3">本月概況</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatCard color="bg-amber-500" num={adminStats.pendingReview}
+                    label="待審核行程" hint="上稿審核佇列" />
+                  <StatCard color="bg-red-500" num={adminStats.pendingOrders}
+                    label="待處理訂單" hint="新訂單未確認" />
+                  <StatCard color="bg-emerald-600" num={fmt(adminStats.monthRevenue)}
+                    label="本月成交金額" hint={`${adminStats.totalOrders} 張總訂單`} />
+                  <StatCard color="bg-blue-600" num={fmt(adminStats.monthCommission)}
+                    label="本月佣金支出" hint="累計待支付分銷商" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                  <StatCard color="bg-slate-800" num={adminStats.totalDist}
+                    label="分銷商總數"
+                    hint={adminStats.pendingDist > 0 ? `${adminStats.pendingDist} 待審核` : '全部已核准'} />
+                  <StatCard color="bg-slate-700" num={adminStats.totalItems}
+                    label="行程總數" />
+                  <StatCard color="bg-slate-600" num={adminStats.totalOrders}
+                    label="累計訂單" />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h2 className="font-black text-lg text-slate-900 mb-3">本月業績</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatCard color="bg-blue-600" num={stats?.month?.count || 0}
+                    label="本月成交筆數" />
+                  <StatCard color="bg-emerald-600" num={fmt(stats?.month?.revenue)}
+                    label="本月推廣金額" />
+                  <StatCard color="bg-amber-500" num={fmt(stats?.month?.commission)}
+                    label="本月應得佣金" hint="含未完成訂單" />
+                  <StatCard color="bg-slate-800" num={fmt(stats?.total?.completedCommission)}
+                    label="已賺取佣金" hint="僅計已完成訂單" />
+                </div>
+                <h2 className="font-black text-lg text-slate-900 mb-3 mt-6">累計</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <StatCard color="bg-slate-700" num={stats?.total?.count || 0}
+                    label="累計成交筆數" />
+                  <StatCard color="bg-slate-700" num={fmt(stats?.total?.revenue)}
+                    label="累計推廣金額" />
+                  <StatCard color="bg-purple-600" num={stats?.customerCount || myCustomers.length}
+                    label="我的客戶數" />
+                </div>
+              </div>
+            )}
+
+            {/* 快速導航 */}
+            <div>
+              <h2 className="font-black text-lg text-slate-900 mb-3">快速導航</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {isAdmin ? (
+                  <>
+                    <NavCard href="crm.html" icon="📋" title="CRM 管理"
+                      subtitle="分銷商 + 訂單"
+                      badge={adminStats.pendingDist + adminStats.pendingOrders} />
+                    <NavCard href="#" onClick={()=>setTab('review')} icon="⚠️" title="審核行程"
+                      subtitle="待審核稿件" badge={adminStats.pendingReview} />
+                    <NavCard href="#" onClick={()=>{ setTab('mine'); setCreating(true); }}
+                      icon="📝" title="新增行程" subtitle="管理員直接上架" />
+                    <NavCard href="index.html" icon="👤" title="會員中心"
+                      subtitle="名片資料" />
+                  </>
+                ) : (
+                  <>
+                    <NavCard href="crm.html" icon="📋" title="我的 CRM"
+                      subtitle="訂單 + 客戶名單" />
+                    <NavCard href="index.html" icon="🎯" title="推廣工具"
+                      subtitle="生 LINE Flex" />
+                    {canUpload && (
+                      <NavCard href="#" onClick={()=>{ setTab('mine'); setCreating(true); }}
+                        icon="📝" title="新增行程"
+                        subtitle="送審後上架" />
+                    )}
+                    <NavCard href="index.html" icon="👤" title="會員中心"
+                      subtitle="編輯名片" />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 業務客戶名單 quick view */}
+            {!isAdmin && myCustomers.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-black text-lg text-slate-900">最近客戶</h2>
+                  <a href="crm.html" className="text-blue-600 font-bold text-sm hover:underline">
+                    全部 ({myCustomers.length}) →
+                  </a>
+                </div>
+                <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden">
+                  {myCustomers.slice(0, 5).map((c, idx) => (
+                    <div key={idx} className="p-4 border-b border-slate-50 last:border-b-0 flex items-center justify-between gap-3 hover:bg-slate-50 transition">
+                      <div className="min-w-0">
+                        <p className="font-black text-slate-800 text-sm">{c.customername || '—'}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{c.customerphone}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-black text-emerald-600">{fmt(c.totalamount)}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{c.totalorders || 0} 筆</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 管理員：待處理摘要 */}
+            {isAdmin && (pendingItems.length > 0 || adminStats.pendingDist > 0) && (
+              <div>
+                <h2 className="font-black text-lg text-slate-900 mb-3">需要您處理</h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {pendingItems.length > 0 && (
+                    <button onClick={()=>setTab('review')}
+                      className="text-left bg-amber-50 border-2 border-amber-200 p-5 rounded-[1.5rem] hover:bg-amber-100 transition">
+                      <p className="text-3xl font-black text-amber-700">{pendingItems.length}</p>
+                      <p className="font-bold text-amber-700 mt-1">待審核行程</p>
+                      <p className="text-xs text-amber-600 mt-2">點擊去審核 →</p>
+                    </button>
+                  )}
+                  {adminStats.pendingDist > 0 && (
+                    <a href="crm.html"
+                      className="block bg-blue-50 border-2 border-blue-200 p-5 rounded-[1.5rem] hover:bg-blue-100 transition">
+                      <p className="text-3xl font-black text-blue-700">{adminStats.pendingDist}</p>
+                      <p className="font-bold text-blue-700 mt-1">待審核分銷商</p>
+                      <p className="text-xs text-blue-600 mt-2">前往 CRM →</p>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ════ 我的行程 / 全部行程 Tab（原 admin.html）════ */}
+        {tab === 'mine' && (isAdmin || canUpload) && (
           <div className="space-y-3 anim">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="font-black text-lg text-slate-900">
+                {isAdmin ? '全部行程' : '我的行程'}
+              </h2>
+              <button onClick={()=>{ setCreating(true); setEditing(null); }}
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
+                + 新增行程
+              </button>
+            </div>
+
             {myItems.length === 0 ? (
               <div className="p-20 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200">
                 <p className="text-slate-300 font-bold mb-2">尚無行程</p>
@@ -444,9 +729,10 @@ function App() {
           </div>
         )}
 
-        {/* ════ 待審核 (管理員) ════ */}
+        {/* ════ 待審核 Tab（管理員）════ */}
         {tab === 'review' && isAdmin && (
           <div className="space-y-3 anim">
+            <h2 className="font-black text-lg text-slate-900 mb-3">待審核行程</h2>
             {pendingItems.length === 0 ? (
               <div className="p-20 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200">
                 <p className="text-slate-300 font-bold">🎉 沒有待審核的行程</p>
@@ -477,7 +763,7 @@ function App() {
 
       </div>
 
-      {/* ════ 新增/編輯 Modal ════ */}
+      {/* ════ 新增/編輯 Modal（原 admin.html）════ */}
       {(creating || editing) && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={e => e.target===e.currentTarget && (saving ? null : (setCreating(false), setEditing(null)))}>
@@ -506,7 +792,7 @@ function App() {
         </div>
       )}
 
-      {/* ════ 審核 Modal ════ */}
+      {/* ════ 審核 Modal（原 admin.html）════ */}
       {reviewing && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={e => e.target===e.currentTarget && setReviewing(null)}>
