@@ -19,9 +19,23 @@
 </head>
 <body class="bg-slate-50 min-h-screen font-sans">
 <div id="root">
-  <div class="flex items-center justify-center h-screen flex-col gap-3">
-    <div class="spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-    <p class="text-slate-400 font-bold text-sm">驗證身份中…</p>
+  <!-- 預設骨架（babel 編譯前/React mount 前的 placeholder） -->
+  <div class="min-h-screen bg-slate-50">
+    <div class="bg-white/90 sticky top-0 border-b border-slate-200">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-slate-200 animate-pulse"></div>
+        <div class="space-y-2">
+          <div class="h-5 w-32 bg-slate-200 rounded animate-pulse"></div>
+          <div class="h-3 w-20 bg-slate-100 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+      <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
+    </div>
   </div>
 </div>
 
@@ -154,12 +168,21 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// 骨架條（loading 占位用）
+// ══════════════════════════════════════════════════════════════
+function Skel({ w = 'w-20', h = 'h-8', cls = '' }) {
+  return <span className={`inline-block bg-white/30 rounded animate-pulse ${w} ${h} ${cls}`} />;
+}
+
+// ══════════════════════════════════════════════════════════════
 // 數字卡片（儀表板用）
 // ══════════════════════════════════════════════════════════════
-function StatCard({ color, num, label, hint }) {
+function StatCard({ color, num, label, hint, loading }) {
   return (
     <div className={`${color} text-white p-5 rounded-[1.5rem]`}>
-      <p className="text-3xl font-black leading-tight">{num}</p>
+      {loading
+        ? <Skel w="w-16" h="h-9" cls="bg-white/30" />
+        : <p className="text-3xl font-black leading-tight">{num}</p>}
       <p className="text-sm font-bold opacity-90 mt-1">{label}</p>
       {hint && <p className="text-[10px] opacity-70 mt-1">{hint}</p>}
     </div>
@@ -202,6 +225,9 @@ function App() {
   const [isDistApproved, setIsDistApproved] = useState(false);
   const [distData,  setDistData]  = useState(null);  // 含 inviteCode、commission
 
+  // ★ 載入旗標（非 auth）— 控制骨架條
+  const [dataLoading, setDataLoading] = useState(true);
+
   // 儀表板數字
   const [stats, setStats] = useState(null);          // 業務視角：getMyStats 回傳
   const [allOrders, setAllOrders] = useState([]);    // 管理員視角
@@ -224,7 +250,9 @@ function App() {
     setTimeout(()=>setToast(null), 3000);
   };
 
-  // ── 初始化（一次拉所有需要的資料）──
+  // ── 初始化 ──
+  //   階段 1：LIFF + 身份檢查 → setAuthState('ready')，版面骨架先出
+  //   階段 2：所有資料並行拉 → setDataLoading(false)，骨架填數字
   useEffect(() => {
     (async () => {
       try {
@@ -233,7 +261,7 @@ function App() {
         const p = await liff.getProfile();
         setProfile(p);
 
-        // 身份檢查（先打這個，決定後續要拉什麼）
+        // 階段 1：身份檢查（最快）
         const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r=>r.json());
         if (!statusRes.success) { setAuthState('denied'); return; }
 
@@ -245,13 +273,15 @@ function App() {
         setIsDistApproved(_isDist);
         setDistData(statusRes.data.distributorData);
 
-        // 任何已認證身份都可進入（管理員 OR 已核准分銷商）
         if (!_isAdmin && !_isDist) {
           setAuthState('denied');
           return;
         }
 
-        // 並行拉資料 — 依角色拉不同
+        // ★ 身份就緒 → 版面立刻渲染（這時數字還沒進來，會顯示骨架）
+        setAuthState('ready');
+
+        // 階段 2：資料慢慢拉，依角色拉不同
         if (_isAdmin) {
           const [pendingRes, allOrdersRes, distRes, myItemsRes] = await Promise.all([
             fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
@@ -264,7 +294,6 @@ function App() {
           setAllDist(Array.isArray(distRes) ? distRes : []);
           setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
         } else {
-          // 已核准分銷商 — 拉個人業績、客戶、上稿（如果有權）
           const tasks = [
             fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:null})),
             fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
@@ -280,7 +309,7 @@ function App() {
           }
         }
 
-        setAuthState('ready');
+        setDataLoading(false);
       } catch(e) {
         console.error(e);
         setAuthState('denied');
@@ -397,9 +426,25 @@ function App() {
   // ════════════════════════════════════════════════════════════
   if (authState === 'checking') {
     return (
-      <div className="flex items-center justify-center h-screen flex-col gap-3">
-        <div className="spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"/>
-        <p className="text-slate-400 font-bold text-sm">驗證身份中…</p>
+      <div className="min-h-screen bg-slate-50">
+        <div className="glass sticky top-0 z-40 border-b border-slate-200">
+          <div className="max-w-6xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-slate-200 animate-pulse"/>
+              <div className="space-y-2">
+                <div className="h-5 w-32 bg-slate-200 rounded animate-pulse"/>
+                <div className="h-3 w-20 bg-slate-100 rounded animate-pulse"/>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"/>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -530,22 +575,23 @@ function App() {
                 <h2 className="font-black text-lg text-slate-900 mb-3">本月概況</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <StatCard color="bg-amber-500" num={adminStats.pendingReview}
-                    label="待審核行程" hint="上稿審核佇列" />
+                    label="待審核行程" hint="上稿審核佇列"  loading={dataLoading} />
                   <StatCard color="bg-red-500" num={adminStats.pendingOrders}
-                    label="待處理訂單" hint="新訂單未確認" />
+                    label="待處理訂單" hint="新訂單未確認"  loading={dataLoading} />
                   <StatCard color="bg-emerald-600" num={fmt(adminStats.monthRevenue)}
-                    label="本月成交金額" hint={`${adminStats.totalOrders} 張總訂單`} />
+                    label="本月成交金額" hint={`${adminStats.totalOrders} 張總訂單`}  loading={dataLoading} />
                   <StatCard color="bg-blue-600" num={fmt(adminStats.monthCommission)}
-                    label="本月佣金支出" hint="累計待支付分銷商" />
+                    label="本月佣金支出" hint="累計待支付分銷商"  loading={dataLoading} />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                   <StatCard color="bg-slate-800" num={adminStats.totalDist}
                     label="分銷商總數"
-                    hint={adminStats.pendingDist > 0 ? `${adminStats.pendingDist} 待審核` : '全部已核准'} />
+                    hint={adminStats.pendingDist > 0 ? `${adminStats.pendingDist} 待審核` : '全部已核准'}
+                    loading={dataLoading} />
                   <StatCard color="bg-slate-700" num={adminStats.totalItems}
-                    label="行程總數" />
+                    label="行程總數"  loading={dataLoading} />
                   <StatCard color="bg-slate-600" num={adminStats.totalOrders}
-                    label="累計訂單" />
+                    label="累計訂單"  loading={dataLoading} />
                 </div>
               </div>
             ) : (
@@ -553,22 +599,22 @@ function App() {
                 <h2 className="font-black text-lg text-slate-900 mb-3">本月業績</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <StatCard color="bg-blue-600" num={stats?.month?.count || 0}
-                    label="本月成交筆數" />
+                    label="本月成交筆數"  loading={dataLoading} />
                   <StatCard color="bg-emerald-600" num={fmt(stats?.month?.revenue)}
-                    label="本月推廣金額" />
+                    label="本月推廣金額"  loading={dataLoading} />
                   <StatCard color="bg-amber-500" num={fmt(stats?.month?.commission)}
-                    label="本月應得佣金" hint="含未完成訂單" />
+                    label="本月應得佣金" hint="含未完成訂單"  loading={dataLoading} />
                   <StatCard color="bg-slate-800" num={fmt(stats?.total?.completedCommission)}
-                    label="已賺取佣金" hint="僅計已完成訂單" />
+                    label="已賺取佣金" hint="僅計已完成訂單"  loading={dataLoading} />
                 </div>
                 <h2 className="font-black text-lg text-slate-900 mb-3 mt-6">累計</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <StatCard color="bg-slate-700" num={stats?.total?.count || 0}
-                    label="累計成交筆數" />
+                    label="累計成交筆數"  loading={dataLoading} />
                   <StatCard color="bg-slate-700" num={fmt(stats?.total?.revenue)}
-                    label="累計推廣金額" />
+                    label="累計推廣金額"  loading={dataLoading} />
                   <StatCard color="bg-purple-600" num={stats?.customerCount || myCustomers.length}
-                    label="我的客戶數" />
+                    label="我的客戶數"  loading={dataLoading} />
                 </div>
               </div>
             )}
@@ -608,16 +654,28 @@ function App() {
             </div>
 
             {/* 業務客戶名單 quick view */}
-            {!isAdmin && myCustomers.length > 0 && (
+            {!isAdmin && (dataLoading || myCustomers.length > 0) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-black text-lg text-slate-900">最近客戶</h2>
-                  <a href="crm.html" className="text-blue-600 font-bold text-sm hover:underline">
-                    全部 ({myCustomers.length}) →
-                  </a>
+                  {!dataLoading && (
+                    <a href="crm.html" className="text-blue-600 font-bold text-sm hover:underline">
+                      全部 ({myCustomers.length}) →
+                    </a>
+                  )}
                 </div>
                 <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden">
-                  {myCustomers.slice(0, 5).map((c, idx) => (
+                  {dataLoading ? (
+                    [1,2,3].map(i => (
+                      <div key={i} className="p-4 border-b border-slate-50 last:border-b-0 flex items-center justify-between gap-3">
+                        <div className="space-y-2">
+                          <div className="h-4 w-24 bg-slate-200 rounded animate-pulse"/>
+                          <div className="h-3 w-32 bg-slate-100 rounded animate-pulse"/>
+                        </div>
+                        <div className="h-5 w-16 bg-slate-200 rounded animate-pulse"/>
+                      </div>
+                    ))
+                  ) : myCustomers.slice(0, 5).map((c, idx) => (
                     <div key={idx} className="p-4 border-b border-slate-50 last:border-b-0 flex items-center justify-between gap-3 hover:bg-slate-50 transition">
                       <div className="min-w-0">
                         <p className="font-black text-slate-800 text-sm">{c.customername || '—'}</p>
