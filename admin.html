@@ -921,16 +921,12 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
-<!-- ★ JSX 編譯快取載入器（替代 babel-standalone 的 type="text/babel" 自動執行）
-     首次：載 babel-standalone → 編譯 → 存 localStorage → eval
-     之後：localStorage 命中 → 直接 eval（省下載 babel + 省編譯時間）
-     JSX 內容變了 → hash 不同 → 自動 invalidate -->
+<!-- ★ JSX 編譯快取載入器 v2（修：拿掉 env preset、加 setItem 後驗證） -->
 <script>
 (function(){
-  const CACHE_KEY_PREFIX = 'tk-jsx-cache-v1:';
+  const CACHE_KEY_PREFIX = 'tk-jsx-cache-v2:';   // ★ v2：bumped，舊 cache 自動失效
   const BABEL_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js';
 
-  // djb2 hash（簡單夠用，碰撞機率極低）
   function hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
 
   function loadScript(src){
@@ -941,50 +937,61 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     });
   }
 
-  function execCode(code){
-    // 用 new Function 而非 eval，避免污染 strict mode；同時要能存取全域 React/ReactDOM
-    // 但 new Function 是非 strict、全域 scope 的——React、ReactDOM 等都能讀到
-    new Function(code)();
-  }
+  function execCode(code){ new Function(code)(); }
 
   async function boot(){
     const src = document.getElementById('app-source')?.textContent || '';
     if (!src.trim()) { console.error('[jsx-loader] no #app-source'); return; }
 
     const key = CACHE_KEY_PREFIX + hash(src);
+    console.log('[jsx-loader] cache key:', key, '| source len:', src.length);
 
     // 1. 試讀快取
     try {
       const cached = localStorage.getItem(key);
       if (cached) {
-        console.log('[jsx-loader] cache HIT, exec compiled code');
+        console.log('[jsx-loader] ✅ cache HIT, compiled len:', cached.length, '— skip babel');
         execCode(cached);
         return;
+      } else {
+        console.log('[jsx-loader] cache MISS（key 不存在）');
       }
     } catch(e) { console.warn('[jsx-loader] localStorage read failed', e); }
 
     // 2. 沒快取 → 載 babel + 編譯
-    console.log('[jsx-loader] cache MISS, loading babel...');
     const t0 = performance.now();
     try {
       await loadScript(BABEL_CDN);
       const t1 = performance.now();
-      console.log('[jsx-loader] babel loaded in', (t1-t0).toFixed(0), 'ms; compiling...');
-      const compiled = Babel.transform(src, { presets: ['react','env'] }).code;
-      const t2 = performance.now();
-      console.log('[jsx-loader] compiled in', (t2-t1).toFixed(0), 'ms');
+      console.log('[jsx-loader] babel loaded in', (t1-t0).toFixed(0), 'ms');
 
-      // 3. 存快取（失敗就算了，下次再編譯）
-      try { localStorage.setItem(key, compiled); }
-      catch(e) {
-        // localStorage 滿了 → 清掉所有舊版本快取再試一次
+      // ★ v2 修正：只用 react preset，不用 env（env 會 polyfill 整個 ES5，編譯產物爆增 3-4 倍）
+      const compiled = Babel.transform(src, { presets: ['react'] }).code;
+      const t2 = performance.now();
+      console.log('[jsx-loader] compiled in', (t2-t1).toFixed(0), 'ms, output len:', compiled.length);
+
+      // 3. 存快取，**並驗證**寫入是否成功
+      try {
+        localStorage.setItem(key, compiled);
+        const verify = localStorage.getItem(key);
+        if (verify === compiled) {
+          console.log('[jsx-loader] ✅ cache write OK，下次進站秒開');
+        } else {
+          console.warn('[jsx-loader] ⚠️ cache write mismatch (verify=' + (verify?verify.length:'null') + ' vs ' + compiled.length + ')');
+        }
+      } catch(e) {
+        console.warn('[jsx-loader] ⚠️ cache write FAILED:', e.name, e.message);
+        // localStorage 可能滿了 → 清掉本前綴所有舊 key 再試
         try {
+          let cleared = 0;
           for (let i=localStorage.length-1; i>=0; i--) {
             const k = localStorage.key(i);
-            if (k && k.startsWith(CACHE_KEY_PREFIX)) localStorage.removeItem(k);
+            if (k && (k.startsWith('tk-jsx-cache-'))) { localStorage.removeItem(k); cleared++; }
           }
+          console.log('[jsx-loader] cleared', cleared, 'old cache keys, retrying...');
           localStorage.setItem(key, compiled);
-        } catch(_) { console.warn('[jsx-loader] cache write failed', e); }
+          console.log('[jsx-loader] ✅ cache write OK (retry)');
+        } catch(e2) { console.warn('[jsx-loader] ⚠️ retry also failed:', e2.message); }
       }
 
       execCode(compiled);
@@ -995,7 +1002,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     }
   }
 
-  // 等 React/ReactDOM 載完才執行
   if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined') boot();
   else window.addEventListener('load', boot);
 })();
