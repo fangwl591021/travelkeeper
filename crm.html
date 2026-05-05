@@ -312,7 +312,7 @@ function CRMApp() {
   const [isAdmin,      setIsAdmin]      = useState(false);
   const [isDistApproved, setIsDistApproved] = useState(false);
 
-  const [tab,          setTab]          = useState('orders');  // distributors | orders（分銷商只有 orders）
+  const [tab,          setTab]          = useState('orders');  // distributors | orders | customers
 
   // 分銷商
   const [distributors, setDistributors] = useState([]);
@@ -325,6 +325,13 @@ function CRMApp() {
   const [selOrder,     setSelOrder]     = useState(null);
   const [orderFilter,  setOrderFilter]  = useState('all');
   const [orderSearch,  setOrderSearch]  = useState('');
+
+  // ★ v2：客戶（業務視角）
+  const [customers,     setCustomers]     = useState([]);
+  const [customerSearch,setCustomerSearch]= useState('');
+  const [selCustomer,   setSelCustomer]   = useState(null);     // 點開的客戶
+  const [customerOrders,setCustomerOrders]= useState([]);       // 該客戶的訂單明細
+  const [loadingCustOrders, setLoadingCustOrders] = useState(false);
 
   const [loading,      setLoading]      = useState(true);
   const [toast,        setToast]        = useState(null);
@@ -353,7 +360,7 @@ function CRMApp() {
 
         // 身份檢查 + 訂單 / 分銷商 名單同時並行打
         const isAdminCandidate = false;  // 還不知道，先全部都拉
-        const [statusRes, ordersForDist, allOrdersRes, distRes] = await Promise.all([
+        const [statusRes, ordersForDist, allOrdersRes, distRes, myCustRes] = await Promise.all([
           fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r => r.json()),
           // 分銷商視角的訂單（如果是分銷商會用到）
           fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
@@ -361,6 +368,8 @@ function CRMApp() {
           fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r => r.json()).catch(() => ({ data: [] })),
           // 分銷商列表（如果是管理員會用到）
           fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r => r.json()).catch(() => []),
+          // ★ v2：分銷商視角的客戶名單（管理員不會用到，但先搶先贏一起拉）
+          fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r => r.json()).catch(() => ({ data: [] })),
         ]);
 
         if (!statusRes.success) { setAuthState('denied'); return; }
@@ -381,9 +390,10 @@ function CRMApp() {
           setOrders(allOrdersRes?.data || []);
           setTab('distributors');
         } else {
-          // 分銷商：只看自己賣出的訂單
+          // 分銷商：只看自己賣出的訂單 + 自己歸屬的客戶
           const myOrders = (ordersForDist?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
           setOrders(myOrders);
+          setCustomers(myCustRes?.data || []);
           setTab('orders');
         }
 
@@ -407,9 +417,14 @@ function CRMApp() {
         setDistributors(Array.isArray(distRes) ? distRes : []);
         setOrders(orderRes?.data || []);
       } else {
-        const orderRes = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`).then(r => r.json());
+        // ★ v2：分銷商重新整理時，訂單 + 客戶名單一起拉
+        const [orderRes, custRes] = await Promise.all([
+          fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`).then(r => r.json()),
+          fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${uid}`).then(r => r.json()).catch(() => ({ data: [] })),
+        ]);
         const myOrders = (orderRes?.data || []).filter(o => String(o.distributoruid) === String(uid));
         setOrders(myOrders);
+        setCustomers(custRes?.data || []);
       }
     } catch (e) { showToast('讀取失敗', 'error'); }
     setLoading(false);
@@ -535,6 +550,28 @@ function CRMApp() {
     cancelled: orders.filter(o => String(o.status).toLowerCase() === 'cancelled').length,
   };
 
+  // ── ★ v2：客戶清單篩選（業務視角） ──
+  const filteredCustomers = customers.filter(c => {
+    if (!customerSearch) return true;
+    const q = customerSearch.toLowerCase();
+    return String(c.customername || '').toLowerCase().includes(q)
+        || String(c.customerphone || '').includes(customerSearch);
+  });
+
+  // 點客戶 → 拉這客戶的訂單明細
+  const openCustomer = async (customer) => {
+    setSelCustomer(customer);
+    setLoadingCustOrders(true);
+    setCustomerOrders([]);
+    try {
+      const res = await fetch(
+        `${WORKER_URL}/api/itineraries?action=getCustomerOrders&uid=${profile.userId}&phone=${encodeURIComponent(customer.customerphone)}`
+      ).then(r => r.json());
+      setCustomerOrders(res?.data || []);
+    } catch (e) { showToast('讀取訂單失敗', 'error'); }
+    setLoadingCustOrders(false);
+  };
+
   // ════════════════════════════════════════════════════════════
   if (authState === 'checking') {
     return (
@@ -584,9 +621,9 @@ function CRMApp() {
             </button>
           </div>
 
-          {/* Tabs — 分銷商只有訂單一個 tab，所以不顯示 tab bar */}
-          {isAdmin && (
-            <div className="flex gap-1 -mb-px">
+          {/* Tabs */}
+          <div className="flex gap-1 -mb-px">
+            {isAdmin && (
               <button onClick={() => setTab('distributors')}
                 className={`px-5 py-3 font-black text-sm transition border-b-2 ${
                   tab === 'distributors'
@@ -596,22 +633,34 @@ function CRMApp() {
                 👥 分銷商管理
                 <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{distCounts.all}</span>
               </button>
-              <button onClick={() => setTab('orders')}
+            )}
+            <button onClick={() => setTab('orders')}
+              className={`px-5 py-3 font-black text-sm transition border-b-2 ${
+                tab === 'orders'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}>
+              📦 {isAdmin ? '訂單管理' : '我的訂單'}
+              <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{orderCounts.all}</span>
+              {orderCounts.pending > 0 && (
+                <span className="ml-1 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                  {orderCounts.pending} 待處理
+                </span>
+              )}
+            </button>
+            {/* ★ v2：分銷商專屬 tab */}
+            {!isAdmin && (
+              <button onClick={() => setTab('customers')}
                 className={`px-5 py-3 font-black text-sm transition border-b-2 ${
-                  tab === 'orders'
+                  tab === 'customers'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}>
-                📦 訂單管理
-                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{orderCounts.all}</span>
-                {orderCounts.pending > 0 && (
-                  <span className="ml-1 text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                    {orderCounts.pending} 待處理
-                  </span>
-                )}
+                👤 我的客戶
+                <span className="ml-2 text-xs bg-slate-100 px-2 py-0.5 rounded-full">{customers.length}</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -839,6 +888,99 @@ function CRMApp() {
             </div>
           </>
         )}
+
+        {/* ════ ★ v2：我的客戶 Tab（分銷商專屬）════ */}
+        {!isAdmin && tab === 'customers' && (
+          <>
+            {/* 統計卡片：客戶總數 / 累計貢獻 / 平均單價 */}
+            <div className="grid grid-cols-3 gap-4 anim">
+              <div className="bg-blue-600 text-white p-5 rounded-[1.5rem]">
+                <p className="text-3xl font-black">{customers.length}</p>
+                <p className="text-sm font-bold opacity-90 mt-1">累計客戶數</p>
+              </div>
+              <div className="bg-emerald-600 text-white p-5 rounded-[1.5rem]">
+                <p className="text-2xl font-black">
+                  {fmt(customers.reduce((s, c) => s + Number(c.totalamount || 0), 0))}
+                </p>
+                <p className="text-sm font-bold opacity-90 mt-1">客戶累計貢獻</p>
+              </div>
+              <div className="bg-slate-800 text-white p-5 rounded-[1.5rem]">
+                <p className="text-2xl font-black">
+                  {customers.length > 0
+                    ? fmt(Math.round(
+                        customers.reduce((s, c) => s + Number(c.totalamount || 0), 0)
+                        / customers.reduce((s, c) => s + Number(c.totalorders || 0), 0)
+                      ))
+                    : '$0'}
+                </p>
+                <p className="text-sm font-bold opacity-90 mt-1">平均單價</p>
+              </div>
+            </div>
+
+            {/* 搜尋 */}
+            <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
+              placeholder="搜尋客戶姓名、電話..."
+              className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
+
+            {/* 客戶列表 */}
+            <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
+              {loading ? (
+                <div className="p-20 text-center">
+                  <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+                  <p className="text-slate-400 font-bold text-sm">載入中...</p>
+                </div>
+              ) : filteredCustomers.length === 0 ? (
+                <div className="p-20 text-center text-slate-300 font-bold">
+                  {customerSearch
+                    ? '無符合條件的客戶'
+                    : '您尚未帶進任何客戶 · 透過推廣連結成交後客戶將出現在這裡'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                      <tr>
+                        <th className="p-4">客戶</th>
+                        <th className="p-4">電話</th>
+                        <th className="p-4 text-right">訂單數</th>
+                        <th className="p-4 text-right">累計金額</th>
+                        <th className="p-4">最後下單</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredCustomers.map((c, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
+                          onClick={() => openCustomer(c)}>
+                          <td className="p-4">
+                            <p className="font-black text-sm text-slate-800">{c.customername || '—'}</p>
+                            {c.source === 'direct' && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">自然客</p>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <a href={`tel:${c.customerphone}`} onClick={(e) => e.stopPropagation()}
+                              className="text-sm text-blue-600 hover:underline font-medium">
+                              {c.customerphone || '—'}
+                            </a>
+                          </td>
+                          <td className="p-4 text-right font-bold text-slate-700">
+                            {c.totalorders || 0}
+                          </td>
+                          <td className="p-4 text-right font-black text-emerald-600">
+                            {fmt(c.totalamount)}
+                          </td>
+                          <td className="p-4 text-xs text-slate-500">
+                            {fmtDate(c.lastorderat)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* 詳情 Modals */}
@@ -857,6 +999,77 @@ function CRMApp() {
           onUpdateStatus={handleUpdateOrderStatus}
           canEditStatus={isAdmin}  // ★ 只有管理員能改狀態
         />
+      )}
+
+      {/* ★ v2：客戶訂單明細 Modal */}
+      {selCustomer && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => { setSelCustomer(null); setCustomerOrders([]); }}>
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto anim"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="font-black text-xl text-slate-900">{selCustomer.customername || '—'}</h3>
+                <a href={`tel:${selCustomer.customerphone}`}
+                  className="text-sm text-blue-600 hover:underline font-medium mt-1 block">
+                  {selCustomer.customerphone}
+                </a>
+              </div>
+              <button onClick={() => { setSelCustomer(null); setCustomerOrders([]); }}
+                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+
+            {/* 數字摘要 */}
+            <div className="p-6 grid grid-cols-3 gap-3 bg-slate-50 border-b border-slate-100">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">訂單數</p>
+                <p className="font-black text-2xl text-slate-900 mt-1">{selCustomer.totalorders || 0}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">累計貢獻</p>
+                <p className="font-black text-2xl text-emerald-600 mt-1">{fmt(selCustomer.totalamount)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">首次下單</p>
+                <p className="font-bold text-xs text-slate-700 mt-2">{fmtDate(selCustomer.firstorderat)}</p>
+              </div>
+            </div>
+
+            {/* 訂單列表 */}
+            <div className="p-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">訂單明細</p>
+              {loadingCustOrders ? (
+                <div className="p-10 text-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"/>
+                </div>
+              ) : customerOrders.length === 0 ? (
+                <div className="p-10 text-center text-slate-300 font-bold text-sm">無訂單</div>
+              ) : (
+                <div className="space-y-2">
+                  {customerOrders.map((o, idx) => (
+                    <div key={idx}
+                      className="border border-slate-100 rounded-xl p-4 hover:border-blue-300 cursor-pointer transition"
+                      onClick={() => { setSelOrder(o); }}>
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm text-slate-800 line-clamp-1">{o.itinerarytitle || '—'}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{o.orderid}</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {o.travelers || 1} 人 · {fmtTravelDate(o.traveldate)} · {fmtDate(o.createdat)}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-black text-red-600">{fmt(o.price)}</p>
+                          <div className="mt-1"><OrderStatusBadge status={o.status} /></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Toast */}
