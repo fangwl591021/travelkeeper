@@ -9,9 +9,13 @@
   <style>
     @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
     @keyframes spin   { to{transform:rotate(360deg)} }
+    @keyframes shimmer { 0%{background-position:-468px 0} 100%{background-position:468px 0} }
     .afu  { animation: fadeUp .25s ease both; }
     .spin { animation: spin .7s linear infinite; }
     .glass{ background:rgba(255,255,255,.92); backdrop-filter:blur(16px); }
+    /* 骨架條 */
+    .skel { background: linear-gradient(to right, #f1f5f9 8%, #e2e8f0 18%, #f1f5f9 33%);
+      background-size: 800px 100px; animation: shimmer 1.4s linear infinite; border-radius: 12px; }
     .promo-check { position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:6px;
       border:2.5px solid #fff;background:rgba(0,0,0,.35);display:flex;align-items:center;
       justify-content:center;cursor:pointer;transition:.15s;z-index:5; }
@@ -28,6 +32,14 @@
       font-size:14px;font-weight:700;opacity:0;transition:.3s;z-index:999;
       white-space:nowrap;pointer-events:none; }
     #toast.show{opacity:1} #toast.err{background:#dc2626}
+    .nav-btn { padding:6px 12px;border-radius:12px;font-size:14px;font-weight:700;transition:.15s;color:#64748b; }
+    .nav-btn:hover { background:#f1f5f9; }
+    .nav-btn.active { background:#2563eb;color:#fff; }
+    .ed-tool-btn { display:flex;align-items:center;gap:4px;padding:5px 12px;font-size:11px;font-weight:700;
+      color:#475569;background:#f1f5f9;border-radius:8px;cursor:pointer;transition:.15s; }
+    .ed-tool-btn:hover{background:#e2e8f0}
+    .pmode-btn { background:#f1f5f9;color:#64748b; }
+    .pmode-btn.active { background:#059669;color:#fff; }
   </style>
 </head>
 <body class="bg-gray-50 text-slate-800 font-sans">
@@ -40,21 +52,36 @@
   <div class="flex items-center gap-1" id="nav-tabs">
     <button onclick="switchTab('home')"   data-tab="home"   class="nav-btn active">找行程</button>
     <button onclick="switchTab('member')" data-tab="member" class="nav-btn hidden" id="nav-member">會員</button>
-    <a href="crm.html" class="nav-btn hidden" id="nav-crm" style="text-decoration:none">CRM</a>
-    <a href="admin.html" class="nav-btn hidden" id="nav-admin" style="text-decoration:none">上稿</a>
+    <a href="admin.html" class="nav-btn hidden bg-slate-100 hover:bg-slate-200 !text-slate-700" id="nav-dashboard" style="text-decoration:none">← 儀表板</a>
     <img id="nav-avatar" src="" class="w-8 h-8 rounded-full border ml-2 hidden" />
   </div>
 </nav>
-<style>
-  .nav-btn { padding:6px 12px;border-radius:12px;font-size:14px;font-weight:700;transition:.15s;color:#64748b; }
-  .nav-btn:hover { background:#f1f5f9; }
-  .nav-btn.active { background:#2563eb;color:#fff; }
-</style>
+
+<!-- ★ v3：推薦人 banner（?invite=XXXXXX 解析成功時顯示） -->
+<div id="invite-banner" class="hidden bg-emerald-50 border-b border-emerald-200 px-5 py-2.5 text-center text-sm">
+  <span class="text-emerald-700 font-bold">您是</span>
+  <span id="invite-name" class="text-emerald-900 font-black mx-1">—</span>
+  <span class="text-emerald-700 font-bold">推薦的客人 🎉</span>
+</div>
 
 <main id="main-content">
-  <div class="flex items-center justify-center h-64 gap-3">
-    <div class="spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-    <span class="text-slate-400 font-bold text-sm">初始化中…</span>
+  <!-- ★ v3：骨架渲染（取代原本的「初始化中…」全螢幕 spinner） -->
+  <div class="w-full px-4 py-5 space-y-4">
+    <div class="flex gap-2 overflow-x-auto pb-1">
+      <div class="skel h-9 w-20 shrink-0 rounded-2xl"></div>
+      <div class="skel h-9 w-20 shrink-0 rounded-2xl"></div>
+      <div class="skel h-9 w-20 shrink-0 rounded-2xl"></div>
+      <div class="skel h-9 w-20 shrink-0 rounded-2xl"></div>
+    </div>
+    <div class="flex gap-2">
+      <div class="skel h-12 flex-1 rounded-2xl"></div>
+      <div class="skel h-12 w-20 rounded-2xl"></div>
+    </div>
+    <div class="space-y-2">
+      <div class="skel h-20 w-full rounded-2xl"></div>
+      <div class="skel h-20 w-full rounded-2xl"></div>
+      <div class="skel h-20 w-full rounded-2xl"></div>
+    </div>
   </div>
 </main>
 
@@ -148,13 +175,6 @@
     </div>
   </div>
 </div>
-<style>
-  .ed-tool-btn { display:flex;align-items:center;gap:4px;padding:5px 12px;font-size:11px;font-weight:700;
-    color:#475569;background:#f1f5f9;border-radius:8px;cursor:pointer;transition:.15s; }
-  .ed-tool-btn:hover{background:#e2e8f0}
-  .pmode-btn { background:#f1f5f9;color:#64748b; }
-  .pmode-btn.active { background:#059669;color:#fff; }
-</style>
 
 <div id="toast"></div>
 
@@ -178,6 +198,11 @@ let APP = {
   liffProfile: null, searchRegion: '', searchKeyword: '',
   expandedId: null, promoMode: false, promoSelected: new Set(),
   promoFlexMode: 'single', editItem: null, currentTab: 'home',
+  // ★ v3：推薦碼相關
+  inviteCode: '',     // ?invite=XXXXXX 從 URL 來的（客人視角）
+  referrer: null,     // { uid, name } 解析後的推薦人資訊
+  myInviteCode: '',   // 業務自己的推薦碼（從 distributorData.inviteCode）
+  dataLoading: true,  // 骨架是否還在
 };
 
 const $  = id => document.getElementById(id);
@@ -190,7 +215,36 @@ function toast(msg, isErr=false) {
 }
 function api(path, opts={}) { return fetch(WORKER+path, { headers:{'Content-Type':'application/json'}, ...opts }).then(r=>r.json()); }
 
+// ★ v3：URL 參數讀取（支援 ?invite= 和舊版 ?ref=）
+function readUrlParams() {
+  const sp = new URLSearchParams(location.search);
+  const invite = (sp.get('invite') || '').trim().toUpperCase();
+  if (invite) APP.inviteCode = invite;
+}
+
+// ★ v3：解析推薦碼 → 顯示 banner
+async function resolveInviteCode() {
+  if (!APP.inviteCode) return;
+  try {
+    const r = await api(`/api/resolve-invite?code=${encodeURIComponent(APP.inviteCode)}`);
+    if (r.success && r.data?.uid) {
+      APP.referrer = { uid: r.data.uid, name: r.data.name || '夥伴' };
+      $('invite-name').textContent = APP.referrer.name;
+      $('invite-banner').classList.remove('hidden');
+    } else {
+      // 推薦碼無效就靜默忽略，不報錯
+      APP.inviteCode = '';
+    }
+  } catch (e) { console.warn('resolveInvite failed:', e); APP.inviteCode = ''; }
+}
+
 window.addEventListener('load', async () => {
+  // ★ v3：先讀 URL 參數，並行解析推薦碼（不阻塞首頁渲染）
+  readUrlParams();
+  const inviteTask = resolveInviteCode();
+
+  // 先把骨架渲染掉（其實 main 已經有骨架，這邊不用動）
+  // 等 LIFF 起來
   for (let i=0; i<30 && typeof liff==='undefined'; i++) await new Promise(r=>setTimeout(r,200));
   if (typeof liff==='undefined') { renderError('LIFF SDK 載入失敗'); return; }
 
@@ -209,9 +263,15 @@ window.addEventListener('load', async () => {
       APP.orders      = data.orders || [];
       APP.distStats   = data.distStats;
       APP.crmList     = data.crmList || [];
+      // ★ v3：把自己的 inviteCode 撈出來（之後 sendFlex / copyFlex 要用）
+      APP.myInviteCode = APP.user?.distributorData?.inviteCode || '';
     }
   } catch(e) { toast('資料讀取失敗','err'); }
 
+  // 確保推薦碼解析也回來了
+  await inviteTask;
+
+  APP.dataLoading = false;
   setupNav();
   renderTab('home');
 });
@@ -223,9 +283,9 @@ function setupNav() {
     $('nav-avatar').src = p.pictureUrl;
     $('nav-avatar').classList.remove('hidden');
   }
-  if (APP.user?.isAdmin) {
-    $('nav-crm').classList.remove('hidden');
-    $('nav-admin').classList.remove('hidden');
+  // ★ v3：管理員 + 已授權上稿的分銷商，都看到「← 儀表板」連結
+  if (APP.user?.isAdmin || APP.user?.distributorData?.canUpload) {
+    $('nav-dashboard').classList.remove('hidden');
   }
 }
 
@@ -240,8 +300,6 @@ function renderTab(tab) {
   m.innerHTML = '';
   if (tab==='home')   renderHome(m);
   if (tab==='member') renderMember(m);
-  if (tab==='crm')    renderCrm(m);
-  if (tab==='admin')  renderAdmin(m);
 }
 
 function renderHome(container) {
@@ -303,14 +361,22 @@ function renderHome(container) {
   if (APP.searchRegion) items = items.filter(i => String(i.region||'').includes(APP.searchRegion));
   if (APP.searchKeyword) items = items.filter(i => String(i.title||'').toLowerCase().includes(APP.searchKeyword.toLowerCase()));
 
-  wrap.appendChild(el('p','text-xs font-bold text-slate-400',`共 ${items.length} 個行程`));
-
-  const list = el('div','space-y-2');
-  if (items.length===0) {
-    list.appendChild(el('div','py-20 text-center text-slate-300 font-bold','沒有符合條件的行程'));
+  // ★ v3：資料還在載入時顯示骨架，否則顯示「共 N 個行程」
+  if (APP.dataLoading) {
+    wrap.appendChild(el('div','skel h-4 w-24 rounded',''));
+    const skList = el('div','space-y-2');
+    for (let i=0; i<3; i++) skList.appendChild(el('div','skel h-20 w-full rounded-2xl',''));
+    wrap.appendChild(skList);
+  } else {
+    wrap.appendChild(el('p','text-xs font-bold text-slate-400',`共 ${items.length} 個行程`));
+    const list = el('div','space-y-2');
+    if (items.length===0) {
+      list.appendChild(el('div','py-20 text-center text-slate-300 font-bold','沒有符合條件的行程'));
+    }
+    items.forEach(item => list.appendChild(buildCard(item)));
+    wrap.appendChild(list);
   }
-  items.forEach(item => list.appendChild(buildCard(item)));
-  wrap.appendChild(list);
+
   container.appendChild(wrap);
 }
 
@@ -377,6 +443,16 @@ function togglePromoSelect(id) {
   renderTab('home');
 }
 
+// ★ v3：把當前的 invite/ref 參數帶到下一頁
+function buildBookingUrl(itineraryId) {
+  const params = new URLSearchParams({ a: 'demo', itinerary: itineraryId });
+  // 推薦碼優先（v2+）；舊的 ref 也保留
+  if (APP.inviteCode)       params.set('invite', APP.inviteCode);
+  else if (APP.referrer?.uid) params.set('ref', APP.referrer.uid);
+  // 走 LIFF（讓 booking.html 拿得到 customer LINE UID）
+  return `https://liff.line.me/${LIFF_ID}/booking.html?${params.toString()}`;
+}
+
 function openTourModal(item) {
   const body = $('tour-modal-body');
   body.innerHTML = '';
@@ -397,8 +473,12 @@ function openTourModal(item) {
   const descDiv = el('div','space-y-3 text-sm text-slate-700 leading-relaxed');
   renderDescTo(descDiv, item.description);
   content.appendChild(descDiv);
-  const bookBtn = el('button','mt-6 w-full bg-red-600 text-white font-black py-4 rounded-2xl hover:bg-red-700 transition','立即預約行程');
+
+  // ★ v3：預約按鈕導去 booking.html，並帶上歸屬參數
+  const bookBtn = el('a','mt-6 w-full bg-red-600 text-white font-black py-4 rounded-2xl hover:bg-red-700 transition text-center block','立即預約行程');
+  bookBtn.href = buildBookingUrl(String(item.id || item.timestamp || ''));
   content.appendChild(bookBtn);
+
   body.appendChild(content);
   $('tour-modal').classList.remove('hidden');
 }
@@ -440,6 +520,22 @@ function renderMember(container) {
     stats.appendChild(el('div','bg-emerald-600 p-5 rounded-[2rem] text-white',`<p class="text-emerald-200 text-xs font-bold uppercase mb-1">累積推廣總額</p><p class="text-3xl font-black">${fmt(totalSales)}</p>`));
     stats.appendChild(el('div','bg-white p-5 rounded-[2rem] border border-slate-100',`<p class="text-slate-400 text-xs font-bold uppercase mb-1">推薦會員數</p><p class="text-3xl font-black text-slate-800">${(APP.distStats.users||[]).length} <span class="text-base font-medium text-slate-400">人</span></p>`));
     sec.appendChild(stats);
+
+    // ★ v3：個人推薦碼卡片（給業務看自己的碼，並可一鍵複製分享連結）
+    if (APP.myInviteCode) {
+      const inviteCard = el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4');
+      inviteCard.innerHTML = `
+        <div class="flex justify-between items-center gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">您的個人推薦碼</p>
+            <p class="text-2xl font-black text-blue-900 font-mono tracking-wider">${APP.myInviteCode}</p>
+            <p class="text-xs text-blue-600 mt-1">客人從帶碼連結進來，永久歸屬於您</p>
+          </div>
+          <button onclick="copyInviteLink()" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm">📋 複製連結</button>
+        </div>`;
+      sec.appendChild(inviteCard);
+    }
+
     sec.appendChild(el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm text-blue-700 font-medium','💡 至「找行程」點「📤 推廣行程」選取行程後即可發送名片'));
     w.appendChild(sec);
   }
@@ -500,6 +596,24 @@ function renderMember(container) {
   container.appendChild(w);
 }
 
+// ★ v3：複製個人推薦連結
+function copyInviteLink() {
+  if (!APP.myInviteCode) { toast('尚未取得推薦碼','err'); return; }
+  const base = location.origin + location.pathname.replace(/index\.html$/, '');
+  const url  = `${base}index.html?invite=${APP.myInviteCode}`;
+  try {
+    navigator.clipboard.writeText(url).then(() => toast('✅ 推薦連結已複製'));
+  } catch(e) {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position='fixed'; ta.style.left='-9999px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('✅ 推薦連結已複製'); }
+    catch(_) { toast('❌ 複製失敗', true); }
+    finally { document.body.removeChild(ta); }
+  }
+}
+
 function openProfileEdit() {
   const dist = APP.user?.distributorData || {};
   const fields = [{key:'phone',label:'電話'},{key:'lineLink',label:'LINE'},{key:'lineAtLink',label:'LINE@'},{key:'fbLink',label:'Facebook'},{key:'webLink',label:'網站'},{key:'mapLink',label:'地圖'},{key:'tgToken',label:'Telegram'}];
@@ -511,140 +625,6 @@ function openProfileEdit() {
     if (res.success) { Object.assign(APP.user.distributorData, updates); toast('名片資料已儲存'); }
     else toast('儲存失敗','err');
   });
-}
-
-function renderCrm(container) {
-  const w = el('div','p-4 md:p-8 max-w-5xl mx-auto space-y-6 afu');
-  const hdr = el('div','flex justify-between items-end');
-  const hdrL = el('div');
-  hdrL.appendChild(el('h2','text-3xl font-black text-slate-900','CRM 分銷商管理'));
-  hdrL.appendChild(el('p','text-slate-400 font-medium mt-1',`Distributors 工作表 · 共 ${APP.crmList.length} 筆`));
-  const refreshBtn = el('button','bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition','重新整理');
-  refreshBtn.onclick = async () => { const r = await api(`/api/itineraries?action=getDistributors`); if(Array.isArray(r)) { APP.crmList=r; renderTab('crm'); } };
-  hdr.append(hdrL, refreshBtn);
-  w.appendChild(hdr);
-
-  const stats = el('div','grid grid-cols-3 gap-4');
-  const pending  = APP.crmList.filter(d=>String(d.status||'').toLowerCase()==='pending').length;
-  const approved = APP.crmList.filter(d=>String(d.status||'').toLowerCase()==='approved').length;
-  [['全部申請',APP.crmList.length,'bg-slate-800'],['待審核',pending,'bg-amber-500'],['已核准',approved,'bg-emerald-600']].forEach(([label,num,color])=>{
-    stats.appendChild(el('div',`${color} text-white p-5 rounded-[1.5rem]`,`<p class="text-4xl font-black">${num}</p><p class="text-sm font-bold opacity-80 mt-1">${label}</p>`));
-  });
-  w.appendChild(stats);
-
-  const linkBox = el('div','bg-blue-50 border border-blue-100 rounded-2xl p-4 flex justify-between items-center');
-  linkBox.appendChild(el('div','',`<p class="font-black text-blue-900 text-sm">分銷商申請入口</p><p class="text-blue-600 text-xs font-medium mt-0.5">複製後分享給業務夥伴</p>`));
-  const copyBtn = el('button','bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm','複製連結');
-  copyBtn.onclick = () => { const u = location.origin + location.pathname.replace('index.html','')+'register.html?a=demo'; navigator.clipboard?.writeText(u).then(()=>toast('連結已複製')); };
-  linkBox.appendChild(copyBtn);
-  w.appendChild(linkBox);
-
-  const tableWrap = el('div','bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm overflow-x-auto');
-  if (!APP.crmList.length) { tableWrap.appendChild(el('div','p-16 text-center text-slate-300 font-bold','目前無申請資料')); }
-  else {
-    const table = document.createElement('table'); table.className='w-full text-left';
-    table.innerHTML=`<thead class="bg-slate-50 text-sm text-slate-500 font-black border-b"><tr>${['申請人','公司/品牌','推薦人','累積業績','狀態','操作'].map(h=>`<th class="px-5 py-4">${h}</th>`).join('')}</tr></thead>`;
-    const tbody = document.createElement('tbody'); tbody.className='divide-y divide-slate-100';
-    APP.crmList.forEach(d => {
-      const tr = document.createElement('tr'); tr.className='hover:bg-slate-50 transition';
-      const isApproved = String(d.status||'').toLowerCase()==='approved';
-      tr.innerHTML = `
-        <td class="px-5 py-4"><p class="font-black text-slate-800">${d.name||'未填寫'}</p><p class="text-sm text-slate-400 mt-0.5">${d.phone||'—'}</p></td>
-        <td class="px-5 py-4 text-base text-slate-600">${d.companyname||d.companyName||'—'}</td>
-        <td class="px-5 py-4 font-mono text-xs text-slate-400" title="${d.ref_uid||''}">${d.ref_uid?d.ref_uid.slice(0,10)+'…':'—'}</td>
-        <td class="px-5 py-4 font-black text-base">${fmt(d.salesrevenue||d.salesRevenue)}</td>
-        <td class="px-5 py-4"><span class="px-3 py-1 rounded-full text-sm font-black ${isApproved?'bg-emerald-50 text-emerald-700':'bg-amber-50 text-amber-600'}">${isApproved?'已核准':'待審核'}</span></td>
-        <td class="px-5 py-4" id="crm-action-${d.uid}"></td>`;
-      tbody.appendChild(tr);
-      const cell = tr.querySelector(`#crm-action-${d.uid}`);
-      if (!isApproved) {
-        const btn = el('button','bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-black hover:bg-emerald-700 transition','核准');
-        btn.onclick = () => approveDistributor(d.uid,'approved');
-        cell.appendChild(btn);
-      } else {
-        const btn = el('button','text-slate-400 hover:text-red-500 transition text-sm font-bold border border-slate-200 px-3 py-2 rounded-xl hover:border-red-300','撤銷');
-        btn.onclick = () => approveDistributor(d.uid,'pending');
-        cell.appendChild(btn);
-      }
-    });
-    table.appendChild(tbody);
-    tableWrap.appendChild(table);
-  }
-  w.appendChild(tableWrap);
-  container.appendChild(w);
-}
-
-async function approveDistributor(uid, status) {
-  const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify({ action:'updateDistributorStatus', uid, status }) });
-  if (res.success) {
-    toast(status==='approved'?'已核准':'已撤銷');
-    const idx = APP.crmList.findIndex(d=>d.uid===uid);
-    if (idx>=0) APP.crmList[idx].status = status;
-    renderTab('crm');
-  } else toast('操作失敗','err');
-}
-
-function renderAdmin(container) {
-  const w = el('div','p-4 md:p-8 max-w-3xl mx-auto afu');
-  const box = el('div','bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100');
-  box.appendChild(el('h2','text-3xl font-black mb-2 text-slate-900','🚀 智能上稿系統'));
-  box.appendChild(el('p','text-slate-400 mb-6','上傳旅遊 DM 圖片，AI 自動生成行程文案'));
-  const dropzone = el('div','relative border-4 border-dashed border-slate-100 bg-slate-50 rounded-[3rem] p-16 text-center','<p class="text-xl font-black text-slate-600 mb-2">點擊上傳旅遊 DM 圖片</p><p class="text-slate-400 text-sm">支援 JPG / PNG</p>');
-  const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*'; fileInput.className='absolute inset-0 opacity-0 cursor-pointer';
-  fileInput.onchange = handleDmUpload;
-  dropzone.appendChild(fileInput);
-  box.appendChild(dropzone);
-  box.id = 'admin-box';
-  w.appendChild(box);
-  container.appendChild(w);
-}
-
-async function handleDmUpload(e) {
-  const file = e.target.files[0]; if(!file) return;
-  const box = $('admin-box');
-  box.innerHTML = '<div class="flex flex-col items-center justify-center p-20 gap-4"><div class="spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full"></div><p class="font-black text-blue-600">視覺模型分析中…</p></div>';
-  const reader = new FileReader();
-  reader.onload = async ev => {
-    try {
-      const res = await api('/api/upload-dm', { method:'POST', body: JSON.stringify({ image: ev.target.result }) });
-      if (res.success) { toast('AI 解析成功！'); renderAdminDraft(res.data); }
-      else throw new Error(res.error||'解析失敗');
-    } catch(err) { toast('解析失敗: '+err.message,'err'); renderAdmin($('main-content')); }
-  };
-  reader.readAsDataURL(file);
-}
-
-function renderAdminDraft(data) {
-  const m = $('main-content'); m.innerHTML='';
-  const w = el('div','p-4 md:p-8 max-w-3xl mx-auto space-y-5 afu');
-  w.appendChild(el('h2','text-2xl font-black text-slate-900','✍️ 確認並發布'));
-  if(data.image) { const img=document.createElement('img'); img.src=data.image; img.className='w-full aspect-video object-cover rounded-2xl'; w.appendChild(img); }
-  const fields = [['title','行程標題','text'],['region','地區','text'],['price','價格','number'],['days','天數','number']];
-  fields.forEach(([key,label,type]) => {
-    const d = el('div');
-    d.appendChild(el('label','text-xs font-black text-slate-400 uppercase tracking-widest',label));
-    const inp = document.createElement('input'); inp.type=type; inp.value=data[key]||''; inp.id='draft-'+key;
-    inp.className='w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 font-bold outline-none focus:border-blue-500';
-    d.appendChild(inp); w.appendChild(d);
-  });
-  const descDiv = el('div');
-  descDiv.appendChild(el('label','text-xs font-black text-slate-400 uppercase tracking-widest','行程描述'));
-  const ta = document.createElement('textarea'); ta.id='draft-desc'; ta.rows=10; ta.value=data.description||'';
-  ta.className='w-full mt-1 border-2 border-slate-100 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500';
-  descDiv.appendChild(ta); w.appendChild(descDiv);
-  const btnRow = el('div','flex gap-4');
-  const cancel = el('button','flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-600 hover:bg-slate-200','取消');
-  cancel.onclick = () => renderTab('admin');
-  const pub = el('button','flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-lg','確認發布 🚀');
-  pub.onclick = async () => {
-    const body = { action:'addItinerary', title: $('draft-title').value, region: $('draft-region').value,
-      price: $('draft-price').value, days: $('draft-days').value, description: $('draft-desc').value, image: data.image, notes:'' };
-    const res = await api('/api/itineraries', { method:'POST', body: JSON.stringify(body) });
-    if(res.success) { toast('行程已發布！'); const r=await api('/api/app-init'+(APP.liffProfile?'?uid='+APP.liffProfile.userId:'')); if(r.success) APP.itineraries=r.itineraries||[]; renderTab('home'); }
-    else toast('發布失敗','err');
-  };
-  btnRow.append(cancel, pub); w.appendChild(btnRow);
-  m.appendChild(w);
 }
 
 function openEditor(item) {
@@ -820,7 +800,8 @@ function buildPromoPreview() {
 }
 
 // ════════════════════════════════════════════════════════════
-// ★ 修正版 sendFlex：支援新舊 LIFF SDK + 詳細 console log
+// 修正版 sendFlex：支援新舊 LIFF SDK + 詳細 console log
+//   ★ v3：傳 inviteCode 給 worker，URL 同時帶 ref + invite
 // ════════════════════════════════════════════════════════════
 async function sendFlex() {
   if (!liff.isLoggedIn()) { liff.login({redirectUri:location.href}); return; }
@@ -839,7 +820,7 @@ async function sendFlex() {
 
     const res = await api('/api/build-flex', {
       method: 'POST',
-      body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields, agencySlug: 'demo' })
+      body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields, agencySlug: 'demo', inviteCode: APP.myInviteCode })
     });
     if (!res.success) throw new Error(res.error || '組裝失敗');
 
@@ -887,7 +868,8 @@ async function sendFlex() {
 }
 
 // ════════════════════════════════════════════════════════════
-// ★ 修正版 copyFlexJson：加 fallback 解決 NotAllowedError
+// 修正版 copyFlexJson：加 fallback 解決 NotAllowedError
+//   ★ v3：傳 inviteCode 給 worker
 // ════════════════════════════════════════════════════════════
 async function copyFlexJson() {
   const ids       = Array.from(APP.promoSelected);
@@ -901,7 +883,7 @@ async function copyFlexJson() {
   });
   const res = await api('/api/build-flex', {
     method: 'POST',
-    body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields, agencySlug: 'demo' })
+    body: JSON.stringify({ ids, mode: APP.promoFlexMode, uid, ctaText, socFields, agencySlug: 'demo', inviteCode: APP.myInviteCode })
   });
   if (!res.success) { toast('組裝失敗','err'); return; }
 
