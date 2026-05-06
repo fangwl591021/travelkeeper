@@ -631,6 +631,93 @@ function OrderModal({ order, onClose, onUpdateStatus, onMarkBalancePaid, canEdit
 // ══════════════════════════════════════════════════════════════
 // Sidebar / Bottom-tab 共用：選單項目定義
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// ★ v8 推廣 Flex Card Modal — 三個動作：LINE 推送 / 複製連結 / 下載圖片
+// ══════════════════════════════════════════════════════════════
+function PromoteModal({ item, profile, inviteCode, agencySlug, onClose, onPushFlex, onCopyLink, onDownloadImage, pushingFlex, genImageBusy }) {
+  if (!item) return null;
+  const promoteUrl = (() => {
+    const base = window.location.origin + window.location.pathname.replace(/dashboard\.html|admin\.html|crm\.html$/, '');
+    const id = item.id || item.timestamp;
+    const params = new URLSearchParams();
+    params.set('t', String(id));
+    if (inviteCode) params.set('invite', inviteCode);
+    if (profile?.userId) params.set('r', profile.userId);
+    if (agencySlug) params.set('a', agencySlug);
+    return `${base}tour.html?${params.toString()}`;
+  })();
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-[2rem] w-full max-w-lg max-h-[90vh] overflow-y-auto anim">
+        <div className="p-6 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
+          <div>
+            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">推廣行程</p>
+            <h2 className="font-black text-xl mt-1 line-clamp-1">{item.title}</h2>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 shrink-0">✕</button>
+        </div>
+
+        {/* 行程預覽 */}
+        <div className="p-6 border-b border-slate-100">
+          {item.image && (
+            <img src={item.image} className="w-full aspect-video object-cover rounded-2xl mb-4" />
+          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            {item.region && <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-xs font-black">📍 {item.region}</span>}
+            {item.days && <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-black">📅 {item.days} 天</span>}
+            <span className="ml-auto text-xl font-black text-red-600">NT$ {Number(item.price||0).toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* 推薦碼資訊 */}
+        <div className="p-6 border-b border-slate-100 bg-slate-50">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">您的推薦碼</p>
+          <p className="font-mono text-2xl font-black text-blue-600 tracking-widest">{inviteCode || '(尚未取得)'}</p>
+          <p className="text-xs text-slate-500 mt-2">
+            透過此推廣產生的訂單會自動歸入您的客戶，並依您的佣金率計算分潤
+          </p>
+        </div>
+
+        {/* 推廣連結預覽 */}
+        <div className="p-6 border-b border-slate-100">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">推廣連結</p>
+          <div className="bg-slate-50 rounded-xl p-3 font-mono text-[11px] text-slate-600 break-all">
+            {promoteUrl}
+          </div>
+        </div>
+
+        {/* 三個動作 */}
+        <div className="p-6 space-y-3">
+          <button onClick={() => onPushFlex(item)} disabled={pushingFlex || !inviteCode}
+            className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {pushingFlex
+              ? <><div className="spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"/>推送中…</>
+              : <>🚀 推送 Flex Card 到我的 LINE</>
+            }
+          </button>
+          <p className="text-xs text-slate-500 text-center -mt-1">推送到您 LINE 後，可直接轉發給客戶或群組</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => onCopyLink(promoteUrl)}
+              className="bg-blue-600 text-white font-black py-3.5 rounded-2xl hover:bg-blue-700 transition flex items-center justify-center gap-2">
+              📋 複製連結
+            </button>
+            <button onClick={() => onDownloadImage(item)} disabled={genImageBusy}
+              className="bg-slate-700 text-white font-black py-3.5 rounded-2xl hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              {genImageBusy
+                ? <><div className="spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"/>合成中</>
+                : <>🖼️ 下載圖片</>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function buildMenu({ isAdmin, canUpload, badges }) {
   const items = [
     { id:'overview',     icon:'📊', label:'總覽',       show:true },
@@ -641,10 +728,13 @@ function buildMenu({ isAdmin, canUpload, badges }) {
     { id:'commission',   icon:'💰', label: isAdmin ? '佣金結算' : '我的佣金', show:true,
       badge: badges.payableCount },
     { id:'customers',    icon:'👤', label:'我的客戶',   show: !isAdmin },
+    // ★ v8：推廣行程（雙角色都看得到，全平台 published）
+    { id:'promote',      icon:'🎯', label:'推廣行程',   show:true },
+    // ★ v8：「我的行程」改名「我上稿的」（只看自己投稿的，含審核狀態）
+    { id:'mine',         icon:'🗂️', label: isAdmin ? '我上稿的' : '我上稿的',
+      show: isAdmin || canUpload },
     { id:'distributors', icon:'👥', label:'分銷商管理', show: isAdmin,
       badge: badges.pendingDist },
-    { id:'mine',         icon:'🗂️', label: isAdmin ? '全部行程' : '我的行程',
-      show: isAdmin || canUpload },
     { id:'review',       icon:'⚠️', label:'待審核行程', show: isAdmin,
       badge: badges.pendingReview },
     { id:'new',          icon:'📝', label: isAdmin ? '新增行程' : '上稿',
@@ -672,8 +762,9 @@ function App() {
   const [stats,         setStats]         = useState(null);    // 業務 getMyStats
   const [orders,        setOrders]        = useState([]);      // 管理員=全部、業務=自己的
   const [distributors,  setDistributors]  = useState([]);      // 管理員
-  const [myItems,       setMyItems]       = useState([]);      // 管理員=全部、業務=自己的
+  const [myItems,       setMyItems]       = useState([]);      // 管理員=自己上稿的、業務(canUpload)=自己上稿的
   const [pendingItems,  setPendingItems]  = useState([]);      // 管理員
+  const [publishedItems, setPublishedItems] = useState([]);    // ★ v8：全平台已上架（推廣用，雙角色都拉）
   const [customers,     setCustomers]     = useState([]);      // 業務
 
   // 視圖狀態
@@ -710,6 +801,13 @@ function App() {
   const [selectedPayoutOrders, setSelectedPayoutOrders] = useState({}); // { uid: Set(orderIds) }
   const [payingOut, setPayingOut] = useState(false);
   const [expandedDist, setExpandedDist] = useState({}); // 結算頁分銷商展開狀態
+
+  // ★ v8 推廣 state
+  const [promoteSearch, setPromoteSearch] = useState('');
+  const [promoteRegion, setPromoteRegion] = useState('all');
+  const [selPromote,    setSelPromote]    = useState(null);  // 開推廣 modal 用
+  const [pushingFlex,   setPushingFlex]   = useState(false);
+  const [genImageBusy,  setGenImageBusy]  = useState(false);
 
   // Toast
   const [toast, setToast] = useState(null);
@@ -757,24 +855,30 @@ function App() {
 
         // 階段 2：依角色並行拉資料
         if (_isAdmin) {
-          const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes] = await Promise.all([
+          const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes, publishedRes] = await Promise.all([
             fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
-            // ★ v7：拉佣金結算彙總
             fetch(`${WORKER_URL}/api/commission/summary?uid=${p.userId}`).then(r=>r.json()).catch(()=>null),
+            // ★ v8：拉「已上架」全平台行程（推廣用）
+            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
           ]);
           setPendingItems(pendingRes?.data || []);
           setOrders(allOrdersRes?.data || []);
           setDistributors(Array.isArray(distRes) ? distRes : []);
-          setMyItems(Array.isArray(allItemsRes) ? allItemsRes : []);
+          // ★ v8：管理員的「我上稿的」現在只看自己上稿的
+          const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
+          setMyItems(allItems.filter(i => String(i.owneruid || '') === String(p.userId)));
+          setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
           if (commRes?.success) setCommissionSummary(commRes.data);
         } else {
           const tasks = [
             fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:null})),
             fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
             fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
+            // ★ v8：業務也拉 publishedItems（推廣用）
+            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
           ];
           if (_canUpload) {
             tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${p.userId}`).then(r=>r.json()).catch(()=>[]));
@@ -784,7 +888,8 @@ function App() {
           setCustomers(results[1]?.data || []);
           const myOrders = (results[2]?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
           setOrders(myOrders);
-          if (_canUpload) setMyItems(Array.isArray(results[3]) ? results[3] : []);
+          setPublishedItems(Array.isArray(results[3]) ? results[3] : []);
+          if (_canUpload) setMyItems(Array.isArray(results[4]) ? results[4] : []);
         }
 
         setLoading(false);
@@ -815,15 +920,26 @@ function App() {
   const reloadItineraries = async () => {
     if (!profile) return;
     if (isAdmin) {
-      const [pendingRes, allItemsRes] = await Promise.all([
+      const [pendingRes, allItemsRes, publishedRes] = await Promise.all([
         fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
         fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
       ]);
       setPendingItems(pendingRes?.data || []);
-      setMyItems(Array.isArray(allItemsRes) ? allItemsRes : []);
+      // ★ v8：管理員「我上稿的」只看自己上稿的
+      const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
+      setMyItems(allItems.filter(i => String(i.owneruid || '') === String(profile.userId)));
+      setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
     } else if (canUpload) {
-      const myItemsRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json());
+      const [myItemsRes, publishedRes] = await Promise.all([
+        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json()),
+        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+      ]);
       setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
+      setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
+    } else {
+      const publishedRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]);
+      setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
     }
   };
 
@@ -832,23 +948,27 @@ function App() {
     setLoading(true);
     try {
       if (isAdmin) {
-        const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes] = await Promise.all([
+        const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes, publishedRes] = await Promise.all([
           fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/commission/summary?uid=${profile.userId}`).then(r=>r.json()).catch(()=>null),
+          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
         ]);
         setPendingItems(pendingRes?.data || []);
         setOrders(allOrdersRes?.data || []);
         setDistributors(Array.isArray(distRes) ? distRes : []);
-        setMyItems(Array.isArray(allItemsRes) ? allItemsRes : []);
+        const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
+        setMyItems(allItems.filter(i => String(i.owneruid || '') === String(profile.userId)));
+        setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
         if (commRes?.success) setCommissionSummary(commRes.data);
       } else {
         const tasks = [
           fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:null})),
           fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
           fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
+          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
         ];
         if (canUpload) tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json()).catch(()=>[]));
         const results = await Promise.all(tasks);
@@ -856,7 +976,8 @@ function App() {
         setCustomers(results[1]?.data || []);
         const myOrders = (results[2]?.data || []).filter(o => String(o.distributoruid) === String(profile.userId));
         setOrders(myOrders);
-        if (canUpload) setMyItems(Array.isArray(results[3]) ? results[3] : []);
+        setPublishedItems(Array.isArray(results[3]) ? results[3] : []);
+        if (canUpload) setMyItems(Array.isArray(results[4]) ? results[4] : []);
       }
       showToast('✅ 已更新');
     } catch (e) { showToast('讀取失敗', 'error'); }
@@ -1057,6 +1178,149 @@ function App() {
     const code = distData?.inviteCode;
     if (!code) return;
     navigator.clipboard.writeText(code).then(() => showToast('✅ 推薦碼已複製：' + code));
+  };
+
+  // ★ v8：推廣 — Flex Card 推送
+  const handlePushFlex = async (item) => {
+    if (!profile?.userId) { showToast('身份驗證失敗', 'error'); return; }
+    setPushingFlex(true);
+    try {
+      // 管理員可能沒有 inviteCode（不是分銷商身份），那就用空字串
+      const myInviteCode = distData?.inviteCode || '';
+      const res = await fetch(`${WORKER_URL}/api/flex/push-to-self`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          itineraryId: String(item.id || item.timestamp),
+          agencySlug: 'demo',
+          inviteCode: myInviteCode,
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast('✅ ' + (result.message || '已推送到您的 LINE'));
+        setSelPromote(null);
+      } else {
+        showToast('推送失敗：' + (result.error || ''), 'error');
+      }
+    } catch (e) {
+      showToast('網路錯誤：' + e.message, 'error');
+    }
+    setPushingFlex(false);
+  };
+
+  // ★ v8：推廣 — 複製連結
+  const handleCopyPromoteLink = (url) => {
+    navigator.clipboard.writeText(url).then(
+      () => showToast('✅ 推廣連結已複製'),
+      () => showToast('複製失敗（請改用桌機）', 'error')
+    );
+  };
+
+  // ★ v8：推廣 — 下載圖片（client-side canvas 合成）
+  const handleDownloadPromoteImage = async (item) => {
+    if (genImageBusy) return;
+    setGenImageBusy(true);
+    try {
+      const W = 1200, H = 630;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      // 背景：藍色漸層 fallback（萬一沒封面圖時用）
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(1, '#1e3a8a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // 載入封面圖（如果有）
+      if (item.image) {
+        try {
+          const img = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.crossOrigin = 'anonymous';
+            i.onload = () => resolve(i);
+            i.onerror = (e) => reject(new Error('圖片載入失敗 (CORS?)'));
+            i.src = item.image;
+          });
+          // 等比例 cover
+          const ratio = Math.max(W / img.width, H / img.height);
+          const dw = img.width * ratio;
+          const dh = img.height * ratio;
+          const dx = (W - dw) / 2;
+          const dy = (H - dh) / 2;
+          ctx.drawImage(img, dx, dy, dw, dh);
+          // 加深色遮罩讓文字看得見
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillRect(0, 0, W, H);
+        } catch (e) {
+          console.warn('封面圖載入失敗，使用漸層底色:', e.message);
+        }
+      }
+
+      // 標題
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 56px "Noto Sans TC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const title = String(item.title || '');
+      // 分行（每行最多 14 中文字）
+      const lines = [];
+      let cur = '';
+      for (const ch of title) {
+        cur += ch;
+        if (cur.length >= 14) { lines.push(cur); cur = ''; }
+      }
+      if (cur) lines.push(cur);
+      const startY = H / 2 - (lines.length * 70) / 2 + 35;
+      lines.forEach((l, i) => ctx.fillText(l, W / 2, startY + i * 70));
+
+      // 行程資訊（地區、天數、價格）
+      ctx.font = '600 32px "Noto Sans TC", sans-serif';
+      const subParts = [];
+      if (item.region) subParts.push('📍 ' + item.region);
+      if (item.days)   subParts.push('📅 ' + item.days + ' 天');
+      ctx.fillStyle = '#e0e7ff';
+      ctx.fillText(subParts.join('   '), W / 2, startY + lines.length * 70 + 30);
+
+      // 價格
+      ctx.font = 'bold 64px sans-serif';
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText('NT$ ' + Number(item.price||0).toLocaleString(), W / 2, startY + lines.length * 70 + 110);
+
+      // 推薦碼浮水印（右下角）
+      const myInviteCode = distData?.inviteCode || '';
+      if (myInviteCode) {
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillText('推薦碼：' + myInviteCode, W - 30, H - 25);
+      }
+
+      // 平台浮水印（左下角）
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '600 18px sans-serif';
+      ctx.fillText('travelkeeper.tw', 30, H - 25);
+
+      // 下載
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png', 0.92));
+      if (!blob) throw new Error('合成失敗');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeTitle = String(item.title || 'tour').replace(/[\\/:*?"<>|]/g, '').slice(0, 30);
+      a.href = url;
+      a.download = `${safeTitle}_${myInviteCode || 'promo'}.png`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('✅ 圖片已下載');
+    } catch (e) {
+      console.error(e);
+      showToast('合成失敗：' + e.message, 'error');
+    }
+    setGenImageBusy(false);
   };
 
   // ── 衍生統計 ──
@@ -1880,12 +2144,141 @@ function App() {
           )}
 
           {/* ── 我的/全部行程 ── */}
+          {/* ── ★ v8：推廣行程 view（雙角色都看得到，全平台 published） ── */}
+          {view === 'promote' && (() => {
+            // 過濾
+            const filtered = publishedItems.filter(item => {
+              if (promoteRegion !== 'all' && item.region !== promoteRegion) return false;
+              if (promoteSearch) {
+                const q = promoteSearch.toLowerCase();
+                if (!String(item.title || '').toLowerCase().includes(q)
+                    && !String(item.region || '').toLowerCase().includes(q)) return false;
+              }
+              return true;
+            });
+            // 取得所有地區（用於篩選按鈕）
+            const regions = Array.from(new Set(publishedItems.map(i => i.region).filter(Boolean)));
+
+            const myInviteCode = distData?.inviteCode || '';
+
+            return (
+              <div className="space-y-5 anim">
+                {/* 推薦碼提示（業務只有有 invitecode 時顯示）*/}
+                {!isAdmin && !myInviteCode && (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-sm">
+                    <p className="font-black text-red-700">⚠ 您尚未取得推薦碼</p>
+                    <p className="text-red-600 text-xs mt-1">請聯絡管理員，取得後才能推廣行程</p>
+                  </div>
+                )}
+                {!isAdmin && myInviteCode && (
+                  <div className="bg-gradient-to-br from-blue-600 to-purple-600 text-white p-5 rounded-2xl flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <p className="text-xs opacity-80 mb-1">您的推薦碼</p>
+                      <p className="font-mono text-2xl font-black tracking-widest">{myInviteCode}</p>
+                    </div>
+                    <p className="text-xs opacity-90 max-w-[280px]">
+                      所有透過此碼的訂單都會歸入您的客戶 · 依您的佣金率分潤
+                    </p>
+                  </div>
+                )}
+
+                {/* 搜尋 + 地區 */}
+                <div className="flex flex-col gap-3">
+                  <input value={promoteSearch} onChange={e => setPromoteSearch(e.target.value)}
+                    placeholder="搜尋行程標題、地區..."
+                    className="w-full p-3 border-2 border-slate-200 rounded-xl font-medium outline-none focus:border-blue-500 bg-white" />
+                  {regions.length > 0 && (
+                    <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 overflow-x-auto no-scrollbar">
+                      <button onClick={() => setPromoteRegion('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition ${
+                          promoteRegion === 'all' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                        }`}>全部 ({publishedItems.length})</button>
+                      {regions.map(r => {
+                        const cnt = publishedItems.filter(i => i.region === r).length;
+                        return (
+                          <button key={r} onClick={() => setPromoteRegion(r)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition ${
+                              promoteRegion === r ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                            }`}>{r} ({cnt})</button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 行程網格 */}
+                {loading ? (
+                  <div className="bg-white rounded-2xl p-20 text-center">
+                    <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+                    <p className="text-slate-400 font-bold text-sm">載入中…</p>
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-20 text-center border-2 border-dashed border-slate-200">
+                    <p className="text-slate-300 font-bold">
+                      {promoteSearch || promoteRegion !== 'all' ? '無符合條件的行程' : '目前無已上架行程'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filtered.map(item => {
+                      const isMine = String(item.owneruid || '') === String(profile?.userId);
+                      const canEditThis = isAdmin || isMine;
+                      return (
+                        <div key={item.id || item.timestamp}
+                          className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-lg transition flex flex-col">
+                          {item.image && (
+                            <div className="aspect-video overflow-hidden bg-slate-100">
+                              <img src={item.image} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="p-4 flex-1 flex flex-col">
+                            <h3 className="font-black text-slate-900 line-clamp-2 mb-2 min-h-[3rem]">{item.title}</h3>
+                            <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                              {item.region && <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-black">📍 {item.region}</span>}
+                              {item.days && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black">📅 {item.days}天</span>}
+                              {isMine && <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-[10px] font-black">我上稿的</span>}
+                            </div>
+                            <p className="text-lg font-black text-red-600 mb-3">NT$ {Number(item.price||0).toLocaleString()}</p>
+                            {item.ownername && (
+                              <p className="text-[10px] text-slate-400 mb-3">📝 上稿者：{item.ownername}</p>
+                            )}
+                            <div className="mt-auto flex gap-2">
+                              <button onClick={() => setSelPromote(item)}
+                                disabled={!isAdmin && !myInviteCode}
+                                className="flex-1 bg-emerald-600 text-white font-black py-2.5 rounded-xl hover:bg-emerald-700 transition disabled:opacity-40 disabled:cursor-not-allowed text-sm">
+                                🚀 推廣
+                              </button>
+                              {canEditThis && (
+                                <button onClick={() => { setEditing(item); setCreating(false); }}
+                                  className="bg-slate-100 text-slate-600 font-black px-3 rounded-xl hover:bg-slate-200 transition text-sm"
+                                  title="編輯">
+                                  ✏️
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── 我上稿的（業務 + 管理員）── */}
           {view === 'mine' && (isAdmin || canUpload) && (
             <div className="space-y-3 anim">
-              <div className="flex justify-between items-center mb-3">
-                <h2 className="font-black text-lg text-slate-900">
-                  共 {myItems.length} 筆
-                </h2>
+              <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+                <div>
+                  <h2 className="font-black text-lg text-slate-900">
+                    我上稿的 <span className="text-slate-400 text-sm font-bold">({myItems.length})</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    這裡只看您自己投稿的，含審核中、已駁回的
+                    {!isAdmin && '。要推廣請去「推廣行程」'}
+                  </p>
+                </div>
                 <button onClick={()=>{ setCreating(true); setEditing(null); }}
                   className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
                   + 新增行程
@@ -1894,9 +2287,9 @@ function App() {
 
               {myItems.length === 0 ? (
                 <div className="p-20 bg-white rounded-[2rem] text-center border-2 border-dashed border-slate-200">
-                  <p className="text-slate-300 font-bold mb-2">尚無行程</p>
+                  <p className="text-slate-300 font-bold mb-2">您還沒上稿過</p>
                   <button onClick={()=>setCreating(true)}
-                    className="text-blue-600 font-black hover:underline">+ 新增第一個行程</button>
+                    className="text-blue-600 font-black hover:underline">+ 上稿第一個行程</button>
                 </div>
               ) : myItems.map(item => {
                 const status = String(item.reviewstatus || 'published').toLowerCase();
@@ -1916,9 +2309,6 @@ function App() {
                           <p className="text-xs text-slate-400 mt-0.5">
                             {item.region} · {item.days}天 · {fmt(item.price)}
                           </p>
-                          {isAdmin && item.ownername && (
-                            <p className="text-xs text-slate-500 mt-1">📝 上稿者：{item.ownername}</p>
-                          )}
                         </div>
                         <span className={`px-3 py-1 rounded-full text-xs font-black border shrink-0 ${statusCfg.cls}`}>
                           {statusCfg.label}
@@ -1938,6 +2328,12 @@ function App() {
                           className="text-red-500 hover:bg-red-50 px-3 py-1 rounded-lg text-xs font-bold">
                           🗑️ 刪除
                         </button>
+                        {status === 'published' && (
+                          <button onClick={()=>setSelPromote(item)}
+                            className="text-emerald-600 hover:bg-emerald-50 px-3 py-1 rounded-lg text-xs font-bold">
+                            🚀 推廣
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2683,6 +3079,22 @@ function App() {
           onUpdateStatus={handleUpdateOrderStatus}
           onMarkBalancePaid={handleMarkBalancePaid}
           canEditStatus={isAdmin}
+        />
+      )}
+
+      {/* ★ v8：推廣 Modal */}
+      {selPromote && (
+        <PromoteModal
+          item={selPromote}
+          profile={profile}
+          inviteCode={distData?.inviteCode || ''}
+          agencySlug="demo"
+          onClose={() => setSelPromote(null)}
+          onPushFlex={handlePushFlex}
+          onCopyLink={handleCopyPromoteLink}
+          onDownloadImage={handleDownloadPromoteImage}
+          pushingFlex={pushingFlex}
+          genImageBusy={genImageBusy}
         />
       )}
 
