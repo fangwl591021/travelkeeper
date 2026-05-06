@@ -192,7 +192,6 @@
 
         try {
           // ★ v3：送單時把 invite_code 也帶上；worker 會優先用它解析業務 uid
-          //   兩個都帶，worker 內部 invite_code 優先，distributor_uid 為 fallback
           const body = {
             itinerary_id: itineraryId,
             customer_line_uid: profile.userId,
@@ -211,9 +210,45 @@
             body: JSON.stringify(body),
           });
           const result = await res.json();
-          if (result.success) { setStep('success'); }
-          else { setErr(result.error || '送出失敗，請稍後重試'); setStep('form'); }
-        } catch {
+          if (!result.success) {
+            setErr(result.error || '送出失敗，請稍後重試');
+            setStep('form');
+            return;
+          }
+
+          // ★ v6：建單成功 → 接著呼叫 /api/payment/create 拿藍新付款 form
+          //   訂金階段（leg=deposit）；全額單訂金 = 全額
+          const orderData = result.data;
+          if (orderData.deposit_amount <= 0) {
+            // 沒有訂金需求（理論上不會發生，金額必定 > 0），直接顯示成功
+            setStep('success');
+            return;
+          }
+
+          // 顯示「正在前往付款」過場
+          setStep('redirecting');
+
+          const payRes = await fetch(`${WORKER_URL}/api/payment/create`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ order_id: orderData.order_id, leg: 'deposit' }),
+          });
+          const payResult = await payRes.json();
+          if (!payResult.success) {
+            setErr('建立付款連結失敗：' + (payResult.error || ''));
+            setStep('form');
+            return;
+          }
+
+          // 把藍新 form 寫到當前分頁（會自動 submit POST 到藍新付款頁）
+          //   不開新分頁是因為 LIFF in-app browser 開新分頁體驗很差
+          //   藍新付完會 redirect 回 thank-you.html
+          document.open();
+          document.write(payResult.data.form_html);
+          document.close();
+          // 上面 document.write 後會自動 submit form，不會回到這裡
+        } catch (err) {
+          console.error('[booking] submit error:', err);
           setErr('網路連線失敗，請稍後重試');
           setStep('form');
         }
@@ -238,6 +273,20 @@
             </p>
             <p style={{color:'#94a3b8',fontWeight:600,fontSize:12,marginTop:14}}>
               請截圖此畫面並聯絡業務人員
+            </p>
+          </div>
+        </Shell>
+      );
+
+      // ★ v6：建單成功後跳藍新付款頁的過場
+      if (step === 'redirecting') return (
+        <Shell tenant={tenant}>
+          <div style={{textAlign:'center',padding:'40px 0'}}>
+            <div className="spin" style={{width:48,height:48,border:'4px solid #e2e8f0',borderTopColor:'#10b981',borderRadius:'50%',margin:'0 auto 20px'}}/>
+            <h2 style={{fontSize:20,fontWeight:900,color:'#0f172a',marginBottom:8}}>正在前往付款頁面…</h2>
+            <p style={{color:'#64748b',fontWeight:600,fontSize:13,lineHeight:1.7}}>
+              您將被導向藍新金流安全付款頁<br/>
+              請勿關閉此視窗
             </p>
           </div>
         </Shell>
@@ -310,6 +359,50 @@
               </div>
             )}
 
+            {/* ★ v6：付款試算（依當前人數即時計算） */}
+            {itinerary && (() => {
+              const travelers = Number(form.travelers) || 1;
+              const total     = (Number(itinerary.price)||0) * travelers;
+              const paymentMode    = String(itinerary.paymentmode || 'deposit').toLowerCase();
+              const depositRatio   = Number(itinerary.depositratio || 20);
+              const balanceCollect = String(itinerary.balancecollect || 'online').toLowerCase();
+              const isFullPay = paymentMode === 'full';
+              const deposit = isFullPay ? total : Math.round(total * depositRatio / 100);
+              const balance = isFullPay ? 0 : total - deposit;
+              const balanceLabel = isFullPay ? '' :
+                balanceCollect === 'offline' ? '出發前由業務收取' : '出發前線上補繳';
+              return (
+                <div style={{background:'#fff',border:'2px solid #fde68a',borderRadius:14,
+                  padding:'14px 16px',marginBottom:26}}>
+                  <p style={{fontSize:10,fontWeight:900,color:'#d97706',textTransform:'uppercase',
+                    letterSpacing:'0.12em',marginBottom:10}}>付款試算（{travelers} 人）</p>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+                    <span style={{color:'#64748b',fontSize:13,fontWeight:600}}>總金額</span>
+                    <span style={{fontSize:15,fontWeight:900,color:'#0f172a'}}>NT$ {total.toLocaleString()}</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+                    <span style={{color:'#dc2626',fontSize:13,fontWeight:900}}>
+                      {isFullPay ? '本次付款（全額）' : `訂金（${depositRatio}%）`}
+                    </span>
+                    <span style={{fontSize:18,fontWeight:900,color:'#dc2626'}}>NT$ {deposit.toLocaleString()}</span>
+                  </div>
+                  {balance > 0 && (
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',
+                      paddingTop:8,borderTop:'1px dashed #fde68a'}}>
+                      <span style={{color:'#92400e',fontSize:12,fontWeight:600}}>
+                        尾款 · {balanceLabel}
+                      </span>
+                      <span style={{fontSize:13,fontWeight:700,color:'#92400e'}}>NT$ {balance.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <p style={{fontSize:11,color:'#94a3b8',marginTop:10,lineHeight:1.6}}>
+                    💳 支援信用卡、LINE Pay、ATM 轉帳<br/>
+                    🔒 由藍新金流安全加密處理
+                  </p>
+                </div>
+              );
+            })()}
+
             <hr style={{border:'none',borderTop:'1.5px solid #f1f5f9',margin:'0 0 26px'}}/>
 
             {/* LINE 已綁定 */}
@@ -376,12 +469,12 @@
             }}>
               {isSubmitting
                 ? <><div className="spin" style={{width:20,height:20,border:'3px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>送出中…</>
-                : '確認送出預約 →'
+                : '前往付款 →'
               }
             </button>
 
             <p style={{textAlign:'center',color:'#cbd5e1',fontSize:11,fontWeight:600,marginTop:14}}>
-              送出後業務專員會盡快與您聯繫
+              點擊後將跳轉至藍新金流安全付款頁
             </p>
           </form>
         </Shell>
