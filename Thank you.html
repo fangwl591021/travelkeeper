@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>付款結果 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdfa 100%); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .spin { animation: spin 0.7s linear infinite; }
+    .fade-up { animation: fadeUp 0.35s ease both; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+<div id="root" class="w-full max-w-md">
+  <!-- 預設 placeholder -->
+  <div class="bg-white rounded-3xl shadow-xl p-8 text-center">
+    <div class="spin inline-block w-12 h-12 border-4 border-slate-200 border-t-emerald-500 rounded-full mb-4"></div>
+    <p class="text-slate-500 font-bold">正在確認付款結果…</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+  const params = new URLSearchParams(location.search);
+  const orderId = params.get('order_id') || '';
+  const leg     = params.get('leg') || 'deposit';
+
+  const root = document.getElementById('root');
+
+  function render(html) {
+    root.innerHTML = html;
+  }
+
+  // 各狀態的 UI
+  const ICONS = {
+    success: `<div class="w-20 h-20 mx-auto mb-5 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center" style="box-shadow:0 8px 24px rgba(16,185,129,.2)">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>`,
+    awaiting: `<div class="w-20 h-20 mx-auto mb-5 rounded-full bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M12 8v4l3 2" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="#f59e0b" stroke-width="2.5"/></svg>
+    </div>`,
+    failed: `<div class="w-20 h-20 mx-auto mb-5 rounded-full bg-gradient-to-br from-red-100 to-red-50 flex items-center justify-center">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round"/></svg>
+    </div>`,
+    loading: `<div class="spin inline-block w-12 h-12 border-4 border-slate-200 border-t-emerald-500 rounded-full mb-4"></div>`,
+  };
+
+  const METHOD_LABEL = {
+    credit_card: '信用卡',
+    linepay:     'LINE Pay',
+    vacc:        'ATM 轉帳',
+    offline:     '線下繳款',
+  };
+
+  function fmt(n) { return 'NT$ ' + Number(n||0).toLocaleString(); }
+
+  function pageWaiting(message) {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 text-center fade-up">
+        ${ICONS.loading}
+        <p class="text-slate-500 font-bold">${message || '正在確認付款結果…'}</p>
+        <p class="text-slate-400 text-xs mt-3">付款資訊由藍新金流回傳，可能需要幾秒</p>
+      </div>`;
+  }
+
+  function pageSuccess(data) {
+    const isDeposit = leg === 'deposit';
+    const legLabel = isDeposit ? '訂金' : '尾款';
+    const amount = isDeposit ? data.deposit_amount : data.balance_amount;
+    const method = isDeposit ? data.deposit_method : data.balance_method;
+    const paidAt = isDeposit ? data.deposit_paid_at : data.balance_paid_at;
+    const balanceLine = (isDeposit && data.balance_amount > 0)
+      ? `<div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+           ⚠ 尾款 <span class="font-black">${fmt(data.balance_amount)}</span>
+           ${String(data.balance_collect).toLowerCase() === 'offline'
+              ? '將由業務於出發前收取'
+              : '請於出發前線上繳清'}
+         </div>` : '';
+
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 fade-up">
+        ${ICONS.success}
+        <h1 class="text-center text-2xl font-black text-emerald-600 mb-2">${legLabel}付款成功</h1>
+        <p class="text-center text-slate-500 text-sm mb-6">電子收據已推播至您的 LINE</p>
+
+        <div class="bg-slate-50 rounded-2xl p-4 space-y-2 mb-4">
+          <div class="flex justify-between text-sm"><span class="text-slate-500">行程</span>
+            <span class="text-slate-900 font-bold text-right max-w-[60%]">${data.itinerary_title || '—'}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-slate-500">訂單編號</span>
+            <span class="text-slate-700 font-mono text-xs">${data.order_id || orderId}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-slate-500">${legLabel}金額</span>
+            <span class="text-red-600 font-black">${fmt(amount)}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-slate-500">付款方式</span>
+            <span class="text-slate-900 font-bold">${METHOD_LABEL[method] || method || '—'}</span></div>
+          ${paidAt ? `<div class="flex justify-between text-sm"><span class="text-slate-500">付款時間</span>
+            <span class="text-slate-600 text-xs">${paidAt}</span></div>` : ''}
+        </div>
+
+        ${balanceLine}
+
+        <button onclick="window.close() || location.replace('index.html')"
+          class="w-full mt-5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg hover:shadow-xl transition">
+          完成
+        </button>
+      </div>`;
+  }
+
+  function pageAwaiting(data) {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 fade-up">
+        ${ICONS.awaiting}
+        <h1 class="text-center text-2xl font-black text-amber-600 mb-2">等待 ATM 繳款</h1>
+        <p class="text-center text-slate-500 text-sm mb-6">您已成功取得虛擬帳號</p>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+          <p class="text-xs font-black text-amber-700 uppercase tracking-widest mb-2">繳款須知</p>
+          <ul class="text-xs text-amber-800 space-y-1.5 list-disc list-inside">
+            <li>請於 ATM 取得的有效期限前完成繳款</li>
+            <li>使用任一銀行 ATM、網銀或 App 轉帳</li>
+            <li>繳款完成後系統會自動更新狀態</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-50 rounded-2xl p-4 space-y-2 mb-4">
+          <div class="flex justify-between text-sm"><span class="text-slate-500">行程</span>
+            <span class="text-slate-900 font-bold text-right max-w-[60%]">${data.itinerary_title || '—'}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-slate-500">訂單編號</span>
+            <span class="text-slate-700 font-mono text-xs">${data.order_id || orderId}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-slate-500">應繳金額</span>
+            <span class="text-red-600 font-black">${fmt(leg === 'deposit' ? data.deposit_amount : data.balance_amount)}</span></div>
+        </div>
+
+        <p class="text-center text-xs text-slate-400 mb-4">請查看藍新提供的虛擬帳號完成繳款</p>
+
+        <button onclick="location.replace('index.html')"
+          class="w-full bg-slate-100 text-slate-600 font-black py-4 rounded-2xl hover:bg-slate-200 transition">
+          回到首頁
+        </button>
+      </div>`;
+  }
+
+  function pageFailed(message) {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 fade-up">
+        ${ICONS.failed}
+        <h1 class="text-center text-2xl font-black text-red-600 mb-2">付款未完成</h1>
+        <p class="text-center text-slate-500 text-sm mb-6">${message || '交易失敗或被取消'}</p>
+
+        <div class="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
+          <p class="text-xs text-red-700">
+            您可以稍後重新預約，或聯絡業務專員協助處理。<br/>
+            訂單編號：<span class="font-mono">${orderId}</span>
+          </p>
+        </div>
+
+        <button onclick="location.replace('index.html')"
+          class="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-black py-4 rounded-2xl shadow-lg transition">
+          回到首頁
+        </button>
+      </div>`;
+  }
+
+  function pageError(msg) {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 text-center fade-up">
+        <p class="text-2xl mb-3">⚠️</p>
+        <p class="text-slate-700 font-bold mb-2">無法取得訂單資料</p>
+        <p class="text-slate-400 text-xs mb-5">${msg || '請聯絡業務人員'}</p>
+        <button onclick="location.replace('index.html')"
+          class="bg-slate-100 text-slate-600 px-6 py-3 rounded-xl font-bold hover:bg-slate-200 transition">回到首頁</button>
+      </div>`;
+  }
+
+  // ★ 輪詢策略：因為 Notify 可能比 Return 晚到，最多等 30 秒
+  //   每 3 秒問一次後端，看到 paid / awaiting_atm / failed 就停
+  let attempts = 0;
+  const MAX_ATTEMPTS = 10;  // 30 秒
+  const POLL_MS = 3000;
+
+  async function poll() {
+    if (!orderId) {
+      render(pageError('缺少訂單編號'));
+      return;
+    }
+    attempts++;
+
+    try {
+      const res = await fetch(`${WORKER_URL}/api/orders/status?order_id=${encodeURIComponent(orderId)}`);
+      const result = await res.json();
+      if (!result.success) {
+        render(pageError(result.error));
+        return;
+      }
+      const data = result.data;
+      const status = leg === 'deposit'
+        ? String(data.deposit_status || '').toLowerCase()
+        : String(data.balance_status || '').toLowerCase();
+
+      if (status === 'paid' || status === 'paid_online') {
+        render(pageSuccess(data));
+        return;
+      }
+      if (status === 'awaiting_atm') {
+        render(pageAwaiting(data));
+        return;
+      }
+      if (status === 'failed') {
+        render(pageFailed());
+        return;
+      }
+      // 還在 unpaid，繼續輪詢
+      if (attempts < MAX_ATTEMPTS) {
+        render(pageWaiting(`正在確認付款結果… (${attempts}/${MAX_ATTEMPTS})`));
+        setTimeout(poll, POLL_MS);
+      } else {
+        // 超時：可能藍新很慢、可能客戶從未付款（按返回鍵）
+        render(`<div class="bg-white rounded-3xl shadow-xl p-8 fade-up">
+          <div class="text-center mb-5"><p class="text-4xl mb-3">⏳</p>
+          <p class="text-slate-700 font-bold">付款結果尚未回傳</p>
+          <p class="text-slate-400 text-xs mt-2">藍新金流可能正在處理中</p></div>
+          <div class="bg-slate-50 rounded-2xl p-4 mb-4">
+            <p class="text-xs text-slate-600">訂單編號：<span class="font-mono">${orderId}</span></p>
+            <p class="text-xs text-slate-600 mt-1">您可以稍後再次確認，或直接聯絡業務人員</p>
+          </div>
+          <button onclick="location.reload()"
+            class="w-full bg-blue-600 text-white font-black py-3 rounded-2xl hover:bg-blue-700 mb-2">重新整理</button>
+          <button onclick="location.replace('index.html')"
+            class="w-full bg-slate-100 text-slate-600 font-black py-3 rounded-2xl hover:bg-slate-200">回到首頁</button>
+        </div>`);
+      }
+    } catch (e) {
+      console.error(e);
+      if (attempts < MAX_ATTEMPTS) {
+        setTimeout(poll, POLL_MS);
+      } else {
+        render(pageError('網路連線異常'));
+      }
+    }
+  }
+
+  poll();
+})();
+</script>
+
+</body>
+</html>
