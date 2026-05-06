@@ -1179,6 +1179,18 @@ function App() {
         || String(c.customerphone || '').includes(customerSearch);
   }), [customers, customerSearch]);
 
+  // ★ 修 React #310：所有 hooks 必須在早期 return 前呼叫（不能在條件之後）
+  // 計算「可請款」訂單數（管理員看全平台、業務看自己的）
+  const payableOrdersCount = useMemo(() => {
+    if (isAdmin) {
+      return orders.filter(o => String(o.commissionstatus || '').toLowerCase() === 'payable').length;
+    }
+    return orders.filter(o =>
+      String(o.distributoruid) === String(profile?.userId) &&
+      String(o.commissionstatus || '').toLowerCase() === 'payable'
+    ).length;
+  }, [orders, isAdmin, profile]);
+
   // ════════════════════════════════════════════════════════════
   // 早期 return：checking / denied
   // ════════════════════════════════════════════════════════════
@@ -1220,17 +1232,6 @@ function App() {
   // ════════════════════════════════════════════════════════════
   // 選單
   // ════════════════════════════════════════════════════════════
-  // 計算「可請款」訂單數（管理員看全平台、業務看自己的）
-  const payableOrdersCount = useMemo(() => {
-    if (isAdmin) {
-      return orders.filter(o => String(o.commissionstatus || '').toLowerCase() === 'payable').length;
-    }
-    return orders.filter(o =>
-      String(o.distributoruid) === String(profile?.userId) &&
-      String(o.commissionstatus || '').toLowerCase() === 'payable'
-    ).length;
-  }, [orders, isAdmin, profile]);
-
   const menu = buildMenu({
     isAdmin, canUpload,
     badges: {
