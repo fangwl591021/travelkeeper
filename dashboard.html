@@ -1883,6 +1883,28 @@ function App() {
                 </div>
               )}
 
+              {/* ★ v12：OA / 個人品牌頁快捷 */}
+              {!isAdmin && distData?.inviteCode && (
+                <div className="grid grid-cols-2 gap-3">
+                  <a href="oa-setup.html"
+                    className="bg-white border border-slate-200 hover:border-purple-400 rounded-2xl p-5 transition shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-xl">📲</div>
+                      <p className="font-black text-slate-900">OA 與個人品牌設定</p>
+                    </div>
+                    <p className="text-xs text-slate-500">編輯 LINE@、社群連結、銀行帳戶、自我介紹</p>
+                  </a>
+                  <a href={`agent.html?code=${encodeURIComponent(distData.inviteCode)}`} target="_blank"
+                    className="bg-white border border-slate-200 hover:border-emerald-400 rounded-2xl p-5 transition shadow-sm hover:shadow-md">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl">🎯</div>
+                      <p className="font-black text-slate-900">我的個人品牌頁</p>
+                    </div>
+                    <p className="text-xs text-slate-500">客戶用名片 QR 進來看到的對外頁，可分享給朋友</p>
+                  </a>
+                </div>
+              )}
+
               {/* 數字儀表板 */}
               {isAdmin ? (
                 <>
