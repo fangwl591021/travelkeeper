@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>補繳尾款 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #f0fdfa 100%); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .spin { animation: spin 0.7s linear infinite; }
+    .fade-up { animation: fadeUp 0.35s ease both; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+<div id="root" class="w-full max-w-md">
+  <div class="bg-white rounded-3xl shadow-xl p-8 text-center">
+    <div class="spin inline-block w-12 h-12 border-4 border-slate-200 border-t-amber-500 rounded-full mb-4"></div>
+    <p class="text-slate-500 font-bold">正在驗證身份…</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+  const LIFF_ID    = '2009367829-BDZCGti8';
+
+  const params = new URLSearchParams(location.search);
+  const orderId = params.get('order_id') || '';
+
+  const root = document.getElementById('root');
+  const render = (html) => { root.innerHTML = html; };
+
+  const fmt = (n) => 'NT$ ' + Number(n||0).toLocaleString();
+  const METHOD_LABEL = { credit_card:'信用卡', linepay:'LINE Pay', vacc:'ATM 轉帳', offline:'線下繳款' };
+
+  // ─────── UI 狀態 ───────
+
+  function pageError(title, msg, showRetry = false) {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 fade-up text-center">
+        <div class="text-5xl mb-3">⚠️</div>
+        <h1 class="text-xl font-black text-red-600 mb-2">${title}</h1>
+        <p class="text-slate-500 text-sm mb-6">${msg}</p>
+        ${showRetry ? `<button onclick="location.reload()" class="bg-blue-600 text-white font-black px-6 py-3 rounded-2xl hover:bg-blue-700 mb-2 w-full">重試</button>` : ''}
+        <button onclick="location.replace('index.html')"
+          class="bg-slate-100 text-slate-600 font-black px-6 py-3 rounded-2xl hover:bg-slate-200 w-full">
+          回到首頁
+        </button>
+      </div>`;
+  }
+
+  function pageOrder(data, onPay) {
+    const balanceStatus = String(data.balance_status || 'unpaid').toLowerCase();
+    const isPaid = ['paid_online', 'paid_offline'].includes(balanceStatus);
+    const isAwaiting = balanceStatus === 'awaiting_atm';
+    const balanceCollect = String(data.balance_collect || 'online').toLowerCase();
+
+    // 尾款已繳清的情況
+    if (isPaid) {
+      return `
+        <div class="bg-white rounded-3xl shadow-xl p-8 fade-up text-center">
+          <div class="w-20 h-20 mx-auto mb-5 rounded-full bg-emerald-50 flex items-center justify-center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+              <path d="M5 13l4 4L19 7" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h1 class="text-2xl font-black text-emerald-600 mb-2">尾款已繳清</h1>
+          <p class="text-slate-500 text-sm mb-6">
+            ${balanceStatus === 'paid_offline' ? '已由業務於線下確認收款' : '已於線上完成繳款'}
+            ${data.balance_paid_at ? `<br><span class="text-xs">(${data.balance_paid_at})</span>` : ''}
+          </p>
+          <button onclick="location.replace('index.html')"
+            class="bg-emerald-500 text-white font-black px-6 py-3 rounded-2xl hover:bg-emerald-600 w-full">
+            回到首頁
+          </button>
+        </div>`;
+    }
+
+    // ATM 取號等繳款中
+    if (isAwaiting) {
+      return `
+        <div class="bg-white rounded-3xl shadow-xl p-8 fade-up text-center">
+          <div class="w-20 h-20 mx-auto mb-5 rounded-full bg-amber-50 flex items-center justify-center text-3xl">⏳</div>
+          <h1 class="text-2xl font-black text-amber-600 mb-2">等待 ATM 繳款</h1>
+          <p class="text-slate-500 text-sm mb-6">您已取得 ATM 虛擬帳號，請於期限內繳款</p>
+          <p class="text-xs text-slate-400">繳款後系統會自動更新狀態</p>
+        </div>`;
+    }
+
+    // 線下收款提示（但仍允許線上補繳）
+    const offlineHint = balanceCollect === 'offline'
+      ? `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+           ℹ️ 此訂單原訂由業務於出發前收取尾款，您也可以在這裡選擇線上提前繳清
+         </div>`
+      : '';
+
+    return `
+      <div class="bg-white rounded-3xl shadow-xl overflow-hidden fade-up">
+        <div class="p-6 bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+          <p class="text-xs uppercase tracking-widest opacity-80 font-black">補繳尾款</p>
+          <h1 class="text-2xl font-black mt-1 line-clamp-2">${data.itinerary_title || '行程預約'}</h1>
+        </div>
+
+        <div class="p-6 space-y-4">
+          ${offlineHint}
+
+          <div class="bg-slate-50 rounded-2xl p-4 space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-500">訂單編號</span>
+              <span class="font-mono text-xs text-slate-700">${data.order_id}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-500">出發日期</span>
+              <span class="text-slate-900 font-bold">${data.travel_date || '—'}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-500">人數</span>
+              <span class="text-slate-900 font-bold">${data.travelers || 1} 人</span>
+            </div>
+          </div>
+
+          <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+            <div class="flex justify-between items-baseline mb-2">
+              <span class="text-slate-600 text-sm">總金額</span>
+              <span class="text-slate-900 font-bold">${fmt(data.total_amount)}</span>
+            </div>
+            <div class="flex justify-between items-baseline mb-2 text-emerald-700">
+              <span class="text-sm">訂金已付</span>
+              <span class="font-bold">${fmt(data.deposit_amount)}</span>
+            </div>
+            <div class="border-t border-amber-300 my-2"></div>
+            <div class="flex justify-between items-baseline">
+              <span class="font-black text-amber-700">本次應付</span>
+              <span class="text-2xl font-black text-red-600">${fmt(data.balance_amount)}</span>
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-400 text-center">
+            🔒 由藍新金流安全加密處理 · 支援信用卡、LINE Pay、ATM 轉帳
+          </p>
+
+          <button id="pay-btn" onclick="window._payHandler && window._payHandler()"
+            class="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black py-4 rounded-2xl shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed">
+            前往付款 →
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function pageRedirecting() {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-8 text-center fade-up">
+        <div class="spin inline-block w-12 h-12 border-4 border-slate-200 border-t-amber-500 rounded-full mb-4"></div>
+        <h2 class="text-xl font-black text-slate-700 mb-2">正在前往付款頁面…</h2>
+        <p class="text-slate-400 text-xs">您將被導向藍新金流安全付款頁<br/>請勿關閉此視窗</p>
+      </div>`;
+  }
+
+  // ─────── 主流程 ───────
+
+  async function main() {
+    // 0. 基本參數檢查
+    if (!orderId) {
+      render(pageError('缺少訂單編號', '請從 LINE 收到的收據訊息點擊「補繳尾款」按鈕進入'));
+      return;
+    }
+
+    // 1. LIFF init + login
+    let profile;
+    try {
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;  // login 會 redirect，這裡 return 即可
+      }
+      profile = await liff.getProfile();
+    } catch (e) {
+      console.error('LIFF init/login failed:', e);
+      render(pageError('LINE 登入失敗', e.message || '請使用 LINE 應用程式開啟此連結', true));
+      return;
+    }
+
+    // 2. 拿訂單，帶 customer_line_uid 驗身份
+    let orderData;
+    try {
+      const res = await fetch(
+        `${WORKER_URL}/api/orders/status?order_id=${encodeURIComponent(orderId)}&customer_line_uid=${encodeURIComponent(profile.userId)}`
+      );
+      const result = await res.json();
+      if (!result.success) {
+        if (res.status === 403) {
+          render(pageError('無權限存取', '此訂單不屬於您的帳號。如有疑問，請聯絡業務專員'));
+        } else if (res.status === 404) {
+          render(pageError('找不到訂單', '請確認訂單編號正確'));
+        } else {
+          render(pageError('讀取失敗', result.error || '請稍後再試', true));
+        }
+        return;
+      }
+      orderData = result.data;
+    } catch (e) {
+      render(pageError('網路連線失敗', e.message, true));
+      return;
+    }
+
+    // 3. 邊界判斷
+    const paymentMode = String(orderData.payment_mode || 'deposit').toLowerCase();
+    if (paymentMode === 'full' || Number(orderData.balance_amount) <= 0) {
+      render(pageError('此訂單無尾款', '訂單為全額付款型，無需補繳'));
+      return;
+    }
+    const depositStatus = String(orderData.deposit_status || 'unpaid').toLowerCase();
+    if (depositStatus !== 'paid') {
+      render(pageError('請先繳清訂金', '尾款補繳必須在訂金完成後才能進行'));
+      return;
+    }
+
+    // 4. 顯示訂單摘要 + 付款按鈕
+    render(pageOrder(orderData));
+
+    // 5. 付款 handler
+    window._payHandler = async () => {
+      const btn = document.getElementById('pay-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+
+      try {
+        const payRes = await fetch(`${WORKER_URL}/api/payment/create`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            order_id: orderId,
+            leg: 'balance',
+            customer_line_uid: profile.userId,  // ★ 身份驗證
+          }),
+        });
+        const payResult = await payRes.json();
+        if (!payResult.success) {
+          render(pageError('建立付款失敗', payResult.error || '請稍後再試', true));
+          return;
+        }
+
+        // 顯示「正在前往付款」
+        render(pageRedirecting());
+
+        // 把藍新 form 寫到當前分頁，自動 submit POST 到藍新付款頁
+        document.open();
+        document.write(payResult.data.form_html);
+        document.close();
+      } catch (e) {
+        render(pageError('網路錯誤', e.message, true));
+      }
+    };
+  }
+
+  main();
+})();
+</script>
+
+</body>
+</html>
