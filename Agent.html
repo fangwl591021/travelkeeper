@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>個人品牌頁 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: linear-gradient(180deg,#f0f9ff,#fef3c7,#f0fdfa); }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-up { animation: fadeUp .35s ease both; }
+    .spin { animation: spin .7s linear infinite; }
+    .scale-on-tap:active { transform: scale(.97); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+<div id="root" class="max-w-md mx-auto p-4">
+  <div class="bg-white rounded-3xl shadow p-12 text-center">
+    <div class="spin inline-block w-12 h-12 border-4 border-slate-200 border-t-blue-500 rounded-full mb-4"></div>
+    <p class="text-slate-500 font-bold">載入中…</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code') || '';
+  const uid  = params.get('uid')  || '';
+
+  const root = document.getElementById('root');
+  function escape(s) {
+    return String(s || '').replace(/[&<>"']/g, ch => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[ch]));
+  }
+
+  function pageError(title, msg) {
+    return `
+      <div class="bg-white rounded-3xl shadow p-10 text-center fade-up">
+        <p class="text-5xl mb-3">😢</p>
+        <h1 class="text-xl font-black text-slate-700 mb-2">${escape(title)}</h1>
+        <p class="text-slate-500 text-sm mb-6">${escape(msg)}</p>
+        <a href="index.html" class="bg-blue-600 text-white font-black px-6 py-3 rounded-2xl hover:bg-blue-700 inline-block">回首頁</a>
+      </div>`;
+  }
+
+  function pageProfile(d, items) {
+    // 處理 tel: 連結
+    const phoneLink = d.phone ? 'tel:' + String(d.phone).replace(/[\s-]/g, '') : '';
+
+    const socials = [
+      { key: 'lineLink',   icon: '💬', label: 'LINE',         color: 'bg-emerald-500',   url: d.lineLink },
+      { key: 'lineAtLink', icon: '📢', label: 'LINE@',        color: 'bg-emerald-600',   url: d.lineAtLink },
+      { key: 'fbLink',     icon: '📘', label: 'Facebook',    color: 'bg-blue-600',      url: d.fbLink },
+      { key: 'igLink',     icon: '📷', label: 'Instagram',   color: 'bg-gradient-to-br from-purple-500 to-pink-500', url: d.igLink },
+      { key: 'webLink',    icon: '🌐', label: '網站',         color: 'bg-slate-700',     url: d.webLink },
+      { key: 'mapLink',    icon: '📍', label: '地圖',         color: 'bg-rose-500',      url: d.mapLink },
+    ].filter(s => s.url);
+
+    const itemsHtml = items.length === 0 ? `
+      <div class="text-center text-slate-400 py-8 text-sm">目前無精選行程</div>
+    ` : items.slice(0, 12).map(it => {
+      const id = it.id || it.timestamp;
+      const inviteParam = code ? `&invite=${encodeURIComponent(code)}` : '';
+      const tourUrl = `tour.html?t=${id}&r=${encodeURIComponent(uid || d.uid || '')}&a=${encodeURIComponent(d.agencySlug || 'demo')}${inviteParam}`;
+      return `
+        <a href="${tourUrl}" class="block bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-lg transition scale-on-tap">
+          ${it.image ? `<img src="${escape(it.image)}" class="w-full aspect-video object-cover" loading="lazy"/>` : ''}
+          <div class="p-3">
+            <h3 class="font-black text-sm text-slate-900 line-clamp-2 min-h-[2.5rem]">${escape(it.title)}</h3>
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-xs text-slate-500">${escape(it.region || '')} · ${escape(it.days || '')}天</span>
+              <span class="text-base font-black text-red-600">NT$ ${Number(it.price||0).toLocaleString()}</span>
+            </div>
+          </div>
+        </a>
+      `;
+    }).join('');
+
+    return `
+      <div class="space-y-5 fade-up">
+        <!-- Hero -->
+        <div class="bg-white rounded-3xl shadow-lg overflow-hidden">
+          <div class="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 h-28 relative"></div>
+          <div class="px-6 pb-6 -mt-12 relative">
+            ${d.avatar
+              ? `<img src="${escape(d.avatar)}" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-xl mx-auto bg-slate-100"
+                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                 <div class="w-24 h-24 rounded-full mx-auto border-4 border-white shadow-xl bg-gradient-to-br from-blue-100 to-purple-100 items-center justify-center text-3xl font-black text-slate-400" style="display:none;">${escape((d.name||'?').charAt(0))}</div>`
+              : `<div class="w-24 h-24 rounded-full mx-auto border-4 border-white shadow-xl bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-3xl font-black text-slate-400">${escape((d.name||'?').charAt(0))}</div>`
+            }
+            <h1 class="text-2xl font-black text-center text-slate-900 mt-3">${escape(d.name)}</h1>
+            ${d.inviteCode ? `<p class="text-center text-slate-400 text-xs mt-1 font-mono">推薦碼：${escape(d.inviteCode)}</p>` : ''}
+            ${d.bio ? `<p class="text-sm text-slate-600 mt-4 leading-relaxed text-center whitespace-pre-line">${escape(d.bio)}</p>` : ''}
+          </div>
+        </div>
+
+        <!-- 主要 CTA -->
+        ${d.lineAtLink || d.lineLink || phoneLink ? `
+        <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow space-y-2">
+          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">立即聯絡</p>
+          ${d.lineAtLink ? `
+            <a href="${escape(d.lineAtLink)}" target="_blank"
+              class="block bg-emerald-500 text-white font-black py-3.5 rounded-xl text-center shadow hover:shadow-lg transition scale-on-tap">
+              📢 加我 LINE@${d.lineAtId ? ' · ' + escape(d.lineAtId) : ''}
+            </a>` : ''}
+          ${d.lineLink ? `
+            <a href="${escape(d.lineLink)}" target="_blank"
+              class="block bg-green-600 text-white font-black py-3.5 rounded-xl text-center shadow hover:shadow-lg transition scale-on-tap">
+              💬 LINE 私訊我
+            </a>` : ''}
+          ${phoneLink ? `
+            <a href="${phoneLink}"
+              class="block bg-slate-700 text-white font-black py-3.5 rounded-xl text-center shadow hover:shadow-lg transition scale-on-tap">
+              📞 撥電話 ${escape(d.phone)}
+            </a>` : ''}
+        </div>
+        ` : ''}
+
+        <!-- 其他社群 (icon-only grid) -->
+        ${socials.filter(s => !['lineLink','lineAtLink'].includes(s.key)).length > 0 ? `
+        <div class="bg-white rounded-2xl border border-slate-100 p-4 shadow">
+          <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">其他平台</p>
+          <div class="grid grid-cols-4 gap-2">
+            ${socials.filter(s => !['lineLink','lineAtLink'].includes(s.key)).map(s => `
+              <a href="${escape(s.url)}" target="_blank"
+                class="${s.color} text-white rounded-xl py-3 text-center scale-on-tap hover:opacity-90 transition">
+                <div class="text-2xl">${s.icon}</div>
+                <div class="text-[10px] font-black mt-1">${s.label}</div>
+              </a>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- OA 介紹 -->
+        ${d.oaIntro ? `
+        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5">
+          <p class="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">關於我的服務</p>
+          <p class="text-sm text-amber-900 leading-relaxed whitespace-pre-line">${escape(d.oaIntro)}</p>
+        </div>
+        ` : ''}
+
+        <!-- 精選行程 -->
+        <div>
+          <h2 class="font-black text-lg text-slate-900 mb-3 px-1">🌟 精選行程</h2>
+          <div class="grid grid-cols-2 gap-3">
+            ${itemsHtml}
+          </div>
+        </div>
+
+        <p class="text-center text-[10px] text-slate-300 py-6">
+          Powered by 旅遊管家 · 透過此頁的訂單會自動歸入 ${escape(d.name)}
+        </p>
+      </div>
+    `;
+  }
+
+  async function main() {
+    if (!code && !uid) {
+      root.innerHTML = pageError('連結錯誤', '此頁需要帶推薦碼或 UID 才能顯示');
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      if (code) params.set('code', code);
+      if (uid) params.set('uid', uid);
+      const [profileRes, itineraryRes] = await Promise.all([
+        fetch(`${WORKER_URL}/api/agent/public?${params}`).then(r => r.json()),
+        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r => r.json()).catch(() => []),
+      ]);
+
+      if (!profileRes.success) {
+        root.innerHTML = pageError('找不到此業務', profileRes.error || '請確認連結是否正確');
+        return;
+      }
+
+      // 設定頁面 title
+      document.title = `${profileRes.data.name} · 旅遊管家`;
+
+      const items = Array.isArray(itineraryRes) ? itineraryRes : [];
+      // 排序：有圖優先，價格高優先（看起來高端）
+      items.sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0) || Number(b.price||0) - Number(a.price||0));
+
+      root.innerHTML = pageProfile(profileRes.data, items);
+    } catch (e) {
+      root.innerHTML = pageError('網路錯誤', e.message);
+    }
+  }
+
+  main();
+})();
+</script>
+
+</body>
+</html>
