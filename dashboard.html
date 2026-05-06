@@ -636,6 +636,10 @@ function buildMenu({ isAdmin, canUpload, badges }) {
     { id:'overview',     icon:'📊', label:'總覽',       show:true },
     { id:'orders',       icon:'📦', label: isAdmin ? '訂單管理' : '我的訂單', show:true,
       badge: badges.pendingOrders },
+    // ★ v7：金流中心
+    { id:'payments',     icon:'💳', label:'金流明細',   show:true },
+    { id:'commission',   icon:'💰', label: isAdmin ? '佣金結算' : '我的佣金', show:true,
+      badge: badges.payableCount },
     { id:'customers',    icon:'👤', label:'我的客戶',   show: !isAdmin },
     { id:'distributors', icon:'👥', label:'分銷商管理', show: isAdmin,
       badge: badges.pendingDist },
@@ -697,6 +701,16 @@ function App() {
   const [customerOrders,setCustomerOrders] = useState([]);
   const [loadingCustOrders,setLoadingCustOrders] = useState(false);
 
+  // ★ v7 金流中心 state
+  const [paymentSearch,    setPaymentSearch]    = useState('');
+  const [paymentFilter,    setPaymentFilter]    = useState('all'); // all/credit_card/linepay/vacc/offline
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all'); // all/paid/awaiting_atm/failed
+  const [paymentDateRange, setPaymentDateRange] = useState('30d'); // 7d/30d/90d/all
+  const [commissionSummary, setCommissionSummary] = useState(null); // 管理員視圖
+  const [selectedPayoutOrders, setSelectedPayoutOrders] = useState({}); // { uid: Set(orderIds) }
+  const [payingOut, setPayingOut] = useState(false);
+  const [expandedDist, setExpandedDist] = useState({}); // 結算頁分銷商展開狀態
+
   // Toast
   const [toast, setToast] = useState(null);
   const showToast = (msg, type='success') => {
@@ -743,16 +757,19 @@ function App() {
 
         // 階段 2：依角色並行拉資料
         if (_isAdmin) {
-          const [pendingRes, allOrdersRes, distRes, allItemsRes] = await Promise.all([
+          const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes] = await Promise.all([
             fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+            // ★ v7：拉佣金結算彙總
+            fetch(`${WORKER_URL}/api/commission/summary?uid=${p.userId}`).then(r=>r.json()).catch(()=>null),
           ]);
           setPendingItems(pendingRes?.data || []);
           setOrders(allOrdersRes?.data || []);
           setDistributors(Array.isArray(distRes) ? distRes : []);
           setMyItems(Array.isArray(allItemsRes) ? allItemsRes : []);
+          if (commRes?.success) setCommissionSummary(commRes.data);
         } else {
           const tasks = [
             fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:null})),
@@ -815,16 +832,18 @@ function App() {
     setLoading(true);
     try {
       if (isAdmin) {
-        const [pendingRes, allOrdersRes, distRes, allItemsRes] = await Promise.all([
+        const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes] = await Promise.all([
           fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+          fetch(`${WORKER_URL}/api/commission/summary?uid=${profile.userId}`).then(r=>r.json()).catch(()=>null),
         ]);
         setPendingItems(pendingRes?.data || []);
         setOrders(allOrdersRes?.data || []);
         setDistributors(Array.isArray(distRes) ? distRes : []);
         setMyItems(Array.isArray(allItemsRes) ? allItemsRes : []);
+        if (commRes?.success) setCommissionSummary(commRes.data);
       } else {
         const tasks = [
           fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:null})),
@@ -1046,16 +1065,69 @@ function App() {
     orders.filter(o => String(o.createdat||'').startsWith(thisMonth)),
   [orders, thisMonth]);
 
-  const adminStats = useMemo(() => ({
-    pendingReview:   pendingItems.length,
-    pendingOrders:   orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
-    monthRevenue:    monthOrders.reduce((s,o) => s + Number(o.price||0), 0),
-    monthCommission: monthOrders.reduce((s,o) => s + Number(o.commissionamount||0), 0),
-    totalDist:       distributors.length,
-    pendingDist:     distributors.filter(d => String(d.status).toLowerCase() === 'pending').length,
-    totalOrders:     orders.length,
-    totalItems:      myItems.length,
-  }), [pendingItems, orders, monthOrders, distributors, myItems]);
+  const adminStats = useMemo(() => {
+    // 用「實收金額」（已收到的訂金 + 已收到的尾款）作為平台真實現金流
+    const sumDeposit = (list) => list
+      .filter(o => ['paid'].includes(String(o.depositstatus||'').toLowerCase()))
+      .reduce((s,o) => s + Number(o.depositamount||0), 0);
+    const sumBalance = (list) => list
+      .filter(o => ['paid_online','paid_offline'].includes(String(o.balancestatus||'').toLowerCase()))
+      .reduce((s,o) => s + Number(o.balanceamount||0), 0);
+    const sumPaidCommission = (list) => list
+      .filter(o => String(o.commissionstatus||'').toLowerCase() === 'paid_out')
+      .reduce((s,o) => s + Number(o.commissionamount||0), 0);
+    const sumPayableCommission = (list) => list
+      .filter(o => String(o.commissionstatus||'').toLowerCase() === 'payable')
+      .reduce((s,o) => s + Number(o.commissionamount||0), 0);
+
+    const monthRevenue    = sumDeposit(monthOrders) + sumBalance(monthOrders);
+    const monthGrossSales = monthOrders.reduce((s,o) => s + Number(o.totalamount || o.price || 0), 0);
+    const monthCommission = monthOrders.reduce((s,o) => s + Number(o.commissionamount||0), 0);
+    const allRevenue      = sumDeposit(orders) + sumBalance(orders);
+    const payableCommissionTotal = sumPayableCommission(orders);
+    const paidCommissionTotal = sumPaidCommission(orders);
+
+    // 近 6 個月趨勢：每月實收金額 + 應付佣金
+    const trend = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const monthList = orders.filter(o => String(o.createdat||'').startsWith(ym));
+      trend.push({
+        month: ym,
+        label: `${d.getMonth()+1}月`,
+        revenue: sumDeposit(monthList) + sumBalance(monthList),
+        commission: monthList.reduce((s,o) => s + Number(o.commissionamount||0), 0),
+        orderCount: monthList.length,
+      });
+    }
+
+    return {
+      pendingReview:   pendingItems.length,
+      pendingOrders:   orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
+      // 訂單金額 vs 實際收到的錢 — 兩種視角
+      monthGrossSales,    // 本月所有訂單總額（含未付）
+      monthRevenue,       // 本月「實收」金額
+      monthCommission,    // 本月應付佣金（含未到結算）
+      // 全平台實收金額
+      allRevenue,
+      // 佣金狀態
+      payableCommissionTotal,
+      paidCommissionTotal,
+      // 毛利估算（實收 - 應付佣金）
+      monthGross: monthRevenue - monthOrders
+        .filter(o => String(o.commissionstatus||'').toLowerCase() !== 'pending')
+        .reduce((s,o) => s + Number(o.commissionamount||0), 0),
+      // 統計
+      totalDist:       distributors.length,
+      pendingDist:     distributors.filter(d => String(d.status).toLowerCase() === 'pending').length,
+      totalOrders:     orders.length,
+      totalItems:      myItems.length,
+      // 趨勢
+      trend,
+    };
+  }, [pendingItems, orders, monthOrders, distributors, myItems]);
 
   const orderStats = useMemo(() => ({
     pendingCount:    orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
@@ -1148,12 +1220,24 @@ function App() {
   // ════════════════════════════════════════════════════════════
   // 選單
   // ════════════════════════════════════════════════════════════
+  // 計算「可請款」訂單數（管理員看全平台、業務看自己的）
+  const payableOrdersCount = useMemo(() => {
+    if (isAdmin) {
+      return orders.filter(o => String(o.commissionstatus || '').toLowerCase() === 'payable').length;
+    }
+    return orders.filter(o =>
+      String(o.distributoruid) === String(profile?.userId) &&
+      String(o.commissionstatus || '').toLowerCase() === 'payable'
+    ).length;
+  }, [orders, isAdmin, profile]);
+
   const menu = buildMenu({
     isAdmin, canUpload,
     badges: {
       pendingOrders: orderCounts.pending,
       pendingDist:   distCounts.pending,
       pendingReview: pendingItems.length,
+      payableCount:  payableOrdersCount,
     }
   });
 
@@ -1287,23 +1371,122 @@ function App() {
 
               {/* 數字儀表板 */}
               {isAdmin ? (
-                <div>
-                  <h2 className="font-black text-lg text-slate-900 mb-3">本月概況</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard color="bg-amber-500"   num={adminStats.pendingReview}     label="待審核行程" hint="上稿審核佇列"   loading={loading}/>
-                    <StatCard color="bg-red-500"     num={adminStats.pendingOrders}     label="待處理訂單" hint="新訂單未確認"   loading={loading}/>
-                    <StatCard color="bg-emerald-600" num={fmt(adminStats.monthRevenue)} label="本月成交金額" hint={`${adminStats.totalOrders} 張總訂單`} loading={loading}/>
-                    <StatCard color="bg-blue-600"    num={fmt(adminStats.monthCommission)} label="本月佣金支出" hint="累計待支付分銷商"  loading={loading}/>
+                <>
+                  {/* ★ v7：本月財務（4 個關鍵數字） */}
+                  <div>
+                    <h2 className="font-black text-lg text-slate-900 mb-3">本月財務</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <StatCard color="bg-emerald-600" num={fmt(adminStats.monthRevenue)}
+                        label="本月實收" hint={`${monthOrders.length} 張訂單`} loading={loading}/>
+                      <StatCard color="bg-blue-600"    num={fmt(adminStats.monthGrossSales)}
+                        label="本月成交金額" hint="含未付款" loading={loading}/>
+                      <StatCard color="bg-amber-500"   num={fmt(adminStats.monthCommission)}
+                        label="本月應付佣金" loading={loading}/>
+                      <StatCard color="bg-purple-600"  num={fmt(adminStats.monthGross)}
+                        label="本月毛利估算" hint="實收 − 已結佣金" loading={loading}/>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                    <StatCard color="bg-slate-800" num={adminStats.totalDist}
-                      label="分銷商總數"
-                      hint={adminStats.pendingDist > 0 ? `${adminStats.pendingDist} 待審核` : '全部已核准'}
-                      loading={loading}/>
-                    <StatCard color="bg-slate-700" num={adminStats.totalItems} label="行程總數"  loading={loading}/>
-                    <StatCard color="bg-slate-600" num={adminStats.totalOrders} label="累計訂單" loading={loading}/>
+
+                  {/* ★ v7：近 6 個月趨勢圖（純 SVG，不依賴 chart 套件） */}
+                  {!loading && (() => {
+                    const trend = adminStats.trend || [];
+                    if (trend.length === 0) return null;
+                    const maxVal = Math.max(1, ...trend.map(t => Math.max(t.revenue, t.commission)));
+                    const W = 600, H = 180, pad = { top:20, right:20, bottom:30, left:50 };
+                    const innerW = W - pad.left - pad.right;
+                    const innerH = H - pad.top - pad.bottom;
+                    const barW = innerW / trend.length * 0.35;
+                    const groupW = innerW / trend.length;
+                    return (
+                      <div className="bg-white rounded-2xl border border-slate-100 p-5">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-black text-base text-slate-900">近 6 個月趨勢</h3>
+                          <div className="flex gap-3 text-xs">
+                            <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded bg-emerald-500"/>實收
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded bg-amber-500"/>佣金
+                            </span>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{minWidth: 360, height: 180}}>
+                            {/* 水平格線 */}
+                            {[0, 0.25, 0.5, 0.75, 1].map((r, i) => {
+                              const y = pad.top + innerH * (1 - r);
+                              return (
+                                <g key={i}>
+                                  <line x1={pad.left} y1={y} x2={W - pad.right} y2={y}
+                                    stroke="#e2e8f0" strokeWidth="1" strokeDasharray="2 4"/>
+                                  <text x={pad.left - 8} y={y + 3} textAnchor="end"
+                                    fontSize="10" fill="#94a3b8">
+                                    {Math.round(maxVal * r / 1000)}k
+                                  </text>
+                                </g>
+                              );
+                            })}
+
+                            {trend.map((t, i) => {
+                              const cx = pad.left + groupW * i + groupW / 2;
+                              const revH = (t.revenue / maxVal) * innerH;
+                              const commH = (t.commission / maxVal) * innerH;
+                              return (
+                                <g key={t.month}>
+                                  {/* 實收 bar */}
+                                  <rect x={cx - barW - 2} y={pad.top + innerH - revH}
+                                    width={barW} height={revH}
+                                    fill="#10b981" rx="2">
+                                    <title>{t.label} 實收 {fmt(t.revenue)}</title>
+                                  </rect>
+                                  {/* 佣金 bar */}
+                                  <rect x={cx + 2} y={pad.top + innerH - commH}
+                                    width={barW} height={commH}
+                                    fill="#f59e0b" rx="2">
+                                    <title>{t.label} 佣金 {fmt(t.commission)}</title>
+                                  </rect>
+                                  {/* x 軸標籤 */}
+                                  <text x={cx} y={H - 10} textAnchor="middle"
+                                    fontSize="11" fontWeight="700" fill="#475569">
+                                    {t.label}
+                                  </text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 待處理 */}
+                  <div>
+                    <h2 className="font-black text-lg text-slate-900 mb-3">待處理</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <StatCard color="bg-amber-500" num={adminStats.pendingReview}
+                        label="待審核行程" loading={loading}/>
+                      <StatCard color="bg-red-500"   num={adminStats.pendingOrders}
+                        label="待處理訂單" loading={loading}/>
+                      <StatCard color="bg-blue-600"  num={fmt(adminStats.payableCommissionTotal)}
+                        label="可請款佣金" hint="待月結匯款" loading={loading}/>
+                      <StatCard color="bg-emerald-700" num={fmt(adminStats.paidCommissionTotal)}
+                        label="累計已匯佣金" loading={loading}/>
+                    </div>
                   </div>
-                </div>
+
+                  {/* 統計 */}
+                  <div>
+                    <h2 className="font-black text-lg text-slate-900 mb-3">總體統計</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <StatCard color="bg-slate-800" num={adminStats.totalDist}
+                        label="分銷商總數"
+                        hint={adminStats.pendingDist > 0 ? `${adminStats.pendingDist} 待審核` : '全部已核准'}
+                        loading={loading}/>
+                      <StatCard color="bg-slate-700" num={adminStats.totalItems} label="行程總數" loading={loading}/>
+                      <StatCard color="bg-slate-600" num={adminStats.totalOrders} label="累計訂單" loading={loading}/>
+                    </div>
+                  </div>
+                </>
               ) : (
                 <div>
                   <h2 className="font-black text-lg text-slate-900 mb-3">本月業績</h2>
@@ -1790,6 +1973,576 @@ function App() {
               ))}
             </div>
           )}
+
+          {/* ── ★ v7：金流明細 view ── */}
+          {view === 'payments' && (() => {
+            // 把 orders 攤平成 payment events（每筆訂金/尾款各算一個事件）
+            const events = [];
+            const myUid = profile?.userId;
+            orders.forEach(o => {
+              if (!isAdmin && String(o.distributoruid) !== String(myUid)) return;
+              const ds = String(o.depositstatus || 'unpaid').toLowerCase();
+              const bs = String(o.balancestatus || 'unpaid').toLowerCase();
+              // 訂金事件（任何狀態都列，這樣可以看到 unpaid / awaiting / failed）
+              if (ds !== 'unpaid' || ds === 'unpaid') {
+                events.push({
+                  ts: o.depositpaidat || o.createdat,
+                  order_id: o.orderid,
+                  itinerary: o.itinerarytitle,
+                  customer: o.customername,
+                  customer_phone: o.customerphone,
+                  leg: 'deposit',
+                  amount: Number(o.depositamount || 0),
+                  method: o.depositmethod,
+                  status: ds,
+                  trade_no: o.deposittradeno,
+                  raw: o,
+                });
+              }
+              // 尾款事件（不是 not_required 才有意義）
+              if (String(o.balancecollect || '').toLowerCase() !== 'not_required'
+                  && Number(o.balanceamount || 0) > 0) {
+                events.push({
+                  ts: o.balancepaidat || o.depositpaidat || o.createdat,
+                  order_id: o.orderid,
+                  itinerary: o.itinerarytitle,
+                  customer: o.customername,
+                  customer_phone: o.customerphone,
+                  leg: 'balance',
+                  amount: Number(o.balanceamount || 0),
+                  method: o.balancemethod,
+                  status: bs,
+                  trade_no: o.balancetradeno,
+                  raw: o,
+                });
+              }
+            });
+
+            // 日期區間篩選
+            const now = new Date();
+            const dateThreshold = (() => {
+              if (paymentDateRange === 'all') return null;
+              const days = { '7d': 7, '30d': 30, '90d': 90 }[paymentDateRange] || 30;
+              return new Date(now.getTime() - days * 86400000);
+            })();
+
+            // 套篩選
+            const filtered = events.filter(ev => {
+              if (paymentFilter !== 'all' && String(ev.method || '').toLowerCase() !== paymentFilter) return false;
+              if (paymentStatusFilter !== 'all') {
+                const s = ev.status;
+                if (paymentStatusFilter === 'paid' && !['paid', 'paid_online', 'paid_offline'].includes(s)) return false;
+                if (paymentStatusFilter !== 'paid' && s !== paymentStatusFilter) return false;
+              }
+              if (dateThreshold && ev.ts) {
+                const evDate = new Date(String(ev.ts).replace(' ', 'T'));
+                if (!isNaN(evDate.getTime()) && evDate < dateThreshold) return false;
+              }
+              if (paymentSearch) {
+                const q = paymentSearch.toLowerCase();
+                if (!String(ev.order_id || '').toLowerCase().includes(q)
+                    && !String(ev.itinerary || '').toLowerCase().includes(q)
+                    && !String(ev.customer || '').toLowerCase().includes(q)
+                    && !String(ev.customer_phone || '').includes(paymentSearch)
+                    && !String(ev.trade_no || '').toLowerCase().includes(q)) return false;
+              }
+              return true;
+            });
+
+            // 依時間倒序
+            filtered.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+
+            // 已收到的金額（只算 paid 狀態）
+            const totalReceived = filtered
+              .filter(e => ['paid', 'paid_online', 'paid_offline'].includes(e.status))
+              .reduce((s, e) => s + e.amount, 0);
+            const awaitingTotal = filtered
+              .filter(e => e.status === 'awaiting_atm')
+              .reduce((s, e) => s + e.amount, 0);
+            const unpaidTotal = filtered
+              .filter(e => e.status === 'unpaid')
+              .reduce((s, e) => s + e.amount, 0);
+
+            // 客戶電話遮罩（業務看不到完整號碼，管理員看得到）
+            const maskPhone = (p) => {
+              if (!p) return '—';
+              if (isAdmin) return p;
+              const s = String(p);
+              if (s.length < 6) return s;
+              return s.slice(0, 2) + '****' + s.slice(-3);
+            };
+
+            // CSV 匯出
+            const exportCsv = () => {
+              const headers = ['時間','訂單編號','行程','客戶','電話','階段','金額','付款方式','狀態','交易號'];
+              const rows = filtered.map(e => [
+                e.ts || '',
+                e.order_id,
+                e.itinerary || '',
+                e.customer || '',
+                isAdmin ? (e.customer_phone || '') : maskPhone(e.customer_phone),
+                e.leg === 'deposit' ? '訂金' : '尾款',
+                e.amount,
+                ({ credit_card:'信用卡', linepay:'LINE Pay', vacc:'ATM', offline:'線下' }[e.method] || e.method || ''),
+                ({ unpaid:'未付款', awaiting_atm:'等ATM', paid:'已付款', paid_online:'已付款', paid_offline:'已付款', failed:'付款失敗' }[e.status] || e.status),
+                e.trade_no || '',
+              ]);
+              const escape = (v) => {
+                const s = String(v ?? '');
+                if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+                return s;
+              };
+              const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escape).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              const today = new Date().toISOString().slice(0, 10);
+              a.href = url; a.download = `travelkeeper-payments-${today}.csv`;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              showToast('✅ CSV 已下載');
+            };
+
+            const METHOD_LABEL = { credit_card:'信用卡', linepay:'LINE Pay', vacc:'ATM', offline:'線下' };
+            const STATUS_BADGE = {
+              unpaid:        { label:'未付款',  cls:'bg-slate-100 text-slate-500' },
+              awaiting_atm:  { label:'等 ATM',  cls:'bg-amber-50 text-amber-700' },
+              paid:          { label:'已付款',  cls:'bg-emerald-50 text-emerald-700' },
+              paid_online:   { label:'已付款',  cls:'bg-emerald-50 text-emerald-700' },
+              paid_offline:  { label:'已付款',  cls:'bg-emerald-50 text-emerald-700' },
+              failed:        { label:'付款失敗', cls:'bg-red-50 text-red-600' },
+            };
+
+            return (
+              <div className="space-y-6 anim">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatCard color="bg-emerald-600" num={fmt(totalReceived)} label="已收到金額"
+                    hint={`${filtered.filter(e => ['paid','paid_online','paid_offline'].includes(e.status)).length} 筆`} loading={loading}/>
+                  <StatCard color="bg-amber-500" num={fmt(awaitingTotal)} label="等待 ATM 繳款"
+                    hint={`${filtered.filter(e => e.status === 'awaiting_atm').length} 筆`} loading={loading}/>
+                  <StatCard color="bg-slate-700" num={fmt(unpaidTotal)} label="尚未付款"
+                    hint={`${filtered.filter(e => e.status === 'unpaid').length} 筆`} loading={loading}/>
+                  <StatCard color="bg-blue-600" num={filtered.length} label="總交易事件" loading={loading}/>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <input value={paymentSearch} onChange={e => setPaymentSearch(e.target.value)}
+                    placeholder="搜尋訂單號 / 行程 / 客戶 / 交易號"
+                    className="w-full p-3 border-2 border-slate-200 rounded-xl font-medium outline-none focus:border-blue-500 bg-white" />
+
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+                      {[
+                        { k:'7d', l:'近 7 天' },
+                        { k:'30d', l:'近 30 天' },
+                        { k:'90d', l:'近 90 天' },
+                        { k:'all', l:'全部' },
+                      ].map(o => (
+                        <button key={o.k} onClick={() => setPaymentDateRange(o.k)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-black transition ${
+                            paymentDateRange === o.k ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                          }`}>{o.l}</button>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+                      {[
+                        { k:'all', l:'全部方式' },
+                        { k:'credit_card', l:'信用卡' },
+                        { k:'linepay', l:'LINE Pay' },
+                        { k:'vacc', l:'ATM' },
+                        { k:'offline', l:'線下' },
+                      ].map(o => (
+                        <button key={o.k} onClick={() => setPaymentFilter(o.k)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-black transition ${
+                            paymentFilter === o.k ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                          }`}>{o.l}</button>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+                      {[
+                        { k:'all', l:'全部狀態' },
+                        { k:'paid', l:'已付' },
+                        { k:'awaiting_atm', l:'等 ATM' },
+                        { k:'unpaid', l:'未付' },
+                        { k:'failed', l:'失敗' },
+                      ].map(o => (
+                        <button key={o.k} onClick={() => setPaymentStatusFilter(o.k)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-black transition ${
+                            paymentStatusFilter === o.k ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                          }`}>{o.l}</button>
+                      ))}
+                    </div>
+
+                    <button onClick={exportCsv} disabled={filtered.length === 0}
+                      className="ml-auto bg-emerald-600 text-white px-4 py-2 rounded-xl font-black text-xs hover:bg-emerald-700 transition disabled:opacity-40">
+                      📥 匯出 CSV ({filtered.length})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
+                  {loading ? (
+                    <div className="p-20 text-center">
+                      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+                      <p className="text-slate-400 font-bold text-sm">載入中…</p>
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div className="p-20 text-center text-slate-300 font-bold">無符合條件的交易紀錄</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                          <tr>
+                            <th className="p-3">時間</th>
+                            <th className="p-3">訂單 / 行程</th>
+                            <th className="p-3">客戶</th>
+                            <th className="p-3">階段</th>
+                            <th className="p-3 text-right">金額</th>
+                            <th className="p-3">方式</th>
+                            <th className="p-3">狀態</th>
+                            <th className="p-3">交易號</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filtered.map((e, idx) => {
+                            const sCfg = STATUS_BADGE[e.status] || STATUS_BADGE.unpaid;
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
+                                onClick={() => setSelOrder(e.raw)}>
+                                <td className="p-3 text-xs text-slate-500 whitespace-nowrap">{fmtDate(e.ts) || '—'}</td>
+                                <td className="p-3 max-w-[180px]">
+                                  <p className="font-mono text-[10px] text-slate-500">{e.order_id}</p>
+                                  <p className="font-bold text-sm text-slate-800 line-clamp-1">{e.itinerary || '—'}</p>
+                                </td>
+                                <td className="p-3 text-xs">
+                                  <p className="font-bold text-slate-700">{e.customer || '—'}</p>
+                                  <p className="text-slate-400 mt-0.5">{maskPhone(e.customer_phone)}</p>
+                                </td>
+                                <td className="p-3">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                                    e.leg === 'deposit' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                                  }`}>{e.leg === 'deposit' ? '訂金' : '尾款'}</span>
+                                </td>
+                                <td className="p-3 text-right font-black text-red-600">{fmt(e.amount)}</td>
+                                <td className="p-3 text-xs font-bold text-slate-700">{METHOD_LABEL[e.method] || '—'}</td>
+                                <td className="p-3">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-black ${sCfg.cls}`}>{sCfg.label}</span>
+                                </td>
+                                <td className="p-3 text-[10px] font-mono text-slate-400 max-w-[100px] truncate">{e.trade_no || '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── ★ v7：佣金結算 view ── */}
+          {view === 'commission' && (() => {
+            // 管理員視圖：依分銷商分組
+            if (isAdmin) {
+              const summary = commissionSummary || { groups: [], totals: { pending:0, payable:0, paid_out:0 } };
+
+              // 計算選中的訂單數與金額
+              const totalSelected = Object.values(selectedPayoutOrders).reduce((s, set) => s + (set?.size || 0), 0);
+              const totalSelectedAmount = (() => {
+                let amt = 0;
+                summary.groups.forEach(g => {
+                  const sel = selectedPayoutOrders[g.uid];
+                  if (!sel) return;
+                  g.payable.orders.forEach(o => {
+                    if (sel.has(o.order_id)) amt += o.commission_amount;
+                  });
+                });
+                return amt;
+              })();
+
+              const togglePayoutOrder = (uid, orderId) => {
+                setSelectedPayoutOrders(prev => {
+                  const next = { ...prev };
+                  const set = new Set(next[uid] || []);
+                  if (set.has(orderId)) set.delete(orderId);
+                  else set.add(orderId);
+                  next[uid] = set;
+                  return next;
+                });
+              };
+
+              const selectAllForDist = (group) => {
+                setSelectedPayoutOrders(prev => {
+                  const next = { ...prev };
+                  const cur = next[group.uid] || new Set();
+                  // 如果已經全選，就清空；否則全選
+                  const allOrderIds = group.payable.orders.map(o => o.order_id);
+                  const allSelected = allOrderIds.every(id => cur.has(id));
+                  if (allSelected) {
+                    next[group.uid] = new Set();
+                  } else {
+                    next[group.uid] = new Set(allOrderIds);
+                  }
+                  return next;
+                });
+              };
+
+              const copyAmount = (amount, distName) => {
+                navigator.clipboard.writeText(String(amount)).then(() => {
+                  showToast(`✅ 已複製 ${fmt(amount)}（給 ${distName}）`);
+                });
+              };
+
+              const handlePayout = async () => {
+                const allIds = [];
+                Object.values(selectedPayoutOrders).forEach(set => {
+                  if (set) set.forEach(id => allIds.push(id));
+                });
+                if (allIds.length === 0) {
+                  showToast('未選擇任何訂單', 'error');
+                  return;
+                }
+                if (!confirm(`確定要把選中的 ${allIds.length} 筆訂單標記為「已匯款」？\n總金額：${fmt(totalSelectedAmount)}`)) return;
+
+                setPayingOut(true);
+                try {
+                  const res = await fetch(`${WORKER_URL}/api/commission/payout`, {
+                    method:'POST',
+                    headers:{ 'Content-Type':'application/json' },
+                    body: JSON.stringify({
+                      order_ids: allIds,
+                      operatorUid: profile.userId,
+                    }),
+                  });
+                  const result = await res.json();
+                  if (result.success) {
+                    showToast(`✅ 已標記 ${result.updated} 筆訂單為已匯款`);
+                    setSelectedPayoutOrders({});
+                    // 重新拉資料
+                    const [allOrdersRes, commRes] = await Promise.all([
+                      fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
+                      fetch(`${WORKER_URL}/api/commission/summary?uid=${profile.userId}`).then(r=>r.json()),
+                    ]);
+                    if (allOrdersRes?.data) setOrders(allOrdersRes.data);
+                    if (commRes?.success) setCommissionSummary(commRes.data);
+                  } else {
+                    showToast('結算失敗：' + (result.error || ''), 'error');
+                  }
+                } catch (e) { showToast('網路錯誤', 'error'); }
+                setPayingOut(false);
+              };
+
+              return (
+                <div className="space-y-6 anim">
+                  <div className="grid grid-cols-3 gap-4">
+                    <StatCard color="bg-amber-500"   num={fmt(summary.totals.pending)}   label="待結算"
+                      hint="尾款未收完成" loading={loading}/>
+                    <StatCard color="bg-blue-600"    num={fmt(summary.totals.payable)}   label="可請款"
+                      hint="勾選後可批次匯款" loading={loading}/>
+                    <StatCard color="bg-emerald-600" num={fmt(summary.totals.paid_out)} label="已匯款（累計）" loading={loading}/>
+                  </div>
+
+                  {totalSelected > 0 && (
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <p className="font-black text-blue-900">已選擇 {totalSelected} 筆訂單</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          應匯總額：<span className="font-black text-lg">{fmt(totalSelectedAmount)}</span>
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setSelectedPayoutOrders({})}
+                          className="bg-white text-slate-600 px-4 py-2 rounded-xl font-black text-sm hover:bg-slate-50 transition border border-slate-200">
+                          清除選擇
+                        </button>
+                        <button onClick={handlePayout} disabled={payingOut}
+                          className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-sm hover:bg-emerald-700 transition disabled:opacity-50">
+                          {payingOut ? '處理中…' : '✅ 標記為已匯款'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {summary.groups.length === 0 ? (
+                    <div className="bg-white rounded-[2rem] p-20 text-center border-2 border-dashed border-slate-200">
+                      <p className="text-4xl mb-3">💸</p>
+                      <p className="text-slate-400 font-bold">目前沒有需要結算的佣金</p>
+                      <p className="text-slate-300 text-xs mt-2">當訂單尾款收齊（線上 paid 或線下標記已收），佣金會出現在這裡</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {summary.groups.map(g => {
+                        const expanded = !!expandedDist[g.uid];
+                        const sel = selectedPayoutOrders[g.uid] || new Set();
+                        const allSelected = g.payable.orders.length > 0
+                          && g.payable.orders.every(o => sel.has(o.order_id));
+                        return (
+                          <div key={g.uid} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                            <div className="p-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50 transition"
+                              onClick={() => setExpandedDist(prev => ({ ...prev, [g.uid]: !expanded }))}>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black text-slate-900">{g.name}</p>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  佣金率 {g.commissionPct}% · {g.phone || '無電話'}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-xs font-bold text-slate-400 uppercase">可請款</p>
+                                <p className="text-xl font-black text-blue-600">{fmt(g.payable.total)}</p>
+                                <p className="text-[10px] text-slate-400">{g.payable.count} 筆</p>
+                              </div>
+                              <div className="text-slate-300 text-sm">
+                                {expanded ? '▲' : '▼'}
+                              </div>
+                            </div>
+
+                            {expanded && (
+                              <div className="border-t border-slate-100 bg-slate-50 p-4">
+                                {g.payable.orders.length === 0 ? (
+                                  <p className="text-center text-slate-300 text-sm py-4">無可請款訂單</p>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                      <button onClick={() => selectAllForDist(g)}
+                                        className="text-xs font-black text-blue-600 hover:underline">
+                                        {allSelected ? '取消全選' : '全選此分銷商'}
+                                      </button>
+                                      <button onClick={() => copyAmount(g.payable.total, g.name)}
+                                        className="bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-black hover:bg-slate-900 transition">
+                                        📋 複製金額 {fmt(g.payable.total)}
+                                      </button>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {g.payable.orders.map((o, idx) => (
+                                        <label key={idx}
+                                          className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 cursor-pointer hover:border-blue-300 transition">
+                                          <input type="checkbox" checked={sel.has(o.order_id)}
+                                            onChange={() => togglePayoutOrder(g.uid, o.order_id)}
+                                            className="w-4 h-4"/>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="font-mono text-[10px] text-slate-400">{o.order_id}</p>
+                                            <p className="text-sm font-bold text-slate-800 line-clamp-1">{o.itinerary_title || '—'}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                              {o.customer_name || '—'} · 訂單金額 {fmt(o.total_amount)} · 結算於 {o.settled_at}
+                                            </p>
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <p className="font-black text-emerald-600">{fmt(o.commission_amount)}</p>
+                                          </div>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+
+                                {/* 已匯/待結算小提示 */}
+                                <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <span className="text-slate-400">待結算（尾款未收）：</span>
+                                    <span className="font-black text-amber-600 ml-1">{fmt(g.pending.total)}</span>
+                                    <span className="text-slate-300 ml-1">({g.pending.count})</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400">已匯款累計：</span>
+                                    <span className="font-black text-emerald-600 ml-1">{fmt(g.paid_out.total)}</span>
+                                    <span className="text-slate-300 ml-1">({g.paid_out.count})</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // 分銷商視圖：自己的佣金三層 status
+            const myOrders = orders.filter(o => String(o.distributoruid) === String(profile?.userId));
+            const myCommission = {
+              pending:  { count:0, total:0, orders:[] },
+              payable:  { count:0, total:0, orders:[] },
+              paid_out: { count:0, total:0, orders:[] },
+            };
+            myOrders.forEach(o => {
+              const s = String(o.commissionstatus || 'pending').toLowerCase();
+              const amt = Number(o.commissionamount || 0);
+              if (myCommission[s]) {
+                myCommission[s].count++;
+                myCommission[s].total += amt;
+                myCommission[s].orders.push(o);
+              }
+            });
+
+            return (
+              <div className="space-y-6 anim">
+                <div className="grid grid-cols-3 gap-4">
+                  <StatCard color="bg-amber-500"   num={fmt(myCommission.pending.total)}  label="待結算"
+                    hint={`${myCommission.pending.count} 筆 · 等尾款`} loading={loading}/>
+                  <StatCard color="bg-blue-600"    num={fmt(myCommission.payable.total)}  label="可請款"
+                    hint={`${myCommission.payable.count} 筆 · 等管理員匯款`} loading={loading}/>
+                  <StatCard color="bg-emerald-600" num={fmt(myCommission.paid_out.total)} label="已領取"
+                    hint={`${myCommission.paid_out.count} 筆 · 累計`} loading={loading}/>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                  <p className="text-xs font-black text-blue-700 uppercase tracking-widest mb-2">💡 佣金結算說明</p>
+                  <ul className="text-xs text-blue-900 space-y-1 list-disc list-inside leading-relaxed">
+                    <li><span className="font-bold">待結算</span>：客戶已下單，但尾款還沒收完整（線上未付完 or 線下未確認收款）</li>
+                    <li><span className="font-bold">可請款</span>：尾款收齊了，等管理員月結匯款</li>
+                    <li><span className="font-bold">已領取</span>：管理員已將佣金匯入您指定的帳戶</li>
+                  </ul>
+                </div>
+
+                {[
+                  { key:'payable', label:'可請款訂單', cls:'bg-blue-50 border-blue-200', cfg: myCommission.payable },
+                  { key:'pending', label:'待結算訂單', cls:'bg-amber-50 border-amber-200', cfg: myCommission.pending },
+                  { key:'paid_out',label:'已領取訂單', cls:'bg-emerald-50 border-emerald-200', cfg: myCommission.paid_out },
+                ].map(group => (
+                  <div key={group.key}>
+                    <h3 className="font-black text-slate-900 mb-3">
+                      {group.label} <span className="text-slate-400 text-sm font-bold">({group.cfg.count})</span>
+                    </h3>
+                    {group.cfg.orders.length === 0 ? (
+                      <div className={`p-8 rounded-2xl border-2 border-dashed ${group.cls.replace('bg-','border-')} text-center text-slate-400 text-sm`}>
+                        無訂單
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {group.cfg.orders.slice(0, 10).map((o, idx) => (
+                          <div key={idx}
+                            className="bg-white border border-slate-100 rounded-xl p-3 flex items-center gap-3 hover:border-blue-200 transition cursor-pointer"
+                            onClick={() => setSelOrder(o)}>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-mono text-[10px] text-slate-400">{o.orderid}</p>
+                              <p className="font-bold text-sm text-slate-800 line-clamp-1">{o.itinerarytitle || '—'}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {o.customername || '—'} · 訂單金額 {fmt(o.totalamount || o.price)}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-black text-emerald-600">{fmt(o.commissionamount)}</p>
+                              {o.commissionsettledat && (
+                                <p className="text-[10px] text-slate-400">{fmtDate(o.commissionsettledat)}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {group.cfg.orders.length > 10 && (
+                          <p className="text-center text-xs text-slate-400 mt-2">… 還有 {group.cfg.orders.length - 10} 筆</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
         </div>
       </main>
