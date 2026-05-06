@@ -897,11 +897,11 @@ function PromoteModal({
             disabled={pushingFlex || selectedCount === 0 || !inviteCode}
             className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
             {pushingFlex
-              ? <><div className="spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"/>推送中…</>
-              : <>🚀 推送 Flex Card 到我的 LINE</>
+              ? <><div className="spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"/>處理中…</>
+              : <>📤 分享給客戶 / 群組</>
             }
           </button>
-          <p className="text-xs text-slate-500 text-center -mt-1">推送到您 LINE 後，可直接轉發給客戶或群組</p>
+          <p className="text-xs text-slate-500 text-center -mt-1">會跳出 LINE 分享面板，您可以選任意朋友、群組</p>
 
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => onCopyLink(promoteUrl)}
@@ -1019,6 +1019,9 @@ function App() {
   const [selPromote,    setSelPromote]    = useState(null);  // 開推廣 modal 用
   const [pushingFlex,   setPushingFlex]   = useState(false);
   const [genImageBusy,  setGenImageBusy]  = useState(false);
+  // ★ v10 勾選模式
+  const [selectingMode, setSelectingMode] = useState(false);
+  const [selectedForPromote, setSelectedForPromote] = useState(new Set());
 
   // Toast
   const [toast, setToast] = useState(null);
@@ -1392,36 +1395,66 @@ function App() {
   };
 
   // ★ v8：推廣 — Flex Card 推送
-  // ★ v9：推廣 — Flex Card 推送（支援多選 / 模式 / 聯絡套件）
+  // ★ v10：推廣 — 用 liff.shareTargetPicker 直接喚起 LINE 原生分享面板
+  //   (取代 v8/v9 的 push-to-self；省 LINE token、沒 quota、客戶直接收）
   const handlePushFlex = async (opts) => {
     if (!profile?.userId) { showToast('身份驗證失敗', 'error'); return; }
     const { ids = [], mode = 'single', socFields = {}, ctaText = '查看完整行程' } = opts || {};
     if (ids.length === 0) { showToast('請先選擇行程', 'error'); return; }
+
+    // 確認 LIFF 環境支援 shareTargetPicker
+    if (typeof liff === 'undefined' || !liff.isApiAvailable || !liff.isApiAvailable('shareTargetPicker')) {
+      showToast('您的 LINE 環境不支援分享功能（請於 LINE app 開啟此頁）', 'error');
+      return;
+    }
+
     setPushingFlex(true);
     try {
       const myInviteCode = distData?.inviteCode || '';
-      const res = await fetch(`${WORKER_URL}/api/flex/push-to-self`, {
+
+      // 1. 先打 worker /api/flex/build 取得 Flex JSON
+      const res = await fetch(`${WORKER_URL}/api/flex/build`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
           uid: profile.userId,
           itineraryIds: ids.map(String),
-          mode,
-          socFields,
-          ctaText,
+          mode, socFields, ctaText,
           agencySlug: 'demo',
           inviteCode: myInviteCode,
         }),
       });
-      const result = await res.json();
-      if (result.success) {
-        showToast('✅ ' + (result.message || '已推送到您的 LINE'));
+
+      // ★ 防呆：worker 也可能回非 JSON
+      const text = await res.text();
+      let result;
+      try { result = JSON.parse(text); }
+      catch (e) {
+        showToast('伺服器回應錯誤：' + text.slice(0, 80), 'error');
+        setPushingFlex(false);
+        return;
+      }
+
+      if (!result.success || !result.message) {
+        showToast('組 Flex 失敗：' + (result.error || ''), 'error');
+        setPushingFlex(false);
+        return;
+      }
+
+      // 2. 用 liff.shareTargetPicker 喚起 LINE 原生分享面板
+      const shareResult = await liff.shareTargetPicker([result.message]);
+      if (shareResult) {
+        showToast(`✅ 已分享給 ${shareResult.status === 'success' ? '選定對象' : ''}`);
         setSelPromote(null);
+        setSelectingMode(false);
+        setSelectedForPromote(new Set());
       } else {
-        showToast('推送失敗：' + (result.error || ''), 'error');
+        // 使用者按取消，shareTargetPicker 會 resolve null
+        showToast('已取消分享');
       }
     } catch (e) {
-      showToast('網路錯誤：' + e.message, 'error');
+      console.error('shareTargetPicker error:', e);
+      showToast('分享失敗：' + (e.message || '未知錯誤'), 'error');
     }
     setPushingFlex(false);
   };
@@ -2361,8 +2394,8 @@ function App() {
 
           {/* ── 我的/全部行程 ── */}
           {/* ── ★ v8：推廣行程 view（雙角色都看得到，全平台 published） ── */}
+          {/* ── ★ v10 升級：推廣行程 view（勾選模式）── */}
           {view === 'promote' && (() => {
-            // 過濾
             const filtered = publishedItems.filter(item => {
               if (promoteRegion !== 'all' && item.region !== promoteRegion) return false;
               if (promoteSearch) {
@@ -2372,21 +2405,45 @@ function App() {
               }
               return true;
             });
-            // 取得所有地區（用於篩選按鈕）
             const regions = Array.from(new Set(publishedItems.map(i => i.region).filter(Boolean)));
-
             const myInviteCode = distData?.inviteCode || '';
+
+            const enterSelectingMode = () => {
+              setSelectingMode(true);
+              setSelectedForPromote(new Set());
+            };
+            const exitSelectingMode = () => {
+              setSelectingMode(false);
+              setSelectedForPromote(new Set());
+            };
+            const togglePromoteSelect = (id) => {
+              setSelectedForPromote(prev => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                return next;
+              });
+            };
+            const proceedToModal = () => {
+              if (selectedForPromote.size === 0) return;
+              const items = filtered.filter(it =>
+                selectedForPromote.has(String(it.id || it.timestamp))
+              );
+              setSelPromote(items);
+              // 不關 selectingMode（讓使用者取消 modal 後仍在勾選模式可調整）
+            };
 
             return (
               <div className="space-y-5 anim">
-                {/* 推薦碼提示（業務只有有 invitecode 時顯示）*/}
+                {/* 業務無推薦碼提示 */}
                 {!isAdmin && !myInviteCode && (
                   <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-sm">
                     <p className="font-black text-red-700">⚠ 您尚未取得推薦碼</p>
                     <p className="text-red-600 text-xs mt-1">請聯絡管理員，取得後才能推廣行程</p>
                   </div>
                 )}
-                {!isAdmin && myInviteCode && (
+
+                {/* 業務推薦碼卡片（含「開始推廣」按鈕）*/}
+                {!isAdmin && myInviteCode && !selectingMode && (
                   <div className="bg-gradient-to-br from-blue-600 to-purple-600 text-white p-5 rounded-2xl flex items-center justify-between flex-wrap gap-3">
                     <div>
                       <p className="text-xs opacity-80 mb-1">您的推薦碼</p>
@@ -2396,22 +2453,61 @@ function App() {
                       <p className="text-xs opacity-90 max-w-[260px]">
                         透過此碼的訂單都會歸入您的客戶 · 依佣金率分潤
                       </p>
-                      <button onClick={() => setSelPromote([])}
+                      <button onClick={enterSelectingMode}
                         disabled={publishedItems.length === 0}
-                        className="bg-white text-blue-600 hover:bg-slate-50 px-4 py-2 rounded-xl font-black text-sm transition shadow-lg disabled:opacity-50">
-                        🎯 批次推廣
+                        className="bg-white text-blue-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-black text-sm transition shadow-lg disabled:opacity-50">
+                        🎯 開始推廣
                       </button>
                     </div>
                   </div>
                 )}
-                {/* 管理員也給批次推廣入口（即便沒 inviteCode 也可推） */}
-                {isAdmin && (
+
+                {/* 管理員：開始推廣入口 */}
+                {isAdmin && !selectingMode && (
                   <div className="flex justify-end">
-                    <button onClick={() => setSelPromote([])}
+                    <button onClick={enterSelectingMode}
                       disabled={publishedItems.length === 0}
                       className="bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl font-black text-sm transition shadow disabled:opacity-50">
-                      🎯 批次推廣（多選/選格式）
+                      🎯 開始推廣（多選）
                     </button>
+                  </div>
+                )}
+
+                {/* ★ v10：勾選模式時固定顯示的批次操作列 */}
+                {selectingMode && (
+                  <div className="sticky top-0 z-30 bg-slate-900 text-white p-3 rounded-2xl shadow-lg flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <span className="bg-emerald-500 text-white text-xs font-black px-2.5 py-1 rounded-full">
+                        勾選模式
+                      </span>
+                      <span className="text-sm font-black">
+                        已選 <span className="text-emerald-400 text-base">{selectedForPromote.size}</span> 筆
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedForPromote.size > 0 && (
+                        <button onClick={() => setSelectedForPromote(new Set())}
+                          className="text-xs font-bold text-slate-300 hover:text-white px-2">
+                          清除
+                        </button>
+                      )}
+                      <button onClick={() => {
+                          // 全選當前可見的
+                          setSelectedForPromote(new Set(filtered.map(it => String(it.id || it.timestamp))));
+                        }}
+                        className="text-xs font-bold text-slate-300 hover:text-white px-2">
+                        全選
+                      </button>
+                      <button onClick={exitSelectingMode}
+                        className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg font-black text-xs">
+                        取消
+                      </button>
+                      <button onClick={proceedToModal}
+                        disabled={selectedForPromote.size === 0}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-1.5 rounded-lg font-black text-xs disabled:opacity-40 disabled:cursor-not-allowed">
+                        下一步 →
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -2454,16 +2550,38 @@ function App() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filtered.map(item => {
+                      const id = String(item.id || item.timestamp);
                       const isMine = String(item.owneruid || '') === String(profile?.userId);
                       const canEditThis = isAdmin || isMine;
+                      const isSelected = selectedForPromote.has(id);
+
                       return (
-                        <div key={item.id || item.timestamp}
-                          className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-lg transition flex flex-col">
-                          {item.image && (
-                            <div className="aspect-video overflow-hidden bg-slate-100">
-                              <img src={item.image} className="w-full h-full object-cover" />
-                            </div>
-                          )}
+                        <div key={id}
+                          onClick={selectingMode ? () => togglePromoteSelect(id) : undefined}
+                          className={`bg-white rounded-2xl border-2 overflow-hidden transition flex flex-col ${
+                            selectingMode
+                              ? `cursor-pointer ${isSelected
+                                  ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-lg'
+                                  : 'border-slate-100 hover:border-emerald-300'}`
+                              : 'border-slate-100 hover:shadow-lg'
+                          }`}>
+                          <div className="relative">
+                            {item.image && (
+                              <div className="aspect-video overflow-hidden bg-slate-100">
+                                <img src={item.image} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            {/* 勾選模式時顯示 checkbox 浮層 */}
+                            {selectingMode && (
+                              <div className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center text-lg font-black transition ${
+                                isSelected
+                                  ? 'bg-emerald-500 text-white shadow-lg'
+                                  : 'bg-white/90 text-slate-300 border-2 border-slate-200'
+                              }`}>
+                                {isSelected ? '✓' : ''}
+                              </div>
+                            )}
+                          </div>
                           <div className="p-4 flex-1 flex flex-col">
                             <h3 className="font-black text-slate-900 line-clamp-2 mb-2 min-h-[3rem]">{item.title}</h3>
                             <div className="flex items-center gap-1.5 flex-wrap mb-3">
@@ -2475,20 +2593,15 @@ function App() {
                             {item.ownername && (
                               <p className="text-[10px] text-slate-400 mb-3">📝 上稿者：{item.ownername}</p>
                             )}
-                            <div className="mt-auto flex gap-2">
-                              <button onClick={() => setSelPromote(item)}
-                                disabled={!isAdmin && !myInviteCode}
-                                className="flex-1 bg-emerald-600 text-white font-black py-2.5 rounded-xl hover:bg-emerald-700 transition disabled:opacity-40 disabled:cursor-not-allowed text-sm">
-                                🚀 推廣
-                              </button>
-                              {canEditThis && (
-                                <button onClick={() => { setEditing(item); setCreating(false); }}
-                                  className="bg-slate-100 text-slate-600 font-black px-3 rounded-xl hover:bg-slate-200 transition text-sm"
-                                  title="編輯">
-                                  ✏️
+                            {/* 非勾選模式時顯示「編輯」按鈕（只給有權的人）*/}
+                            {!selectingMode && canEditThis && (
+                              <div className="mt-auto flex gap-2">
+                                <button onClick={(e) => { e.stopPropagation(); setEditing(item); setCreating(false); }}
+                                  className="flex-1 bg-slate-100 text-slate-600 font-black py-2 rounded-xl hover:bg-slate-200 transition text-xs">
+                                  ✏️ 編輯
                                 </button>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -2499,7 +2612,6 @@ function App() {
             );
           })()}
 
-          {/* ── 我上稿的（業務 + 管理員）── */}
           {view === 'mine' && (isAdmin || canUpload) && (
             <div className="space-y-3 anim">
               <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
