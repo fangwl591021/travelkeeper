@@ -632,13 +632,91 @@ function OrderModal({ order, onClose, onUpdateStatus, onMarkBalancePaid, canEdit
 // Sidebar / Bottom-tab 共用：選單項目定義
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-// ★ v8 推廣 Flex Card Modal — 三個動作：LINE 推送 / 複製連結 / 下載圖片
+// ★ v9 推廣 Flex Card Modal — 完整版
+//   支援：多選行程、三種模式 (single/carousel/list)、聯絡按鈕、CTA 自訂
 // ══════════════════════════════════════════════════════════════
-function PromoteModal({ item, profile, inviteCode, agencySlug, onClose, onPushFlex, onCopyLink, onDownloadImage, pushingFlex, genImageBusy }) {
-  if (!item) return null;
+function PromoteModal({
+  initialItems,        // 預選的 items 陣列（從卡片進入）
+  allItems,            // 全部可選的 items（讓使用者再加幾筆）
+  profile, inviteCode, agencySlug, distData,
+  onClose, onPushFlex, onCopyLink, onDownloadImage,
+  pushingFlex, genImageBusy
+}) {
+  const initialIds = (initialItems || []).map(i => String(i.id || i.timestamp));
+  const [selectedIds, setSelectedIds] = useState(new Set(initialIds));
+  const [mode, setMode] = useState('single');
+  const [ctaText, setCtaText] = useState('查看完整行程');
+  const [showSelector, setShowSelector] = useState(false);
+
+  // 聯絡套件：依據 distData 有什麼欄位才顯示對應 toggle
+  // 預設全部 OFF（使用者明確勾選才會出現在卡片底部）
+  const SOC_OPTIONS = [
+    { key: 'phone',      label: '📞 電話',      field: 'phone'      },
+    { key: 'line',       label: '💬 LINE',      field: 'lineLink'   },
+    { key: 'lineAt',     label: '📢 LINE@',     field: 'lineAtLink' },
+    { key: 'fb',         label: '📘 Facebook',  field: 'fbLink'     },
+    { key: 'web',        label: '🌐 網站',      field: 'webLink'    },
+    { key: 'map',        label: '📍 地圖',      field: 'mapLink'    },
+  ];
+  const availableSocs = SOC_OPTIONS.filter(o => distData?.[o.field]);
+  const [enabledSocs, setEnabledSocs] = useState(new Set());
+
+  const toggleId = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSoc = (key) => {
+    setEnabledSocs(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const selectedCount = selectedIds.size;
+  const selectedItems = (allItems || []).filter(i => selectedIds.has(String(i.id || i.timestamp)));
+
+  // 模式自動切換規則：
+  //   1 筆 → 強制 single
+  //   2+ 筆 → 不能 single（自動切 carousel）
+  useEffect(() => {
+    if (selectedCount === 1 && mode !== 'single') setMode('single');
+    if (selectedCount >= 2 && mode === 'single') setMode('carousel');
+  }, [selectedCount]);
+
+  // 組 socFields 物件（同時包含 boolean key 跟 field 值）
+  const buildSocFields = () => {
+    const out = {};
+    enabledSocs.forEach(key => {
+      const def = SOC_OPTIONS.find(o => o.key === key);
+      if (def && distData?.[def.field]) {
+        out[def.key] = true;
+        out[def.field] = distData[def.field];
+      }
+    });
+    return out;
+  };
+
+  // 推送
+  const handlePush = () => {
+    if (selectedCount === 0) return;
+    onPushFlex({
+      ids: Array.from(selectedIds),
+      mode,
+      socFields: buildSocFields(),
+      ctaText,
+    });
+  };
+
+  // 複製連結（單筆才有意義）— 取第一筆的 tour url
   const promoteUrl = (() => {
+    if (selectedItems.length === 0) return '';
+    const first = selectedItems[0];
     const base = window.location.origin + window.location.pathname.replace(/dashboard\.html|admin\.html|crm\.html$/, '');
-    const id = item.id || item.timestamp;
+    const id = first.id || first.timestamp;
     const params = new URLSearchParams();
     params.set('t', String(id));
     if (inviteCode) params.set('invite', inviteCode);
@@ -647,50 +725,176 @@ function PromoteModal({ item, profile, inviteCode, agencySlug, onClose, onPushFl
     return `${base}tour.html?${params.toString()}`;
   })();
 
+  // 下載圖片只在單筆時有意義
+  const canDownload = selectedCount === 1 && !genImageBusy;
+  const canCopyLink = selectedCount === 1;
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-[2rem] w-full max-w-lg max-h-[90vh] overflow-y-auto anim">
-        <div className="p-6 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
+      <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto anim">
+        <div className="p-5 border-b border-slate-100 sticky top-0 bg-white z-10 flex justify-between items-center">
           <div>
-            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">推廣行程</p>
-            <h2 className="font-black text-xl mt-1 line-clamp-1">{item.title}</h2>
+            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">製作推廣卡片</p>
+            <h2 className="font-black text-lg mt-0.5">推薦碼：<span className="font-mono text-emerald-600">{inviteCode || '(未取得)'}</span></h2>
           </div>
           <button onClick={onClose} className="w-9 h-9 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 shrink-0">✕</button>
         </div>
 
-        {/* 行程預覽 */}
-        <div className="p-6 border-b border-slate-100">
-          {item.image && (
-            <img src={item.image} className="w-full aspect-video object-cover rounded-2xl mb-4" />
+        {/* Step 1：選擇行程 */}
+        <div className="p-5 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
+              ① 選擇行程
+              <span className="ml-2 text-blue-600">已選 {selectedCount} 筆</span>
+            </p>
+            <button onClick={() => setShowSelector(s => !s)}
+              className="text-xs font-black text-blue-600 hover:underline">
+              {showSelector ? '收起' : '加 / 改'} 選擇
+            </button>
+          </div>
+
+          {/* 已選的小卡片預覽 */}
+          {selectedItems.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">尚未選擇行程</p>
+          ) : (
+            <div className="space-y-2">
+              {selectedItems.map(it => (
+                <div key={it.id || it.timestamp}
+                  className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl">
+                  {it.image && <img src={it.image} className="w-12 h-12 object-cover rounded-lg shrink-0"/>}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-slate-800 line-clamp-1">{it.title}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {it.region} · {it.days}天 · NT$ {Number(it.price||0).toLocaleString()}
+                    </p>
+                  </div>
+                  <button onClick={() => toggleId(String(it.id || it.timestamp))}
+                    className="w-7 h-7 rounded-full bg-slate-200 hover:bg-red-100 hover:text-red-600 text-slate-500 text-sm shrink-0">✕</button>
+                </div>
+              ))}
+            </div>
           )}
-          <div className="flex items-center gap-3 flex-wrap">
-            {item.region && <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-xs font-black">📍 {item.region}</span>}
-            {item.days && <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-black">📅 {item.days} 天</span>}
-            <span className="ml-auto text-xl font-black text-red-600">NT$ {Number(item.price||0).toLocaleString()}</span>
+
+          {/* 選擇器（按了「加/改選擇」才展開） */}
+          {showSelector && (
+            <div className="mt-3 p-3 bg-slate-50 rounded-xl">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase">全部行程 ({(allItems||[]).length})</p>
+                <div className="flex gap-2 text-[11px]">
+                  <button onClick={() => setSelectedIds(new Set((allItems||[]).map(i => String(i.id || i.timestamp))))}
+                    className="text-blue-600 font-black hover:underline">全選</button>
+                  <button onClick={() => setSelectedIds(new Set())}
+                    className="text-slate-500 font-black hover:underline">清除</button>
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                {(allItems || []).map(it => {
+                  const id = String(it.id || it.timestamp);
+                  const checked = selectedIds.has(id);
+                  return (
+                    <label key={id}
+                      className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${
+                        checked ? 'bg-blue-50 border border-blue-200' : 'bg-white border border-slate-100 hover:border-blue-200'
+                      }`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleId(id)}
+                        className="w-4 h-4"/>
+                      {it.image && <img src={it.image} className="w-8 h-8 object-cover rounded shrink-0"/>}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-xs text-slate-800 line-clamp-1">{it.title}</p>
+                        <p className="text-[10px] text-slate-500">{it.region} · NT$ {Number(it.price||0).toLocaleString()}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Step 2：卡片格式 */}
+        <div className="p-5 border-b border-slate-100">
+          <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">② 卡片格式</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { v:'single',   label:'單張',   hint:'1 筆',     enabled: selectedCount === 1 },
+              { v:'carousel', label:'輪播',   hint:'2-10 筆',  enabled: selectedCount >= 2 },
+              { v:'list',     label:'列表',   hint:'2-10 筆',  enabled: selectedCount >= 2 },
+            ].map(m => (
+              <button key={m.v} type="button"
+                onClick={() => m.enabled && setMode(m.v)}
+                disabled={!m.enabled}
+                className={`p-3 rounded-xl text-xs font-black border-2 transition ${
+                  mode === m.v
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : m.enabled
+                      ? 'bg-white text-slate-700 border-slate-200 hover:border-blue-300'
+                      : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                }`}>
+                {m.label}<br/><span className="text-[10px] opacity-80 font-normal">{m.hint}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* 推薦碼資訊 */}
-        <div className="p-6 border-b border-slate-100 bg-slate-50">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">您的推薦碼</p>
-          <p className="font-mono text-2xl font-black text-blue-600 tracking-widest">{inviteCode || '(尚未取得)'}</p>
-          <p className="text-xs text-slate-500 mt-2">
-            透過此推廣產生的訂單會自動歸入您的客戶，並依您的佣金率計算分潤
+        {/* Step 3：附加聯絡按鈕 */}
+        <div className="p-5 border-b border-slate-100">
+          <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">
+            ③ 附加聯絡按鈕 <span className="text-slate-400 font-normal">（選填）</span>
           </p>
+          {availableSocs.length === 0 ? (
+            <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg">
+              您尚未填寫任何聯絡方式（電話、LINE、FB 等）。要顯示聯絡按鈕，請先在分銷商管理填寫。
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {availableSocs.map(o => {
+                const checked = enabledSocs.has(o.key);
+                return (
+                  <label key={o.key}
+                    className={`flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition ${
+                      checked ? 'bg-emerald-50 border-2 border-emerald-300' : 'bg-white border-2 border-slate-100 hover:border-emerald-200'
+                    }`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleSoc(o.key)}
+                      className="w-4 h-4"/>
+                    <span className="text-sm font-bold">{o.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* 推廣連結預覽 */}
-        <div className="p-6 border-b border-slate-100">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">推廣連結</p>
-          <div className="bg-slate-50 rounded-xl p-3 font-mono text-[11px] text-slate-600 break-all">
-            {promoteUrl}
-          </div>
+        {/* Step 4：CTA 文字 */}
+        <div className="p-5 border-b border-slate-100">
+          <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">④ CTA 文字</p>
+          <input value={ctaText} onChange={e => setCtaText(e.target.value)}
+            placeholder="查看完整行程"
+            className="w-full p-3 border-2 border-slate-100 rounded-xl text-sm font-medium outline-none focus:border-blue-500"/>
+          <p className="text-[10px] text-slate-400 mt-1">這是卡片底部「次要」按鈕的文字。主要按鈕固定為「立即預約」。</p>
+        </div>
+
+        {/* 預覽摘要 */}
+        <div className="p-5 bg-slate-50 border-b border-slate-100">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">預覽摘要</p>
+          {selectedCount === 0 ? (
+            <p className="text-sm text-slate-400">請先選擇行程</p>
+          ) : (
+            <div className="text-sm space-y-1">
+              <p>📦 將推送 <span className="font-black">{selectedCount} 筆</span> 行程</p>
+              <p>🎨 格式：<span className="font-black">{
+                mode === 'single' ? '單張卡片' : mode === 'carousel' ? '輪播卡片' : '列表卡片'
+              }</span></p>
+              <p>📞 含 <span className="font-black">{enabledSocs.size}</span> 個聯絡按鈕</p>
+              <p>🏷️ 推薦碼：<span className="font-mono font-black text-emerald-600">{inviteCode || '無'}</span></p>
+            </div>
+          )}
         </div>
 
         {/* 三個動作 */}
-        <div className="p-6 space-y-3">
-          <button onClick={() => onPushFlex(item)} disabled={pushingFlex || !inviteCode}
+        <div className="p-5 space-y-3">
+          <button onClick={handlePush}
+            disabled={pushingFlex || selectedCount === 0 || !inviteCode}
             className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black py-4 rounded-2xl shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
             {pushingFlex
               ? <><div className="spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"/>推送中…</>
@@ -701,17 +905,24 @@ function PromoteModal({ item, profile, inviteCode, agencySlug, onClose, onPushFl
 
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => onCopyLink(promoteUrl)}
-              className="bg-blue-600 text-white font-black py-3.5 rounded-2xl hover:bg-blue-700 transition flex items-center justify-center gap-2">
+              disabled={!canCopyLink}
+              className="bg-blue-600 text-white font-black py-3.5 rounded-2xl hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               📋 複製連結
             </button>
-            <button onClick={() => onDownloadImage(item)} disabled={genImageBusy}
-              className="bg-slate-700 text-white font-black py-3.5 rounded-2xl hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            <button onClick={() => onDownloadImage(selectedItems[0])}
+              disabled={!canDownload}
+              className="bg-slate-700 text-white font-black py-3.5 rounded-2xl hover:bg-slate-900 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {genImageBusy
                 ? <><div className="spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"/>合成中</>
                 : <>🖼️ 下載圖片</>
               }
             </button>
           </div>
+          {(selectedCount > 1) && (
+            <p className="text-[11px] text-slate-400 text-center">
+              ※「複製連結」「下載圖片」僅單筆模式可用
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -1181,18 +1392,23 @@ function App() {
   };
 
   // ★ v8：推廣 — Flex Card 推送
-  const handlePushFlex = async (item) => {
+  // ★ v9：推廣 — Flex Card 推送（支援多選 / 模式 / 聯絡套件）
+  const handlePushFlex = async (opts) => {
     if (!profile?.userId) { showToast('身份驗證失敗', 'error'); return; }
+    const { ids = [], mode = 'single', socFields = {}, ctaText = '查看完整行程' } = opts || {};
+    if (ids.length === 0) { showToast('請先選擇行程', 'error'); return; }
     setPushingFlex(true);
     try {
-      // 管理員可能沒有 inviteCode（不是分銷商身份），那就用空字串
       const myInviteCode = distData?.inviteCode || '';
       const res = await fetch(`${WORKER_URL}/api/flex/push-to-self`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
           uid: profile.userId,
-          itineraryId: String(item.id || item.timestamp),
+          itineraryIds: ids.map(String),
+          mode,
+          socFields,
+          ctaText,
           agencySlug: 'demo',
           inviteCode: myInviteCode,
         }),
@@ -2176,9 +2392,26 @@ function App() {
                       <p className="text-xs opacity-80 mb-1">您的推薦碼</p>
                       <p className="font-mono text-2xl font-black tracking-widest">{myInviteCode}</p>
                     </div>
-                    <p className="text-xs opacity-90 max-w-[280px]">
-                      所有透過此碼的訂單都會歸入您的客戶 · 依您的佣金率分潤
-                    </p>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <p className="text-xs opacity-90 max-w-[260px]">
+                        透過此碼的訂單都會歸入您的客戶 · 依佣金率分潤
+                      </p>
+                      <button onClick={() => setSelPromote([])}
+                        disabled={publishedItems.length === 0}
+                        className="bg-white text-blue-600 hover:bg-slate-50 px-4 py-2 rounded-xl font-black text-sm transition shadow-lg disabled:opacity-50">
+                        🎯 批次推廣
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {/* 管理員也給批次推廣入口（即便沒 inviteCode 也可推） */}
+                {isAdmin && (
+                  <div className="flex justify-end">
+                    <button onClick={() => setSelPromote([])}
+                      disabled={publishedItems.length === 0}
+                      className="bg-emerald-600 text-white hover:bg-emerald-700 px-5 py-2.5 rounded-xl font-black text-sm transition shadow disabled:opacity-50">
+                      🎯 批次推廣（多選/選格式）
+                    </button>
                   </div>
                 )}
 
@@ -3082,13 +3315,15 @@ function App() {
         />
       )}
 
-      {/* ★ v8：推廣 Modal */}
+      {/* ★ v9：推廣 Modal（完整版） */}
       {selPromote && (
         <PromoteModal
-          item={selPromote}
+          initialItems={Array.isArray(selPromote) ? selPromote : [selPromote]}
+          allItems={publishedItems}
           profile={profile}
           inviteCode={distData?.inviteCode || ''}
           agencySlug="demo"
+          distData={distData}
           onClose={() => setSelPromote(null)}
           onPushFlex={handlePushFlex}
           onCopyLink={handleCopyPromoteLink}
