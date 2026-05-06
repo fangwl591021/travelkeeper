@@ -79,9 +79,7 @@
     const balanceLine = (isDeposit && data.balance_amount > 0)
       ? `<div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
            ⚠ 尾款 <span class="font-black">${fmt(data.balance_amount)}</span>
-           ${String(data.balance_collect).toLowerCase() === 'offline'
-              ? '將由業務於出發前收取'
-              : '請於出發前線上繳清'}
+           可隨時線上補繳${String(data.balance_collect).toLowerCase() === 'offline' ? '，或由業務於出發前收取' : ''}
          </div>` : '';
 
     return `
