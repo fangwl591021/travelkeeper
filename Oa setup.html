@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OA 與個人品牌設定 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: linear-gradient(135deg,#f0f9ff,#fef3c7); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .spin { animation: spin .7s linear infinite; }
+    .fade-up { animation: fadeUp .3s ease both; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+<div id="root" class="max-w-2xl mx-auto">
+  <!-- 預設 placeholder -->
+  <div class="bg-white rounded-3xl shadow-xl p-12 text-center">
+    <div class="spin inline-block w-12 h-12 border-4 border-slate-200 border-t-blue-500 rounded-full mb-4"></div>
+    <p class="text-slate-500 font-bold">正在驗證身份…</p>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50" hidden>
+  <div id="toast-body" class="px-5 py-3 rounded-2xl shadow-2xl font-black text-sm"></div>
+</div>
+
+<script>
+(function(){
+  const WORKER_URL = 'https://travelkeeper.fangwl591021.workers.dev';
+  const LIFF_ID    = '2009367829-BDZCGti8';
+
+  let profile = null;
+  let distData = null;
+  let activeTab = 'basic';
+  let dirty = false;  // 有未儲存的變更
+  let saving = false;
+
+  const root = document.getElementById('root');
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    const b = document.getElementById('toast-body');
+    b.className = `px-5 py-3 rounded-2xl shadow-2xl font-black text-sm ${
+      type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'
+    }`;
+    b.textContent = msg;
+    t.hidden = false;
+    setTimeout(() => { t.hidden = true; }, 3500);
+  }
+
+  function pageError(title, msg, retry = false) {
+    return `
+      <div class="bg-white rounded-3xl shadow-xl p-10 text-center fade-up">
+        <p class="text-5xl mb-3">⚠️</p>
+        <h1 class="text-xl font-black text-red-600 mb-2">${title}</h1>
+        <p class="text-slate-500 text-sm mb-6">${msg}</p>
+        ${retry ? `<button onclick="location.reload()" class="bg-blue-600 text-white font-black px-6 py-3 rounded-2xl hover:bg-blue-700 mb-2 w-full">重試</button>` : ''}
+        <button onclick="location.replace('index.html')" class="bg-slate-100 text-slate-600 font-black px-6 py-3 rounded-2xl hover:bg-slate-200 w-full">回首頁</button>
+      </div>`;
+  }
+
+  function pageNoAccess() {
+    return pageError('此頁僅限分銷商', '您的帳號不在分銷商名單中。如需申請分銷商資格，請聯絡管理員。');
+  }
+
+  // 主介面 (4 tabs)
+  function pageMain() {
+    if (!distData) return '';
+
+    const tabs = [
+      { key: 'basic',   icon: '🪪', label: '基本資料' },
+      { key: 'social',  icon: '📱', label: 'LINE & 社群' },
+      { key: 'bank',    icon: '🏦', label: '佣金匯款' },
+      { key: 'brand',   icon: '🎯', label: '個人品牌' },
+    ];
+
+    return `
+      <div class="space-y-4">
+        <!-- 頂部標題 -->
+        <div class="bg-gradient-to-br from-blue-600 to-purple-600 text-white p-5 rounded-2xl shadow-lg">
+          <p class="text-xs opacity-80 font-black uppercase tracking-widest mb-1">OA 與個人品牌設定</p>
+          <h1 class="text-2xl font-black">${escape(distData.name)}</h1>
+          <p class="text-sm opacity-90 mt-1">推薦碼：<span class="font-mono font-black">${escape(distData.inviteCode)}</span> · 佣金率：${distData.commission}%</p>
+          <div class="mt-3 flex gap-2 flex-wrap">
+            <a href="agent.html?code=${encodeURIComponent(distData.inviteCode)}" target="_blank"
+               class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-1.5 rounded-lg text-xs font-black transition">
+              🔍 預覽我的品牌頁
+            </a>
+            <button onclick="window._copyAgentUrl()"
+               class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-1.5 rounded-lg text-xs font-black transition">
+              📋 複製品牌頁網址
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 切換 -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-1 flex gap-1 overflow-x-auto no-scrollbar sticky top-2 z-20 shadow">
+          ${tabs.map(t => `
+            <button data-tab="${t.key}"
+              onclick="window._switchTab('${t.key}')"
+              class="tab-btn flex-shrink-0 px-4 py-2.5 rounded-xl text-xs md:text-sm font-black transition ${
+                activeTab === t.key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }">
+              ${t.icon} ${t.label}
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Tab 內容 -->
+        <div id="tab-content" class="bg-white rounded-3xl border border-slate-100 shadow p-5">
+          ${renderTab(activeTab)}
+        </div>
+
+        <!-- 儲存按鈕 fixed bottom -->
+        <div class="sticky bottom-2 z-30">
+          <button id="save-btn" onclick="window._save()" disabled
+            class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black py-4 rounded-2xl shadow-xl hover:shadow-2xl transition disabled:opacity-50 disabled:cursor-not-allowed">
+            💾 儲存變更
+          </button>
+        </div>
+
+        <p class="text-center text-xs text-slate-400 mt-2 mb-8">
+          所有變更會立即同步到推廣 Flex Card 跟個人品牌頁
+        </p>
+      </div>`;
+  }
+
+  function escape(s) {
+    return String(s || '').replace(/[&<>"']/g, ch => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[ch]));
+  }
+
+  // 表單欄位 helper
+  function fInput(label, key, opts = {}) {
+    const val = distData[key] !== undefined ? distData[key] : '';
+    const placeholder = opts.placeholder || '';
+    const type = opts.type || 'text';
+    const hint = opts.hint || '';
+    return `
+      <div class="mb-4">
+        <label class="block text-xs font-black text-slate-600 uppercase tracking-widest mb-1.5">
+          ${label} ${opts.required ? '<span class="text-red-500">*</span>' : ''}
+        </label>
+        <input type="${type}" data-field="${key}" value="${escape(val)}"
+          placeholder="${escape(placeholder)}"
+          class="w-full p-3 border-2 border-slate-100 rounded-xl outline-none focus:border-blue-500 transition" />
+        ${hint ? `<p class="text-[11px] text-slate-400 mt-1">${hint}</p>` : ''}
+      </div>`;
+  }
+
+  function fTextarea(label, key, opts = {}) {
+    const val = distData[key] !== undefined ? distData[key] : '';
+    const rows = opts.rows || 4;
+    const max = opts.maxLength || 500;
+    return `
+      <div class="mb-4">
+        <label class="block text-xs font-black text-slate-600 uppercase tracking-widest mb-1.5">${label}</label>
+        <textarea data-field="${key}" rows="${rows}" maxlength="${max}"
+          placeholder="${escape(opts.placeholder || '')}"
+          class="w-full p-3 border-2 border-slate-100 rounded-xl outline-none focus:border-blue-500 transition resize-y">${escape(val)}</textarea>
+        ${opts.hint ? `<p class="text-[11px] text-slate-400 mt-1">${opts.hint}</p>` : ''}
+      </div>`;
+  }
+
+  function renderTab(tab) {
+    if (tab === 'basic') {
+      return `
+        <h2 class="font-black text-lg mb-4">🪪 基本資料</h2>
+        ${fInput('姓名', 'name', { hint: '此欄需聯絡管理員修改', placeholder: '王小明' })}
+        ${fInput('手機', 'phone', { type: 'tel', placeholder: '0912345678', hint: '不會公開，僅供管理員聯絡' })}
+        ${fInput('Email', 'email', { type: 'email', placeholder: 'me@example.com', hint: '佣金匯款通知會寄到這裡' })}
+        <div class="bg-slate-50 rounded-xl p-4 mt-2">
+          <p class="text-xs font-black text-slate-500 mb-2">系統資訊（不可改）</p>
+          <p class="text-sm text-slate-700">推薦碼：<span class="font-mono font-black">${escape(distData.inviteCode || '—')}</span></p>
+          <p class="text-sm text-slate-700">佣金率：${distData.commission}%</p>
+          <p class="text-sm text-slate-700">狀態：${distData.status}</p>
+          <p class="text-sm text-slate-700">可上稿：${distData.canUpload ? '✅ 是' : '❌ 否'}</p>
+        </div>
+      `;
+    }
+
+    if (tab === 'social') {
+      return `
+        <h2 class="font-black text-lg mb-4">📱 LINE & 社群連結</h2>
+        <p class="text-xs text-slate-500 mb-4">這些連結會出現在您的 Flex Card 推廣卡片底部、以及個人品牌頁，方便客戶聯絡您</p>
+
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4">
+          <p class="text-[11px] font-black text-emerald-700 mb-1">💚 LINE</p>
+          ${fInput('LINE 個人連結', 'lineLink', { placeholder: 'https://line.me/ti/p/xxxxx', hint: '在 LINE 個人檔案 → 分享 → 取得個人連結' })}
+          ${fInput('LINE@ 連結', 'lineAtLink', { placeholder: 'https://line.me/R/ti/p/@xxxxx' })}
+          ${fInput('LINE@ ID', 'lineAtId', { placeholder: '@xxxxx', hint: '只填 ID 也行，不一定要連結' })}
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+          <p class="text-[11px] font-black text-blue-700 mb-1">🌐 社群</p>
+          ${fInput('Facebook', 'fbLink', { placeholder: 'https://facebook.com/yourname' })}
+          ${fInput('Instagram', 'igLink', { placeholder: 'https://instagram.com/yourname' })}
+          ${fInput('個人/公司網站', 'webLink', { placeholder: 'https://example.com' })}
+          ${fInput('地圖位置', 'mapLink', { placeholder: 'https://goo.gl/maps/xxx' })}
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <p class="text-[11px] font-black text-amber-700 mb-1">📨 Telegram 訂單通知</p>
+          <p class="text-xs text-amber-700 mb-3">設定後，每筆訂單成立會自動發訊到您的 TG（取得方式：BotFather 建 bot 拿 token + 跟 bot 對話拿 chat_id）</p>
+          ${fInput('Bot Token', 'tgToken', { placeholder: '123456789:ABC...' })}
+          ${fInput('Chat ID', 'tgChatId', { placeholder: '987654321' })}
+          <button onclick="window._testTg()"
+            class="bg-amber-600 text-white px-4 py-2 rounded-lg font-black text-xs hover:bg-amber-700 transition">
+            📤 發測試訊息
+          </button>
+        </div>
+      `;
+    }
+
+    if (tab === 'bank') {
+      return `
+        <h2 class="font-black text-lg mb-4">🏦 佣金匯款帳戶</h2>
+        <p class="text-xs text-slate-500 mb-4">管理員月結佣金時會匯款到這個帳戶。請務必填寫正確</p>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+          🔒 此資料僅管理員可見，不會出現在任何公開頁面
+        </div>
+        ${fInput('銀行名稱', 'bankName', { placeholder: '玉山銀行' })}
+        ${fInput('分行', 'bankBranch', { placeholder: '信義分行' })}
+        ${fInput('戶名', 'bankHolder', { placeholder: '王小明' })}
+        ${fInput('帳號', 'bankAccount', { placeholder: '0123456789012', hint: '可包含 - 或 空格' })}
+      `;
+    }
+
+    if (tab === 'brand') {
+      const previewUrl = `agent.html?code=${encodeURIComponent(distData.inviteCode || '')}`;
+      return `
+        <h2 class="font-black text-lg mb-2">🎯 個人品牌頁</h2>
+        <p class="text-xs text-slate-500 mb-4">這些資料會出現在您的個人品牌頁，客戶用名片 QR / FB / IG 連進來時看到的就是這個</p>
+
+        <div class="flex justify-end mb-3">
+          <a href="${previewUrl}" target="_blank"
+            class="bg-purple-600 text-white px-4 py-2 rounded-lg font-black text-xs hover:bg-purple-700 transition">
+            🔍 預覽
+          </a>
+        </div>
+
+        ${fInput('大頭照 URL', 'avatar', {
+          placeholder: 'https://example.com/me.jpg',
+          hint: '建議正方形、邊長 ≥ 400px。可用 Imgur / Cloudinary 等圖床'
+        })}
+
+        ${fTextarea('自我介紹（200 字內）', 'bio', {
+          rows: 4, maxLength: 200,
+          placeholder: '專業領隊 10 年經驗，擅長日本親子團、東南亞海島自由行...',
+          hint: '會顯示在品牌頁上半部，是客戶第一眼看到的個人介紹'
+        })}
+
+        ${fTextarea('關於我的 OA / 服務理念（300 字內）', 'oaIntro', {
+          rows: 5, maxLength: 300,
+          placeholder: '我們提供 24 小時 LINE 客服、客製化行程設計、出團前一週免費更換出發日...',
+          hint: '介紹您的服務特色或 OA 理念，會顯示在品牌頁中段'
+        })}
+
+        ${distData.avatar ? `
+        <div class="bg-slate-50 rounded-xl p-4 mt-2">
+          <p class="text-xs font-black text-slate-500 mb-2">大頭照預覽</p>
+          <img src="${escape(distData.avatar)}" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block'"/>
+          <p class="text-xs text-red-500" style="display:none">⚠️ 圖片載入失敗，請確認 URL 正確 + 允許跨域</p>
+        </div>` : ''}
+      `;
+    }
+
+    return '';
+  }
+
+  // ─── 互動 handlers ───
+
+  window._switchTab = (tab) => {
+    if (dirty && !confirm('有未儲存的變更，確定切換頁籤？')) return;
+    activeTab = tab;
+    document.getElementById('tab-content').innerHTML = renderTab(tab);
+    bindFieldChanges();
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      const isActive = btn.dataset.tab === tab;
+      btn.classList.toggle('bg-blue-600', isActive);
+      btn.classList.toggle('text-white', isActive);
+      btn.classList.toggle('text-slate-600', !isActive);
+    });
+  };
+
+  window._copyAgentUrl = () => {
+    const url = location.origin + location.pathname.replace(/oa-setup\.html$/,'') + 'agent.html?code=' + encodeURIComponent(distData.inviteCode);
+    navigator.clipboard.writeText(url).then(
+      () => showToast('✅ 品牌頁網址已複製：' + url),
+      () => showToast('複製失敗', 'error')
+    );
+  };
+
+  window._testTg = async () => {
+    const token = (document.querySelector('[data-field="tgToken"]') || {}).value;
+    const chat  = (document.querySelector('[data-field="tgChatId"]') || {}).value;
+    if (!token || !chat) {
+      showToast('請先填寫 Bot Token 跟 Chat ID', 'error');
+      return;
+    }
+    showToast('📤 發送中...');
+    try {
+      const res = await fetch(`${WORKER_URL}/api/dist/test-tg`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tgToken: token, tgChatId: chat })
+      });
+      const result = await res.json();
+      if (result.success) showToast('✅ 已送達！請查看您的 TG');
+      else showToast('❌ ' + result.error, 'error');
+    } catch (e) {
+      showToast('❌ 網路錯誤', 'error');
+    }
+  };
+
+  function bindFieldChanges() {
+    document.querySelectorAll('[data-field]').forEach(el => {
+      el.addEventListener('input', () => {
+        const key = el.dataset.field;
+        distData[key] = el.value;
+        if (!dirty) {
+          dirty = true;
+          const btn = document.getElementById('save-btn');
+          if (btn) {
+            btn.disabled = false;
+            btn.classList.add('animate-pulse');
+          }
+        }
+      });
+    });
+  }
+
+  window._save = async () => {
+    if (saving) return;
+    saving = true;
+    const btn = document.getElementById('save-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.remove('animate-pulse');
+      btn.textContent = '儲存中…';
+    }
+    try {
+      const payload = { uid: profile.userId, ...distData };
+      // 移除唯讀欄位
+      delete payload.status; delete payload.commission; delete payload.canUpload;
+      delete payload.inviteCode; delete payload.agencySlug;
+
+      const res = await fetch(`${WORKER_URL}/api/dist/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (result.success) {
+        showToast('✅ 已儲存');
+        dirty = false;
+        if (btn) btn.textContent = '💾 儲存變更';
+      } else {
+        showToast('❌ 儲存失敗：' + result.error, 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '💾 儲存變更';
+        }
+      }
+    } catch (e) {
+      showToast('❌ 網路錯誤', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '💾 儲存變更';
+      }
+    }
+    saving = false;
+  };
+
+  // 防止離開頁面前漏存
+  window.addEventListener('beforeunload', (e) => {
+    if (dirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // ─── 主流程 ───
+  async function main() {
+    // LIFF init + login
+    try {
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+      profile = await liff.getProfile();
+    } catch (e) {
+      root.innerHTML = pageError('LINE 登入失敗', e.message || '請重試', true);
+      return;
+    }
+
+    // 抓資料
+    try {
+      const res = await fetch(`${WORKER_URL}/api/dist/profile?uid=${encodeURIComponent(profile.userId)}`);
+      const result = await res.json();
+      if (!result.success) {
+        if (String(result.error || '').includes('找不到此分銷商')) {
+          root.innerHTML = pageNoAccess();
+        } else {
+          root.innerHTML = pageError('讀取失敗', result.error, true);
+        }
+        return;
+      }
+      distData = result.data;
+      // 檢查是否 approved
+      if (String(distData.status || '').toLowerCase() !== 'approved') {
+        root.innerHTML = pageError('帳號審核中', `您的分銷商申請目前狀態為「${distData.status}」，待管理員審核通過後即可使用本頁面`);
+        return;
+      }
+    } catch (e) {
+      root.innerHTML = pageError('網路連線失敗', e.message, true);
+      return;
+    }
+
+    // render 主介面
+    root.innerHTML = pageMain();
+    bindFieldChanges();
+  }
+
+  main();
+})();
+</script>
+
+</body>
+</html>
