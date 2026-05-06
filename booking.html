@@ -370,7 +370,7 @@
               const deposit = isFullPay ? total : Math.round(total * depositRatio / 100);
               const balance = isFullPay ? 0 : total - deposit;
               const balanceLabel = isFullPay ? '' :
-                balanceCollect === 'offline' ? '出發前由業務收取' : '出發前線上補繳';
+                balanceCollect === 'offline' ? '出發前由業務收取（也可線上提前繳）' : '可隨時線上補繳';
               return (
                 <div style={{background:'#fff',border:'2px solid #fde68a',borderRadius:14,
                   padding:'14px 16px',marginBottom:26}}>
