@@ -1030,63 +1030,6 @@ function App() {
     setTimeout(()=>setToast(null), 3000);
   };
 
-  // ★ v13 Lazy load 追蹤（useRef 不觸發 re-render）
-  const loadedGroups = React.useRef({});
-  const profileRef   = React.useRef(null); // 供 loadOnDemand 使用
-  const [loadingGroups, setLoadingGroups] = React.useState({}); // group => true 表示正在載
-
-  // 各 group 定義
-  const LAZY_GROUPS = {
-    // 管理員
-    distributors: async (p) => {
-      const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json());
-      setDistributors(Array.isArray(res) ? res : []);
-    },
-    commission: async (p) => {
-      const res = await fetch(`${WORKER_URL}/api/commission/summary?uid=${p.userId}`).then(r=>r.json()).catch(()=>null);
-      if (res?.success) setCommissionSummary(res.data);
-    },
-    allItems: async (p) => {
-      const [allItemsRes, publishedRes] = await Promise.all([
-        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
-        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
-      ]);
-      const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
-      setMyItems(allItems.filter(i => String(i.owneruid || '') === String(p.userId)));
-      setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
-    },
-    // 業務
-    customers: async (p) => {
-      const res = await fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]}));
-      setCustomers(res?.data || []);
-    },
-    agentItems: async (p, canUp) => {
-      const tasks = [
-        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
-      ];
-      if (canUp) tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${p.userId}`).then(r=>r.json()).catch(()=>[]));
-      const results = await Promise.all(tasks);
-      setPublishedItems(Array.isArray(results[0]) ? results[0] : []);
-      if (canUp) setMyItems(Array.isArray(results[1]) ? results[1] : []);
-    },
-  };
-
-  // loadOnDemand：若該 group 尚未載則執行，否則 no-op
-  const loadOnDemand = React.useCallback(async (group) => {
-    if (loadedGroups.current[group]) return;
-    loadedGroups.current[group] = true; // 先標記，避免重複觸發
-    const p = profileRef.current;
-    if (!p) return;
-    setLoadingGroups(prev => ({ ...prev, [group]: true }));
-    try {
-      await LAZY_GROUPS[group]?.(p, canUpload);
-    } catch(e) {
-      loadedGroups.current[group] = false; // 失敗可重試
-      console.warn('lazy load failed:', group, e);
-    }
-    setLoadingGroups(prev => ({ ...prev, [group]: false }));
-  }, [canUpload]);
-
   // ── 初始化 ──
   useEffect(() => {
     (async () => {
@@ -1123,27 +1066,47 @@ function App() {
         }
 
         setAuthState('ready');
-        profileRef.current = p; // ★ v13 供 loadOnDemand 使用
 
-        // ★ v13 階段 2：只打總覽必要 API（2 支），其餘 lazy
+        // 階段 2：依角色並行拉資料
         if (_isAdmin) {
-          const [pendingRes, allOrdersRes] = await Promise.all([
+          const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes, publishedRes] = await Promise.all([
             fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
             fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
+            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
+            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+            fetch(`${WORKER_URL}/api/commission/summary?uid=${p.userId}`).then(r=>r.json()).catch(()=>null),
+            // ★ v8：拉「已上架」全平台行程（推廣用）
+            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
           ]);
           setPendingItems(pendingRes?.data || []);
           setOrders(allOrdersRes?.data || []);
+          setDistributors(Array.isArray(distRes) ? distRes : []);
+          // ★ v8：管理員的「我上稿的」現在只看自己上稿的
+          const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
+          setMyItems(allItems.filter(i => String(i.owneruid || '') === String(p.userId)));
+          setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
+          if (commRes?.success) setCommissionSummary(commRes.data);
         } else {
-          const [statsRes, ordersRes] = await Promise.all([
+          const tasks = [
             fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:null})),
+            fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
             fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
-          ]);
-          setStats(statsRes?.data || null);
-          const myOrders = (ordersRes?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
+            // ★ v8：業務也拉 publishedItems（推廣用）
+            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+          ];
+          if (_canUpload) {
+            tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${p.userId}`).then(r=>r.json()).catch(()=>[]));
+          }
+          const results = await Promise.all(tasks);
+          setStats(results[0]?.data || null);
+          setCustomers(results[1]?.data || []);
+          const myOrders = (results[2]?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
           setOrders(myOrders);
+          setPublishedItems(Array.isArray(results[3]) ? results[3] : []);
+          if (_canUpload) setMyItems(Array.isArray(results[4]) ? results[4] : []);
         }
 
-        setLoading(false); // ★ v13 總覽資料到就先顯示，其餘頁面進去再 lazy load
+        setLoading(false);
       } catch(e) {
         console.error(e);
         setAuthState('denied');
@@ -1161,35 +1124,15 @@ function App() {
     }
   }, [view, authState]);
 
-  // ── 切 view 時自動關手機選單，並觸發 lazy load ──
-  const VIEW_TO_GROUPS_ADMIN = {
-    distributors: ['distributors'],
-    mine:         ['allItems'],
-    promote:      ['allItems'],
-    review:       ['allItems'],
-    commission:   ['commission', 'distributors'],
-  };
-  const VIEW_TO_GROUPS_AGENT = {
-    customers: ['customers'],
-    mine:      ['agentItems'],
-    promote:   ['agentItems'],
-  };
-
+  // ── 切 view 時自動關手機選單 ──
   const goView = (v) => {
     setView(v);
     setMobileMenuOpen(false);
-    // ★ v13 lazy load — 依角色選對應 group map
-    const groupMap = isAdmin ? VIEW_TO_GROUPS_ADMIN : VIEW_TO_GROUPS_AGENT;
-    const groups = groupMap[v] || [];
-    groups.forEach(g => loadOnDemand(g));
   };
 
   // ── reload ──
   const reloadItineraries = async () => {
     if (!profile) return;
-    // ★ v13：重置行程相關 groups，讓下次進頁面重新拉
-    loadedGroups.current.allItems = false;
-    loadedGroups.current.agentItems = false;
     if (isAdmin) {
       const [pendingRes, allItemsRes, publishedRes] = await Promise.all([
         fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
@@ -1217,29 +1160,39 @@ function App() {
   const handleRefreshAll = async () => {
     if (!profile) return;
     setLoading(true);
-    // ★ v13：重置 loadedGroups，讓各頁面重新 lazy load
-    loadedGroups.current = {};
     try {
       if (isAdmin) {
-        const [pendingRes, allOrdersRes] = await Promise.all([
+        const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes, publishedRes] = await Promise.all([
           fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
           fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
+          fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
+          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+          fetch(`${WORKER_URL}/api/commission/summary?uid=${profile.userId}`).then(r=>r.json()).catch(()=>null),
+          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
         ]);
         setPendingItems(pendingRes?.data || []);
         setOrders(allOrdersRes?.data || []);
+        setDistributors(Array.isArray(distRes) ? distRes : []);
+        const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
+        setMyItems(allItems.filter(i => String(i.owneruid || '') === String(profile.userId)));
+        setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
+        if (commRes?.success) setCommissionSummary(commRes.data);
       } else {
-        const [statsRes, ordersRes] = await Promise.all([
+        const tasks = [
           fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:null})),
+          fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
           fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
-        ]);
-        setStats(statsRes?.data || null);
-        const myOrders = (ordersRes?.data || []).filter(o => String(o.distributoruid) === String(profile.userId));
+          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+        ];
+        if (canUpload) tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json()).catch(()=>[]));
+        const results = await Promise.all(tasks);
+        setStats(results[0]?.data || null);
+        setCustomers(results[1]?.data || []);
+        const myOrders = (results[2]?.data || []).filter(o => String(o.distributoruid) === String(profile.userId));
         setOrders(myOrders);
+        setPublishedItems(Array.isArray(results[3]) ? results[3] : []);
+        if (canUpload) setMyItems(Array.isArray(results[4]) ? results[4] : []);
       }
-      // 重新 lazy load 目前頁面
-      const groupMap = isAdmin ? VIEW_TO_GROUPS_ADMIN : VIEW_TO_GROUPS_AGENT;
-      const groups = groupMap[view] || [];
-      await Promise.all(groups.map(g => loadOnDemand(g)));
       showToast('✅ 已更新');
     } catch (e) { showToast('讀取失敗', 'error'); }
     setLoading(false);
@@ -1930,28 +1883,6 @@ function App() {
                 </div>
               )}
 
-              {/* ★ v12：OA / 個人品牌頁快捷 */}
-              {!isAdmin && distData?.inviteCode && (
-                <div className="grid grid-cols-2 gap-3">
-                  <a href="oa-setup.html"
-                    className="bg-white border border-slate-200 hover:border-purple-400 rounded-2xl p-5 transition shadow-sm hover:shadow-md">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-xl">📲</div>
-                      <p className="font-black text-slate-900">OA 與個人品牌設定</p>
-                    </div>
-                    <p className="text-xs text-slate-500">編輯 LINE@、社群連結、銀行帳戶、自我介紹</p>
-                  </a>
-                  <a href={`agent.html?code=${encodeURIComponent(distData.inviteCode)}`} target="_blank"
-                    className="bg-white border border-slate-200 hover:border-emerald-400 rounded-2xl p-5 transition shadow-sm hover:shadow-md">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl">🎯</div>
-                      <p className="font-black text-slate-900">我的個人品牌頁</p>
-                    </div>
-                    <p className="text-xs text-slate-500">客戶用名片 QR 進來看到的對外頁，可分享給朋友</p>
-                  </a>
-                </div>
-              )}
-
               {/* 數字儀表板 */}
               {isAdmin ? (
                 <>
@@ -2294,7 +2225,7 @@ function App() {
                 className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
 
               <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
-                {(loading || loadingGroups['customers']) ? (
+                {loading ? (
                   <div className="p-20 text-center">
                     <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
                     <p className="text-slate-400 font-bold text-sm">載入中...</p>
@@ -2368,7 +2299,7 @@ function App() {
                 className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
 
               <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
-                {(loading || loadingGroups['distributors']) ? (
+                {loading ? (
                   <div className="p-20 text-center">
                     <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
                     <p className="text-slate-400 font-bold text-sm">載入中...</p>
@@ -2605,7 +2536,7 @@ function App() {
                 </div>
 
                 {/* 行程網格 */}
-                {(loading || loadingGroups['allItems'] || loadingGroups['agentItems']) ? (
+                {loading ? (
                   <div className="bg-white rounded-2xl p-20 text-center">
                     <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
                     <p className="text-slate-400 font-bold text-sm">載入中…</p>
@@ -2617,7 +2548,7 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filtered.map(item => {
                       const id = String(item.id || item.timestamp);
                       const isMine = String(item.owneruid || '') === String(profile?.userId);
@@ -2627,7 +2558,7 @@ function App() {
                       return (
                         <div key={id}
                           onClick={selectingMode ? () => togglePromoteSelect(id) : undefined}
-                          className={`bg-white rounded-xl border-2 overflow-hidden transition flex flex-col ${
+                          className={`bg-white rounded-2xl border-2 overflow-hidden transition flex flex-col ${
                             selectingMode
                               ? `cursor-pointer ${isSelected
                                   ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-lg'
@@ -2651,22 +2582,22 @@ function App() {
                               </div>
                             )}
                           </div>
-                          <div className="p-3 flex-1 flex flex-col">
-                            <h3 className="font-black text-slate-900 text-sm line-clamp-2 mb-1.5 min-h-[2.5rem]">{item.title}</h3>
-                            <div className="flex items-center gap-1 flex-wrap mb-2">
-                              {item.region && <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded text-[10px] font-black">📍 {item.region}</span>}
-                              {item.days && <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-black">📅 {item.days}天</span>}
-                              {isMine && <span className="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-black">我上稿的</span>}
+                          <div className="p-4 flex-1 flex flex-col">
+                            <h3 className="font-black text-slate-900 line-clamp-2 mb-2 min-h-[3rem]">{item.title}</h3>
+                            <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                              {item.region && <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-black">📍 {item.region}</span>}
+                              {item.days && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-black">📅 {item.days}天</span>}
+                              {isMine && <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-[10px] font-black">我上稿的</span>}
                             </div>
-                            <p className="text-base font-black text-red-600 mb-2">NT$ {Number(item.price||0).toLocaleString()}</p>
+                            <p className="text-lg font-black text-red-600 mb-3">NT$ {Number(item.price||0).toLocaleString()}</p>
                             {item.ownername && (
-                              <p className="text-[10px] text-slate-400 mb-2">📝 上稿者：{item.ownername}</p>
+                              <p className="text-[10px] text-slate-400 mb-3">📝 上稿者：{item.ownername}</p>
                             )}
                             {/* 非勾選模式時顯示「編輯」按鈕（只給有權的人）*/}
                             {!selectingMode && canEditThis && (
                               <div className="mt-auto flex gap-2">
                                 <button onClick={(e) => { e.stopPropagation(); setEditing(item); setCreating(false); }}
-                                  className="flex-1 bg-slate-100 text-slate-600 font-black py-1.5 rounded-lg hover:bg-slate-200 transition text-xs">
+                                  className="flex-1 bg-slate-100 text-slate-600 font-black py-2 rounded-xl hover:bg-slate-200 transition text-xs">
                                   ✏️ 編輯
                                 </button>
                               </div>
@@ -2994,7 +2925,7 @@ function App() {
                 </div>
 
                 <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
-                  {(loading || loadingGroups['allItems'] || loadingGroups['agentItems']) ? (
+                  {loading ? (
                     <div className="p-20 text-center">
                       <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
                       <p className="text-slate-400 font-bold text-sm">載入中…</p>
@@ -3150,10 +3081,10 @@ function App() {
                 <div className="space-y-6 anim">
                   <div className="grid grid-cols-3 gap-4">
                     <StatCard color="bg-amber-500"   num={fmt(summary.totals.pending)}   label="待結算"
-                      hint="尾款未收完成" loading={loading || loadingGroups['commission']}/>
+                      hint="尾款未收完成" loading={loading}/>
                     <StatCard color="bg-blue-600"    num={fmt(summary.totals.payable)}   label="可請款"
-                      hint="勾選後可批次匯款" loading={loading || loadingGroups['commission']}/>
-                    <StatCard color="bg-emerald-600" num={fmt(summary.totals.paid_out)} label="已匯款（累計）" loading={loading || loadingGroups['commission']}/>
+                      hint="勾選後可批次匯款" loading={loading}/>
+                    <StatCard color="bg-emerald-600" num={fmt(summary.totals.paid_out)} label="已匯款（累計）" loading={loading}/>
                   </div>
 
                   {totalSelected > 0 && (
