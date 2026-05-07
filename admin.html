@@ -2570,7 +2570,7 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px'}}>
                     {filtered.map(item => {
                       const id = String(item.id || item.timestamp);
                       const isMine = String(item.owneruid || '') === String(profile?.userId);
