@@ -1,0 +1,9 @@
+name = "travelkeeper-worker"
+main = "worker.js"
+compatibility_date = "2026-05-08"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "travelkeeper"
+database_id = "REPLACE_WITH_DATABASE_ID"
+migrations_dir = "migrations"
