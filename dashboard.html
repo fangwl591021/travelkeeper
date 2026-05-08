@@ -1398,68 +1398,87 @@ function App() {
   // ★ v10：推廣 — 用 liff.shareTargetPicker 直接喚起 LINE 原生分享面板
   //   (取代 v8/v9 的 push-to-self；省 LINE token、沒 quota、客戶直接收）
   const handlePushFlex = async (opts) => {
-    if (!profile?.userId) { showToast('身份驗證失敗', 'error'); return; }
-    const { ids = [], mode = 'single', socFields = {}, ctaText = '查看完整行程' } = opts || {};
-    if (ids.length === 0) { showToast('請先選擇行程', 'error'); return; }
+    if (!profile?.userId) { showToast('\u8eab\u4efd\u9a57\u8b49\u5931\u6557', 'error'); return; }
+    const { ids = [], mode = 'single', socFields = {}, ctaText = '\u67e5\u770b\u5b8c\u6574\u884c\u7a0b' } = opts || {};
+    if (ids.length === 0) { showToast('\u8acb\u5148\u9078\u64c7\u884c\u7a0b', 'error'); return; }
 
-    // 確認 LIFF 環境支援 shareTargetPicker
+    // \u78ba\u8a8d LIFF \u74b0\u5883\u652f\u63f4 shareTargetPicker
     if (typeof liff === 'undefined' || !liff.isApiAvailable || !liff.isApiAvailable('shareTargetPicker')) {
-      showToast('您的 LINE 環境不支援分享功能（請於 LINE app 開啟此頁）', 'error');
+      showToast('\u60a8\u7684 LINE \u74b0\u5883\u4e0d\u652f\u63f4\u5206\u4eab\u529f\u80fd\uff08\u8acb\u65bc LINE app \u958b\u555f\u6b64\u9801\uff09', 'error');
       return;
     }
 
     setPushingFlex(true);
     try {
       const myInviteCode = distData?.inviteCode || '';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      // 1. 先打 worker /api/flex/build 取得 Flex JSON
-      const res = await fetch(`${WORKER_URL}/api/flex/build`, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          uid: profile.userId,
-          itineraryIds: ids.map(String),
-          mode, socFields, ctaText,
-          agencySlug: 'demo',
-          inviteCode: myInviteCode,
-        }),
-      });
+      let res;
+      try {
+        // 1. \u5148\u6253 worker /api/flex/build \u53d6\u5f97 Flex JSON
+        res = await fetch(WORKER_URL + '/api/flex/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            itineraryIds: ids.map(String),
+            mode,
+            socFields,
+            ctaText,
+            agencySlug: 'demo',
+            inviteCode: myInviteCode,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
-      // ★ 防呆：worker 也可能回非 JSON
+      // \u517c\u5bb9\u8655\u7406\uff1aworker \u53ef\u80fd\u56de\u50b3\u932f\u8aa4\u9801\uff0c\u4e0d\u4e00\u5b9a\u662f JSON
       const text = await res.text();
       let result;
-      try { result = JSON.parse(text); }
-      catch (e) {
-        showToast('伺服器回應錯誤：' + text.slice(0, 80), 'error');
-        setPushingFlex(false);
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        console.error('flex build non-json:', text);
+        showToast('\u5206\u4eab\u670d\u52d9\u56de\u61c9\u7570\u5e38\uff08HTTP ' + res.status + '\uff09', 'error');
+        return;
+      }
+
+      if (!res.ok) {
+        showToast('\u5206\u4eab\u670d\u52d9\u5931\u6557\uff08HTTP ' + res.status + '\uff09\uff1a' + (result.error || '\u8acb\u7a0d\u5f8c\u518d\u8a66'), 'error');
         return;
       }
 
       if (!result.success || !result.message) {
-        showToast('組 Flex 失敗：' + (result.error || ''), 'error');
-        setPushingFlex(false);
+        showToast('\u7d44 Flex \u5931\u6557\uff1a' + (result.error || '\u627e\u4e0d\u5230\u5206\u4eab\u5167\u5bb9'), 'error');
         return;
       }
 
-      // 2. 用 liff.shareTargetPicker 喚起 LINE 原生分享面板
+      // 2. \u7528 liff.shareTargetPicker \u559a\u8d77 LINE \u539f\u751f\u5206\u4eab\u9762\u677f
       const shareResult = await liff.shareTargetPicker([result.message]);
       if (shareResult) {
-        showToast(`✅ 已分享給 ${shareResult.status === 'success' ? '選定對象' : ''}`);
+        showToast('\u2705 \u5df2\u5206\u4eab\u7d66 ' + (shareResult.status === 'success' ? '\u9078\u5b9a\u5c0d\u8c61' : ''));
         setSelPromote(null);
         setSelectingMode(false);
         setSelectedForPromote(new Set());
       } else {
-        // 使用者按取消，shareTargetPicker 會 resolve null
-        showToast('已取消分享');
+        // \u4f7f\u7528\u8005\u6309\u53d6\u6d88\uff0cshareTargetPicker \u6703 resolve null
+        showToast('\u5df2\u53d6\u6d88\u5206\u4eab');
       }
     } catch (e) {
       console.error('shareTargetPicker error:', e);
-      showToast('分享失敗：' + (e.message || '未知錯誤'), 'error');
+      if (e?.name === 'AbortError') {
+        showToast('\u5206\u4eab\u670d\u52d9\u903e\u6642\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66', 'error');
+      } else {
+        showToast('\u5206\u4eab\u5931\u6557\uff1a' + (e.message || '\u672a\u77e5\u932f\u8aa4'), 'error');
+      }
+    } finally {
+      setPushingFlex(false);
     }
-    setPushingFlex(false);
   };
 
-  // ★ v8：推廣 — 複製連結
   const handleCopyPromoteLink = (url) => {
     navigator.clipboard.writeText(url).then(
       () => showToast('✅ 推廣連結已複製'),
