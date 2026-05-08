@@ -9,6 +9,9 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+const ADMIN_UIDS = new Set([
+  'Uf729764dbb5b652a5a90a467320bea29',
+]);
 const R2_PUBLIC = 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
 
@@ -70,6 +73,57 @@ async function resolveInviteCodeWithFallback(env, code) {
     }
   }
   return gasGet(env, { action: 'resolveInviteCode', code });
+}
+
+async function d1CheckUserStatus(env, uid) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return { success: false, error: 'MISSING_UID' };
+
+  const row = await env.DB.prepare(
+    `SELECT * FROM distributors WHERE uid = ?`
+  ).bind(normalizedUid).first();
+
+  const isAdmin = ADMIN_UIDS.has(normalizedUid);
+  const status = String(row?.status || '').toLowerCase();
+  const normalizedStatus = status === 'active' ? 'approved' : status;
+  const distCanUpload = !!Number(row?.can_upload || 0);
+
+  return {
+    success: true,
+    data: {
+      isAdmin,
+      canUpload: isAdmin || distCanUpload,
+      role: row ? 'distributor' : 'guest',
+      status: row ? normalizedStatus : null,
+      distributorData: row ? {
+        name: row.name || '',
+        phone: row.phone || '',
+        status: normalizedStatus || '',
+        commission: row.commission_pct || '',
+        canUpload: distCanUpload,
+        inviteCode: row.invite_code || '',
+        lineLink: row.line_link || '',
+        lineAtLink: row.line_at_link || '',
+        fbLink: row.fb_link || '',
+        webLink: row.web_link || '',
+        mapLink: row.map_link || '',
+        tgToken: row.tg_token || '',
+        tgChatId: row.tg_chat_id || '',
+      } : null,
+    },
+  };
+}
+
+async function readCheckUserStatusWithFallback(env, uid) {
+  if (env.DB) {
+    try {
+      return await d1CheckUserStatus(env, uid);
+    } catch (err) {
+      console.warn('[D1->GAS fallback] checkUserStatus error:', err.message);
+    }
+  }
+  return gasGet(env, { action: 'checkUserStatus', uid });
 }
 
 async function d1GetAgentPublicProfile(env, { code = '', uid = '' } = {}) {
@@ -569,7 +623,7 @@ export default {
         // 並行拉取：行程列表 + 用戶狀態
         const [itinRaw, userRaw] = await Promise.all([
           readItinerariesWithFallback(env, {}),
-          uid ? gasGet(env, { action: 'checkUserStatus', uid }) : Promise.resolve(null),
+          uid ? readCheckUserStatusWithFallback(env, uid) : Promise.resolve(null),
         ]);
 
         const itineraries = Array.isArray(itinRaw) ? itinRaw : [];
@@ -989,6 +1043,12 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
           const action = params.action || 'getItineraries';
           if (action === 'getItineraries') {
             const result = await readItinerariesWithFallback(env, params);
+            return json(result);
+          }
+          if (action === 'checkUserStatus') {
+            const uid = params.uid || '';
+            if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+            const result = await readCheckUserStatusWithFallback(env, uid);
             return json(result);
           }
           if (action === 'getDistributors') {
