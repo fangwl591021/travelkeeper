@@ -216,7 +216,7 @@ async function d1GetItineraries(env, params = {}) {
   let query = `
     SELECT *
       FROM itineraries
-     WHERE deleted_at IS NULL
+     WHERE (deleted_at IS NULL OR deleted_at = '')
   `;
   const bind = [];
 
@@ -385,7 +385,7 @@ async function d1GetPendingReviews(env) {
   const { results } = await env.DB.prepare(
     `SELECT *
        FROM itineraries
-      WHERE deleted_at IS NULL
+      WHERE (deleted_at IS NULL OR deleted_at = '')
         AND review_status = 'pending_review'
       ORDER BY created_at DESC`
   ).all();
