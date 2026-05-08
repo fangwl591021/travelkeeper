@@ -1841,7 +1841,7 @@ function App() {
           主內容
           ════════════════════════════════════════════════════════ */}
       <main className="flex-1 min-w-0 pb-24 md:pb-0">
-        <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-8">
+        <div className={`${view === 'promote' ? 'max-w-[1600px]' : 'max-w-6xl'} mx-auto px-4 md:px-8 py-6 md:py-8`}>
 
           {/* 頂部標題（隨 view 變動）*/}
           <div className="mb-6 flex items-center justify-between gap-3">
@@ -2548,7 +2548,7 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {filtered.map(item => {
                       const id = String(item.id || item.timestamp);
                       const isMine = String(item.owneruid || '') === String(profile?.userId);
@@ -2558,7 +2558,7 @@ function App() {
                       return (
                         <div key={id}
                           onClick={selectingMode ? () => togglePromoteSelect(id) : undefined}
-                          className={`bg-white rounded-2xl border-2 overflow-hidden transition flex flex-col ${
+                          className={`bg-white rounded-2xl overflow-hidden transition flex flex-col shadow-sm ${
                             selectingMode
                               ? `cursor-pointer ${isSelected
                                   ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-lg'
