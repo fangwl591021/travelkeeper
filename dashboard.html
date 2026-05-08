@@ -1030,6 +1030,98 @@ function App() {
     setTimeout(()=>setToast(null), 3000);
   };
 
+  const fetchJson = (url, fallback) =>
+    fetch(url).then(r => r.json()).catch(() => fallback);
+
+  const loadAdminViewData = async (userId, targetView) => {
+    if (!userId) return;
+
+    if (targetView === 'promote') {
+      const publishedRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries`, []);
+      setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
+      return;
+    }
+
+    if (targetView === 'review') {
+      const pendingRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getPendingReviews`, { data: [] });
+      setPendingItems(pendingRes?.data || []);
+      return;
+    }
+
+    if (targetView === 'distributors') {
+      const distRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getDistributors`, []);
+      setDistributors(Array.isArray(distRes) ? distRes : []);
+      return;
+    }
+
+    if (targetView === 'mine') {
+      const allItemsRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`, []);
+      const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
+      setMyItems(allItems.filter(i => String(i.owneruid || '') === String(userId)));
+      return;
+    }
+
+    if (targetView === 'commission') {
+      const [allOrdersRes, commRes] = await Promise.all([
+        fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] }),
+        fetchJson(`${WORKER_URL}/api/commission/summary?uid=${userId}`, null),
+      ]);
+      setOrders(allOrdersRes?.data || []);
+      if (commRes?.success) setCommissionSummary(commRes.data);
+      return;
+    }
+
+    if (targetView === 'orders' || targetView === 'payments') {
+      const allOrdersRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] });
+      setOrders(allOrdersRes?.data || []);
+      return;
+    }
+
+    if (targetView === 'overview') {
+      const [pendingRes, allOrdersRes, distRes] = await Promise.all([
+        fetchJson(`${WORKER_URL}/api/itineraries?action=getPendingReviews`, { data: [] }),
+        fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] }),
+        fetchJson(`${WORKER_URL}/api/itineraries?action=getDistributors`, []),
+      ]);
+      setPendingItems(pendingRes?.data || []);
+      setOrders(allOrdersRes?.data || []);
+      setDistributors(Array.isArray(distRes) ? distRes : []);
+    }
+  };
+
+  const loadDistributorViewData = async (userId, targetView, canUploadNow) => {
+    if (!userId) return;
+
+    if (targetView === 'promote') {
+      const publishedRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries`, []);
+      setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
+      return;
+    }
+
+    if (targetView === 'customers') {
+      const customersRes = await fetchJson(`${WORKER_URL}/api/my/customers?uid=${userId}`, { data: [] });
+      setCustomers(customersRes?.data || []);
+      return;
+    }
+
+    if (targetView === 'mine' && canUploadNow) {
+      const myItemsRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${userId}`, []);
+      setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
+      return;
+    }
+
+    if (targetView === 'overview' || targetView === 'orders' || targetView === 'payments' || targetView === 'commission') {
+      const [statsRes, ordersRes] = await Promise.all([
+        fetchJson(`${WORKER_URL}/api/my/stats?uid=${userId}`, { data: null }),
+        fetchJson(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${userId}`, { data: [] }),
+      ]);
+      setStats(statsRes?.data || null);
+      const myOrders = (ordersRes?.data || []).filter(o => String(o.distributoruid) === String(userId));
+      setOrders(myOrders);
+      return;
+    }
+  };
+
   // ── 初始化 ──
   useEffect(() => {
     (async () => {
@@ -1066,46 +1158,6 @@ function App() {
         }
 
         setAuthState('ready');
-
-        // 階段 2：依角色並行拉資料
-        if (_isAdmin) {
-          const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes, publishedRes] = await Promise.all([
-            fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
-            fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
-            fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
-            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
-            fetch(`${WORKER_URL}/api/commission/summary?uid=${p.userId}`).then(r=>r.json()).catch(()=>null),
-            // ★ v8：拉「已上架」全平台行程（推廣用）
-            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
-          ]);
-          setPendingItems(pendingRes?.data || []);
-          setOrders(allOrdersRes?.data || []);
-          setDistributors(Array.isArray(distRes) ? distRes : []);
-          // ★ v8：管理員的「我上稿的」現在只看自己上稿的
-          const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
-          setMyItems(allItems.filter(i => String(i.owneruid || '') === String(p.userId)));
-          setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
-          if (commRes?.success) setCommissionSummary(commRes.data);
-        } else {
-          const tasks = [
-            fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:null})),
-            fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
-            fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${p.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
-            // ★ v8：業務也拉 publishedItems（推廣用）
-            fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
-          ];
-          if (_canUpload) {
-            tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${p.userId}`).then(r=>r.json()).catch(()=>[]));
-          }
-          const results = await Promise.all(tasks);
-          setStats(results[0]?.data || null);
-          setCustomers(results[1]?.data || []);
-          const myOrders = (results[2]?.data || []).filter(o => String(o.distributoruid) === String(p.userId));
-          setOrders(myOrders);
-          setPublishedItems(Array.isArray(results[3]) ? results[3] : []);
-          if (_canUpload) setMyItems(Array.isArray(results[4]) ? results[4] : []);
-        }
-
         setLoading(false);
       } catch(e) {
         console.error(e);
@@ -1123,6 +1175,26 @@ function App() {
       }
     }
   }, [view, authState]);
+  useEffect(() => {
+    if (authState !== 'ready' || !profile?.userId) return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        if (isAdmin) {
+          await loadAdminViewData(profile.userId, view);
+        } else {
+          await loadDistributorViewData(profile.userId, view, canUpload);
+        }
+      } catch (e) {
+        if (!cancelled) console.error('lazy load failed:', e);
+      }
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [authState, profile, isAdmin, canUpload, view]);
+
 
   // ── 切 view 時自動關手機選單 ──
   const goView = (v) => {
