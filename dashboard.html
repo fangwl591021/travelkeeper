@@ -37,7 +37,7 @@
       <div class="h-10 bg-slate-100 rounded-xl animate-pulse"></div>
     </aside>
     <main class="flex-1 p-6">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-6xl">
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-5 max-w-[1680px]">
         <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
         <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
         <div class="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"></div>
@@ -108,9 +108,9 @@ function StatCard({ color, num, label, hint, loading }) {
     <div className={`${color} text-white p-5 rounded-[1.5rem]`}>
       {loading
         ? <Skel w="w-16" h="h-9" cls="bg-white/30" />
-        : <p className="text-3xl font-black leading-tight">{num}</p>}
-      <p className="text-sm font-bold opacity-90 mt-1">{label}</p>
-      {hint && <p className="text-[10px] opacity-70 mt-1">{hint}</p>}
+        : <p className="text-4xl md:text-[2.6rem] font-black leading-tight">{num}</p>}
+      <p className="text-base md:text-lg font-bold opacity-95 mt-1">{label}</p>
+      {hint && <p className="text-xs opacity-80 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -1812,7 +1812,7 @@ function App() {
           {[1,2,3,4].map(i => <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse"/>)}
         </aside>
         <main className="flex-1 p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-6xl">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-5 max-w-[1680px]">
             {[1,2,3,4].map(i => <div key={i} className="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"/>)}
           </div>
         </main>
@@ -1932,16 +1932,16 @@ function App() {
           主內容
           ════════════════════════════════════════════════════════ */}
       <main className="flex-1 min-w-0 pb-24 md:pb-0">
-        <div className={`${view === 'promote' ? 'max-w-[1600px]' : 'max-w-6xl'} mx-auto px-4 md:px-8 py-6 md:py-8`}>
+        <div className="w-full max-w-[1680px] mx-auto px-5 md:px-10 py-6 md:py-8">
 
           {/* 頂部標題（隨 view 變動）*/}
           <div className="mb-6 flex items-center justify-between gap-3">
-            <h1 className="font-black text-2xl md:text-3xl text-slate-900">
+            <h1 className="font-black text-3xl md:text-[2.6rem] text-slate-900">
               {(menu.find(m => m.id === view) || menu[0]).icon}{' '}
               {(menu.find(m => m.id === view) || menu[0]).label}
             </h1>
             <button onClick={handleRefreshAll}
-              className="md:hidden bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition">
+              className="md:hidden bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
               重新整理
             </button>
           </div>
@@ -1980,7 +1980,7 @@ function App() {
                   {/* ★ v7：本月財務（4 個關鍵數字） */}
                   <div>
                     <h2 className="font-black text-lg text-slate-900 mb-3">本月財務</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
                       <StatCard color="bg-emerald-600" num={fmt(adminStats.monthRevenue)}
                         label="本月實收" hint={`${monthOrders.length} 張訂單`} loading={loading}/>
                       <StatCard color="bg-blue-600"    num={fmt(adminStats.monthGrossSales)}
@@ -2067,7 +2067,7 @@ function App() {
                   {/* 待處理 */}
                   <div>
                     <h2 className="font-black text-lg text-slate-900 mb-3">待處理</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
                       <StatCard color="bg-amber-500" num={adminStats.pendingReview}
                         label="待審核行程" loading={loading}/>
                       <StatCard color="bg-red-500"   num={adminStats.pendingOrders}
@@ -2095,7 +2095,7 @@ function App() {
               ) : (
                 <div>
                   <h2 className="font-black text-lg text-slate-900 mb-3">本月業績</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
                     <StatCard color="bg-blue-600"    num={stats?.month?.count || 0}        label="本月成交筆數"  loading={loading}/>
                     <StatCard color="bg-emerald-600" num={fmt(stats?.month?.revenue)}      label="本月推廣金額"  loading={loading}/>
                     <StatCard color="bg-amber-500"   num={fmt(stats?.month?.commission)}   label="本月應得佣金" hint="含未完成訂單" loading={loading}/>
@@ -2180,7 +2180,7 @@ function App() {
           {/* ── 訂單 ── */}
           {view === 'orders' && (
             <div className="space-y-6 anim">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
                 <StatCard color="bg-amber-500"   num={orderStats.pendingCount}       label="待處理訂單" loading={loading}/>
                 <StatCard color="bg-blue-600"    num={fmt(orderStats.monthRevenue)}  label={isAdmin ? '本月成交金額' : '本月推廣金額'} loading={loading}/>
                 <StatCard color="bg-emerald-600" num={fmt(isAdmin ? orderStats.monthCommission : orderStats.completedCommission)}
@@ -2189,7 +2189,7 @@ function App() {
               </div>
 
               <div className="flex flex-col md:flex-row gap-3">
-                <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 overflow-x-auto">
+                <div className="flex gap-1.5 bg-white border border-slate-200 rounded-2xl p-1.5 overflow-x-auto">
                   {[
                     { key:'all',       label:'全部' },
                     { key:'pending',   label:'待處理' },
@@ -2198,7 +2198,7 @@ function App() {
                     { key:'cancelled', label:'已取消' },
                   ].map(f => (
                     <button key={f.key} onClick={() => setOrderFilter(f.key)}
-                      className={`px-3 py-2 rounded-lg text-xs font-black whitespace-nowrap transition ${
+                      className={`px-4 py-2.5 rounded-xl text-sm font-black whitespace-nowrap transition ${
                         orderFilter === f.key ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'
                       }`}>
                       {f.label} <span className="ml-1 opacity-70">{orderCounts[f.key] || 0}</span>
@@ -2207,7 +2207,7 @@ function App() {
                 </div>
                 <input value={orderSearch} onChange={e => setOrderSearch(e.target.value)}
                   placeholder="搜尋訂單號、行程、客戶姓名、電話..."
-                  className="flex-1 p-3 border-2 border-slate-200 rounded-xl font-medium outline-none focus:border-blue-500 bg-white" />
+                  className="flex-1 p-4 border-2 border-slate-200 rounded-2xl text-base font-medium outline-none focus:border-blue-500 bg-white" />
               </div>
 
               <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
@@ -2225,15 +2225,15 @@ function App() {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                      <thead className="bg-slate-50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                      <thead className="bg-slate-50 text-xs text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
                         <tr>
-                          <th className="p-4">訂單號 / 時間</th>
-                          <th className="p-4">行程 / 客戶</th>
-                          <th className="p-4">人數 / 出發日</th>
-                          <th className="p-4 text-right">金額</th>
-                          <th className="p-4 text-right">{isAdmin ? '應付佣金' : '我的佣金'}</th>
-                          <th className="p-4">付款</th>
-                          <th className="p-4">狀態</th>
+                          <th className="p-5">訂單號 / 時間</th>
+                          <th className="p-5">行程 / 客戶</th>
+                          <th className="p-5">人數 / 出發日</th>
+                          <th className="p-5 text-right">金額</th>
+                          <th className="p-5 text-right">{isAdmin ? '應付佣金' : '我的佣金'}</th>
+                          <th className="p-5">付款</th>
+                          <th className="p-5">狀態</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -2261,28 +2261,28 @@ function App() {
                           return (
                             <tr key={idx} className="hover:bg-slate-50 transition cursor-pointer"
                               onClick={() => setSelOrder(o)}>
-                              <td className="p-4">
-                                <p className="font-mono text-xs font-bold text-slate-700">{o.orderid}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5">{fmtDate(o.createdat)}</p>
+                              <td className="p-5">
+                                <p className="font-mono text-sm font-bold text-slate-700">{o.orderid}</p>
+                                <p className="text-xs text-slate-400 mt-1">{fmtDate(o.createdat)}</p>
                               </td>
-                              <td className="p-4 max-w-[200px]">
-                                <p className="font-black text-sm text-slate-800 line-clamp-1">{o.itinerarytitle || '—'}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">
+                              <td className="p-5 max-w-[320px]">
+                                <p className="font-black text-base text-slate-800 line-clamp-1">{o.itinerarytitle || '—'}</p>
+                                <p className="text-sm text-slate-500 mt-1">
                                   {o.customername || '—'}{o.customerphone && ` · ${o.customerphone}`}
                                 </p>
                               </td>
-                              <td className="p-4 text-sm">
+                              <td className="p-5 text-base">
                                 <p className="font-bold text-slate-700">{o.travelers || 1} 人</p>
-                                <p className="text-xs text-slate-400 mt-0.5">{fmtTravelDate(o.traveldate)}</p>
+                                <p className="text-sm text-slate-400 mt-1">{fmtTravelDate(o.traveldate)}</p>
                               </td>
-                              <td className="p-4 text-right font-black text-red-600">{fmt(o.totalamount || o.price)}</td>
-                              <td className="p-4 text-right font-bold text-emerald-600 text-sm">{fmt(o.commissionamount)}</td>
-                              <td className="p-4">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${payCls}`}>
+                              <td className="p-5 text-right font-black text-red-600 text-[1.1rem]">{fmt(o.totalamount || o.price)}</td>
+                              <td className="p-5 text-right font-bold text-emerald-600 text-base">{fmt(o.commissionamount)}</td>
+                              <td className="p-5">
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-black ${payCls}`}>
                                   {payLabel}
                                 </span>
                               </td>
-                              <td className="p-4"><OrderStatusBadge status={o.status} /></td>
+                              <td className="p-5"><OrderStatusBadge status={o.status} /></td>
                             </tr>
                           );
                         })}
@@ -2297,7 +2297,7 @@ function App() {
           {/* ── 我的客戶（業務）── */}
           {view === 'customers' && !isAdmin && (
             <div className="space-y-6 anim">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid xl:grid-cols-3 gap-5">
                 <StatCard color="bg-blue-600"    num={customers.length}
                   label="累計客戶數" loading={loading}/>
                 <StatCard color="bg-emerald-600" num={fmt(customers.reduce((s,c)=>s+Number(c.totalamount||0),0))}
@@ -2369,7 +2369,7 @@ function App() {
           {/* ── 分銷商管理（管理員）── */}
           {view === 'distributors' && isAdmin && (
             <div className="space-y-6 anim">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid xl:grid-cols-3 gap-5">
                 {[
                   { label:'全部申請', key:'all',      color:'bg-slate-800',  num: distCounts.all },
                   { label:'待審核',   key:'pending',  color:'bg-amber-500',  num: distCounts.pending },
@@ -2948,7 +2948,7 @@ function App() {
 
             return (
               <div className="space-y-6 anim">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
                   <StatCard color="bg-emerald-600" num={fmt(totalReceived)} label="已收到金額"
                     hint={`${filtered.filter(e => ['paid','paid_online','paid_offline'].includes(e.status)).length} 筆`} loading={loading}/>
                   <StatCard color="bg-amber-500" num={fmt(awaitingTotal)} label="等待 ATM 繳款"
@@ -3170,7 +3170,7 @@ function App() {
 
               return (
                 <div className="space-y-6 anim">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid xl:grid-cols-3 gap-5">
                     <StatCard color="bg-amber-500"   num={fmt(summary.totals.pending)}   label="待結算"
                       hint="尾款未收完成" loading={loading}/>
                     <StatCard color="bg-blue-600"    num={fmt(summary.totals.payable)}   label="可請款"
@@ -3314,7 +3314,7 @@ function App() {
 
             return (
               <div className="space-y-6 anim">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid xl:grid-cols-3 gap-5">
                   <StatCard color="bg-amber-500"   num={fmt(myCommission.pending.total)}  label="待結算"
                     hint={`${myCommission.pending.count} 筆 · 等尾款`} loading={loading}/>
                   <StatCard color="bg-blue-600"    num={fmt(myCommission.payable.total)}  label="可請款"
