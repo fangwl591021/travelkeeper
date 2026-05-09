@@ -910,7 +910,7 @@ export default {
         };
 
         let flex;
-        if (mode === 'multi') {
+        if (mode === 'multi' || mode === 'list') {
           // ★ 列表模式：單一 bubble，每筆行程之間用 separator 分隔
           const itemContents = [];
           items.forEach((tour, idx) => {
