@@ -15,6 +15,8 @@ const ADMIN_UIDS = new Set([
 ]);
 const R2_PUBLIC = 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
+const LINE_NEGATIVE_KEYWORDS = ['退費', '退款', '客訴', '負評', '生氣', '失望', '取消', '抱怨', '投訴', '不滿'];
+const LINE_URGENT_KEYWORDS = ['緊急', '立刻', '馬上', '現在', '危險', '出事', '失聯', '找不到'];
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -1133,27 +1135,284 @@ async function handleLineWebhookGateway(request, env, ctx) {
     return json({ success: false, error: 'Invalid JSON body' }, 400);
   }
 
-  if (env.FORWARD_WEBHOOK_URL) {
-    ctx.waitUntil(
-      forwardWebhookToSecondary(env, rawBody, signature).catch(err => {
+  ctx.waitUntil((async () => {
+    try {
+      await storeLineWebhookEvents(env, payload);
+    } catch (err) {
+      console.warn('store line webhook events failed:', err.message);
+    }
+
+    if (env.FORWARD_WEBHOOK_URL) {
+      try {
+        await forwardWebhookToSecondary(env, rawBody, signature);
+      } catch (err) {
         console.warn('secondary webhook forward failed:', err.message);
-      })
-    );
-  }
+      }
+    }
 
-  const gasResult = await postToGasWebhook(env, payload);
-  const replyPayload = gasResult?.data?.replyPayload || gasResult?.replyPayload || null;
-
-  if (replyPayload?.replyToken && Array.isArray(replyPayload?.messages) && replyPayload.messages.length > 0) {
-    await replyLineMessage(env, replyPayload);
-  }
+    try {
+      const gasResult = await postToGasWebhook(env, payload);
+      const replyPayload = gasResult?.data?.replyPayload || gasResult?.replyPayload || null;
+      if (replyPayload?.replyToken && Array.isArray(replyPayload?.messages) && replyPayload.messages.length > 0) {
+        await replyLineMessage(env, replyPayload);
+      }
+    } catch (err) {
+      console.error('line webhook background processing failed:', err.message);
+    }
+  })());
 
   return json({
     success: true,
     events: Array.isArray(payload?.events) ? payload.events.length : 0,
-    replied: !!replyPayload,
+    queued: true,
     forwarded: !!env.FORWARD_WEBHOOK_URL,
   });
+}
+
+function getLineThreadId(source = {}) {
+  const type = String(source?.type || 'user');
+  if (type === 'group' && source?.groupId) return `group:${source.groupId}`;
+  if (type === 'room' && source?.roomId) return `room:${source.roomId}`;
+  if (source?.userId) return `user:${source.userId}`;
+  return `unknown:${crypto.randomUUID()}`;
+}
+
+function getLineDisplayName(source = {}) {
+  if (source?.userId) return `用戶 ${String(source.userId).slice(-6)}`;
+  if (source?.groupId) return `群組 ${String(source.groupId).slice(-6)}`;
+  if (source?.roomId) return `聊天室 ${String(source.roomId).slice(-6)}`;
+  return '未命名聊天室';
+}
+
+function summarizeLineRisk(text = '') {
+  const haystack = String(text || '');
+  const hits = [
+    ...LINE_NEGATIVE_KEYWORDS.filter(k => haystack.includes(k)),
+    ...LINE_URGENT_KEYWORDS.filter(k => haystack.includes(k)),
+  ];
+  const uniqueHits = [...new Set(hits)];
+  const riskLevel = uniqueHits.some(k => LINE_URGENT_KEYWORDS.includes(k))
+    ? 'high'
+    : uniqueHits.length > 0
+      ? 'medium'
+      : 'low';
+  return { riskLevel, hits: uniqueHits };
+}
+
+function lineMessageCreatedAt(event = {}) {
+  if (event.timestamp) {
+    try {
+      return new Date(Number(event.timestamp)).toISOString();
+    } catch (_err) {}
+  }
+  return new Date().toISOString();
+}
+
+async function storeLineWebhookEvents(env, payload = {}) {
+  if (!env.DB) return;
+  const events = Array.isArray(payload?.events) ? payload.events : [];
+  for (const event of events) {
+    const source = event?.source || {};
+    const threadId = getLineThreadId(source);
+    const messageType = String(event?.message?.type || event?.type || 'event');
+    const messageText = messageType === 'text'
+      ? String(event?.message?.text || '').trim()
+      : `[${messageType}]`;
+    const createdAt = lineMessageCreatedAt(event);
+    const { riskLevel, hits } = summarizeLineRisk(messageText);
+    const tagsText = hits.join(',');
+    const displayName = getLineDisplayName(source);
+    const summary = messageText || `[${messageType}]`;
+
+    await env.DB.prepare(`
+      INSERT INTO line_threads (
+        id, source_type, source_user_id, source_group_id, display_name, status,
+        risk_level, summary, unread_count, tags, last_message_at, created_at, updated_at
+      ) VALUES (?, 'line_oa', ?, ?, ?, 'open', ?, ?, 1, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        source_user_id = excluded.source_user_id,
+        source_group_id = excluded.source_group_id,
+        display_name = CASE
+          WHEN excluded.display_name <> '' THEN excluded.display_name
+          ELSE line_threads.display_name
+        END,
+        status = CASE
+          WHEN line_threads.status = 'closed' THEN line_threads.status
+          ELSE 'open'
+        END,
+        risk_level = CASE
+          WHEN line_threads.risk_level = 'high' OR excluded.risk_level = 'high' THEN 'high'
+          WHEN line_threads.risk_level = 'medium' OR excluded.risk_level = 'medium' THEN 'medium'
+          ELSE 'low'
+        END,
+        summary = excluded.summary,
+        unread_count = line_threads.unread_count + 1,
+        tags = CASE
+          WHEN excluded.tags = '' THEN line_threads.tags
+          WHEN line_threads.tags = '' THEN excluded.tags
+          ELSE line_threads.tags || ',' || excluded.tags
+        END,
+        last_message_at = excluded.last_message_at,
+        updated_at = excluded.updated_at
+    `).bind(
+      threadId,
+      String(source?.userId || ''),
+      String(source?.groupId || source?.roomId || ''),
+      displayName,
+      riskLevel,
+      summary,
+      tagsText,
+      createdAt,
+      createdAt,
+      createdAt
+    ).run();
+
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO line_messages (
+        id, thread_id, line_event_id, reply_token, message_type, sender_role,
+        sender_id, sender_name, message_text, raw_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'user', ?, ?, ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      threadId,
+      String(event?.webhookEventId || ''),
+      String(event?.replyToken || ''),
+      messageType,
+      String(source?.userId || source?.groupId || source?.roomId || ''),
+      displayName,
+      summary,
+      JSON.stringify(event),
+      createdAt
+    ).run();
+  }
+}
+
+async function d1GetLineThreads(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const { results } = await env.DB.prepare(`
+    SELECT
+      id,
+      display_name,
+      source_user_id,
+      source_group_id,
+      status,
+      risk_level,
+      assigned_to,
+      summary,
+      unread_count,
+      tags,
+      note,
+      last_message_at
+    FROM line_threads
+    ORDER BY COALESCE(last_message_at, created_at) DESC
+    LIMIT 200
+  `).all();
+  return {
+    success: true,
+    data: results.map(row => ({
+      id: row.id,
+      name: row.display_name || '未命名聊天室',
+      userId: row.source_user_id || row.source_group_id || '',
+      summary: row.summary || '',
+      unread: Number(row.unread_count || 0),
+      risk: row.risk_level || 'low',
+      status: row.status || 'open',
+      assignedTo: row.assigned_to || '',
+      tags: String(row.tags || '').split(',').map(v => v.trim()).filter(Boolean),
+      note: row.note || '',
+      lastMessageAt: row.last_message_at || '',
+    })),
+  };
+}
+
+async function d1GetLineThread(env, threadId) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const thread = await env.DB.prepare(`
+    SELECT
+      id,
+      display_name,
+      source_user_id,
+      source_group_id,
+      status,
+      risk_level,
+      assigned_to,
+      summary,
+      unread_count,
+      tags,
+      note,
+      last_message_at
+    FROM line_threads
+    WHERE id = ?
+  `).bind(threadId).first();
+  if (!thread) return { success: false, error: 'THREAD_NOT_FOUND' };
+  const { results } = await env.DB.prepare(`
+    SELECT id, message_type, sender_role, sender_id, sender_name, message_text, created_at
+    FROM line_messages
+    WHERE thread_id = ?
+    ORDER BY created_at ASC, inserted_at ASC
+    LIMIT 500
+  `).bind(threadId).all();
+  return {
+    success: true,
+    data: {
+      id: thread.id,
+      name: thread.display_name || '未命名聊天室',
+      userId: thread.source_user_id || thread.source_group_id || '',
+      summary: thread.summary || '',
+      unread: Number(thread.unread_count || 0),
+      risk: thread.risk_level || 'low',
+      status: thread.status || 'open',
+      assignedTo: thread.assigned_to || '',
+      tags: String(thread.tags || '').split(',').map(v => v.trim()).filter(Boolean),
+      note: thread.note || '',
+      lastMessageAt: thread.last_message_at || '',
+      messages: results.map(msg => ({
+        id: msg.id,
+        type: msg.message_type || 'text',
+        senderRole: msg.sender_role || 'user',
+        senderId: msg.sender_id || '',
+        senderName: msg.sender_name || '用戶',
+        text: msg.message_text || '',
+        createdAt: msg.created_at || '',
+      })),
+    },
+  };
+}
+
+async function d1UpdateLineThread(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const threadId = String(body.id || '').trim();
+  if (!threadId) return { success: false, error: '缺少聊天室 id' };
+  const tags = Array.isArray(body.tags)
+    ? body.tags.map(v => String(v || '').trim()).filter(Boolean)
+    : String(body.tags || '').split(',').map(v => v.trim()).filter(Boolean);
+  const status = ['open', 'pending', 'closed'].includes(String(body.status || ''))
+    ? String(body.status)
+    : null;
+  const note = body.note === undefined ? null : String(body.note || '');
+  const sets = [];
+  const values = [];
+  if (status !== null) {
+    sets.push('status = ?');
+    values.push(status);
+  }
+  if (note !== null) {
+    sets.push('note = ?');
+    values.push(note);
+  }
+  if (body.tags !== undefined) {
+    sets.push('tags = ?');
+    values.push(tags.join(','));
+  }
+  if (!sets.length) return { success: false, error: '沒有可更新欄位' };
+  sets.push("updated_at = datetime('now')");
+  const result = await env.DB.prepare(`
+    UPDATE line_threads
+    SET ${sets.join(', ')}
+    WHERE id = ?
+  `).bind(...values, threadId).run();
+  if (!result.success) return { success: false, error: '更新失敗' };
+  return d1GetLineThread(env, threadId);
 }
 
 async function checkEndpoint(url, options = {}) {
@@ -1304,6 +1563,32 @@ export default {
       if (path === '/api/hub-test' && request.method === 'GET') {
         const status = await buildHubTestStatus(env);
         return json({ success: true, data: status });
+      }
+
+      if (path === '/api/line-oa/threads' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        return json(await d1GetLineThreads(env));
+      }
+
+      if (path === '/api/line-oa/thread' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        const threadId = url.searchParams.get('id') || '';
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!threadId) return json({ success: false, error: '缺少聊天室 id' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        const result = await d1GetLineThread(env, threadId);
+        return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/line-oa/thread' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        const result = await d1UpdateLineThread(env, body);
+        return json(result, result.success ? 200 : 400);
       }
 
       // ══════════════════════════════════════════════════════════
