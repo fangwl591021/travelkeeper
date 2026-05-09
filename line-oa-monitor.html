@@ -37,10 +37,6 @@
 
       <div class="px-4 py-4 border-b border-slate-200 space-y-4">
         <div>
-          <label class="block text-sm font-black mb-2">Worker API URL</label>
-          <input id="worker-url" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm bg-slate-50" value="https://travelkeeper-worker.fangwl591021.workers.dev" readonly>
-        </div>
-        <div>
           <label class="block text-sm font-black mb-2">聊天室搜尋</label>
           <input id="thread-search" class="w-full rounded-full border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" placeholder="搜尋聊天、用戶名稱、用戶 ID、標籤">
         </div>
@@ -52,6 +48,35 @@
       </div>
 
       <div id="thread-list" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
+
+      <details class="border-t border-slate-200 bg-slate-50/80">
+        <summary class="list-none cursor-pointer px-4 py-3 flex items-center justify-between">
+          <div>
+            <p class="font-black text-sm text-slate-900">工具與手動匯入</p>
+            <p class="text-xs text-slate-500 mt-1">平常可收合，避免佔用聊天室空間</p>
+          </div>
+          <span class="text-slate-400 text-sm font-black">展開</span>
+        </summary>
+        <div class="px-4 pb-4 space-y-4">
+          <div>
+            <label class="block text-sm font-black mb-2">監看 Worker API</label>
+            <input class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm bg-white text-slate-600" value="https://travelkeeper-worker.fangwl591021.workers.dev" readonly>
+          </div>
+          <div>
+            <label class="block text-sm font-black mb-2">匯入名稱</label>
+            <input id="import-title" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 bg-white" placeholder="例如：2026-05-09 LINE OA 對話匯入">
+          </div>
+          <div>
+            <label class="block text-sm font-black mb-2">匯入聊天室</label>
+            <input id="import-file" type="file" accept=".txt,.json,.csv,.log,.md" class="block w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm bg-white">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="import-read" class="rounded-2xl bg-slate-100 text-slate-700 font-black py-3 hover:bg-slate-200">讀取檔案</button>
+            <button id="import-save" class="rounded-2xl bg-emerald-500 text-white font-black py-3 hover:bg-emerald-600">匯入聊天室</button>
+          </div>
+          <textarea id="import-text" rows="5" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500 bg-white" placeholder="貼上對話紀錄後，可手動匯入成單一聊天室。這是輔助工具，不影響真實 webhook。"></textarea>
+        </div>
+      </details>
     </aside>
 
     <main class="min-w-0 flex-1 flex flex-col bg-white border-r border-slate-200">
@@ -177,6 +202,9 @@
     const customTagEl = document.getElementById('custom-tag');
     const panelDraftEl = document.getElementById('draft-reply');
     const previewNoteEl = document.getElementById('preview-note');
+    const importTitleEl = document.getElementById('import-title');
+    const importFileEl = document.getElementById('import-file');
+    const importTextEl = document.getElementById('import-text');
 
     function showToast(message, type = 'success') {
       const el = document.getElementById('toast');
@@ -245,6 +273,59 @@
         const haystack = [item.name, item.userId, item.summary, item.assignedTo, ...(item.tags || [])].join(' ');
         return haystack.includes(keyword);
       });
+    }
+
+    async function readImportFile() {
+      const file = importFileEl.files && importFileEl.files[0];
+      if (!file) {
+        showToast('請先選擇檔案', 'error');
+        return;
+      }
+      const text = await file.text();
+      importTextEl.value = text;
+      if (!importTitleEl.value.trim()) {
+        importTitleEl.value = file.name.replace(/\.[^.]+$/, '');
+      }
+      showToast('已載入檔案內容');
+    }
+
+    function saveImportedThread() {
+      const text = String(importTextEl.value || '').trim();
+      if (!text) {
+        showToast('請先貼上或讀取對話內容', 'error');
+        return;
+      }
+      const title = importTitleEl.value.trim() || `手動匯入 ${new Date().toLocaleString('zh-TW')}`;
+      const imported = {
+        id: `manual:${Date.now()}`,
+        name: title,
+        userId: 'manual-import',
+        summary: text.split('\n').find(Boolean) || '',
+        unread: 0,
+        risk: NEGATIVE_KEYWORDS.some(k => text.includes(k)) || URGENT_KEYWORDS.some(k => text.includes(k)) ? 'medium' : 'low',
+        status: 'pending',
+        assignedTo: '',
+        tags: ['手動匯入'],
+        note: '',
+        lastMessageAt: new Date().toISOString(),
+        messages: text.split('\n').filter(Boolean).map((line, index) => ({
+          id: `manual-msg-${Date.now()}-${index}`,
+          type: 'text',
+          senderRole: 'user',
+          senderId: 'manual-import',
+          senderName: '匯入對話',
+          text: line,
+          createdAt: new Date(Date.now() + index * 60000).toISOString(),
+        })),
+      };
+      allThreads = [imported, ...allThreads];
+      activeThreadId = imported.id;
+      importTitleEl.value = '';
+      importTextEl.value = '';
+      importFileEl.value = '';
+      renderThreadList();
+      renderActiveThread(imported);
+      showToast('已匯入單一聊天室供人工檢視');
     }
 
     async function fetchJson(url, options) {
@@ -447,6 +528,12 @@
         showToast('複製失敗', 'error');
       }
     });
+
+    document.getElementById('import-read').addEventListener('click', () => {
+      readImportFile().catch(err => showToast(err.message, 'error'));
+    });
+
+    document.getElementById('import-save').addEventListener('click', saveImportedThread);
 
     document.getElementById('save-thread-meta').addEventListener('click', () => {
       const active = allThreads.find(item => item.id === activeThreadId);
