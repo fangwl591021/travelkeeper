@@ -946,6 +946,8 @@ function buildMenu({ isAdmin, canUpload, badges }) {
       show: isAdmin || canUpload },
     { id:'itinerary-maintenance-list', icon:'\u{1F6E0}\uFE0F', label:'\u884C\u7A0B\u7DAD\u8B77', show: isAdmin,
       href:'itinerary-maintenance-list.html' },
+    { id:'ai-guide-system', icon:'\u{1F916}', label:'AI\u5C0E\u904A', show: isAdmin,
+      href:'ai-guide-system.html' },
     { id:'distributors', icon:'👥', label:'分銷商管理', show: isAdmin,
       badge: badges.pendingDist },
     { id:'review',       icon:'⚠️', label:'待審核行程', show: isAdmin,

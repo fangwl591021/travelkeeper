@@ -1031,14 +1031,280 @@ async function readMyStatsWithFallback(env, uid) {
   return gasGet(env, { action: 'getMyStats', uid });
 }
 
+
+function getGasWebhookUrl(env) {
+  return env.GAS_URL || env.GAS_WEBAPP_URL || '';
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+async function verifyLineSignature(rawBody, signature, secret) {
+  if (!signature || !secret) return false;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
+  const digest = bytesToBase64(new Uint8Array(mac));
+  return digest === signature;
+}
+
+async function replyLineMessage(env, replyPayload) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+    throw new Error('LINE_CHANNEL_ACCESS_TOKEN missing');
+  }
+  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify(replyPayload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LINE reply failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+}
+
+async function forwardWebhookToSecondary(env, rawBody, signature) {
+  const forwardUrl = String(env.FORWARD_WEBHOOK_URL || '').trim();
+  if (!forwardUrl) return { forwarded: false, skipped: true };
+  const res = await fetch(forwardUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(signature ? { 'x-line-signature': signature } : {}),
+      'x-travelkeeper-forwarded-by': 'travelkeeper-worker',
+    },
+    body: rawBody,
+  });
+  return { forwarded: true, status: res.status };
+}
+
+async function postToGasWebhook(env, payload) {
+  const gasUrl = getGasWebhookUrl(env);
+  if (!gasUrl) throw new Error('GAS_URL missing');
+  const res = await fetch(gasUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'LINE_WEBHOOK', payload }),
+    redirect: 'follow',
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`GAS non-JSON response (${res.status}): ${text.slice(0, 200)}`);
+  }
+  if (!res.ok) {
+    throw new Error(`GAS response ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return data;
+}
+
+async function handleLineWebhookGateway(request, env, ctx) {
+  const rawBody = await request.text();
+  const signature = request.headers.get('x-line-signature') || '';
+  if (!env.LINE_CHANNEL_SECRET) {
+    return json({ success: false, error: 'LINE_CHANNEL_SECRET missing' }, 500);
+  }
+  const valid = await verifyLineSignature(rawBody, signature, env.LINE_CHANNEL_SECRET);
+  if (!valid) {
+    return new Response('Invalid Signature', { status: 403, headers: CORS });
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch (err) {
+    return json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  if (env.FORWARD_WEBHOOK_URL) {
+    ctx.waitUntil(
+      forwardWebhookToSecondary(env, rawBody, signature).catch(err => {
+        console.warn('secondary webhook forward failed:', err.message);
+      })
+    );
+  }
+
+  const gasResult = await postToGasWebhook(env, payload);
+  const replyPayload = gasResult?.data?.replyPayload || gasResult?.replyPayload || null;
+
+  if (replyPayload?.replyToken && Array.isArray(replyPayload?.messages) && replyPayload.messages.length > 0) {
+    await replyLineMessage(env, replyPayload);
+  }
+
+  return json({
+    success: true,
+    events: Array.isArray(payload?.events) ? payload.events.length : 0,
+    replied: !!replyPayload,
+    forwarded: !!env.FORWARD_WEBHOOK_URL,
+  });
+}
+
+async function checkEndpoint(url, options = {}) {
+  if (!url) return { ok: false, status: 'missing', detail: 'not configured' };
+  try {
+    const res = await fetch(url, options);
+    return { ok: res.ok, status: res.status, detail: res.ok ? 'ok' : `HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, status: 'error', detail: err.message };
+  }
+}
+
+async function checkLineBotInfo(env) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+    return { ok: false, status: 'missing', detail: 'LINE_CHANNEL_ACCESS_TOKEN missing' };
+  }
+  try {
+    const res = await fetch('https://api.line.me/v2/bot/info', {
+      headers: { 'Authorization': `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` },
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (err) { data = null; }
+    return {
+      ok: res.ok,
+      status: res.status,
+      detail: res.ok ? (data?.displayName || 'ok') : text.slice(0, 120),
+      data,
+    };
+  } catch (err) {
+    return { ok: false, status: 'error', detail: err.message };
+  }
+}
+
+async function buildHubTestStatus(env) {
+  const gasUrl = getGasWebhookUrl(env);
+  const gas = await checkEndpoint(gasUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'GET_SETTINGS' }),
+  });
+  const forward = env.FORWARD_WEBHOOK_URL
+    ? await checkEndpoint(env.FORWARD_WEBHOOK_URL, { method: 'GET' })
+    : { ok: false, status: 'disabled', detail: 'FORWARD_WEBHOOK_URL not configured' };
+  const line = await checkLineBotInfo(env);
+  return {
+    gas,
+    forward,
+    line,
+    config: {
+      hasGasUrl: !!gasUrl,
+      hasLineSecret: !!env.LINE_CHANNEL_SECRET,
+      hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
+      hasForwardWebhook: !!env.FORWARD_WEBHOOK_URL,
+    },
+  };
+}
+
+function renderHubTestHtml(status, origin) {
+  const row = (label, item) => {
+    const color = item.ok ? '#16a34a' : '#dc2626';
+    return       `
+      <div style="display:flex;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid #e2e8f0;">
+        <div>
+          <div style="font-weight:900;font-size:18px;">${label}</div>
+          <div style="color:#64748b;font-size:14px;margin-top:4px;">${item.detail || '-'}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:900;color:${color};">${item.ok ? 'OK' : 'FAIL'}</div>
+          <div style="color:#64748b;font-size:13px;margin-top:4px;">${item.status}</div>
+        </div>
+      </div>
+    `;
+  };
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webhook Diagnostics | TravelKeeper</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f8fafc; color:#0f172a; margin:0; }
+    .wrap { max-width: 1040px; margin:0 auto; padding:32px 20px 60px; }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:24px; padding:28px; box-shadow:0 10px 30px rgba(15,23,42,.04); }
+    .pill { display:inline-block; padding:8px 12px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-weight:700; font-size:13px; margin-right:8px; margin-bottom:8px; }
+    code { background:#f1f5f9; padding:2px 6px; border-radius:8px; }
+    a { color:#2563eb; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px;">
+      <div>
+        <div style="font-size:12px;font-weight:900;color:#94a3b8;letter-spacing:.18em;text-transform:uppercase;">Webhook Diagnostics</div>
+        <h1 style="font-size:40px;line-height:1.1;margin:10px 0 8px;font-weight:900;">Dual Webhook Diagnostics</h1>
+        <p style="margin:0;color:#64748b;font-size:16px;">Check Worker, GAS, secondary system, and LINE reply connectivity.</p>
+      </div>
+      <a href="${origin}/ai-guide-system.html" style="display:inline-block;padding:12px 16px;border-radius:14px;background:#0f172a;color:#fff;text-decoration:none;font-weight:800;">Open AI Guide System</a>
+    </div>
+    <div class="card">
+      ${row('GAS backend', status.gas)}
+      ${row('Secondary system', status.forward)}
+      ${row('LINE Bot Token', status.line)}
+      <div style="padding-top:18px;">
+        <div style="font-weight:900;font-size:18px;margin-bottom:12px;">Environment flags</div>
+        <div>
+          <span class="pill">GAS_URL: ${status.config.hasGasUrl ? 'configured' : 'missing'}</span>
+          <span class="pill">LINE_CHANNEL_SECRET: ${status.config.hasLineSecret ? 'configured' : 'missing'}</span>
+          <span class="pill">LINE_CHANNEL_ACCESS_TOKEN: ${status.config.hasLineToken ? 'configured' : 'missing'}</span>
+          <span class="pill">FORWARD_WEBHOOK_URL: ${status.config.hasForwardWebhook ? 'configured' : 'missing'}</span>
+        </div>
+      </div>
+      <div style="padding-top:18px;">
+        <div style="font-weight:900;font-size:18px;margin-bottom:12px;">Deployment notes</div>
+        <ul style="margin:0;padding-left:18px;color:#475569;line-height:1.8;">
+          <li>Set LINE Webhook URL to <code>${origin}/line-webhook</code></li>
+          <li>Set <code>FORWARD_WEBHOOK_URL</code> if a second system should receive the same event</li>
+          <li>GAS should return <code>{ replyPayload: { replyToken, messages } }</code> or <code>{ data: { replyPayload } }</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     const url  = new URL(request.url);
     const path = url.pathname;
 
     try {
+
+      if (path === '/line-webhook' && request.method === 'POST') {
+        return await handleLineWebhookGateway(request, env, ctx);
+      }
+
+      if (path === '/hub-test' && request.method === 'GET') {
+        const status = await buildHubTestStatus(env);
+        return new Response(renderHubTestHtml(status, url.origin), {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=UTF-8', ...CORS },
+        });
+      }
+
+      if (path === '/api/hub-test' && request.method === 'GET') {
+        const status = await buildHubTestStatus(env);
+        return json({ success: true, data: status });
+      }
 
       // ══════════════════════════════════════════════════════════
       // GET /api/app-init?uid=xxx

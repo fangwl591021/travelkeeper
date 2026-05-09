@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Guide System | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: Inter, Arial, sans-serif; background: #f8fafc; }
+    [hidden] { display: none !important; }
+    .line-clamp-3 {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <div class="max-w-[1680px] mx-auto px-4 py-6 md:px-8 md:py-10">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+      <div>
+        <p class="text-xs font-black tracking-[0.18em] text-slate-400 uppercase">AI Guide Console</p>
+        <h1 class="text-3xl md:text-5xl font-black mt-1">AI Guide System</h1>
+        <p class="text-sm md:text-base text-slate-500 mt-2 max-w-4xl leading-7">
+          This is the TravelKeeper AI guide control center. It is designed for TravelKeeper only, with no MLM account confusion.
+          The next step is to connect dual webhooks, product recommendation, conversation monitoring, negative review alerts, and group service tracking.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="dashboard.html#overview" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">
+          Back to dashboard
+        </a>
+        <a href="itinerary-maintenance-list.html" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700">
+          Itinerary maintenance
+        </a>
+        <a href="https://travelkeeper-worker.fangwl591021.workers.dev/hub-test" target="_blank" rel="noopener noreferrer" class="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-black hover:bg-slate-800">
+          Webhook diagnostics
+        </a>
+      </div>
+    </div>
+
+    <div id="preview-note" hidden class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">
+      <p class="font-black">Preview mode</p>
+      <p class="text-sm mt-1 leading-7">
+        You opened this page with <code>file://</code>, so the UI uses local sample data only.
+        For real identity and real API reads, open this page from GitHub Pages or LIFF.
+      </p>
+    </div>
+
+    <div id="loading" class="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">
+      Loading AI Guide System...
+    </div>
+
+    <div id="error" hidden class="bg-white rounded-3xl border border-red-200 p-10 text-center">
+      <h2 class="text-xl font-black text-red-600 mb-2">Unable to load AI Guide System</h2>
+      <p id="error-text" class="text-slate-500"></p>
+    </div>
+
+    <div id="content" hidden class="space-y-6">
+      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="rounded-3xl bg-slate-900 text-white p-6">
+          <p id="stat-itineraries" class="text-4xl font-black">0</p>
+          <p class="text-sm font-bold mt-2 text-slate-200">Products available</p>
+        </div>
+        <div class="rounded-3xl bg-blue-600 text-white p-6">
+          <p id="stat-published" class="text-4xl font-black">0</p>
+          <p class="text-sm font-bold mt-2 text-blue-100">Published itineraries</p>
+        </div>
+        <div class="rounded-3xl bg-rose-500 text-white p-6">
+          <p id="stat-alerts" class="text-4xl font-black">0</p>
+          <p class="text-sm font-bold mt-2 text-rose-50">Risk keywords hit</p>
+        </div>
+        <div class="rounded-3xl bg-emerald-600 text-white p-6">
+          <p id="stat-groups" class="text-4xl font-black">0</p>
+          <p class="text-sm font-bold mt-2 text-emerald-50">Tracked groups</p>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl md:text-3xl font-black">1. Product knowledge and recommendation</h2>
+            <p class="text-sm text-slate-500 mt-1 leading-7">
+              Paste a customer question and let the system suggest the best matching itineraries from your current products.
+            </p>
+          </div>
+          <div class="px-4 py-2 rounded-2xl bg-blue-50 text-blue-700 font-black text-sm">
+            Uses current itinerary data
+          </div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-5">
+          <div class="space-y-4">
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Customer question</span>
+              <textarea id="qa-input" rows="6" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500" placeholder="Example: Need a Japan hot spring trip for seniors, budget around 20,000 TWD."></textarea>
+            </label>
+            <div class="flex flex-wrap gap-3">
+              <button id="qa-run" class="px-5 py-3 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700">
+                Generate suggestions
+              </button>
+              <button id="qa-fill-sample" class="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">
+                Load sample
+              </button>
+            </div>
+            <div id="qa-answer" class="rounded-3xl bg-slate-50 border border-slate-200 p-5 text-slate-700 hidden"></div>
+          </div>
+          <div class="space-y-3">
+            <p class="text-sm font-black text-slate-500">Recommendations</p>
+            <div id="qa-recommendations" class="space-y-3"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl md:text-3xl font-black">2. Conversation monitoring and reply draft</h2>
+            <p class="text-sm text-slate-500 mt-1 leading-7">
+              Paste a conversation log to estimate sentiment, urgency, and a suggested reply.
+            </p>
+          </div>
+          <div class="px-4 py-2 rounded-2xl bg-amber-50 text-amber-700 font-black text-sm">
+            Negative review alert included
+          </div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-[1.05fr_0.95fr] gap-5">
+          <div class="space-y-4">
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Conversation text</span>
+              <textarea id="monitor-input" rows="10" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500" placeholder="Example: The guest says the pickup was late and wants an immediate explanation."></textarea>
+            </label>
+            <div class="flex flex-wrap gap-3">
+              <button id="monitor-run" class="px-5 py-3 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800">
+                Analyze conversation
+              </button>
+              <button id="monitor-fill-sample" class="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">
+                Load sample
+              </button>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <p class="font-black">Risk level</p>
+                <span id="risk-level" class="px-3 py-1 rounded-full bg-slate-200 text-slate-600 text-sm font-black">Not analyzed</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-sm">
+                <div class="rounded-2xl bg-white border border-slate-200 p-4">
+                  <p class="text-slate-400 font-black text-xs uppercase">Sentiment</p>
+                  <p id="sentiment-label" class="text-xl font-black mt-2">-</p>
+                </div>
+                <div class="rounded-2xl bg-white border border-slate-200 p-4">
+                  <p class="text-slate-400 font-black text-xs uppercase">Priority</p>
+                  <p id="priority-label" class="text-xl font-black mt-2">-</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <p class="font-black mb-2">Suggested reply</p>
+              <p id="monitor-suggestion" class="text-sm leading-7 text-slate-700 whitespace-pre-wrap">Run analysis first.</p>
+            </div>
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <p class="font-black mb-2">Triggered keywords</p>
+              <div id="risk-tags" class="flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl md:text-3xl font-black">3. Group tracking center</h2>
+            <p class="text-sm text-slate-500 mt-1 leading-7">
+              Create a simple list of groups now. Later we can connect the dual webhook pipeline and build a full service timeline.
+            </p>
+          </div>
+          <div class="px-4 py-2 rounded-2xl bg-emerald-50 text-emerald-700 font-black text-sm">
+            Ready for bot tracking
+          </div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-5">
+          <form id="group-form" class="rounded-3xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+            <div>
+              <p class="text-lg font-black">Add tracked group</p>
+              <p class="text-sm text-slate-500 mt-1 leading-7">
+                Start with group name, platform, owner, and notes. The webhook timeline can be added next.
+              </p>
+            </div>
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Group or tour name</span>
+              <input name="name" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500" placeholder="Example: 05/20 Kyushu Family Tour LINE group">
+            </label>
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Platform</span>
+              <select name="platform" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+                <option value="line">LINE</option>
+                <option value="facebook">Facebook</option>
+                <option value="telegram">Telegram</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Guide or owner</span>
+              <input name="owner" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500" placeholder="Example: Tonyfang">
+            </label>
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Current status</span>
+              <select name="status" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+                <option value="watching">Watching</option>
+                <option value="pending-bot">Pending bot access</option>
+                <option value="warning">Needs attention</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="block text-sm font-black mb-2">Notes</span>
+              <textarea name="notes" rows="4" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500" placeholder="Example: Senior guests, high sensitivity to pickup timing and meal changes."></textarea>
+            </label>
+            <button type="submit" class="w-full rounded-2xl bg-blue-600 text-white font-black py-3 hover:bg-blue-700">
+              Add to tracking list
+            </button>
+          </form>
+
+          <div class="space-y-4">
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <p class="text-lg font-black">Dual webhook checklist</p>
+              <ul class="mt-3 space-y-2 text-sm text-slate-600 list-disc list-inside leading-7">
+                <li>LINE Webhook should hit Worker first, then Worker forwards to GAS.</li>
+                <li>Worker may also forward the same payload to a second system.</li>
+                <li>Worker should be the only place that calls the LINE Reply API.</li>
+                <li>Later we can store group events into D1 for service-quality tracking.</li>
+              </ul>
+            </div>
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <p class="text-lg font-black">Next upgrades</p>
+              <ul class="mt-3 space-y-2 text-sm text-slate-600 list-disc list-inside leading-7">
+                <li>Write webhook event timelines into D1.</li>
+                <li>Send high-risk alerts to manager channels.</li>
+                <li>Replace rules-based reply drafts with a true AI suggestion service.</li>
+              </ul>
+            </div>
+            <div id="group-list" class="space-y-3"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-black shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const previewMode = location.protocol === 'file:';
+    const previewItineraries = [
+      {
+        id: '1778030927507',
+        title: 'Spring Tohoku Hot Spring Tour',
+        region: 'Asia',
+        price: 19900,
+        days: 4,
+        image: 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev/tours/cover_1778030842931.jpg',
+        description: 'A slower-paced Tohoku itinerary with hot springs and scenic highlights for seniors and families.',
+        notes: 'Best for guests who care about hot springs and pace.',
+        reviewstatus: 'published',
+        ownername: 'Tonyfang'
+      },
+      {
+        id: '1777948071803',
+        title: 'Kumamoto Family Fun Kyushu Tour',
+        region: 'Asia',
+        price: 35500,
+        days: 5,
+        image: 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev/tours/cover_1777948051078.jpg',
+        description: 'A family-friendly Kyushu trip with a lighter rhythm and broad appeal.',
+        notes: 'Strong fit for family and shopping requests.',
+        reviewstatus: 'pending_review',
+        ownername: 'Tonyfang'
+      },
+      {
+        id: '1777246281232',
+        title: 'Korea Food and Culture Trip',
+        region: 'Asia',
+        price: 16500,
+        days: 5,
+        image: 'https://images.unsplash.com/photo-1538485399081-7c897d2b648c?auto=format&fit=crop&w=1200&q=80',
+        description: 'Focused on food, city highlights, and trend-driven travel.',
+        notes: 'Good for younger guests and photo-heavy itineraries.',
+        reviewstatus: 'published',
+        ownername: 'Tonyfang'
+      }
+    ];
+    const previewGroups = [
+      { id: 'g1', name: '05/20 Kyushu Family Tour LINE Group', platform: 'line', owner: 'Tonyfang', status: 'watching', notes: 'Many parent questions, quick answers required.' },
+      { id: 'g2', name: '06/01 Korea Food Tour LINE Group', platform: 'line', owner: 'Amy', status: 'warning', notes: 'A guest already complained about unclear assembly details.' }
+    ];
+    const NEGATIVE_KEYWORDS = ['refund', 'complaint', 'angry', 'disappointed', 'cancel', 'bad', 'late', 'problem', 'upset', 'delay'];
+    const URGENT_KEYWORDS = ['now', 'urgent', 'immediately', 'asap', 'right away', 'today'];
+
+    let allItineraries = [];
+    let trackedGroups = [];
+
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorTextEl = document.getElementById('error-text');
+    const contentEl = document.getElementById('content');
+    const previewNoteEl = document.getElementById('preview-note');
+    const qaInputEl = document.getElementById('qa-input');
+    const qaAnswerEl = document.getElementById('qa-answer');
+    const qaRecommendationsEl = document.getElementById('qa-recommendations');
+    const monitorInputEl = document.getElementById('monitor-input');
+    const riskLevelEl = document.getElementById('risk-level');
+    const sentimentLabelEl = document.getElementById('sentiment-label');
+    const priorityLabelEl = document.getElementById('priority-label');
+    const monitorSuggestionEl = document.getElementById('monitor-suggestion');
+    const riskTagsEl = document.getElementById('risk-tags');
+    const groupListEl = document.getElementById('group-list');
+    const groupFormEl = document.getElementById('group-form');
+
+    function showToast(message, type = 'success') {
+      const el = document.getElementById('toast');
+      el.hidden = false;
+      el.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-black shadow-2xl ' +
+        (type === 'error' ? 'bg-red-500' : 'bg-emerald-500');
+      el.textContent = message;
+      setTimeout(() => { el.hidden = true; }, 2600);
+    }
+
+    function showError(message) {
+      loadingEl.hidden = true;
+      contentEl.hidden = true;
+      errorEl.hidden = false;
+      errorTextEl.textContent = message;
+    }
+
+    function getStoredGroups() {
+      try {
+        return JSON.parse(localStorage.getItem('tk-ai-groups') || '[]');
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function setStoredGroups(groups) {
+      trackedGroups = groups;
+      localStorage.setItem('tk-ai-groups', JSON.stringify(groups));
+    }
+
+    function updateStats() {
+      const published = allItineraries.filter(item => String(item.reviewstatus || '').toLowerCase() === 'published').length;
+      const latestAnalysis = analyzeConversation(monitorInputEl.value || '');
+      document.getElementById('stat-itineraries').textContent = allItineraries.length;
+      document.getElementById('stat-published').textContent = published;
+      document.getElementById('stat-alerts').textContent = latestAnalysis.matches.length;
+      document.getElementById('stat-groups').textContent = trackedGroups.length;
+    }
+
+    function extractTokens(text) {
+      const words = (String(text || '').toLowerCase().match(/[a-z0-9]+/g) || []);
+      return [...new Set(words)];
+    }
+
+    function itineraryScore(item, tokens, question) {
+      const haystack = [
+        item.title || '',
+        item.region || '',
+        item.description || '',
+        item.notes || ''
+      ].join(' ').toLowerCase();
+
+      let score = 0;
+      for (const token of tokens) {
+        if (haystack.includes(token)) score += 2;
+      }
+
+      const budgetMatch = String(question || '').match(/(\d{4,6})/);
+      if (budgetMatch) {
+        const budget = Number(budgetMatch[1]);
+        if (Math.abs(Number(item.price || 0) - budget) <= 5000) score += 2;
+      }
+
+      if (/senior|hot spring|slow/.test(question) && /senior|hot spring|slow/.test(haystack)) score += 3;
+      if (/family|kid|child/.test(question) && /family|kid|child/.test(haystack)) score += 3;
+      if (/korea/.test(question) && /korea/.test(haystack)) score += 3;
+      if (/japan|kyushu|tohoku/.test(question) && /japan|kyushu|tohoku/.test(haystack)) score += 3;
+
+      return score;
+    }
+
+    function getRecommendations(question) {
+      const normalized = String(question || '').trim().toLowerCase();
+      const tokens = extractTokens(normalized);
+      return allItineraries
+        .map(item => ({ item, score: itineraryScore(item, tokens, normalized) }))
+        .filter(entry => entry.score > 0)
+        .sort((a, b) => b.score - a.score || Number(a.item.price || 0) - Number(b.item.price || 0))
+        .slice(0, 3);
+    }
+
+    function renderRecommendations(question) {
+      const results = getRecommendations(question);
+      qaRecommendationsEl.innerHTML = '';
+      if (!results.length) {
+        qaRecommendationsEl.innerHTML = '<div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-400 font-bold">No strong match yet. Add destination, budget, days, or traveler type.</div>';
+        qaAnswerEl.classList.remove('hidden');
+        qaAnswerEl.innerHTML = 'Suggested follow-up questions:<br>1. Budget range<br>2. Preferred destination<br>3. Senior, family, or friends?';
+        return;
+      }
+
+      qaAnswerEl.classList.remove('hidden');
+      qaAnswerEl.innerHTML = `
+        <p class="font-black text-slate-900 mb-2">Suggested direction</p>
+        <p class="leading-7 text-sm md:text-base">
+          Based on the current question, these are the best-matching itineraries from your current product set.
+          You can use them as a reply draft and then refine by budget, month, or traveler type.
+        </p>
+      `;
+
+      for (const { item, score } of results) {
+        const card = document.createElement('article');
+        card.className = 'rounded-3xl border border-slate-200 bg-white p-4';
+        card.innerHTML = `
+          <div class="flex gap-4">
+            <img src="${item.image || 'https://via.placeholder.com/320x220?text=No+Image'}" alt="" class="w-24 h-24 rounded-2xl object-cover bg-slate-100 shrink-0">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-black">Score ${score}</span>
+                <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-black">${item.region || '-'} · ${item.days || 0} days</span>
+              </div>
+              <h3 class="text-lg font-black leading-6">${item.title || 'Untitled itinerary'}</h3>
+              <p class="text-sm text-slate-500 mt-1">NT$ ${Number(item.price || 0).toLocaleString()} · Owner ${item.ownername || '-'}</p>
+              <p class="text-sm text-slate-600 mt-2 line-clamp-3">${item.description || item.notes || 'No description available.'}</p>
+            </div>
+          </div>
+        `;
+        qaRecommendationsEl.appendChild(card);
+      }
+    }
+
+    function analyzeConversation(text) {
+      const content = String(text || '').toLowerCase().trim();
+      const matches = NEGATIVE_KEYWORDS.filter(keyword => content.includes(keyword));
+      const urgent = URGENT_KEYWORDS.filter(keyword => content.includes(keyword));
+      const negativeScore = matches.length * 2 + urgent.length;
+
+      let risk = 'low';
+      let sentiment = 'Neutral';
+      let priority = 'Normal';
+      if (negativeScore >= 5) {
+        risk = 'high';
+        sentiment = 'Negative';
+        priority = 'Immediate';
+      } else if (negativeScore >= 2) {
+        risk = 'medium';
+        sentiment = 'At risk';
+        priority = 'Follow soon';
+      }
+
+      let suggestion = 'Low risk so far. Keep the reply calm and confirm the guest need clearly.';
+      if (risk === 'medium') {
+        suggestion = 'Acknowledge the issue, clarify the exact problem, and commit to a concrete follow-up window.';
+      } else if (risk === 'high') {
+        suggestion = 'Step in quickly. Apologize, confirm the impact, and notify the guide or manager immediately.';
+      }
+
+      return { matches, urgent, risk, sentiment, priority, suggestion };
+    }
+
+    function renderConversationAnalysis() {
+      const result = analyzeConversation(monitorInputEl.value);
+      riskLevelEl.textContent = result.risk === 'high' ? 'High risk' : result.risk === 'medium' ? 'Medium risk' : 'Low risk';
+      riskLevelEl.className = 'px-3 py-1 rounded-full text-sm font-black ' +
+        (result.risk === 'high'
+          ? 'bg-rose-100 text-rose-700'
+          : result.risk === 'medium'
+            ? 'bg-amber-100 text-amber-700'
+            : 'bg-emerald-100 text-emerald-700');
+      sentimentLabelEl.textContent = result.sentiment;
+      priorityLabelEl.textContent = result.priority;
+      monitorSuggestionEl.textContent = result.suggestion;
+      riskTagsEl.innerHTML = '';
+      const tags = [...result.matches, ...result.urgent];
+      if (!tags.length) {
+        riskTagsEl.innerHTML = '<span class="px-3 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-black">No risk keywords found</span>';
+      } else {
+        for (const tag of tags) {
+          const pill = document.createElement('span');
+          pill.className = 'px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-black';
+          pill.textContent = tag;
+          riskTagsEl.appendChild(pill);
+        }
+      }
+      updateStats();
+    }
+
+    function statusLabel(status) {
+      if (status === 'watching') return 'Watching';
+      if (status === 'pending-bot') return 'Pending bot';
+      if (status === 'warning') return 'Warning';
+      if (status === 'archived') return 'Archived';
+      return 'Unknown';
+    }
+
+    function statusClass(status) {
+      if (status === 'watching') return 'bg-emerald-100 text-emerald-700';
+      if (status === 'pending-bot') return 'bg-slate-200 text-slate-700';
+      if (status === 'warning') return 'bg-rose-100 text-rose-700';
+      if (status === 'archived') return 'bg-blue-100 text-blue-700';
+      return 'bg-slate-100 text-slate-600';
+    }
+
+    function renderGroups() {
+      groupListEl.innerHTML = '';
+      if (!trackedGroups.length) {
+        groupListEl.innerHTML = '<div class="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-400 font-bold">No tracked groups yet</div>';
+        updateStats();
+        return;
+      }
+
+      for (const group of trackedGroups) {
+        const card = document.createElement('article');
+        card.className = 'rounded-3xl border border-slate-200 bg-white p-5';
+        card.innerHTML = `
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="px-3 py-1 rounded-full text-xs font-black ${statusClass(group.status)}">${statusLabel(group.status)}</span>
+                <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-black">${group.platform.toUpperCase()}</span>
+              </div>
+              <h3 class="text-lg font-black break-words">${group.name}</h3>
+              <p class="text-sm text-slate-500 mt-1">Owner: ${group.owner || 'Not assigned'}</p>
+              <p class="text-sm text-slate-600 mt-2">${group.notes || 'No notes yet.'}</p>
+            </div>
+            <div class="flex gap-2">
+              <button data-group-id="${group.id}" class="group-delete px-4 py-2 rounded-2xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">Delete</button>
+            </div>
+          </div>
+        `;
+        groupListEl.appendChild(card);
+      }
+
+      groupListEl.querySelectorAll('.group-delete').forEach(button => {
+        button.addEventListener('click', () => {
+          const id = button.getAttribute('data-group-id');
+          setStoredGroups(trackedGroups.filter(group => group.id !== id));
+          renderGroups();
+          showToast('Group removed');
+        });
+      });
+
+      updateStats();
+    }
+
+    async function loadRealData() {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`).then(r => r.json());
+      if (!statusRes?.data?.isAdmin) {
+        throw new Error('Admin access required for AI Guide System.');
+      }
+
+      const itinerariesRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r => r.json());
+      allItineraries = Array.isArray(itinerariesRes) ? itinerariesRes : (itinerariesRes?.data || []);
+    }
+
+    function bindEvents() {
+      document.getElementById('qa-run').addEventListener('click', () => {
+        renderRecommendations(qaInputEl.value);
+      });
+      document.getElementById('qa-fill-sample').addEventListener('click', () => {
+        qaInputEl.value = 'Need a Japan hot spring trip for seniors, budget around 20000.';
+        renderRecommendations(qaInputEl.value);
+      });
+      document.getElementById('monitor-run').addEventListener('click', () => {
+        renderConversationAnalysis();
+      });
+      document.getElementById('monitor-fill-sample').addEventListener('click', () => {
+        monitorInputEl.value = 'The guest says pickup details are unclear and the driver is late. They are upset and want help now.';
+        renderConversationAnalysis();
+      });
+      groupFormEl.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const formData = new FormData(groupFormEl);
+        const next = {
+          id: `g-${Date.now()}`,
+          name: String(formData.get('name') || '').trim(),
+          platform: String(formData.get('platform') || 'line'),
+          owner: String(formData.get('owner') || '').trim(),
+          status: String(formData.get('status') || 'watching'),
+          notes: String(formData.get('notes') || '').trim()
+        };
+        if (!next.name) {
+          showToast('Please enter a group name.', 'error');
+          return;
+        }
+        setStoredGroups([next, ...trackedGroups]);
+        groupFormEl.reset();
+        renderGroups();
+        showToast('Added to tracking list');
+      });
+    }
+
+    async function boot() {
+      trackedGroups = getStoredGroups();
+      if (!trackedGroups.length) setStoredGroups(previewGroups);
+
+      try {
+        if (previewMode) {
+          previewNoteEl.hidden = false;
+          allItineraries = previewItineraries;
+        } else {
+          await loadRealData();
+        }
+
+        loadingEl.hidden = true;
+        errorEl.hidden = true;
+        contentEl.hidden = false;
+        bindEvents();
+        renderRecommendations(qaInputEl.value);
+        renderConversationAnalysis();
+        renderGroups();
+        updateStats();
+      } catch (err) {
+        console.error(err);
+        showError(err.message || 'Load failed');
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>
