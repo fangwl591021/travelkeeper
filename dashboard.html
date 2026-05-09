@@ -1031,7 +1031,48 @@ function App() {
   };
 
   const fetchJson = (url, fallback) =>
-    fetch(url).then(r => r.json()).catch(() => fallback);
+      fetch(url).then(r => r.json()).catch(() => fallback);
+
+  const recoverLiffSession = async (reason = '') => {
+    const msg = String(reason || '').toLowerCase();
+    const shouldRelogin =
+      msg.includes('access token expired') ||
+      msg.includes('token expired') ||
+      msg.includes('unauthorized') ||
+      msg.includes('401');
+
+    if (!shouldRelogin) return false;
+
+    showToast('LINE 登入已過期，正在重新驗證…', 'error');
+    try {
+      if (typeof liff !== 'undefined' && liff.login) {
+        setTimeout(() => liff.login({ redirectUri: location.href }), 300);
+        return true;
+      }
+    } catch (err) {
+      console.error('liff relogin failed:', err);
+    }
+    return false;
+  };
+
+  const ensureFreshLiffSession = async () => {
+    if (typeof liff === 'undefined') throw new Error('LIFF_NOT_READY');
+    if (!liff.isLoggedIn || !liff.isLoggedIn()) {
+      if (liff.login) {
+        liff.login({ redirectUri: location.href });
+        throw new Error('LIFF_LOGIN_REQUIRED');
+      }
+      throw new Error('LIFF_NOT_LOGGED_IN');
+    }
+    try {
+      await liff.getProfile();
+      return true;
+    } catch (err) {
+      const handled = await recoverLiffSession(err?.message || String(err));
+      if (handled) throw new Error('LIFF_SESSION_REFRESHING');
+      throw err;
+    }
+  };
 
   const loadAdminViewData = async (userId, targetView) => {
     if (!userId) return;
@@ -1482,6 +1523,8 @@ function App() {
 
     setPushingFlex(true);
     try {
+      await ensureFreshLiffSession();
+
       const myInviteCode = distData?.inviteCode || '';
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -1543,6 +1586,11 @@ function App() {
       console.error('shareTargetPicker error:', e);
       if (e?.name === 'AbortError') {
         showToast('\u5206\u4eab\u670d\u52d9\u903e\u6642\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66', 'error');
+      } else if (e?.message === 'LIFF_SESSION_REFRESHING' || e?.message === 'LIFF_LOGIN_REQUIRED') {
+        // recoverLiffSession 已處理提示與重新登入
+        return;
+      } else if (await recoverLiffSession(e?.message || String(e))) {
+        return;
       } else {
         showToast('\u5206\u4eab\u5931\u6557\uff1a' + (e.message || '\u672a\u77e5\u932f\u8aa4'), 'error');
       }
