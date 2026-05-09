@@ -1,0 +1,2 @@
+ALTER TABLE itineraries
+ADD COLUMN commission_amount INTEGER NOT NULL DEFAULT 0;

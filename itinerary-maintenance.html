@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>行程維護 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900">
+  <div class="max-w-5xl mx-auto px-4 py-6 md:px-8 md:py-10">
+    <div class="flex items-center justify-between gap-4 mb-6">
+      <div>
+        <p class="text-xs font-black tracking-[0.18em] text-slate-400 uppercase">Itinerary</p>
+        <h1 class="text-3xl md:text-4xl font-black mt-1">行程維護</h1>
+        <p id="subtitle" class="text-sm md:text-base text-slate-500 mt-2">正在讀取行程資料...</p>
+      </div>
+      <a href="dashboard.html#mine" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">返回我上稿的</a>
+    </div>
+
+    <div id="loading" class="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">
+      讀取中...
+    </div>
+
+    <div id="error" hidden class="bg-white rounded-3xl border border-red-200 p-10 text-center">
+      <h2 class="text-xl font-black text-red-600 mb-2">載入失敗</h2>
+      <p id="error-text" class="text-slate-500"></p>
+    </div>
+
+    <form id="form" hidden class="space-y-6">
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex items-start gap-4">
+          <img id="cover-preview" src="" alt="" class="w-28 h-20 md:w-40 md:h-28 rounded-2xl object-cover bg-slate-100 shrink-0">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span id="status-pill" class="px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">-</span>
+              <span id="owner-pill" class="px-3 py-1 rounded-full text-xs font-black bg-blue-50 text-blue-700">-</span>
+            </div>
+            <h2 id="title-preview" class="text-xl md:text-2xl font-black break-words">-</h2>
+            <p id="meta-preview" class="text-sm md:text-base text-slate-500 mt-2">-</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h3 class="text-2xl font-black">內容</h3>
+            <p class="text-sm text-slate-500 mt-1">這一區給上稿者維護行程對外內容。</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+          <label class="block">
+            <span class="block text-sm font-black mb-2">行程名稱</span>
+            <input name="title" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">封面圖片 URL</span>
+            <input name="image" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">地區</span>
+            <input name="region" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">天數</span>
+            <input type="number" min="1" name="days" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block md:col-span-2">
+            <span class="block text-sm font-black mb-2">售價</span>
+            <input type="number" min="0" step="1" name="price" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block md:col-span-2">
+            <span class="block text-sm font-black mb-2">行程描述</span>
+            <textarea name="description" rows="8" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
+          </label>
+          <label class="block md:col-span-2">
+            <span class="block text-sm font-black mb-2">備註</span>
+            <textarea name="notes" rows="4" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section id="admin-controls" hidden class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="mb-5">
+          <h3 class="text-2xl font-black">銷售規則</h3>
+          <p class="text-sm text-slate-500 mt-1">這一區只給管理員設定，經銷商看不到。</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+          <label class="block">
+            <span class="block text-sm font-black mb-2">分潤金額</span>
+            <input type="number" min="0" step="1" name="commissionAmount" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">名額上限</span>
+            <input type="number" min="0" step="1" name="seatLimit" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">最低成團人數</span>
+            <input type="number" min="0" step="1" name="minGroupSize" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">付款模式</span>
+            <select name="paymentMode" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <option value="deposit">訂金</option>
+              <option value="full">全額</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">訂金比例 (%)</span>
+            <input type="number" min="0" max="100" step="1" name="depositRatio" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-black mb-2">尾款收款方式</span>
+            <select name="balanceCollect" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <option value="online">線上</option>
+              <option value="offline">線下</option>
+              <option value="not_required">不需要</option>
+            </select>
+          </label>
+          <fieldset class="md:col-span-2">
+            <legend class="block text-sm font-black mb-2">允許付款方式</legend>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" name="allowedPaymentMethods" value="credit_card">
+                <span class="font-bold">信用卡</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" name="allowedPaymentMethods" value="linepay">
+                <span class="font-bold">LINE Pay</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" name="allowedPaymentMethods" value="atm">
+                <span class="font-bold">ATM</span>
+              </label>
+            </div>
+          </fieldset>
+          <label class="flex items-center justify-between md:col-span-2 rounded-2xl border border-slate-200 px-4 py-4">
+            <div>
+              <span class="block text-sm font-black">允許分享</span>
+              <span class="block text-xs text-slate-500 mt-1">關掉後，經銷商仍可看見，但不應再被拿去推廣。</span>
+            </div>
+            <input type="checkbox" name="shareEnabled" class="w-5 h-5">
+          </label>
+        </div>
+      </section>
+
+      <div class="sticky bottom-3">
+        <button id="save-btn" type="submit" class="w-full rounded-2xl bg-blue-600 text-white font-black text-lg py-4 hover:bg-blue-700 disabled:opacity-50">
+          儲存變更
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-black shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const params = new URLSearchParams(location.search);
+    const itineraryId = params.get('id') || '';
+
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorTextEl = document.getElementById('error-text');
+    const formEl = document.getElementById('form');
+    const adminControlsEl = document.getElementById('admin-controls');
+    const saveBtn = document.getElementById('save-btn');
+
+    let profile = null;
+    let userStatus = null;
+    let current = null;
+
+    function showToast(message, type = 'success') {
+      const el = document.getElementById('toast');
+      el.hidden = false;
+      el.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-black shadow-2xl ' +
+        (type === 'error' ? 'bg-red-500' : 'bg-emerald-500');
+      el.textContent = message;
+      setTimeout(() => { el.hidden = true; }, 2800);
+    }
+
+    function showError(message) {
+      loadingEl.hidden = true;
+      formEl.hidden = true;
+      errorEl.hidden = false;
+      errorTextEl.textContent = message;
+    }
+
+    function setPreview(data) {
+      document.getElementById('cover-preview').src = data.image || 'https://via.placeholder.com/640x420?text=No+Image';
+      document.getElementById('title-preview').textContent = data.title || '未命名行程';
+      document.getElementById('meta-preview').textContent = `${data.region || '-'} · ${data.days || 0} 天 · NT$ ${(Number(data.price || 0)).toLocaleString()}`;
+      document.getElementById('status-pill').textContent = data.reviewStatus || data.reviewstatus || 'published';
+      document.getElementById('owner-pill').textContent = userStatus?.data?.isAdmin ? '管理員視角' : '上稿者視角';
+      document.getElementById('subtitle').textContent = data.title || '行程維護';
+    }
+
+    function setField(name, value) {
+      const field = formEl.elements[name];
+      if (!field) return;
+      if (field.type === 'checkbox') {
+        field.checked = !!value;
+      } else {
+        field.value = value ?? '';
+      }
+    }
+
+    function fillForm(data) {
+      setPreview(data);
+      setField('title', data.title);
+      setField('image', data.image);
+      setField('region', data.region);
+      setField('days', data.days);
+      setField('price', data.price);
+      setField('description', data.description);
+      setField('notes', data.notes);
+      setField('commissionAmount', data.commissionAmount);
+      setField('seatLimit', data.seatLimit);
+      setField('minGroupSize', data.minGroupSize);
+      setField('paymentMode', data.paymentMode);
+      setField('depositRatio', data.depositRatio);
+      setField('balanceCollect', data.balanceCollect);
+      setField('shareEnabled', !!data.shareEnabled);
+
+      const allowed = new Set(Array.isArray(data.allowedPaymentMethods) ? data.allowedPaymentMethods : []);
+      formEl.querySelectorAll('input[name="allowedPaymentMethods"]').forEach(input => {
+        input.checked = allowed.has(input.value);
+      });
+    }
+
+    function collectPayload() {
+      const allowedPaymentMethods = [...formEl.querySelectorAll('input[name="allowedPaymentMethods"]:checked')].map(input => input.value);
+      return {
+        id: itineraryId,
+        uid: profile.userId,
+        title: formEl.elements.title.value.trim(),
+        image: formEl.elements.image.value.trim(),
+        region: formEl.elements.region.value.trim(),
+        days: Number(formEl.elements.days.value || 0),
+        price: Number(formEl.elements.price.value || 0),
+        description: formEl.elements.description.value.trim(),
+        notes: formEl.elements.notes.value.trim(),
+        paymentMode: formEl.elements.paymentMode.value,
+        depositRatio: Number(formEl.elements.depositRatio.value || 0),
+        balanceCollect: formEl.elements.balanceCollect.value,
+        commissionAmount: Number(formEl.elements.commissionAmount.value || 0),
+        seatLimit: Number(formEl.elements.seatLimit.value || 0),
+        minGroupSize: Number(formEl.elements.minGroupSize.value || 0),
+        allowedPaymentMethods,
+        shareEnabled: formEl.elements.shareEnabled.checked,
+      };
+    }
+
+    async function load() {
+      if (!itineraryId) return showError('缺少行程 id');
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+
+        profile = await liff.getProfile();
+        const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
+        userStatus = await statusRes.json();
+        if (!userStatus?.success) return showError('身份驗證失敗');
+
+        const detailRes = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}`);
+        const detail = await detailRes.json();
+        if (!detail?.success) return showError(detail?.error || '讀取行程失敗');
+
+        current = detail.data;
+        fillForm(current);
+        adminControlsEl.hidden = !userStatus.data.isAdmin;
+        loadingEl.hidden = true;
+        formEl.hidden = false;
+      } catch (err) {
+        showError(err.message || '載入失敗');
+      }
+    }
+
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      saveBtn.disabled = true;
+      saveBtn.textContent = '儲存中...';
+      try {
+        const res = await fetch(`${WORKER_URL}/api/itinerary/detail`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(collectPayload()),
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error || '儲存失敗');
+        current = result.data || current;
+        fillForm(current);
+        showToast('已儲存');
+      } catch (err) {
+        showToast(err.message || '儲存失敗', 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '儲存變更';
+      }
+    });
+
+    formEl.addEventListener('input', () => {
+      const image = formEl.elements.image.value.trim();
+      if (image) document.getElementById('cover-preview').src = image;
+      document.getElementById('title-preview').textContent = formEl.elements.title.value.trim() || '未命名行程';
+      document.getElementById('meta-preview').textContent =
+        `${formEl.elements.region.value.trim() || '-'} · ${formEl.elements.days.value || 0} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
+    });
+
+    load();
+  </script>
+</body>
+</html>

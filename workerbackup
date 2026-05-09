@@ -201,6 +201,7 @@ function toSheetItinerary(row) {
     ownername: row.owner_name,
     reviewstatus: row.review_status,
     reviewnote: row.review_note,
+    commissionamount: row.commission_amount,
     paymentmode: row.payment_mode,
     depositratio: row.deposit_ratio,
     balancecollect: row.balance_collect,
@@ -245,6 +246,299 @@ async function readItinerariesWithFallback(env, params = {}) {
     }
   }
   return gasGet(env, { action: 'getItineraries', ...normalized });
+}
+
+function toItineraryManageModel(row) {
+  return {
+    id: row.id,
+    title: row.title || '',
+    region: row.region || '',
+    price: Number(row.price || 0),
+    days: Number(row.days || 0),
+    image: row.image || '',
+    description: row.description || '',
+    notes: row.notes || '',
+    ownerUid: row.owner_uid || '',
+    ownerName: row.owner_name || '',
+    reviewStatus: row.review_status || 'published',
+    reviewNote: row.review_note || '',
+    commissionAmount: Number(row.commission_amount || 0),
+    paymentMode: row.payment_mode || 'deposit',
+    depositRatio: Number(row.deposit_ratio || 20),
+    balanceCollect: row.balance_collect || 'online',
+    seatLimit: Number(row.seat_limit || 0),
+    minGroupSize: Number(row.min_group_size || 0),
+    allowedPaymentMethods: String(row.allowed_payment_methods || 'credit_card,linepay,atm')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean),
+    shareEnabled: Number(row.share_enabled ?? 1) === 1,
+    createdAt: row.created_at || '',
+    updatedAt: row.updated_at || '',
+  };
+}
+
+function normalizeAllowedPaymentMethods(value) {
+  const list = Array.isArray(value)
+    ? value
+    : String(value || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean);
+  const allowed = ['credit_card', 'linepay', 'atm'];
+  const normalized = [...new Set(list.filter(v => allowed.includes(v)))];
+  return normalized.join(',');
+}
+
+async function d1GetItineraryDetail(env, id) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return null;
+  return env.DB.prepare(`SELECT * FROM itineraries WHERE id = ?`).bind(normalizedId).first();
+}
+
+async function d1SaveItineraryDetail(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const itineraryId = String(body.id || '').trim();
+  const operatorUid = String(body.uid || body.operatorUid || '').trim();
+  if (!itineraryId) return { success: false, error: '缺少 id' };
+  if (!operatorUid) return { success: false, error: '缺少 uid' };
+
+  const existing = await d1GetItineraryDetail(env, itineraryId);
+  if (!existing) return { success: false, error: '找不到此行程' };
+
+  const isAdmin = ADMIN_UIDS.has(operatorUid);
+  const isOwner = String(existing.owner_uid || '') === operatorUid;
+  if (!isAdmin && !isOwner) return { success: false, error: '無權限編輯此行程' };
+
+  const basicUpdates = {
+    title: body.title ?? existing.title ?? '',
+    region: body.region ?? existing.region ?? '',
+    price: Number(body.price ?? existing.price ?? 0),
+    days: Number(body.days ?? existing.days ?? 0),
+    image: body.image ?? existing.image ?? '',
+    description: body.description ?? existing.description ?? '',
+    notes: body.notes ?? existing.notes ?? '',
+    payment_mode: body.paymentMode ?? body.paymentmode ?? existing.payment_mode ?? 'deposit',
+    deposit_ratio: Number(body.depositRatio ?? body.depositratio ?? existing.deposit_ratio ?? 20),
+    balance_collect: body.balanceCollect ?? body.balancecollect ?? existing.balance_collect ?? 'online',
+  };
+
+  const adminUpdates = isAdmin
+    ? {
+        commission_amount: Number(body.commissionAmount ?? body.commissionamount ?? existing.commission_amount ?? 0),
+        seat_limit: Number(body.seatLimit ?? body.seatlimit ?? existing.seat_limit ?? 0),
+        min_group_size: Number(body.minGroupSize ?? body.mingroupsize ?? existing.min_group_size ?? 0),
+        allowed_payment_methods: normalizeAllowedPaymentMethods(
+          body.allowedPaymentMethods ?? body.allowedpaymentmethods ?? existing.allowed_payment_methods ?? 'credit_card,linepay,atm'
+        ),
+        share_enabled: body.shareEnabled === undefined && body.shareenabled === undefined
+          ? Number(existing.share_enabled ?? 1)
+          : ((body.shareEnabled ?? body.shareenabled) ? 1 : 0),
+      }
+    : {};
+
+  const d1Updates = { ...basicUpdates, ...adminUpdates };
+  const d1Columns = Object.keys(d1Updates);
+  const d1Sets = d1Columns.map(column => `${column} = ?`);
+  const d1Values = d1Columns.map(column => d1Updates[column]);
+  d1Sets.push(`updated_at = datetime('now')`);
+
+  const updateRes = await env.DB.prepare(
+    `UPDATE itineraries SET ${d1Sets.join(', ')} WHERE id = ?`
+  ).bind(...d1Values, itineraryId).run();
+
+  if (!updateRes.success) return { success: false, error: '行程更新失敗' };
+
+  if (env.GAS_WEBAPP_URL) {
+    const gasBody = {
+      action: 'updateItinerary',
+      id: itineraryId,
+      operatorUid,
+      title: basicUpdates.title,
+      region: basicUpdates.region,
+      price: basicUpdates.price,
+      days: basicUpdates.days,
+      image: basicUpdates.image,
+      description: basicUpdates.description,
+      notes: basicUpdates.notes,
+      paymentMode: basicUpdates.payment_mode,
+      depositRatio: basicUpdates.deposit_ratio,
+      balanceCollect: basicUpdates.balance_collect,
+    };
+    if (isAdmin && adminUpdates.commission_amount !== undefined) {
+      gasBody.commissionAmount = adminUpdates.commission_amount;
+    }
+    try {
+      await gasPost(env, gasBody);
+    } catch (err) {
+      console.warn('sync updateItinerary to GAS failed:', err.message);
+    }
+  }
+
+  const fresh = await d1GetItineraryDetail(env, itineraryId);
+  return { success: true, data: toItineraryManageModel(fresh) };
+}
+
+function formatTaipeiDateTime(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+  return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second}`;
+}
+
+function normalizePhoneValue(value) {
+  return String(value || '').trim();
+}
+
+async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
+  if (!env.DB) throw new Error('D1 binding missing');
+
+  const itineraryId = String(body.itinerary_id || '').trim();
+  const distributorUid = String(body.distributor_uid || '').trim();
+  const customerName = String(body.customer_name || '').trim();
+  const customerPhone = normalizePhoneValue(body.customer_phone);
+  const customerLineUid = String(body.customer_line_uid || '').trim();
+  const travelers = Math.max(1, Number(body.travelers) || 1);
+  const travelDate = String(body.travel_date || '').trim();
+  const note = String(body.note || '').trim();
+  const source = String(body.source || 'referral').trim() || 'referral';
+
+  if (!itineraryId || !distributorUid || !customerName || !customerPhone) {
+    return { success: false, error: '缺少建立訂單所需欄位' };
+  }
+
+  const itinerary = await env.DB.prepare(
+    `SELECT * FROM itineraries WHERE id = ? AND (deleted_at IS NULL OR deleted_at = '')`
+  ).bind(itineraryId).first();
+  if (!itinerary) return { success: false, error: '找不到此行程' };
+
+  const distributor = await env.DB.prepare(
+    `SELECT * FROM distributors WHERE uid = ?`
+  ).bind(distributorUid).first();
+  if (!distributor) return { success: false, error: '找不到分銷商' };
+
+  const price = Number(itinerary.price || 0);
+  const totalAmount = price * travelers;
+  const paymentMode = String(itinerary.payment_mode || 'deposit').toLowerCase();
+  const depositRatio = Number(itinerary.deposit_ratio || 20);
+  const balanceCollect = paymentMode === 'full'
+    ? 'not_required'
+    : String(itinerary.balance_collect || 'online').toLowerCase();
+
+  const depositAmount = paymentMode === 'full'
+    ? totalAmount
+    : Math.round(totalAmount * depositRatio / 100);
+  const balanceAmount = paymentMode === 'full'
+    ? 0
+    : Math.max(0, totalAmount - depositAmount);
+
+  const commissionAmount = Number(itinerary.commission_amount || 0);
+  const createdAt = formatTaipeiDateTime(new Date());
+  const orderId = 'ORD' + Date.now() + Math.floor(1000 + Math.random() * 9000);
+  const initBalanceStatus = paymentMode === 'full' ? 'not_required' : 'unpaid';
+
+  const insertResult = await env.DB.prepare(`
+    INSERT INTO orders (
+      order_id, itinerary_id, itinerary_title, price, distributor_uid, customer_name, customer_phone, customer_line_uid,
+      travelers, travel_date, note, status, commission_amount, total_amount, deposit_amount, balance_amount, payment_mode,
+      balance_collect, deposit_status, deposit_paid_at, deposit_method, deposit_trade_no, balance_status, balance_paid_at,
+      balance_method, balance_trade_no, commission_status, commission_settled_at, commission_paid_out_at, source, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 'unpaid', '', '', '', ?, '', '', '', 'pending', '', '', ?, ?, ?)
+  `).bind(
+    orderId,
+    itineraryId,
+    String(itinerary.title || ''),
+    price,
+    distributorUid,
+    customerName,
+    customerPhone,
+    customerLineUid,
+    travelers,
+    travelDate,
+    note,
+    commissionAmount,
+    totalAmount,
+    depositAmount,
+    balanceAmount,
+    paymentMode,
+    balanceCollect,
+    initBalanceStatus,
+    source,
+    createdAt,
+    createdAt
+  ).run();
+
+  if (!insertResult.success) return { success: false, error: '訂單建立失敗' };
+
+  await env.DB.prepare(`
+    INSERT INTO customers (
+      customer_phone, customer_name, customer_line_uid, owner_uid, owner_name,
+      first_order_at, last_order_at, total_orders, total_amount, source, note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, '', ?, ?)
+    ON CONFLICT(customer_phone) DO UPDATE SET
+      customer_name = CASE WHEN customers.customer_name = '' THEN excluded.customer_name ELSE customers.customer_name END,
+      customer_line_uid = CASE WHEN customers.customer_line_uid = '' THEN excluded.customer_line_uid ELSE customers.customer_line_uid END,
+      last_order_at = excluded.last_order_at,
+      total_orders = customers.total_orders + 1,
+      total_amount = customers.total_amount + excluded.total_amount,
+      updated_at = excluded.updated_at
+  `).bind(
+    customerPhone,
+    customerName,
+    customerLineUid,
+    distributorUid,
+    String(distributor.name || ''),
+    createdAt,
+    createdAt,
+    totalAmount,
+    source,
+    createdAt,
+    createdAt
+  ).run();
+
+  await env.DB.prepare(`
+    UPDATE distributors
+       SET sales_revenue = COALESCE(sales_revenue, 0) + ?,
+           updated_at = datetime('now')
+     WHERE uid = ?
+  `).bind(totalAmount, distributorUid).run();
+
+  return {
+    success: true,
+    data: {
+      order: {
+        order_id: orderId,
+        itinerary_title: String(itinerary.title || ''),
+        price,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        travelers,
+        travel_date: travelDate,
+        note,
+        commission_amount: commissionAmount,
+        created_at: createdAt,
+        total_amount: totalAmount,
+        deposit_amount: depositAmount,
+        balance_amount: balanceAmount,
+        payment_mode: paymentMode,
+        balance_collect: balanceCollect,
+      },
+      distributor: {
+        name: distributor.name || '',
+        tgToken: distributor.tg_token || '',
+        tgChatId: distributor.tg_chat_id || '',
+      },
+    },
+  };
 }
 
 function toSheetOrder(row) {
@@ -347,6 +641,128 @@ async function d1GetDistributors(env) {
       ORDER BY created_at DESC`
   ).all();
   return results.map(toSheetDistributor);
+}
+
+const DISTRIBUTOR_PROFILE_FIELDS = {
+  name: 'name',
+  phone: 'phone',
+  email: 'email',
+  lineLink: 'line_link',
+  linelink: 'line_link',
+  lineAtLink: 'line_at_link',
+  lineatlink: 'line_at_link',
+  lineAtId: 'line_at_id',
+  lineatid: 'line_at_id',
+  fbLink: 'fb_link',
+  fblink: 'fb_link',
+  igLink: 'ig_link',
+  iglink: 'ig_link',
+  webLink: 'web_link',
+  weblink: 'web_link',
+  mapLink: 'map_link',
+  maplink: 'map_link',
+  tgToken: 'tg_token',
+  tgtoken: 'tg_token',
+  tgChatId: 'tg_chat_id',
+  tgchatid: 'tg_chat_id',
+  avatar: 'avatar',
+  bio: 'bio',
+  oaIntro: 'oa_intro',
+  oaintro: 'oa_intro',
+  bankAccount: 'bank_account',
+  bankaccount: 'bank_account',
+  bankName: 'bank_name',
+  bankname: 'bank_name',
+  bankBranch: 'bank_branch',
+  bankbranch: 'bank_branch',
+  bankHolder: 'bank_holder',
+  bankholder: 'bank_holder',
+};
+
+function pickDistributorProfileUpdates(body = {}) {
+  const updates = {};
+  for (const [key, column] of Object.entries(DISTRIBUTOR_PROFILE_FIELDS)) {
+    if (body[key] !== undefined) updates[column] = body[key] ?? '';
+  }
+  return updates;
+}
+
+async function d1GetDistributorProfile(env, uid) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return { success: false, error: '缺少 uid' };
+
+  const row = await env.DB.prepare(`SELECT * FROM distributors WHERE uid = ?`).bind(normalizedUid).first();
+  if (!row) return { success: false, error: '找不到此分銷商' };
+
+  return {
+    success: true,
+    data: {
+      uid: row.uid,
+      name: row.name || '',
+      phone: row.phone || '',
+      email: row.email || '',
+      agencySlug: row.agency_slug || '',
+      inviteCode: row.invite_code || '',
+      status: row.status || '',
+      commission: Number(row.commission_pct || 0),
+      canUpload: !!Number(row.can_upload || 0),
+      lineLink: row.line_link || '',
+      lineAtLink: row.line_at_link || '',
+      lineAtId: row.line_at_id || '',
+      fbLink: row.fb_link || '',
+      igLink: row.ig_link || '',
+      webLink: row.web_link || '',
+      mapLink: row.map_link || '',
+      tgToken: row.tg_token || '',
+      tgChatId: row.tg_chat_id || '',
+      avatar: row.avatar || '',
+      bio: row.bio || '',
+      oaIntro: row.oa_intro || '',
+      bankAccount: row.bank_account || '',
+      bankName: row.bank_name || '',
+      bankBranch: row.bank_branch || '',
+      bankHolder: row.bank_holder || '',
+    },
+  };
+}
+
+async function d1UpdateDistributorProfile(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedUid = String(body.uid || '').trim();
+  if (!normalizedUid) return { success: false, error: '缺少 uid' };
+
+  const updates = pickDistributorProfileUpdates(body);
+  if (Object.keys(updates).length === 0) {
+    return d1GetDistributorProfile(env, normalizedUid);
+  }
+
+  const columns = Object.keys(updates);
+  const sets = columns.map(column => `${column} = ?`);
+  const values = columns.map(column => updates[column]);
+  sets.push(`updated_at = datetime('now')`);
+
+  const result = await env.DB.prepare(
+    `UPDATE distributors SET ${sets.join(', ')} WHERE uid = ?`
+  ).bind(...values, normalizedUid).run();
+
+  if (!result.success) return { success: false, error: '分銷商更新失敗' };
+
+  if (env.GAS_WEBAPP_URL) {
+    const gasBody = { action: 'updateDistributorProfile', uid: normalizedUid };
+    for (const [key, column] of Object.entries(DISTRIBUTOR_PROFILE_FIELDS)) {
+      if (updates[column] !== undefined && gasBody[key] === undefined) {
+        gasBody[key] = updates[column];
+      }
+    }
+    try {
+      await gasPost(env, gasBody);
+    } catch (err) {
+      console.warn('sync updateDistributorProfile to GAS failed:', err.message);
+    }
+  }
+
+  return d1GetDistributorProfile(env, normalizedUid);
 }
 
 async function readDistributorsWithFallback(env) {
@@ -867,18 +1283,21 @@ export default {
         }
 
         // 1. 呼叫 GAS 寫訂單（GAS 端會查行程、查分銷商、算佣金、寫 Orders）
-        const result = await gasPost(env, {
-          action: 'createOrder',
-          agency_slug: agencySlug,
-          itinerary_id: body.itinerary_id,
-          distributor_uid: body.distributor_uid,
-          customer_line_uid: body.customer_line_uid || '',
-          customer_name: body.customer_name,
-          customer_phone: body.customer_phone,
-          travelers: Number(body.travelers) || 1,
-          travel_date: body.travel_date || '',
-          note: body.note || '',
-        });
+        const result = env.DB
+          ? await d1CreateOrder(env, body, agencySlug)
+          : await gasPost(env, {
+              action: 'createOrder',
+              agency_slug: agencySlug,
+              itinerary_id: body.itinerary_id,
+              distributor_uid: body.distributor_uid,
+              customer_line_uid: body.customer_line_uid || '',
+              customer_name: body.customer_name,
+              customer_phone: body.customer_phone,
+              travelers: Number(body.travelers) || 1,
+              travel_date: body.travel_date || '',
+              note: body.note || '',
+              source: body.source || 'referral',
+            });
 
         if (!result.success) {
           return json({ success: false, error: result.error || '訂單建立失敗' }, 500);
@@ -973,6 +1392,57 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
       // ══════════════════════════════════════════════════════════
       // GET /api/config
       // ══════════════════════════════════════════════════════════
+      if (path === '/api/dist/profile' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+
+        const result = env.DB
+          ? await d1GetDistributorProfile(env, uid)
+          : await gasPost(env, { action: 'getDistributorProfile', uid });
+
+        return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/dist/profile' && request.method === 'POST') {
+        const body = await request.json();
+        if (!body?.uid) return json({ success: false, error: '缺少 uid' }, 400);
+
+        const result = env.DB
+          ? await d1UpdateDistributorProfile(env, body)
+          : await gasPost(env, { action: 'updateDistributorProfile', ...body });
+
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/dist/test-tg' && request.method === 'POST') {
+        const body = await request.json();
+        const { tgToken, tgChatId, msg } = body || {};
+        if (!tgToken || !tgChatId) {
+          return json({ success: false, error: '缺少 tgToken 或 tgChatId' }, 400);
+        }
+
+        try {
+          const tgRes = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: tgChatId,
+              text: msg || '✅ 測試訊息：您的 Telegram 通知設定成功！未來訂單通知會送到這裡。',
+            }),
+          });
+          const tgResult = await tgRes.json();
+          if (tgResult.ok) {
+            return json({ success: true, message: '測試訊息已送達您的 Telegram' });
+          }
+          return json({
+            success: false,
+            error: 'TG 回傳錯誤：' + (tgResult.description || JSON.stringify(tgResult)),
+          });
+        } catch (err) {
+          return json({ success: false, error: '網路錯誤：' + err.message }, 500);
+        }
+      }
+
       if (path === '/api/config' && request.method === 'GET') {
         const slug   = url.searchParams.get('a') || 'demo';
         const result = await readConfigWithFallback(env, slug);
@@ -1006,6 +1476,57 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
       // GET /api/my/customers?uid=Uxxx
       // ★ 優先讀 D1，沒有再 fallback GAS
       // ══════════════════════════════════════════════════════════
+      if (path === '/api/itinerary/detail' && request.method === 'GET') {
+        const itineraryId = url.searchParams.get('id') || '';
+        const uid = url.searchParams.get('uid') || '';
+        if (!itineraryId) return json({ success: false, error: '缺少 id' }, 400);
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+
+        if (env.DB) {
+          const row = await d1GetItineraryDetail(env, itineraryId);
+          if (!row) return json({ success: false, error: '找不到此行程' }, 404);
+
+          const isAdmin = ADMIN_UIDS.has(uid);
+          const isOwner = String(row.owner_uid || '') === String(uid);
+          if (!isAdmin && !isOwner) {
+            return json({ success: false, error: '無權限查看此行程' }, 403);
+          }
+          return json({ success: true, data: toItineraryManageModel(row) });
+        }
+
+        const allItems = await gasGet(env, { action: 'getItineraries', all: '1' });
+        const items = Array.isArray(allItems) ? allItems : [];
+        const item = items.find(i => String(i.id || i.timestamp || '') === String(itineraryId));
+        if (!item) return json({ success: false, error: '找不到此行程' }, 404);
+        const isAdmin = ADMIN_UIDS.has(uid);
+        const isOwner = String(item.owneruid || '') === String(uid);
+        if (!isAdmin && !isOwner) return json({ success: false, error: '無權限查看此行程' }, 403);
+        return json({ success: true, data: item });
+      }
+
+      if (path === '/api/itinerary/detail' && request.method === 'POST') {
+        const body = await request.json();
+        const result = env.DB
+          ? await d1SaveItineraryDetail(env, body)
+          : await gasPost(env, {
+              action: 'updateItinerary',
+              id: body.id,
+              operatorUid: body.uid || body.operatorUid || '',
+              title: body.title,
+              region: body.region,
+              price: body.price,
+              days: body.days,
+              image: body.image,
+              description: body.description,
+              notes: body.notes,
+              paymentMode: body.paymentMode,
+              depositRatio: body.depositRatio,
+              balanceCollect: body.balanceCollect,
+            });
+
+        return json(result, result.success ? 200 : 400);
+      }
+
       if (path === '/api/my/customers' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
