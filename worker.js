@@ -348,6 +348,125 @@ async function d1GetDistributors(env) {
   return results.map(toSheetDistributor);
 }
 
+const DISTRIBUTOR_EDITABLE_FIELDS = {
+  name: 'name',
+  phone: 'phone',
+  email: 'email',
+  companyName: 'company_name',
+  companyname: 'company_name',
+  taxId: 'tax_id',
+  taxid: 'tax_id',
+  commission: 'commission_pct',
+  note: 'note',
+  lineLink: 'line_link',
+  linelink: 'line_link',
+  lineAtLink: 'line_at_link',
+  lineatlink: 'line_at_link',
+  lineAtId: 'line_at_id',
+  lineatid: 'line_at_id',
+  fbLink: 'fb_link',
+  fblink: 'fb_link',
+  igLink: 'ig_link',
+  iglink: 'ig_link',
+  webLink: 'web_link',
+  weblink: 'web_link',
+  mapLink: 'map_link',
+  maplink: 'map_link',
+  tgToken: 'tg_token',
+  tgtoken: 'tg_token',
+  tgChatId: 'tg_chat_id',
+  tgchatid: 'tg_chat_id',
+  avatar: 'avatar',
+  bio: 'bio',
+  oaIntro: 'oa_intro',
+  oaintro: 'oa_intro',
+  bankAccount: 'bank_account',
+  bankName: 'bank_name',
+  bankBranch: 'bank_branch',
+  bankHolder: 'bank_holder',
+};
+
+function buildDistributorUpdate(body = {}) {
+  const updates = {};
+  for (const [key, column] of Object.entries(DISTRIBUTOR_EDITABLE_FIELDS)) {
+    if (body[key] !== undefined) updates[column] = body[key];
+  }
+  if (updates.commission_pct !== undefined) {
+    updates.commission_pct = Number(updates.commission_pct) || 0;
+  }
+  for (const key of Object.keys(updates)) {
+    if (updates[key] === null) updates[key] = '';
+  }
+  return updates;
+}
+
+async function syncDistributorToGas(env, uid, updates) {
+  if (!env.GAS_WEBAPP_URL) return;
+  const gasBody = { action: 'updateDistributorProfile', uid };
+  const syncable = {
+    phone: 'phone',
+    email: 'email',
+    line_link: 'lineLink',
+    line_at_link: 'lineAtLink',
+    line_at_id: 'lineAtId',
+    fb_link: 'fbLink',
+    ig_link: 'igLink',
+    web_link: 'webLink',
+    map_link: 'mapLink',
+    tg_token: 'tgToken',
+    tg_chat_id: 'tgChatId',
+    avatar: 'avatar',
+    bio: 'bio',
+    oa_intro: 'oaIntro',
+    bank_account: 'bankAccount',
+    bank_name: 'bankName',
+    bank_branch: 'bankBranch',
+    bank_holder: 'bankHolder',
+  };
+  let hasSyncable = false;
+  for (const [column, gasKey] of Object.entries(syncable)) {
+    if (updates[column] !== undefined) {
+      gasBody[gasKey] = updates[column];
+      hasSyncable = true;
+    }
+  }
+  if (!hasSyncable) return;
+  try {
+    await gasPost(env, gasBody);
+  } catch (err) {
+    console.warn('syncDistributorToGas failed:', err.message);
+  }
+}
+
+async function d1UpdateDistributor(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const uid = String(body.uid || '').trim();
+  if (!uid) return { success: false, error: 'MISSING_UID' };
+
+  const updates = buildDistributorUpdate(body);
+  if (Object.keys(updates).length === 0) {
+    const row = await env.DB.prepare(`SELECT * FROM distributors WHERE uid = ?`).bind(uid).first();
+    return row ? { success: true, data: toSheetDistributor(row) } : { success: false, error: 'DISTRIBUTOR_NOT_FOUND' };
+  }
+
+  const columns = Object.keys(updates);
+  const sets = columns.map((column) => `${column} = ?`);
+  const values = columns.map((column) => updates[column]);
+  sets.push(`updated_at = datetime('now')`);
+
+  const result = await env.DB.prepare(
+    `UPDATE distributors SET ${sets.join(', ')} WHERE uid = ?`
+  ).bind(...values, uid).run();
+
+  if (!result.success) return { success: false, error: 'DISTRIBUTOR_UPDATE_FAILED' };
+
+  const row = await env.DB.prepare(`SELECT * FROM distributors WHERE uid = ?`).bind(uid).first();
+  if (!row) return { success: false, error: 'DISTRIBUTOR_NOT_FOUND' };
+
+  await syncDistributorToGas(env, uid, updates);
+  return { success: true, data: toSheetDistributor(row) };
+}
+
 async function readDistributorsWithFallback(env) {
   if (env.DB) {
     try {
@@ -1032,6 +1151,17 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
         const result = await readCommissionSummaryWithFallback(env, uid);
         return json(result);
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // POST /api/distributors/update
+      // 管理員後台維護分銷商資料（先寫 D1，重疊欄位 best-effort 同步 GAS）
+      // ══════════════════════════════════════════════════════════
+      if (path === '/api/distributors/update' && request.method === 'POST') {
+        const body = await request.json();
+        if (!body?.uid) return json({ success: false, error: '缺少 uid' }, 400);
+        const result = await d1UpdateDistributor(env, body);
+        return json(result, result.success ? 200 : 400);
       }
 
       // ══════════════════════════════════════════════════════════
