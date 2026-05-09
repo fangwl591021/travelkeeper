@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>行程維護 | TravelKeeper</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -12,15 +12,25 @@
     [hidden] { display: none !important; }
   </style>
 </head>
-<body class="min-h-screen text-slate-900">
-  <div class="max-w-5xl mx-auto px-4 py-6 md:px-8 md:py-10">
-    <div class="flex items-center justify-between gap-4 mb-6">
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <div class="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
       <div>
-        <p class="text-xs font-black tracking-[0.18em] text-slate-400 uppercase">Itinerary</p>
+        <p class="text-xs font-black tracking-[0.18em] text-slate-400 uppercase">Itinerary Maintenance</p>
         <h1 class="text-3xl md:text-4xl font-black mt-1">行程維護</h1>
-        <p id="subtitle" class="text-sm md:text-base text-slate-500 mt-2">正在讀取行程資料...</p>
+        <p id="subtitle" class="text-sm md:text-base text-slate-500 mt-2">讀取指定行程後，可在這裡維護內容與銷售規則。</p>
       </div>
-      <a href="dashboard.html#mine" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">返回我上稿的</a>
+      <a href="dashboard.html#mine" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">
+        返回列表
+      </a>
+    </div>
+
+    <div id="preview-note" hidden class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">
+      <p class="font-black">預覽模式</p>
+      <p class="text-sm mt-1">
+        你目前是直接用 <code>file://</code> 開啟本頁，所以會顯示示意資料，方便先看版面。
+        真正讀寫資料時，請從系統入口帶著行程 id 與登入身份進來。
+      </p>
     </div>
 
     <div id="loading" class="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">
@@ -34,25 +44,23 @@
 
     <form id="form" hidden class="space-y-6">
       <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
-        <div class="flex items-start gap-4">
-          <img id="cover-preview" src="" alt="" class="w-28 h-20 md:w-40 md:h-28 rounded-2xl object-cover bg-slate-100 shrink-0">
-          <div class="min-w-0">
+        <div class="flex flex-col md:flex-row md:items-start gap-4">
+          <img id="cover-preview" src="" alt="封面預覽" class="w-full md:w-44 h-56 md:h-32 rounded-2xl object-cover bg-slate-100 shrink-0">
+          <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2 mb-2">
               <span id="status-pill" class="px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">-</span>
-              <span id="owner-pill" class="px-3 py-1 rounded-full text-xs font-black bg-blue-50 text-blue-700">-</span>
+              <span id="role-pill" class="px-3 py-1 rounded-full text-xs font-black bg-blue-50 text-blue-700">-</span>
             </div>
-            <h2 id="title-preview" class="text-xl md:text-2xl font-black break-words">-</h2>
+            <h2 id="title-preview" class="text-xl md:text-2xl font-black break-words">未命名行程</h2>
             <p id="meta-preview" class="text-sm md:text-base text-slate-500 mt-2">-</p>
           </div>
         </div>
       </section>
 
       <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
-        <div class="flex items-center justify-between mb-5">
-          <div>
-            <h3 class="text-2xl font-black">內容</h3>
-            <p class="text-sm text-slate-500 mt-1">這一區給上稿者維護行程對外內容。</p>
-          </div>
+        <div class="mb-5">
+          <h3 class="text-2xl font-black">內容設定</h3>
+          <p class="text-sm text-slate-500 mt-1">這一區是行程頁面會直接看到的內容，包含封面、售價與介紹。</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
           <label class="block">
@@ -76,7 +84,7 @@
             <input type="number" min="0" step="1" name="price" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
           </label>
           <label class="block md:col-span-2">
-            <span class="block text-sm font-black mb-2">行程描述</span>
+            <span class="block text-sm font-black mb-2">行程介紹</span>
             <textarea name="description" rows="8" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
           </label>
           <label class="block md:col-span-2">
@@ -88,13 +96,25 @@
 
       <section id="admin-controls" hidden class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
         <div class="mb-5">
-          <h3 class="text-2xl font-black">銷售規則</h3>
-          <p class="text-sm text-slate-500 mt-1">這一區只給管理員設定，經銷商看不到。</p>
+          <h3 class="text-2xl font-black">管理員銷售規則</h3>
+          <p class="text-sm text-slate-500 mt-1">只有管理員能維護這一區，包含分潤、付款限制與名額控制。</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
           <label class="block">
-            <span class="block text-sm font-black mb-2">分潤金額</span>
+            <span class="block text-sm font-black mb-2">分潤模式</span>
+            <select name="commissionMode" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <option value="amount">固定金額</option>
+              <option value="percent">百分比</option>
+            </select>
+          </label>
+          <div></div>
+          <label class="block" id="commission-amount-wrap">
+            <span class="block text-sm font-black mb-2">固定分潤金額</span>
             <input type="number" min="0" step="1" name="commissionAmount" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block" id="commission-percent-wrap">
+            <span class="block text-sm font-black mb-2">分潤百分比 (%)</span>
+            <input type="number" min="0" step="0.1" name="commissionPercent" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
           </label>
           <label class="block">
             <span class="block text-sm font-black mb-2">名額上限</span>
@@ -116,11 +136,11 @@
             <input type="number" min="0" max="100" step="1" name="depositRatio" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
           </label>
           <label class="block">
-            <span class="block text-sm font-black mb-2">尾款收款方式</span>
+            <span class="block text-sm font-black mb-2">尾款收取方式</span>
             <select name="balanceCollect" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
-              <option value="online">線上</option>
-              <option value="offline">線下</option>
-              <option value="not_required">不需要</option>
+              <option value="online">線上付款</option>
+              <option value="offline">線下付款</option>
+              <option value="not_required">不需要尾款</option>
             </select>
           </label>
           <fieldset class="md:col-span-2">
@@ -143,7 +163,7 @@
           <label class="flex items-center justify-between md:col-span-2 rounded-2xl border border-slate-200 px-4 py-4">
             <div>
               <span class="block text-sm font-black">允許分享</span>
-              <span class="block text-xs text-slate-500 mt-1">關掉後，經銷商仍可看見，但不應再被拿去推廣。</span>
+              <span class="block text-xs text-slate-500 mt-1">關閉後，這支行程不會出現在推廣與分享流程中。</span>
             </div>
             <input type="checkbox" name="shareEnabled" class="w-5 h-5">
           </label>
@@ -172,10 +192,38 @@
     const formEl = document.getElementById('form');
     const adminControlsEl = document.getElementById('admin-controls');
     const saveBtn = document.getElementById('save-btn');
+    const previewNoteEl = document.getElementById('preview-note');
+    const titlePreviewEl = document.getElementById('title-preview');
+    const metaPreviewEl = document.getElementById('meta-preview');
+    const coverPreviewEl = document.getElementById('cover-preview');
+    const statusPillEl = document.getElementById('status-pill');
+    const rolePillEl = document.getElementById('role-pill');
+    const subtitleEl = document.getElementById('subtitle');
 
     let profile = null;
     let userStatus = null;
-    let current = null;
+    const previewMode = location.protocol === 'file:';
+
+    const previewData = {
+      title: '北海道賞雪溫泉體驗',
+      image: 'https://images.unsplash.com/photo-1517154421773-0529f29ea451?auto=format&fit=crop&w=1200&q=80',
+      region: '日本',
+      days: 5,
+      price: 16500,
+      description: '這是預覽模式的示意資料，用來確認版面與欄位排列是否正確。',
+      notes: '真正讀寫資料時，請從系統入口進入。',
+      reviewStatus: 'published',
+      commissionMode: 'amount',
+      commissionAmount: 1500,
+      commissionPercent: 10,
+      paymentMode: 'deposit',
+      depositRatio: 20,
+      balanceCollect: 'online',
+      seatLimit: 30,
+      minGroupSize: 10,
+      allowedPaymentMethods: ['credit_card', 'linepay', 'atm'],
+      shareEnabled: true,
+    };
 
     function showToast(message, type = 'success') {
       const el = document.getElementById('toast');
@@ -194,22 +242,32 @@
     }
 
     function setPreview(data) {
-      document.getElementById('cover-preview').src = data.image || 'https://via.placeholder.com/640x420?text=No+Image';
-      document.getElementById('title-preview').textContent = data.title || '未命名行程';
-      document.getElementById('meta-preview').textContent = `${data.region || '-'} · ${data.days || 0} 天 · NT$ ${(Number(data.price || 0)).toLocaleString()}`;
-      document.getElementById('status-pill').textContent = data.reviewStatus || data.reviewstatus || 'published';
-      document.getElementById('owner-pill').textContent = userStatus?.data?.isAdmin ? '管理員視角' : '上稿者視角';
-      document.getElementById('subtitle').textContent = data.title || '行程維護';
+      coverPreviewEl.src = data.image || 'https://via.placeholder.com/640x420?text=No+Image';
+      titlePreviewEl.textContent = data.title || '未命名行程';
+      metaPreviewEl.textContent = `${data.region || '-'} · ${data.days || 0} 天 · NT$ ${Number(data.price || 0).toLocaleString()}`;
+      statusPillEl.textContent = data.reviewStatus || 'published';
+      rolePillEl.textContent = previewMode ? '預覽模式' : (userStatus?.data?.isAdmin ? '管理員' : '分銷商');
+      subtitleEl.textContent = data.title || '行程維護';
     }
 
     function setField(name, value) {
       const field = formEl.elements[name];
       if (!field) return;
-      if (field.type === 'checkbox') {
-        field.checked = !!value;
-      } else {
-        field.value = value ?? '';
-      }
+      if (field.type === 'checkbox') field.checked = !!value;
+      else field.value = value ?? '';
+    }
+
+    function syncCommissionMode() {
+      const mode = formEl.elements.commissionMode.value;
+      const amount = formEl.elements.commissionAmount;
+      const percent = formEl.elements.commissionPercent;
+      const amountWrap = document.getElementById('commission-amount-wrap');
+      const percentWrap = document.getElementById('commission-percent-wrap');
+
+      amount.disabled = mode !== 'amount';
+      percent.disabled = mode !== 'percent';
+      amountWrap.classList.toggle('opacity-50', mode !== 'amount');
+      percentWrap.classList.toggle('opacity-50', mode !== 'percent');
     }
 
     function fillForm(data) {
@@ -221,25 +279,27 @@
       setField('price', data.price);
       setField('description', data.description);
       setField('notes', data.notes);
-      setField('commissionAmount', data.commissionAmount);
-      setField('seatLimit', data.seatLimit);
-      setField('minGroupSize', data.minGroupSize);
-      setField('paymentMode', data.paymentMode);
-      setField('depositRatio', data.depositRatio);
-      setField('balanceCollect', data.balanceCollect);
+      setField('commissionMode', data.commissionMode || 'amount');
+      setField('commissionAmount', data.commissionAmount || 0);
+      setField('commissionPercent', data.commissionPercent || 0);
+      setField('paymentMode', data.paymentMode || 'deposit');
+      setField('depositRatio', data.depositRatio || 20);
+      setField('balanceCollect', data.balanceCollect || 'online');
+      setField('seatLimit', data.seatLimit || 0);
+      setField('minGroupSize', data.minGroupSize || 0);
       setField('shareEnabled', !!data.shareEnabled);
 
       const allowed = new Set(Array.isArray(data.allowedPaymentMethods) ? data.allowedPaymentMethods : []);
       formEl.querySelectorAll('input[name="allowedPaymentMethods"]').forEach(input => {
         input.checked = allowed.has(input.value);
       });
+      syncCommissionMode();
     }
 
     function collectPayload() {
-      const allowedPaymentMethods = [...formEl.querySelectorAll('input[name="allowedPaymentMethods"]:checked')].map(input => input.value);
       return {
         id: itineraryId,
-        uid: profile.userId,
+        uid: profile?.userId || '',
         title: formEl.elements.title.value.trim(),
         image: formEl.elements.image.value.trim(),
         region: formEl.elements.region.value.trim(),
@@ -247,47 +307,63 @@
         price: Number(formEl.elements.price.value || 0),
         description: formEl.elements.description.value.trim(),
         notes: formEl.elements.notes.value.trim(),
+        commissionMode: formEl.elements.commissionMode.value,
+        commissionAmount: Number(formEl.elements.commissionAmount.value || 0),
+        commissionPercent: Number(formEl.elements.commissionPercent.value || 0),
         paymentMode: formEl.elements.paymentMode.value,
         depositRatio: Number(formEl.elements.depositRatio.value || 0),
         balanceCollect: formEl.elements.balanceCollect.value,
-        commissionAmount: Number(formEl.elements.commissionAmount.value || 0),
         seatLimit: Number(formEl.elements.seatLimit.value || 0),
         minGroupSize: Number(formEl.elements.minGroupSize.value || 0),
-        allowedPaymentMethods,
+        allowedPaymentMethods: [...formEl.querySelectorAll('input[name="allowedPaymentMethods"]:checked')].map(el => el.value),
         shareEnabled: formEl.elements.shareEnabled.checked,
       };
     }
 
-    async function load() {
-      if (!itineraryId) return showError('缺少行程 id');
-      try {
-        await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) {
-          liff.login({ redirectUri: location.href });
-          return;
-        }
-
-        profile = await liff.getProfile();
-        const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
-        userStatus = await statusRes.json();
-        if (!userStatus?.success) return showError('身份驗證失敗');
-
-        const detailRes = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}`);
-        const detail = await detailRes.json();
-        if (!detail?.success) return showError(detail?.error || '讀取行程失敗');
-
-        current = detail.data;
-        fillForm(current);
-        adminControlsEl.hidden = !userStatus.data.isAdmin;
-        loadingEl.hidden = true;
-        formEl.hidden = false;
-      } catch (err) {
-        showError(err.message || '載入失敗');
+    async function loadRealData() {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
       }
+      profile = await liff.getProfile();
+
+      const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
+      userStatus = await statusRes.json();
+      if (!userStatus?.success) throw new Error('讀取身份失敗');
+
+      const detailRes = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}`);
+      const detail = await detailRes.json();
+      if (!detail?.success) throw new Error(detail?.error || '讀取行程失敗');
+
+      adminControlsEl.hidden = !userStatus.data.isAdmin;
+      fillForm(detail.data);
+      loadingEl.hidden = true;
+      formEl.hidden = false;
     }
+
+    async function loadPreview() {
+      previewNoteEl.hidden = false;
+      adminControlsEl.hidden = false;
+      fillForm(previewData);
+      loadingEl.hidden = true;
+      formEl.hidden = false;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '預覽模式無法儲存';
+    }
+
+    formEl.addEventListener('input', () => {
+      const image = formEl.elements.image.value.trim();
+      if (image) coverPreviewEl.src = image;
+      titlePreviewEl.textContent = formEl.elements.title.value.trim() || '未命名行程';
+      metaPreviewEl.textContent = `${formEl.elements.region.value.trim() || '-'} · ${formEl.elements.days.value || 0} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
+    });
+
+    formEl.elements.commissionMode?.addEventListener('change', syncCommissionMode);
 
     formEl.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (previewMode) return;
       saveBtn.disabled = true;
       saveBtn.textContent = '儲存中...';
       try {
@@ -298,9 +374,8 @@
         });
         const result = await res.json();
         if (!result.success) throw new Error(result.error || '儲存失敗');
-        current = result.data || current;
-        fillForm(current);
-        showToast('已儲存');
+        fillForm(result.data);
+        showToast('已儲存變更');
       } catch (err) {
         showToast(err.message || '儲存失敗', 'error');
       } finally {
@@ -309,15 +384,21 @@
       }
     });
 
-    formEl.addEventListener('input', () => {
-      const image = formEl.elements.image.value.trim();
-      if (image) document.getElementById('cover-preview').src = image;
-      document.getElementById('title-preview').textContent = formEl.elements.title.value.trim() || '未命名行程';
-      document.getElementById('meta-preview').textContent =
-        `${formEl.elements.region.value.trim() || '-'} · ${formEl.elements.days.value || 0} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
-    });
-
-    load();
+    (async function init() {
+      try {
+        if (previewMode) {
+          await loadPreview();
+          return;
+        }
+        if (!itineraryId) {
+          showError('缺少行程 id。請從行程列表點擊「進入維護」再來這頁。');
+          return;
+        }
+        await loadRealData();
+      } catch (err) {
+        showError(err.message || '載入失敗');
+      }
+    })();
   </script>
 </body>
 </html>

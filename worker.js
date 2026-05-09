@@ -202,6 +202,8 @@ function toSheetItinerary(row) {
     reviewstatus: row.review_status,
     reviewnote: row.review_note,
     commissionamount: row.commission_amount,
+    commissionmode: row.commission_mode,
+    commissionpercent: row.commission_percent,
     paymentmode: row.payment_mode,
     depositratio: row.deposit_ratio,
     balancecollect: row.balance_collect,
@@ -263,6 +265,8 @@ function toItineraryManageModel(row) {
     reviewStatus: row.review_status || 'published',
     reviewNote: row.review_note || '',
     commissionAmount: Number(row.commission_amount || 0),
+    commissionMode: row.commission_mode || 'amount',
+    commissionPercent: Number(row.commission_percent || 0),
     paymentMode: row.payment_mode || 'deposit',
     depositRatio: Number(row.deposit_ratio || 20),
     balanceCollect: row.balance_collect || 'online',
@@ -327,6 +331,8 @@ async function d1SaveItineraryDetail(env, body = {}) {
   const adminUpdates = isAdmin
     ? {
         commission_amount: Number(body.commissionAmount ?? body.commissionamount ?? existing.commission_amount ?? 0),
+        commission_mode: String(body.commissionMode ?? body.commissionmode ?? existing.commission_mode ?? 'amount'),
+        commission_percent: Number(body.commissionPercent ?? body.commissionpercent ?? existing.commission_percent ?? 0),
         seat_limit: Number(body.seatLimit ?? body.seatlimit ?? existing.seat_limit ?? 0),
         min_group_size: Number(body.minGroupSize ?? body.mingroupsize ?? existing.min_group_size ?? 0),
         allowed_payment_methods: normalizeAllowedPaymentMethods(
@@ -368,6 +374,8 @@ async function d1SaveItineraryDetail(env, body = {}) {
     };
     if (isAdmin && adminUpdates.commission_amount !== undefined) {
       gasBody.commissionAmount = adminUpdates.commission_amount;
+      gasBody.commissionMode = adminUpdates.commission_mode;
+      gasBody.commissionPercent = adminUpdates.commission_percent;
     }
     try {
       await gasPost(env, gasBody);
@@ -441,7 +449,10 @@ async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
     ? 0
     : Math.max(0, totalAmount - depositAmount);
 
-  const commissionAmount = Number(itinerary.commission_amount || 0);
+  const commissionMode = String(itinerary.commission_mode || 'amount').toLowerCase();
+  const commissionAmount = commissionMode === 'percent'
+    ? Math.round(totalAmount * Number(itinerary.commission_percent || 0) / 100)
+    : Number(itinerary.commission_amount || 0);
   const createdAt = formatTaipeiDateTime(new Date());
   const orderId = 'ORD' + Date.now() + Math.floor(1000 + Math.random() * 9000);
   const initBalanceStatus = paymentMode === 'full' ? 'not_required' : 'unpaid';
