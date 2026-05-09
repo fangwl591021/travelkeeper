@@ -944,6 +944,8 @@ function buildMenu({ isAdmin, canUpload, badges }) {
     // ★ v8：「我的行程」改名「我上稿的」（只看自己投稿的，含審核狀態）
     { id:'mine',         icon:'🗂️', label: isAdmin ? '我上稿的' : '我上稿的',
       show: isAdmin || canUpload },
+    { id:'itinerary-maintenance-list', icon:'\u{1F6E0}\uFE0F', label:'\u884C\u7A0B\u7DAD\u8B77', show: isAdmin,
+      href:'itinerary-maintenance-list.html' },
     { id:'distributors', icon:'👥', label:'分銷商管理', show: isAdmin,
       badge: badges.pendingDist },
     { id:'review',       icon:'⚠️', label:'待審核行程', show: isAdmin,
@@ -1896,6 +1898,10 @@ function App() {
 
   // 點「新增/上稿」這種行為按鈕：直接開新增 modal，不切 view
   const handleMenuClick = (item) => {
+    if (item.href) {
+      location.href = item.href;
+      return;
+    }
     if (item.id === 'new') {
       setEditing(null);
       setCreating(true);
