@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全部行程維護 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f8fafc; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <div class="max-w-7xl mx-auto px-4 py-6 md:px-8 md:py-10">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+      <div>
+        <p class="text-xs font-black tracking-[0.18em] text-slate-400 uppercase">Admin Maintenance</p>
+        <h1 class="text-3xl md:text-4xl font-black mt-1">全部行程維護</h1>
+        <p class="text-sm md:text-base text-slate-500 mt-2">管理員可在這裡快速找到任一行程，點進去維護分潤、名額與付款限制。</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="dashboard.html#mine" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-black hover:bg-slate-200">
+          返回 dashboard
+        </a>
+      </div>
+    </div>
+
+    <div id="preview-note" hidden class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">
+      <p class="font-black">預覽模式</p>
+      <p class="text-sm mt-1">你目前是直接用 <code>file://</code> 開啟本頁，所以會顯示示意資料。真正權限檢查與資料讀取，請使用正式網址。</p>
+    </div>
+
+    <div id="loading" class="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-bold">
+      讀取中...
+    </div>
+
+    <div id="error" hidden class="bg-white rounded-3xl border border-red-200 p-10 text-center">
+      <h2 class="text-xl font-black text-red-600 mb-2">載入失敗</h2>
+      <p id="error-text" class="text-slate-500"></p>
+    </div>
+
+    <div id="content" hidden class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="rounded-3xl bg-slate-900 text-white p-6">
+          <p class="text-4xl font-black" id="stat-total">0</p>
+          <p class="text-sm font-bold mt-2 text-slate-200">全部行程</p>
+        </div>
+        <div class="rounded-3xl bg-emerald-500 text-white p-6">
+          <p class="text-4xl font-black" id="stat-published">0</p>
+          <p class="text-sm font-bold mt-2 text-emerald-50">已上架</p>
+        </div>
+        <div class="rounded-3xl bg-amber-500 text-white p-6">
+          <p class="text-4xl font-black" id="stat-pending">0</p>
+          <p class="text-sm font-bold mt-2 text-amber-50">待審核</p>
+        </div>
+        <div class="rounded-3xl bg-rose-500 text-white p-6">
+          <p class="text-4xl font-black" id="stat-rejected">0</p>
+          <p class="text-sm font-bold mt-2 text-rose-50">已駁回</p>
+        </div>
+      </div>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-5 md:p-6">
+        <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+          <div class="flex-1">
+            <input
+              id="search-input"
+              type="text"
+              placeholder="搜尋行程名稱、地區、上稿者..."
+              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"
+            >
+          </div>
+          <div class="flex flex-wrap gap-2" id="status-filters">
+            <button data-status="all" class="status-filter px-4 py-2 rounded-xl bg-blue-600 text-white font-black">全部</button>
+            <button data-status="published" class="status-filter px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-black">已上架</button>
+            <button data-status="pending_review" class="status-filter px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-black">待審核</button>
+            <button data-status="rejected" class="status-filter px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-black">已駁回</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="space-y-4" id="list"></section>
+
+      <div id="empty-state" hidden class="bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-400 font-bold">
+        目前沒有符合條件的行程
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const previewMode = location.protocol === 'file:';
+
+    const previewItems = [
+      {
+        id: '1778030927507',
+        title: '春戀東北：日本東北合掌村大雙城百選三溫泉超值之旅',
+        region: '亞洲',
+        price: 19900,
+        days: 4,
+        image: 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev/tours/cover_1778030842931.jpg',
+        ownername: 'Tonyfang',
+        reviewstatus: 'published',
+        commissionmode: 'amount',
+        commissionamount: 1800,
+      },
+      {
+        id: '1777948071803',
+        title: '熊本親子同樂九州五日遊',
+        region: '亞洲',
+        price: 35500,
+        days: 5,
+        image: 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev/tours/cover_1777948051078.jpg',
+        ownername: 'Tonyfang',
+        reviewstatus: 'pending_review',
+        commissionmode: 'percent',
+        commissionpercent: 8,
+      },
+    ];
+
+    let allItems = [];
+    let activeStatus = 'all';
+
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorTextEl = document.getElementById('error-text');
+    const contentEl = document.getElementById('content');
+    const previewNoteEl = document.getElementById('preview-note');
+    const listEl = document.getElementById('list');
+    const emptyStateEl = document.getElementById('empty-state');
+    const searchInputEl = document.getElementById('search-input');
+
+    function showError(message) {
+      loadingEl.hidden = true;
+      contentEl.hidden = true;
+      errorEl.hidden = false;
+      errorTextEl.textContent = message;
+    }
+
+    function statusLabel(status) {
+      const map = {
+        published: '已上架',
+        pending_review: '待審核',
+        rejected: '已駁回',
+      };
+      return map[status] || '未設定';
+    }
+
+    function statusClass(status) {
+      if (status === 'published') return 'bg-emerald-50 text-emerald-700';
+      if (status === 'pending_review') return 'bg-amber-50 text-amber-700';
+      if (status === 'rejected') return 'bg-rose-50 text-rose-700';
+      return 'bg-slate-100 text-slate-600';
+    }
+
+    function commissionLabel(item) {
+      if (item.commissionmode === 'percent') {
+        return `${Number(item.commissionpercent || 0)}%`;
+      }
+      return `NT$ ${Number(item.commissionamount || 0).toLocaleString()}`;
+    }
+
+    function updateStats(items) {
+      document.getElementById('stat-total').textContent = items.length;
+      document.getElementById('stat-published').textContent = items.filter(item => item.reviewstatus === 'published').length;
+      document.getElementById('stat-pending').textContent = items.filter(item => item.reviewstatus === 'pending_review').length;
+      document.getElementById('stat-rejected').textContent = items.filter(item => item.reviewstatus === 'rejected').length;
+    }
+
+    function filteredItems() {
+      const keyword = searchInputEl.value.trim().toLowerCase();
+      return allItems.filter(item => {
+        if (activeStatus !== 'all' && item.reviewstatus !== activeStatus) return false;
+        if (!keyword) return true;
+        const haystack = [
+          item.title || '',
+          item.region || '',
+          item.ownername || '',
+        ].join(' ').toLowerCase();
+        return haystack.includes(keyword);
+      });
+    }
+
+    function renderList() {
+      const items = filteredItems();
+      listEl.innerHTML = '';
+      emptyStateEl.hidden = items.length > 0;
+
+      for (const item of items) {
+        const row = document.createElement('article');
+        row.className = 'bg-white rounded-3xl border border-slate-200 p-4 md:p-5';
+        row.innerHTML = `
+          <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <img src="${item.image || 'https://via.placeholder.com/320x220?text=No+Image'}" alt="" class="w-full lg:w-44 h-48 lg:h-28 rounded-2xl object-cover bg-slate-100 shrink-0">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="px-3 py-1 rounded-full text-xs font-black ${statusClass(item.reviewstatus)}">${statusLabel(item.reviewstatus)}</span>
+                <span class="px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-600">${item.region || '未分類'} · ${item.days || 0} 天</span>
+              </div>
+              <h2 class="text-xl font-black break-words">${item.title || '未命名行程'}</h2>
+              <div class="mt-2 text-sm text-slate-500 flex flex-wrap gap-x-5 gap-y-1">
+                <span>售價：NT$ ${Number(item.price || 0).toLocaleString()}</span>
+                <span>分潤：${commissionLabel(item)}</span>
+                <span>上稿者：${item.ownername || '未指定'}</span>
+              </div>
+            </div>
+            <div class="lg:w-48 flex lg:justify-end">
+              <a
+                href="itinerary-maintenance.html?id=${encodeURIComponent(String(item.id || item.timestamp || ''))}"
+                class="w-full lg:w-auto inline-flex items-center justify-center px-5 py-3 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700"
+              >
+                進入維護
+              </a>
+            </div>
+          </div>
+        `;
+        listEl.appendChild(row);
+      }
+    }
+
+    function setFilterButtons() {
+      document.querySelectorAll('.status-filter').forEach(button => {
+        const active = button.dataset.status === activeStatus;
+        button.className = active
+          ? 'status-filter px-4 py-2 rounded-xl bg-blue-600 text-white font-black'
+          : 'status-filter px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-black';
+      });
+    }
+
+    async function loadPreview() {
+      previewNoteEl.hidden = false;
+      allItems = previewItems;
+      updateStats(allItems);
+      renderList();
+      setFilterButtons();
+      loadingEl.hidden = true;
+      contentEl.hidden = false;
+    }
+
+    async function loadRealData() {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
+      const userStatus = await statusRes.json();
+      if (!userStatus?.success) throw new Error('讀取身份失敗');
+      if (!userStatus?.data?.isAdmin) throw new Error('只有管理員可以使用這頁');
+
+      const listRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`);
+      const listData = await listRes.json();
+      allItems = Array.isArray(listData) ? listData : [];
+      updateStats(allItems);
+      renderList();
+      setFilterButtons();
+      loadingEl.hidden = true;
+      contentEl.hidden = false;
+    }
+
+    document.querySelectorAll('.status-filter').forEach(button => {
+      button.addEventListener('click', () => {
+        activeStatus = button.dataset.status;
+        setFilterButtons();
+        renderList();
+      });
+    });
+
+    searchInputEl.addEventListener('input', renderList);
+
+    (async function init() {
+      try {
+        if (previewMode) {
+          await loadPreview();
+          return;
+        }
+        await loadRealData();
+      } catch (err) {
+        showError(err.message || '載入失敗');
+      }
+    })();
+  </script>
+</body>
+</html>
