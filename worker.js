@@ -11,6 +11,7 @@ const CORS = {
 };
 const ADMIN_UIDS = new Set([
   'Uf729764dbb5b652a5a90a467320bea29',
+  'U58eb5c1a747450140ce1335af709ae55',
 ]);
 const R2_PUBLIC = 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
