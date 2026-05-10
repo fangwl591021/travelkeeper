@@ -1184,6 +1184,99 @@ function getLineDisplayName(source = {}) {
   return '未命名聊天室';
 }
 
+async function fetchLineSourceProfile(env, source = {}) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return null;
+  const headers = { Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` };
+  let endpoint = '';
+  if (source?.type === 'user' && source?.userId) {
+    endpoint = `https://api.line.me/v2/bot/profile/${encodeURIComponent(source.userId)}`;
+  } else if (source?.type === 'group' && source?.groupId && source?.userId) {
+    endpoint = `https://api.line.me/v2/bot/group/${encodeURIComponent(source.groupId)}/member/${encodeURIComponent(source.userId)}`;
+  } else if (source?.type === 'room' && source?.roomId && source?.userId) {
+    endpoint = `https://api.line.me/v2/bot/room/${encodeURIComponent(source.roomId)}/member/${encodeURIComponent(source.userId)}`;
+  } else {
+    return null;
+  }
+  try {
+    const res = await fetch(endpoint, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      displayName: String(data.displayName || '').trim(),
+      pictureUrl: String(data.pictureUrl || '').trim(),
+    };
+  } catch (_err) {
+    return null;
+  }
+}
+
+function isPlaceholderLineDisplayName(name = '', sourceId = '') {
+  const value = String(name || '').trim();
+  const id = String(sourceId || '').trim();
+  if (!value) return true;
+  if (value === 'Unknown user' || value === '未知用戶') return true;
+  if (!id) return false;
+  const suffix = id.slice(-6);
+  if (!suffix) return false;
+  if ((value.startsWith('用戶 ') || value.startsWith('User ')) && value.endsWith(suffix)) return true;
+  if ((value.startsWith('群組 ') || value.startsWith('聊天室 ')) && value.endsWith(suffix)) return true;
+  if (value.includes(id) && value.length <= id.length + 8) return true;
+  return false;
+}
+
+async function enrichStoredLineThreadProfile(env, row = {}) {
+  const sourceUserId = String(row?.source_user_id || '').trim();
+  const sourceGroupId = String(row?.source_group_id || '').trim();
+  const currentName = String(row?.display_name || '').trim();
+  const currentPicture = String(row?.picture_url || '').trim();
+  const needsName = isPlaceholderLineDisplayName(currentName, sourceUserId || sourceGroupId);
+  const needsPicture = !currentPicture;
+  if ((!needsName && !needsPicture) || !env.LINE_CHANNEL_ACCESS_TOKEN) {
+    return {
+      ...row,
+      display_name: currentName,
+      picture_url: currentPicture,
+    };
+  }
+
+  let profile = null;
+  if (sourceUserId && !sourceGroupId) {
+    profile = await fetchLineSourceProfile(env, { type: 'user', userId: sourceUserId });
+  } else if (sourceUserId && sourceGroupId) {
+    profile = await fetchLineSourceProfile(env, { type: 'group', groupId: sourceGroupId, userId: sourceUserId });
+    if (!profile) {
+      profile = await fetchLineSourceProfile(env, { type: 'room', roomId: sourceGroupId, userId: sourceUserId });
+    }
+  }
+
+  const displayName = String(profile?.displayName || '').trim() || currentName;
+  const pictureUrl = String(profile?.pictureUrl || '').trim() || currentPicture;
+  if ((displayName && displayName !== currentName) || (pictureUrl && pictureUrl !== currentPicture)) {
+    const now = new Date().toISOString();
+    await env.DB.prepare(`
+      UPDATE line_threads
+      SET
+        display_name = CASE WHEN ? <> '' THEN ? ELSE display_name END,
+        picture_url = CASE WHEN ? <> '' THEN ? ELSE picture_url END,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      displayName,
+      displayName,
+      pictureUrl,
+      pictureUrl,
+      now,
+      String(row?.id || '')
+    ).run();
+  }
+
+  return {
+    ...row,
+    display_name: displayName,
+    picture_url: pictureUrl,
+  };
+}
+
 function summarizeLineRisk(text = '') {
   const haystack = String(text || '');
   const hits = [
@@ -1221,20 +1314,26 @@ async function storeLineWebhookEvents(env, payload = {}) {
     const createdAt = lineMessageCreatedAt(event);
     const { riskLevel, hits } = summarizeLineRisk(messageText);
     const tagsText = hits.join(',');
-    const displayName = getLineDisplayName(source);
+    const remoteProfile = await fetchLineSourceProfile(env, source);
+    const displayName = remoteProfile?.displayName || getLineDisplayName(source);
+    const pictureUrl = remoteProfile?.pictureUrl || '';
     const summary = messageText || `[${messageType}]`;
 
     await env.DB.prepare(`
       INSERT INTO line_threads (
-        id, source_type, source_user_id, source_group_id, display_name, status,
+        id, source_type, source_user_id, source_group_id, display_name, picture_url, status,
         risk_level, summary, unread_count, tags, last_message_at, created_at, updated_at
-      ) VALUES (?, 'line_oa', ?, ?, ?, 'open', ?, ?, 1, ?, ?, ?, ?)
+      ) VALUES (?, 'line_oa', ?, ?, ?, ?, 'open', ?, ?, 1, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         source_user_id = excluded.source_user_id,
         source_group_id = excluded.source_group_id,
         display_name = CASE
           WHEN excluded.display_name <> '' THEN excluded.display_name
           ELSE line_threads.display_name
+        END,
+        picture_url = CASE
+          WHEN excluded.picture_url <> '' THEN excluded.picture_url
+          ELSE line_threads.picture_url
         END,
         status = CASE
           WHEN line_threads.status = 'closed' THEN line_threads.status
@@ -1259,6 +1358,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
       String(source?.userId || ''),
       String(source?.groupId || source?.roomId || ''),
       displayName,
+      pictureUrl,
       riskLevel,
       summary,
       tagsText,
@@ -1293,6 +1393,7 @@ async function d1GetLineThreads(env) {
     SELECT
       id,
       display_name,
+      picture_url,
       source_user_id,
       source_group_id,
       status,
@@ -1307,11 +1408,16 @@ async function d1GetLineThreads(env) {
     ORDER BY COALESCE(last_message_at, created_at) DESC
     LIMIT 200
   `).all();
+  const enrichedResults = [];
+  for (const row of results) {
+    enrichedResults.push(await enrichStoredLineThreadProfile(env, row));
+  }
   return {
     success: true,
-    data: results.map(row => ({
+    data: enrichedResults.map(row => ({
       id: row.id,
-      name: row.display_name || '未命名聊天室',
+      name: row.display_name || '????',
+      pictureUrl: row.picture_url || '',
       userId: row.source_user_id || row.source_group_id || '',
       summary: row.summary || '',
       unread: Number(row.unread_count || 0),
@@ -1327,10 +1433,11 @@ async function d1GetLineThreads(env) {
 
 async function d1GetLineThread(env, threadId) {
   if (!env.DB) throw new Error('D1 binding missing');
-  const thread = await env.DB.prepare(`
+  const threadRow = await env.DB.prepare(`
     SELECT
       id,
       display_name,
+      picture_url,
       source_user_id,
       source_group_id,
       status,
@@ -1344,7 +1451,8 @@ async function d1GetLineThread(env, threadId) {
     FROM line_threads
     WHERE id = ?
   `).bind(threadId).first();
-  if (!thread) return { success: false, error: 'THREAD_NOT_FOUND' };
+  if (!threadRow) return { success: false, error: 'THREAD_NOT_FOUND' };
+  const thread = await enrichStoredLineThreadProfile(env, threadRow);
   const { results } = await env.DB.prepare(`
     SELECT id, message_type, sender_role, sender_id, sender_name, message_text, created_at
     FROM line_messages
@@ -1356,7 +1464,8 @@ async function d1GetLineThread(env, threadId) {
     success: true,
     data: {
       id: thread.id,
-      name: thread.display_name || '未命名聊天室',
+      name: thread.display_name || '????',
+      pictureUrl: thread.picture_url || '',
       userId: thread.source_user_id || thread.source_group_id || '',
       summary: thread.summary || '',
       unread: Number(thread.unread_count || 0),
@@ -1371,7 +1480,9 @@ async function d1GetLineThread(env, threadId) {
         type: msg.message_type || 'text',
         senderRole: msg.sender_role || 'user',
         senderId: msg.sender_id || '',
-        senderName: msg.sender_name || '用戶',
+        senderName: msg.sender_role === 'user'
+          ? (thread.display_name || msg.sender_name || '????')
+          : (msg.sender_name || '??'),
         text: msg.message_text || '',
         createdAt: msg.created_at || '',
       })),
