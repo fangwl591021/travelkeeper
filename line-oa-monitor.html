@@ -324,6 +324,7 @@
         const price = Number(item.price || 0);
         const summary = [item.region || '', item.days ? String(item.days) + '?' : '', price > 0 ? 'NT$ ' + price.toLocaleString() : ''].filter(Boolean).join(' ? ');
         const helper = '??????' + title + (summary ? '?' + summary + '?' : '');
+        const tourUrl = 'tour.html?t=' + encodeURIComponent(String(item.id || ''));
         const card = document.createElement('div');
         card.className = 'rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4';
         card.innerHTML = [
@@ -334,7 +335,11 @@
           '  </div>',
           '  <button class="copy-itinerary text-sm font-semibold text-sky-700 shrink-0" data-text="' + encodeURIComponent(helper) + '">??</button>',
           '</div>',
-          '<p class="text-sm text-slate-600">' + (summary || '?????? / ?? / ??') + '</p>'
+          '<p class="text-sm text-slate-600">' + (summary || '?????? / ?? / ??') + '</p>',
+          '<div class="mt-3 flex gap-2">',
+          '  <button class="use-itinerary flex-1 rounded-xl bg-slate-900 text-white px-3 py-2 text-sm font-semibold" data-text="' + encodeURIComponent(helper) + '">????</button>',
+          '  <a class="open-itinerary flex-1 rounded-xl border border-slate-300 bg-white text-slate-700 px-3 py-2 text-sm font-semibold text-center" href="' + tourUrl + '" target="_blank" rel="noopener">????</a>',
+          '</div>'
         ].join('');
         itinerarySuggestionListEl.appendChild(card);
       });
@@ -350,8 +355,14 @@
           }
         });
       });
+      itinerarySuggestionListEl.querySelectorAll('.use-itinerary').forEach(button => {
+        button.addEventListener('click', () => {
+          const text = decodeURIComponent(button.getAttribute('data-text') || '');
+          panelDraftEl.value = text;
+          showToast('???????');
+        });
+      });
     }
-
     async function loadPublishedItineraries() {
       try {
         const res = await fetch(WORKER_URL + '/api/itineraries?action=getItineraries');
