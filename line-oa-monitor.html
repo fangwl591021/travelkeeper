@@ -130,7 +130,7 @@
         </div>
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">??????</p>
+            <p class="text-xl font-black">&#26368;&#26032;&#24314;&#35696;&#22238;&#35206;</p>
             <span id="suggestion-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="suggestion-list" class="space-y-3"></div>
@@ -138,7 +138,7 @@
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">????</p>
+            <p class="text-xl font-black">&#34892;&#31243;&#21443;&#32771;</p>
             <span id="itinerary-suggestion-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="itinerary-suggestion-list" class="space-y-3"></div>
@@ -354,8 +354,16 @@
 
     async function loadPublishedItineraries() {
       try {
-        const data = await fetchJson(WORKER_URL + '/api/itineraries?action=getItineraries');
-        publishedItineraries = Array.isArray(data.data) ? data.data : [];
+        const res = await fetch(WORKER_URL + '/api/itineraries?action=getItineraries');
+        let payload = null;
+        try { payload = await res.json(); } catch (_jsonErr) {}
+        if (Array.isArray(payload)) {
+          publishedItineraries = payload;
+        } else if (Array.isArray(payload?.data)) {
+          publishedItineraries = payload.data;
+        } else {
+          publishedItineraries = [];
+        }
       } catch (_err) {
         publishedItineraries = [];
       }
