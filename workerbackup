@@ -1210,6 +1210,39 @@ async function fetchLineSourceProfile(env, source = {}) {
   }
 }
 
+async function debugLineSourceProfile(env, source = {}) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+    return { ok: false, status: 'missing', detail: 'LINE_CHANNEL_ACCESS_TOKEN missing', source };
+  }
+  const headers = { Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` };
+  let endpoint = '';
+  if (source?.type === 'user' && source?.userId) {
+    endpoint = `https://api.line.me/v2/bot/profile/${encodeURIComponent(source.userId)}`;
+  } else if (source?.type === 'group' && source?.groupId && source?.userId) {
+    endpoint = `https://api.line.me/v2/bot/group/${encodeURIComponent(source.groupId)}/member/${encodeURIComponent(source.userId)}`;
+  } else if (source?.type === 'room' && source?.roomId && source?.userId) {
+    endpoint = `https://api.line.me/v2/bot/room/${encodeURIComponent(source.roomId)}/member/${encodeURIComponent(source.userId)}`;
+  } else {
+    return { ok: false, status: 'invalid_source', detail: 'source missing ids', source };
+  }
+  try {
+    const res = await fetch(endpoint, { headers });
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_err) { data = null; }
+    return {
+      ok: res.ok,
+      status: res.status,
+      endpoint,
+      source,
+      detail: res.ok ? 'ok' : text.slice(0, 300),
+      data,
+    };
+  } catch (err) {
+    return { ok: false, status: 'error', endpoint, source, detail: err.message };
+  }
+}
+
 function isPlaceholderLineDisplayName(name = '', sourceId = '') {
   const value = String(name || '').trim();
   const id = String(sourceId || '').trim();
@@ -1496,6 +1529,41 @@ async function d1GetLineThread(env, threadId) {
   };
 }
 
+async function d1DebugLineThreadProfile(env, threadId) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const row = await env.DB.prepare(`
+    SELECT id, display_name, picture_url, source_user_id, source_group_id, summary, updated_at
+    FROM line_threads
+    WHERE id = ?
+  `).bind(threadId).first();
+  if (!row) return { success: false, error: 'THREAD_NOT_FOUND' };
+
+  const sourceUserId = String(row.source_user_id || '').trim();
+  const sourceGroupId = String(row.source_group_id || '').trim();
+  const direct = sourceUserId && !sourceGroupId
+    ? await debugLineSourceProfile(env, { type: 'user', userId: sourceUserId })
+    : null;
+  const asGroup = sourceUserId && sourceGroupId
+    ? await debugLineSourceProfile(env, { type: 'group', groupId: sourceGroupId, userId: sourceUserId })
+    : null;
+  const asRoom = sourceUserId && sourceGroupId
+    ? await debugLineSourceProfile(env, { type: 'room', roomId: sourceGroupId, userId: sourceUserId })
+    : null;
+
+  return {
+    success: true,
+    data: {
+      thread: row,
+      placeholderDetected: isPlaceholderLineDisplayName(row.display_name, sourceUserId || sourceGroupId),
+      profileChecks: {
+        direct,
+        asGroup,
+        asRoom,
+      },
+    },
+  };
+}
+
 async function d1UpdateLineThread(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   const threadId = String(body.id || '').trim();
@@ -1696,6 +1764,16 @@ export default {
         if (!threadId) return json({ success: false, error: '缺少聊天室 id' }, 400);
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
         const result = await d1GetLineThread(env, threadId);
+        return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/line-oa/profile-debug' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        const threadId = url.searchParams.get('id') || '';
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!threadId) return json({ success: false, error: '缺少 thread id' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        const result = await d1DebugLineThreadProfile(env, threadId);
         return json(result, result.success ? 200 : 404);
       }
 
