@@ -112,7 +112,7 @@
             <button class="w-11 h-11 rounded-full border border-slate-300 bg-white text-xl text-slate-500">&#9786;</button>
             <button class="w-11 h-11 rounded-full border border-slate-300 bg-white text-xl text-slate-500">&#128206;</button>
             <button class="w-11 h-11 rounded-full border border-slate-300 bg-white text-2xl text-slate-500">&#65291;</button>
-            <textarea id="draft-reply" rows="6" class="flex-1 min-h-[190px] rounded-3xl border border-slate-200 px-4 py-4 text-base leading-7 outline-none focus:border-emerald-500" placeholder="AI &#24314;&#35696;&#22238;&#35206;&#26371;&#25918;&#22312;&#36889;&#35041;&#65292;&#26041;&#20415;&#20154;&#24037;&#35079;&#35069;&#36028;&#22238; LINE OA&#12290;"></textarea>
+            <textarea id="draft-reply" rows="7" class="flex-1 min-h-[240px] rounded-3xl border border-slate-200 px-4 py-4 text-base leading-7 outline-none focus:border-emerald-500" placeholder="AI &#24314;&#35696;&#22238;&#35206;&#26371;&#25918;&#22312;&#36889;&#35041;&#65292;&#26041;&#20415;&#20154;&#24037;&#35079;&#35069;&#36028;&#22238; LINE OA&#12290;"></textarea>
             <button id="copy-reply" class="rounded-2xl bg-emerald-500 text-white font-semibold px-6 py-3 hover:bg-emerald-600">&#35079;&#35069;</button>
           </div>
         </div>
@@ -347,61 +347,86 @@
       itinerarySuggestionListEl.innerHTML = '';
       if (!thread || !publishedItineraries.length) {
         itinerarySuggestionCountEl.textContent = '0';
-        itinerarySuggestionListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-400">\u76ee\u524d\u6c92\u6709\u53ef\u53c3\u8003\u7684\u5df2\u4e0a\u67b6\u884c\u7a0b\u3002</div>'; 
+        itinerarySuggestionListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-400">目前沒有可參考的已上架行程。</div>';
         return;
       }
       const recommendations = recommendPublishedItineraries(thread);
       itinerarySuggestionCountEl.textContent = String(recommendations.length);
       recommendations.forEach((item, idx) => {
-        const title = item.title || item.name || '\u672a\u547d\u540d\u884c\u7a0b';
+        const title = item.title || item.name || '未命名行程';
         const price = Number(item.price || 0);
-        const summary = [item.region || '', item.days ? String(item.days) + '\u5929' : '', price > 0 ? 'NT$ ' + price.toLocaleString() : ''].filter(Boolean).join('\u30fb');
-        const helper = '\u53ef\u56de\u8986\u5ba2\u6236\uff1a' + title + (summary ? '\uff08' + summary + '\uff09' : '');
+        const summary = [item.region || '', item.days ? String(item.days) + '天' : '', price > 0 ? 'NT$ ' + price.toLocaleString() : '']
+          .filter(Boolean)
+          .join('・');
+        const helper = '可回覆客戶：' + title + (summary ? '（' + summary + '）' : '');
         const tourUrl = 'tour.html?t=' + encodeURIComponent(String(item.id || ''));
         const card = document.createElement('div');
         card.className = 'rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4';
-        card.innerHTML = [
-          '<div class="flex items-start justify-between gap-3 mb-2">',
-          '  <div class="min-w-0">',
-          '    <p class="text-sm text-slate-400">\u5efa\u8b70\u884c\u7a0b ' + (idx + 1) + '</p>',
-          '    <p class="font-semibold text-slate-900 break-words">' + title + '</p>',
-          '  </div>',
-          '  <button class="copy-itinerary text-sm font-semibold text-sky-700 shrink-0" data-text="' + encodeURIComponent(helper) + '">\u8907\u88fd</button>',
-          '</div>',
-          '<p class="text-sm text-slate-600">' + (summary || '\u5c1a\u672a\u8a2d\u5b9a\u5730\u5340\u3001\u5929\u6578\u6216\u50f9\u683c') + '</p>',
-          '<div class="mt-3 flex gap-2">',
-          '  <button class="use-itinerary flex-1 rounded-xl bg-slate-900 text-white px-3 py-2 text-sm font-semibold" data-text="' + encodeURIComponent(helper) + '">\u5e36\u5165\u8349\u7a3f</button>',
-          '  <button class="open-itinerary flex-1 rounded-xl border border-slate-300 bg-white text-slate-700 px-3 py-2 text-sm font-semibold text-center" data-url="' + encodeURIComponent(tourUrl) + '" data-title="' + encodeURIComponent(title) + '">\u958b\u555f\u884c\u7a0b</button>',
-          '</div>'
-        ].join('');
-        itinerarySuggestionListEl.appendChild(card);
-      });
-      itinerarySuggestionListEl.querySelectorAll('.copy-itinerary').forEach(button => {
-        button.addEventListener('click', async () => {
-          const text = decodeURIComponent(button.getAttribute('data-text') || '');
+
+        const header = document.createElement('div');
+        header.className = 'flex items-start justify-between gap-3 mb-2';
+
+        const headerText = document.createElement('div');
+        headerText.className = 'min-w-0';
+
+        const seq = document.createElement('p');
+        seq.className = 'text-sm text-slate-400';
+        seq.textContent = `建議行程 ${idx + 1}`;
+
+        const titleEl = document.createElement('p');
+        titleEl.className = 'font-semibold text-slate-900 break-words';
+        titleEl.textContent = title;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'text-sm font-semibold text-sky-700 shrink-0';
+        copyBtn.type = 'button';
+        copyBtn.textContent = '複製';
+        copyBtn.addEventListener('click', async () => {
           try {
-            await navigator.clipboard.writeText(text);
-            panelDraftEl.value = text;
-            showToast('\u5df2\u8907\u88fd\u5efa\u8b70\u884c\u7a0b\u8a71\u8853');
+            await navigator.clipboard.writeText(helper);
+            panelDraftEl.value = helper;
+            showToast('已複製建議行程話術');
           } catch (_err) {
-            showToast('\u8907\u88fd\u5931\u6557', 'error');
+            showToast('複製失敗', 'error');
           }
         });
-      });
-      itinerarySuggestionListEl.querySelectorAll('.use-itinerary').forEach(button => {
-        button.addEventListener('click', () => {
-          const text = decodeURIComponent(button.getAttribute('data-text') || '');
-          panelDraftEl.value = text;
-          showToast('\u5df2\u5e36\u5165\u5ba2\u670d\u8349\u7a3f');
+
+        headerText.appendChild(seq);
+        headerText.appendChild(titleEl);
+        header.appendChild(headerText);
+        header.appendChild(copyBtn);
+
+        const summaryEl = document.createElement('p');
+        summaryEl.className = 'text-sm text-slate-600';
+        summaryEl.textContent = summary || '尚未設定地區、天數或價格';
+
+        const actions = document.createElement('div');
+        actions.className = 'mt-3 flex gap-2';
+
+        const draftBtn = document.createElement('button');
+        draftBtn.className = 'flex-1 rounded-xl bg-slate-900 text-white px-3 py-2 text-sm font-semibold';
+        draftBtn.type = 'button';
+        draftBtn.textContent = '帶入草稿';
+        draftBtn.addEventListener('click', () => {
+          panelDraftEl.value = helper;
+          showToast('已帶入客服草稿');
         });
-      });
-      itinerarySuggestionListEl.querySelectorAll('.open-itinerary').forEach(button => {
-        button.addEventListener('click', () => {
-          const url = decodeURIComponent(button.getAttribute('data-url') || '');
-          const title = decodeURIComponent(button.getAttribute('data-title') || '');
-          if (!url) return;
-          openTourDrawer(url, title);
+
+        const openBtn = document.createElement('button');
+        openBtn.className = 'flex-1 rounded-xl border border-slate-300 bg-white text-slate-700 px-3 py-2 text-sm font-semibold text-center';
+        openBtn.type = 'button';
+        openBtn.textContent = '開啟行程';
+        openBtn.addEventListener('click', () => {
+          openTourDrawer(tourUrl, title);
         });
+
+        actions.appendChild(draftBtn);
+        actions.appendChild(openBtn);
+
+        card.appendChild(header);
+        card.appendChild(summaryEl);
+        card.appendChild(actions);
+        itinerarySuggestionListEl.appendChild(card);
       });
     }
     async function loadPublishedItineraries() {
