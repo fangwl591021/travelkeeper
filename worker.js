@@ -1564,6 +1564,44 @@ async function d1DebugLineThreadProfile(env, threadId) {
   };
 }
 
+async function d1BackfillLineThreadProfiles(env, limit = 100) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const size = Math.max(1, Math.min(Number(limit) || 100, 500));
+  const { results } = await env.DB.prepare(`
+    SELECT id, display_name, picture_url, source_user_id, source_group_id
+    FROM line_threads
+    WHERE source_user_id <> ''
+    ORDER BY COALESCE(updated_at, created_at) DESC
+    LIMIT ?
+  `).bind(size).all();
+
+  let scanned = 0;
+  let updated = 0;
+  const changed = [];
+
+  for (const row of results) {
+    scanned += 1;
+    const beforeName = String(row.display_name || '').trim();
+    const beforePic = String(row.picture_url || '').trim();
+    const enriched = await enrichStoredLineThreadProfile(env, row);
+    const afterName = String(enriched.display_name || '').trim();
+    const afterPic = String(enriched.picture_url || '').trim();
+    if (afterName !== beforeName || afterPic !== beforePic) {
+      updated += 1;
+      changed.push({
+        id: row.id,
+        beforeName,
+        afterName,
+      });
+    }
+  }
+
+  return {
+    success: true,
+    data: { scanned, updated, changed },
+  };
+}
+
 async function d1UpdateLineThread(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   const threadId = String(body.id || '').trim();
@@ -1775,6 +1813,15 @@ export default {
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
         const result = await d1DebugLineThreadProfile(env, threadId);
         return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/line-oa/backfill-names' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        const limit = url.searchParams.get('limit') || '100';
+        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        const result = await d1BackfillLineThreadProfiles(env, limit);
+        return json(result);
       }
 
       if (path === '/api/line-oa/thread' && request.method === 'POST') {
