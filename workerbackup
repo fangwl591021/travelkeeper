@@ -1229,9 +1229,7 @@ async function enrichStoredLineThreadProfile(env, row = {}) {
   const sourceGroupId = String(row?.source_group_id || '').trim();
   const currentName = String(row?.display_name || '').trim();
   const currentPicture = String(row?.picture_url || '').trim();
-  const needsName = isPlaceholderLineDisplayName(currentName, sourceUserId || sourceGroupId);
-  const needsPicture = !currentPicture;
-  if ((!needsName && !needsPicture) || !env.LINE_CHANNEL_ACCESS_TOKEN) {
+  if (!sourceUserId || !env.LINE_CHANNEL_ACCESS_TOKEN) {
     return {
       ...row,
       display_name: currentName,
@@ -1240,13 +1238,21 @@ async function enrichStoredLineThreadProfile(env, row = {}) {
   }
 
   let profile = null;
-  if (sourceUserId && !sourceGroupId) {
+  if (!sourceGroupId) {
     profile = await fetchLineSourceProfile(env, { type: 'user', userId: sourceUserId });
-  } else if (sourceUserId && sourceGroupId) {
+  } else {
     profile = await fetchLineSourceProfile(env, { type: 'group', groupId: sourceGroupId, userId: sourceUserId });
     if (!profile) {
       profile = await fetchLineSourceProfile(env, { type: 'room', roomId: sourceGroupId, userId: sourceUserId });
     }
+  }
+
+  if (!profile?.displayName && !profile?.pictureUrl) {
+    return {
+      ...row,
+      display_name: currentName,
+      picture_url: currentPicture,
+    };
   }
 
   const displayName = String(profile?.displayName || '').trim() || currentName;
