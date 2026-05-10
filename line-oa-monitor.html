@@ -87,7 +87,8 @@
       <div id="chat-view" hidden class="flex-1 flex flex-col min-h-0">
         <div class="px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3">
+              <div id="chat-avatar" class="w-12 h-12 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold text-lg shrink-0 overflow-hidden"></div>
               <h2 id="chat-name" class="text-3xl font-black truncate"></h2>
               <span id="chat-risk-pill" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">&#20302;&#39080;&#38570;</span>
             </div>
@@ -210,6 +211,7 @@
     const threadSearchEl = document.getElementById('thread-search');
     const chatEmptyEl = document.getElementById('chat-empty');
     const chatViewEl = document.getElementById('chat-view');
+    const chatAvatarEl = document.getElementById('chat-avatar');
     const chatNameEl = document.getElementById('chat-name');
     const chatMetaEl = document.getElementById('chat-meta');
     const chatRiskPillEl = document.getElementById('chat-risk-pill');
@@ -288,6 +290,21 @@
       const d = new Date(value);
       if (Number.isNaN(d.getTime())) return value;
       return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderAvatar(container, item = {}, active = false) {
+      container.innerHTML = '';
+      const pictureUrl = String(item.pictureUrl || '').trim();
+      if (pictureUrl) {
+        const img = document.createElement('img');
+        img.src = pictureUrl;
+        img.alt = item.name || 'avatar';
+        img.className = 'w-full h-full object-cover';
+        container.appendChild(img);
+        return;
+      }
+      container.className = `${container.className.replace(/bg-[^ ]+|text-[^ ]+/g, '').trim()} ${active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-700'}`.trim();
+      container.textContent = String(item.name || '?').trim().slice(0, 1);
     }
 
     function buildSuggestions(thread) {
@@ -554,28 +571,57 @@
         const card = document.createElement('button');
         card.type = 'button';
         card.className = `w-full text-left rounded-3xl border px-4 py-4 transition ${active ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`;
-        card.innerHTML = `
-          <div class="flex items-start gap-3">
-            <div class="w-14 h-14 rounded-full ${active ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-700'} grid place-items-center font-bold text-xl shrink-0">
-              ${String(item.name || '?').trim().slice(0, 1)}
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="font-bold text-lg truncate">${item.name || '\u672a\u547d\u540d\u804a\u5929\u5ba4'}</p>
-                  <p class="text-xs text-slate-400 truncate mt-0.5">${item.userId || ''}</p>
-                </div>
-                <p class="text-xs text-slate-400 shrink-0">${formatTime(item.lastMessageAt)}</p>
-              </div>
-              <p class="text-sm text-slate-600 mt-2 line-clamp-3">${item.summary || ''}</p>
-              <div class="flex flex-wrap gap-2 mt-3">
-                <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
-                <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
-                ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} \u5247</span>` : ''}
-              </div>
-            </div>
-          </div>
+        const layout = document.createElement('div');
+        layout.className = 'flex items-start gap-3';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'w-14 h-14 rounded-full grid place-items-center font-bold text-xl shrink-0 overflow-hidden';
+        renderAvatar(avatar, item, active);
+
+        const body = document.createElement('div');
+        body.className = 'min-w-0 flex-1';
+
+        const top = document.createElement('div');
+        top.className = 'flex items-start justify-between gap-2';
+
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'min-w-0';
+
+        const title = document.createElement('p');
+        title.className = 'font-bold text-lg truncate';
+        title.textContent = item.name || '未命名聊天室';
+
+        const userId = document.createElement('p');
+        userId.className = 'text-xs text-slate-400 truncate mt-0.5';
+        userId.textContent = item.userId || '';
+
+        const time = document.createElement('p');
+        time.className = 'text-xs text-slate-400 shrink-0';
+        time.textContent = formatTime(item.lastMessageAt);
+
+        titleWrap.appendChild(title);
+        titleWrap.appendChild(userId);
+        top.appendChild(titleWrap);
+        top.appendChild(time);
+
+        const summary = document.createElement('p');
+        summary.className = 'text-sm text-slate-600 mt-2 line-clamp-3';
+        summary.textContent = item.summary || '';
+
+        const pills = document.createElement('div');
+        pills.className = 'flex flex-wrap gap-2 mt-3';
+        pills.innerHTML = `
+          <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
+          ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} 則</span>` : ''}
         `;
+
+        body.appendChild(top);
+        body.appendChild(summary);
+        body.appendChild(pills);
+        layout.appendChild(avatar);
+        layout.appendChild(body);
+        card.appendChild(layout);
         card.addEventListener('click', () => { loadThreadDetail(item.id).catch(err => showToast(err.message, 'error')); });
         threadListEl.appendChild(card);
       });
@@ -640,6 +686,8 @@
 
       chatViewEl.hidden = false;
       chatEmptyEl.hidden = true;
+      chatAvatarEl.className = 'w-12 h-12 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold text-lg shrink-0 overflow-hidden';
+      renderAvatar(chatAvatarEl, thread, false);
       chatNameEl.textContent = thread.name || '\u672a\u547d\u540d\u804a\u5929\u5ba4';
       chatMetaEl.textContent = `\u5171 ${thread.messages.length} \u5247\u8a0a\u606f\u30fb\u7528\u6236 ID ${thread.userId || ""}`;
       chatRiskPillEl.className = `px-3 py-1 rounded-full text-xs font-semibold ${riskClass(thread.risk || 'low')}`;
