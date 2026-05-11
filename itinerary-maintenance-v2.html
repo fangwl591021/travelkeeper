@@ -465,9 +465,21 @@
     }
 
     function sanitizeDescriptionMarkdown(rawText) {
-      const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
+      const text = String(rawText || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/([^\n])(!\[[^\]]*\]\(https?:\/\/[^)\s]+\))/gi, '$1\n$2')
+        .replace(/(!\[[^\]]*\]\(https?:\/\/[^)\s]+\))([^\n])/gi, '$1\n$2');
       const lines = text.split('\n').map((line) => normalizeImageMarkdownLine(line));
       return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    function hasMeaningfulSections(list) {
+      return Array.isArray(list) && list.some(section => {
+        return String(section?.title || '').trim() ||
+          String(section?.image || '').trim() ||
+          String(section?.body || '').trim();
+      });
     }
 
     function serializeSections(list) {
@@ -747,9 +759,11 @@
 
     const sanitizeBtn = document.getElementById('sanitize-btn');
     if (sanitizeBtn) sanitizeBtn.addEventListener('click', () => {
+      const original = String(descriptionField.value || '');
       const cleaned = sanitizeDescriptionMarkdown(descriptionField.value);
+      const parsed = parseDescriptionToSections(cleaned);
       descriptionField.value = cleaned;
-      sections = parseDescriptionToSections(cleaned);
+      sections = hasMeaningfulSections(parsed) ? parsed : [{ title: '', image: '', body: cleaned || original }];
       renderSections();
       syncDescriptionField();
       showToast(UI.cleanDone);
