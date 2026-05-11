@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
@@ -414,7 +414,7 @@
       const lines = text.split('\n');
       const result = [];
       let current = null;
-      const headingRegex = /^第\s*\d+\s*天.*$/;
+      const headingRegex = /^蝚枯s*\d+\s*憭?*$/;
       const imageRegex = /^!\[[^\]]*\]\(([^)]+)\)\s*$/;
 
       function pushCurrent() {
@@ -452,7 +452,7 @@
         const image = String(section.image || '').trim();
         const body = String(section.body || '').trim();
         if (title) parts.push(title);
-        if (image) parts.push(`![圖片](${image})`);
+        if (image) parts.push(`![??](${image})`);
         if (body) parts.push(body);
         return parts.join('\n');
       }).filter(Boolean).join('\n\n').trim();
@@ -644,7 +644,8 @@
       legacyLinkEl.href = `itinerary-maintenance.html?id=${encodeURIComponent(itineraryId)}`;
     }
 
-    document.getElementById('cover-upload').addEventListener('change', async (e) => {
+    const coverUploadInput = document.getElementById('cover-upload');
+    if (coverUploadInput) coverUploadInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
       try {
@@ -666,7 +667,7 @@
       }
     });
 
-    formEl.elements.image.addEventListener('input', () => {
+    if (formEl.elements.image) formEl.elements.image.addEventListener('input', () => {
       setPreview({
         title: formEl.elements.title.value,
         image: formEl.elements.image.value,
@@ -677,26 +678,29 @@
       });
     });
 
-    formEl.elements.title.addEventListener('input', () => {
+    if (formEl.elements.title) formEl.elements.title.addEventListener('input', () => {
       titlePreviewEl.textContent = formEl.elements.title.value || UI.noTitle;
     });
 
     ['region', 'days', 'price'].forEach(name => {
+      if (!formEl.elements[name]) return;
       formEl.elements[name].addEventListener('input', () => {
         metaPreviewEl.textContent = `${formEl.elements.region.value || '-'} · ${Number(formEl.elements.days.value || 0)} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
       });
     });
 
-    formEl.elements.commissionMode.addEventListener('change', syncCommissionMode);
+    if (formEl.elements.commissionMode) formEl.elements.commissionMode.addEventListener('change', syncCommissionMode);
 
-    document.getElementById('reparse-btn').addEventListener('click', () => {
+    const reparseBtn = document.getElementById('reparse-btn');
+    if (reparseBtn) reparseBtn.addEventListener('click', () => {
       sections = parseDescriptionToSections(descriptionField.value);
       renderSections();
       syncDescriptionField();
       showToast(UI.reparseDone);
     });
 
-    document.getElementById('add-section-btn').addEventListener('click', () => {
+    const addSectionBtn = document.getElementById('add-section-btn');
+    if (addSectionBtn) addSectionBtn.addEventListener('click', () => {
       sections.push(createEmptySection());
       renderSections();
       syncDescriptionField();
@@ -766,3 +770,4 @@
   </script>
 </body>
 </html>
+
