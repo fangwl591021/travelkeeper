@@ -520,7 +520,7 @@
             removeBtn: !!removeBtn,
           });
           sectionsListEl.appendChild(node);
-          continue;
+          return;
         }
 
         titleInput.value = section.title || '';
@@ -656,52 +656,56 @@
       legacyLinkEl.href = `itinerary-maintenance.html?id=${encodeURIComponent(itineraryId)}`;
     }
 
-    const coverUploadInput = document.getElementById('cover-upload');
-    if (coverUploadInput) coverUploadInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const url = await uploadFileToR2(file);
-        formEl.elements.image.value = url;
+    if (!formEl) {
+      console.warn('itinerary-maintenance-v2: missing #form');
+    } else {
+      const coverUploadInput = document.getElementById('cover-upload');
+      if (coverUploadInput) coverUploadInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const url = await uploadFileToR2(file);
+          formEl.elements.image.value = url;
+          setPreview({
+            title: formEl.elements.title.value,
+            image: url,
+            region: formEl.elements.region.value,
+            days: formEl.elements.days.value,
+            price: formEl.elements.price.value,
+            reviewStatus: statusPillEl.textContent,
+          });
+          showToast(UI.uploadCoverDone);
+        } catch (err) {
+          showToast(err.message || UI.uploadFail, 'error');
+        } finally {
+          e.target.value = '';
+        }
+      });
+
+      if (formEl.elements.image) formEl.elements.image.addEventListener('input', () => {
         setPreview({
           title: formEl.elements.title.value,
-          image: url,
+          image: formEl.elements.image.value,
           region: formEl.elements.region.value,
           days: formEl.elements.days.value,
           price: formEl.elements.price.value,
           reviewStatus: statusPillEl.textContent,
         });
-        showToast(UI.uploadCoverDone);
-      } catch (err) {
-        showToast(err.message || UI.uploadFail, 'error');
-      } finally {
-        e.target.value = '';
-      }
-    });
-
-    if (formEl.elements.image) formEl.elements.image.addEventListener('input', () => {
-      setPreview({
-        title: formEl.elements.title.value,
-        image: formEl.elements.image.value,
-        region: formEl.elements.region.value,
-        days: formEl.elements.days.value,
-        price: formEl.elements.price.value,
-        reviewStatus: statusPillEl.textContent,
       });
-    });
 
-    if (formEl.elements.title) formEl.elements.title.addEventListener('input', () => {
-      titlePreviewEl.textContent = formEl.elements.title.value || UI.noTitle;
-    });
-
-    ['region', 'days', 'price'].forEach(name => {
-      if (!formEl.elements[name]) return;
-      formEl.elements[name].addEventListener('input', () => {
-        metaPreviewEl.textContent = `${formEl.elements.region.value || '-'} · ${Number(formEl.elements.days.value || 0)} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
+      if (formEl.elements.title) formEl.elements.title.addEventListener('input', () => {
+        titlePreviewEl.textContent = formEl.elements.title.value || UI.noTitle;
       });
-    });
 
-    if (formEl.elements.commissionMode) formEl.elements.commissionMode.addEventListener('change', syncCommissionMode);
+      ['region', 'days', 'price'].forEach(name => {
+        if (!formEl.elements[name]) return;
+        formEl.elements[name].addEventListener('input', () => {
+          metaPreviewEl.textContent = `${formEl.elements.region.value || '-'} · ${Number(formEl.elements.days.value || 0)} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
+        });
+      });
+
+      if (formEl.elements.commissionMode) formEl.elements.commissionMode.addEventListener('change', syncCommissionMode);
+    }
 
     const reparseBtn = document.getElementById('reparse-btn');
     if (reparseBtn) reparseBtn.addEventListener('click', () => {
@@ -718,7 +722,7 @@
       syncDescriptionField();
     });
 
-    formEl.addEventListener('submit', async (e) => {
+    if (formEl) formEl.addEventListener('submit', async (e) => {
       e.preventDefault();
       syncDescriptionField();
 
