@@ -1,7 +1,7 @@
-// ============================================================
+﻿// ============================================================
 // TravelKeeper BFF Worker
-// 職責：聚合 API、組裝 Flex Message、R2 圖片上傳、AI 解析、訂單建立
-// 前端只需打一支 API 拿到所需全部資料
+// ?瑁痊嚗???API??鋆?Flex Message?2 ??銝?I 閫?????桀遣蝡?
+// ?垢?芷?????API ?踹???券鞈?
 // ============================================================
 
 const CORS = {
@@ -15,8 +15,8 @@ const ADMIN_UIDS = new Set([
 ]);
 const R2_PUBLIC = 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
-const LINE_NEGATIVE_KEYWORDS = ['退費', '退款', '客訴', '負評', '生氣', '失望', '取消', '抱怨', '投訴', '不滿'];
-const LINE_URGENT_KEYWORDS = ['緊急', '立刻', '馬上', '現在', '危險', '出事', '失聯', '找不到'];
+const LINE_NEGATIVE_KEYWORDS = ['退款', '退費', '取消', '生氣', '客訴', '抱怨', '不滿', '失望', '負評', '建議'];
+const LINE_URGENT_KEYWORDS = ['立即', '現在', '趕快', '今天', '急件', '盡快', '馬上', '立刻'];
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -303,19 +303,184 @@ async function d1GetItineraryDetail(env, id) {
   return env.DB.prepare(`SELECT * FROM itineraries WHERE id = ?`).bind(normalizedId).first();
 }
 
+function normalizeGasItinerary(item = {}) {
+  const id = String(item.id || item.timestamp || '').trim();
+  if (!id) return null;
+  return {
+    id,
+    title: String(item.title || '').trim(),
+    region: String(item.region || '').trim(),
+    price: Number(item.price || 0),
+    days: Number(item.days || 0),
+    image: String(item.image || '').trim(),
+    description: String(item.description || item.desc || '').trim(),
+    notes: String(item.notes || item.note || '').trim(),
+    owner_uid: String(item.owneruid || item.ownerUid || '').trim(),
+    owner_name: String(item.ownername || item.ownerName || '').trim(),
+    review_status: String(item.reviewstatus || item.reviewStatus || 'published').trim() || 'published',
+    review_note: String(item.reviewnote || item.reviewNote || '').trim(),
+    payment_mode: String(item.paymentmode || item.paymentMode || 'deposit').trim() || 'deposit',
+    deposit_ratio: Number(item.depositratio || item.depositRatio || 20),
+    balance_collect: String(item.balancecollect || item.balanceCollect || 'online').trim() || 'online',
+    commission_amount: Number(item.commissionamount || item.commissionAmount || 0),
+    commission_mode: String(item.commissionmode || item.commissionMode || 'amount').trim() || 'amount',
+    commission_percent: Number(item.commissionpercent || item.commissionPercent || 0),
+    seat_limit: Number(item.seatlimit || item.seatLimit || 0),
+    min_group_size: Number(item.mingroupsize || item.minGroupSize || 0),
+    allowed_payment_methods: normalizeAllowedPaymentMethods(
+      item.allowedpaymentmethods || item.allowedPaymentMethods || 'credit_card,linepay,atm'
+    ),
+    share_enabled: Number(item.shareenabled ?? item.shareEnabled ?? 1) === 1 ? 1 : 0,
+  };
+}
+
+function pickGasItinerary(items = [], body = {}, gasResult = {}) {
+  const normalized = items.map(normalizeGasItinerary).filter(Boolean);
+  if (!normalized.length) return null;
+
+  const preferredId = String(
+    gasResult?.itinerary?.id ||
+    gasResult?.itinerary?.timestamp ||
+    gasResult?.id ||
+    body.id ||
+    body.timestamp ||
+    ''
+  ).trim();
+  if (preferredId) {
+    const exact = normalized.find(item => item.id === preferredId);
+    if (exact) return exact;
+  }
+
+  const ownerUid = String(body.ownerUid || body.owneruid || '').trim();
+  const title = String(body.title || '').trim();
+  const region = String(body.region || '').trim();
+  const price = Number(body.price || 0);
+
+  const sameOwner = ownerUid
+    ? normalized.filter(item => item.owner_uid === ownerUid)
+    : normalized;
+
+  const sameTitle = title
+    ? sameOwner.filter(item => item.title === title)
+    : sameOwner;
+
+  const sameRegion = region
+    ? sameTitle.filter(item => item.region === region)
+    : sameTitle;
+
+  const samePrice = price
+    ? sameRegion.filter(item => Number(item.price || 0) === price)
+    : sameRegion;
+
+  return samePrice[0] || sameRegion[0] || sameTitle[0] || sameOwner[0] || normalized[0];
+}
+
+async function d1UpsertGasItinerary(env, itinerary) {
+  if (!env.DB || !itinerary?.id) return;
+  await env.DB.prepare(`
+    INSERT INTO itineraries (
+      id, title, region, price, days, image, description, notes,
+      owner_uid, owner_name, review_status, review_note,
+      payment_mode, deposit_ratio, balance_collect,
+      commission_amount, commission_mode, commission_percent,
+      seat_limit, min_group_size, allowed_payment_methods, share_enabled,
+      created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?,
+      ?, ?, ?,
+      ?, ?, ?,
+      ?, ?, ?, ?,
+      COALESCE((SELECT created_at FROM itineraries WHERE id = ?), datetime('now')),
+      datetime('now')
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      region = excluded.region,
+      price = excluded.price,
+      days = excluded.days,
+      image = excluded.image,
+      description = excluded.description,
+      notes = excluded.notes,
+      owner_uid = excluded.owner_uid,
+      owner_name = excluded.owner_name,
+      review_status = excluded.review_status,
+      review_note = excluded.review_note,
+      payment_mode = excluded.payment_mode,
+      deposit_ratio = excluded.deposit_ratio,
+      balance_collect = excluded.balance_collect,
+      commission_amount = excluded.commission_amount,
+      commission_mode = excluded.commission_mode,
+      commission_percent = excluded.commission_percent,
+      seat_limit = excluded.seat_limit,
+      min_group_size = excluded.min_group_size,
+      allowed_payment_methods = excluded.allowed_payment_methods,
+      share_enabled = excluded.share_enabled,
+      updated_at = datetime('now')
+  `).bind(
+    itinerary.id,
+    itinerary.title,
+    itinerary.region,
+    itinerary.price,
+    itinerary.days,
+    itinerary.image,
+    itinerary.description,
+    itinerary.notes,
+    itinerary.owner_uid,
+    itinerary.owner_name,
+    itinerary.review_status,
+    itinerary.review_note,
+    itinerary.payment_mode,
+    itinerary.deposit_ratio,
+    itinerary.balance_collect,
+    itinerary.commission_amount,
+    itinerary.commission_mode,
+    itinerary.commission_percent,
+    itinerary.seat_limit,
+    itinerary.min_group_size,
+    itinerary.allowed_payment_methods,
+    itinerary.share_enabled,
+    itinerary.id
+  ).run();
+}
+
+async function d1SyncItineraryFromGas(env, body = {}, gasResult = {}) {
+  if (!env.DB || !env.GAS_WEBAPP_URL) return;
+  const allItems = await gasGet(env, { action: 'getItineraries', all: '1' });
+  const picked = pickGasItinerary(Array.isArray(allItems) ? allItems : [], body, gasResult);
+  if (!picked) throw new Error('Unable to find itinerary from GAS after submit');
+  await d1UpsertGasItinerary(env, picked);
+}
+
+async function d1SyncItineraryReviewStatus(env, body = {}) {
+  if (!env.DB) return;
+  const itineraryId = String(body.id || '').trim();
+  const reviewStatus = String(body.status || body.reviewStatus || '').trim();
+  if (!itineraryId || !reviewStatus) return;
+  await env.DB.prepare(`
+    UPDATE itineraries
+       SET review_status = ?, review_note = ?, updated_at = datetime('now')
+     WHERE id = ?
+  `).bind(
+    reviewStatus,
+    String(body.reviewNote || '').trim(),
+    itineraryId
+  ).run();
+}
+
 async function d1SaveItineraryDetail(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   const itineraryId = String(body.id || '').trim();
   const operatorUid = String(body.uid || body.operatorUid || '').trim();
-  if (!itineraryId) return { success: false, error: '缺少 id' };
-  if (!operatorUid) return { success: false, error: '缺少 uid' };
+  if (!itineraryId) return { success: false, error: '蝻箏? id' };
+  if (!operatorUid) return { success: false, error: '蝻箏? uid' };
 
   const existing = await d1GetItineraryDetail(env, itineraryId);
-  if (!existing) return { success: false, error: '找不到此行程' };
+  if (!existing) return { success: false, error: '?曆??唳迨銵?' };
 
   const isAdmin = ADMIN_UIDS.has(operatorUid);
   const isOwner = String(existing.owner_uid || '') === operatorUid;
-  if (!isAdmin && !isOwner) return { success: false, error: '無權限編輯此行程' };
+  if (!isAdmin && !isOwner) return { success: false, error: '?⊥??楊頛舀迨銵?' };
 
   const basicUpdates = {
     title: body.title ?? existing.title ?? '',
@@ -356,7 +521,7 @@ async function d1SaveItineraryDetail(env, body = {}) {
     `UPDATE itineraries SET ${d1Sets.join(', ')} WHERE id = ?`
   ).bind(...d1Values, itineraryId).run();
 
-  if (!updateRes.success) return { success: false, error: '行程更新失敗' };
+  if (!updateRes.success) return { success: false, error: '銵??湔憭望?' };
 
   if (env.GAS_WEBAPP_URL) {
     const gasBody = {
@@ -423,18 +588,18 @@ async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
   const source = String(body.source || 'referral').trim() || 'referral';
 
   if (!itineraryId || !distributorUid || !customerName || !customerPhone) {
-    return { success: false, error: '缺少建立訂單所需欄位' };
+    return { success: false, error: '蝻箏?撱箇?閮??甈?' };
   }
 
   const itinerary = await env.DB.prepare(
     `SELECT * FROM itineraries WHERE id = ? AND (deleted_at IS NULL OR deleted_at = '')`
   ).bind(itineraryId).first();
-  if (!itinerary) return { success: false, error: '找不到此行程' };
+  if (!itinerary) return { success: false, error: '?曆??唳迨銵?' };
 
   const distributor = await env.DB.prepare(
     `SELECT * FROM distributors WHERE uid = ?`
   ).bind(distributorUid).first();
-  if (!distributor) return { success: false, error: '找不到分銷商' };
+  if (!distributor) return { success: false, error: '?曆??啣??瑕?' };
 
   const price = Number(itinerary.price || 0);
   const totalAmount = price * travelers;
@@ -490,7 +655,7 @@ async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
     createdAt
   ).run();
 
-  if (!insertResult.success) return { success: false, error: '訂單建立失敗' };
+  if (!insertResult.success) return { success: false, error: '閮撱箇?憭望?' };
 
   await env.DB.prepare(`
     INSERT INTO customers (
@@ -696,10 +861,10 @@ function pickDistributorProfileUpdates(body = {}) {
 async function d1GetDistributorProfile(env, uid) {
   if (!env.DB) throw new Error('D1 binding missing');
   const normalizedUid = String(uid || '').trim();
-  if (!normalizedUid) return { success: false, error: '缺少 uid' };
+  if (!normalizedUid) return { success: false, error: '蝻箏? uid' };
 
   const row = await env.DB.prepare(`SELECT * FROM distributors WHERE uid = ?`).bind(normalizedUid).first();
-  if (!row) return { success: false, error: '找不到此分銷商' };
+  if (!row) return { success: false, error: '????????' };
 
   return {
     success: true,
@@ -736,7 +901,7 @@ async function d1GetDistributorProfile(env, uid) {
 async function d1UpdateDistributorProfile(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   const normalizedUid = String(body.uid || '').trim();
-  if (!normalizedUid) return { success: false, error: '缺少 uid' };
+  if (!normalizedUid) return { success: false, error: '蝻箏? uid' };
 
   const updates = pickDistributorProfileUpdates(body);
   if (Object.keys(updates).length === 0) {
@@ -752,7 +917,7 @@ async function d1UpdateDistributorProfile(env, body = {}) {
     `UPDATE distributors SET ${sets.join(', ')} WHERE uid = ?`
   ).bind(...values, normalizedUid).run();
 
-  if (!result.success) return { success: false, error: '分銷商更新失敗' };
+  if (!result.success) return { success: false, error: '?????????' };
 
   if (env.GAS_WEBAPP_URL) {
     const gasBody = { action: 'updateDistributorProfile', uid: normalizedUid };
@@ -1006,7 +1171,7 @@ async function d1GetCommissionSummary(env) {
     if (!groupBy[uid]) {
       groupBy[uid] = {
         uid,
-        name: row.distributor_name || '(未知)',
+        name: row.distributor_name || '(?芰)',
         phone: row.distributor_phone || '',
         commissionPct: Number(row.distributor_commission_pct || 0),
         payable: { count: 0, total: 0, orders: [] },
@@ -1323,10 +1488,10 @@ function getLineThreadId(source = {}) {
 }
 
 function getLineDisplayName(source = {}) {
-  if (source?.userId) return `用戶 ${String(source.userId).slice(-6)}`;
-  if (source?.groupId) return `群組 ${String(source.groupId).slice(-6)}`;
-  if (source?.roomId) return `聊天室 ${String(source.roomId).slice(-6)}`;
-  return '未命名聊天室';
+  if (source?.userId) return `?冽 ${String(source.userId).slice(-6)}`;
+  if (source?.groupId) return `蝢斤? ${String(source.groupId).slice(-6)}`;
+  if (source?.roomId) return `?予摰?${String(source.roomId).slice(-6)}`;
+  return '?芸??憭拙恕';
 }
 
 async function fetchLineSourceProfile(env, source = {}) {
@@ -1392,12 +1557,12 @@ function isPlaceholderLineDisplayName(name = '', sourceId = '') {
   const value = String(name || '').trim();
   const id = String(sourceId || '').trim();
   if (!value) return true;
-  if (value === 'Unknown user' || value === '未知用戶') return true;
+  if (value === 'Unknown user' || value === '?芰?冽') return true;
   if (!id) return false;
   const suffix = id.slice(-6);
   if (!suffix) return false;
-  if ((value.startsWith('用戶 ') || value.startsWith('User ')) && value.endsWith(suffix)) return true;
-  if ((value.startsWith('群組 ') || value.startsWith('聊天室 ')) && value.endsWith(suffix)) return true;
+  if ((value.startsWith('?冽 ') || value.startsWith('User ')) && value.endsWith(suffix)) return true;
+  if ((value.startsWith('蝢斤? ') || value.startsWith('?予摰?')) && value.endsWith(suffix)) return true;
   if (value.includes(id) && value.length <= id.length + 8) return true;
   return false;
 }
@@ -1750,7 +1915,7 @@ async function d1BackfillLineThreadProfiles(env, limit = 100) {
 async function d1UpdateLineThread(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   const threadId = String(body.id || '').trim();
-  if (!threadId) return { success: false, error: '缺少聊天室 id' };
+  if (!threadId) return { success: false, error: '蝻箏??予摰?id' };
   const tags = Array.isArray(body.tags)
     ? body.tags.map(v => String(v || '').trim()).filter(Boolean)
     : String(body.tags || '').split(',').map(v => v.trim()).filter(Boolean);
@@ -1772,14 +1937,14 @@ async function d1UpdateLineThread(env, body = {}) {
     sets.push('tags = ?');
     values.push(tags.join(','));
   }
-  if (!sets.length) return { success: false, error: '沒有可更新欄位' };
+  if (!sets.length) return { success: false, error: '????????' };
   sets.push("updated_at = datetime('now')");
   const result = await env.DB.prepare(`
     UPDATE line_threads
     SET ${sets.join(', ')}
     WHERE id = ?
   `).bind(...values, threadId).run();
-  if (!result.success) return { success: false, error: '更新失敗' };
+  if (!result.success) return { success: false, error: '?湔憭望?' };
   return d1GetLineThread(env, threadId);
 }
 
@@ -1935,17 +2100,17 @@ export default {
 
       if (path === '/api/line-oa/threads' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
         return json(await d1GetLineThreads(env));
       }
 
       if (path === '/api/line-oa/thread' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         const threadId = url.searchParams.get('id') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
-        if (!threadId) return json({ success: false, error: '缺少聊天室 id' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
+        if (!threadId) return json({ success: false, error: '蝻箏??予摰?id' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
         const result = await d1GetLineThread(env, threadId);
         return json(result, result.success ? 200 : 404);
       }
@@ -1953,9 +2118,9 @@ export default {
       if (path === '/api/line-oa/profile-debug' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         const threadId = url.searchParams.get('id') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
-        if (!threadId) return json({ success: false, error: '缺少 thread id' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
+        if (!threadId) return json({ success: false, error: '蝻箏? thread id' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
         const result = await d1DebugLineThreadProfile(env, threadId);
         return json(result, result.success ? 200 : 404);
       }
@@ -1963,8 +2128,8 @@ export default {
       if (path === '/api/line-oa/backfill-names' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         const limit = url.searchParams.get('limit') || '100';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
         const result = await d1BackfillLineThreadProfiles(env, limit);
         return json(result);
       }
@@ -1972,21 +2137,21 @@ export default {
       if (path === '/api/line-oa/thread' && request.method === 'POST') {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '無權限' }, 403);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
         const result = await d1UpdateLineThread(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // GET /api/app-init?uid=xxx
-      // ★ 前端初始化一次打這支，拿到所有需要的資料
-      //   回傳：{ itineraries, user, orders, distStats? }
-      // ══════════════════════════════════════════════════════════
+      // ???垢????甈⊥??嚗?唳???閬?鞈?
+      //   ?嚗 itineraries, user, orders, distStats? }
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/app-init' && request.method === 'GET') {
         const uid = url.searchParams.get('uid');
 
-        // 並行拉取：行程列表 + 用戶狀態
+        // 銝西???嚗?蝔?銵?+ ?冽???
         const [itinRaw, userRaw] = await Promise.all([
           readItinerariesWithFallback(env, {}),
           uid ? readCheckUserStatusWithFallback(env, uid) : Promise.resolve(null),
@@ -1995,7 +2160,7 @@ export default {
         const itineraries = Array.isArray(itinRaw) ? itinRaw : [];
         const user        = userRaw?.success ? userRaw.data : null;
 
-        // 若是分銷商，額外拿業績；若是管理員，拿 CRM 名單
+        // ?交???憿??踵平蝮橘??交蝞∠??∴???CRM ?
         let orders    = [];
         let distStats = null;
         let crmList   = [];
@@ -2018,12 +2183,12 @@ export default {
         return json({ success: true, itineraries, user, orders, distStats, crmList });
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // POST /api/build-flex
       // POST /api/flex/build
-      // ★ 前端傳入行程 IDs + 設定，Worker 回傳組裝好的 Flex JSON
+      // ???垢?喳銵? IDs + 閮剖?嚗orker ?蝯?憟賜? Flex JSON
       //   body: { ids / itineraryIds, mode, uid, ctaText, socFields, agencySlug, inviteCode }
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       if ((path === '/api/build-flex' || path === '/api/flex/build') && request.method === 'POST') {
         const body = await request.json();
         const {
@@ -2031,32 +2196,32 @@ export default {
           itineraryIds = [],
           mode = 'single',
           uid = '',
-          ctaText = '查看行程 / 立即報名',
+          ctaText = '?亦?銵? / 蝡?勗?',
           socFields = {},
           agencySlug = 'demo',
           inviteCode = '',
         } = body;
         const finalIds = (Array.isArray(itineraryIds) && itineraryIds.length > 0 ? itineraryIds : ids).map(String);
 
-        // 拉取這幾筆行程
+        // ???嗾蝑?蝔?
         const itinRaw = await readItinerariesWithFallback(env, {});
         const all     = Array.isArray(itinRaw) ? itinRaw : [];
         const items   = finalIds.map(id => all.find(i => String(i.id || i.timestamp || '') === String(id))).filter(Boolean);
 
-        if (items.length === 0) return json({ success: false, error: '找不到指定行程' }, 400);
+        if (items.length === 0) return json({ success: false, error: '???????' }, 400);
 
-        // LIFF ID 從 config 拿，作為預約按鈕 URL 的一部分
+        // LIFF ID 敺?config ?選?雿???? URL ???典?
         const cfgRes = await readConfigWithFallback(env, agencySlug);
         const liffId = cfgRes?.data?.liff_id || '';
 
-        // 聯絡按鈕
+        // ?舐窗??
         const SOC_DEFS = [
-          { key: 'phone',      label: '電話',    prefix: 'tel:',  field: 'phone'      },
+          { key: 'phone',      label: '?餉店',    prefix: 'tel:',  field: 'phone'      },
           { key: 'line',       label: 'LINE',    prefix: '',      field: 'lineLink'   },
           { key: 'lineAt',     label: 'LINE@',   prefix: '',      field: 'lineAtLink' },
           { key: 'fb',         label: 'Facebook',prefix: '',      field: 'fbLink'     },
-          { key: 'web',        label: '網站',    prefix: '',      field: 'webLink'    },
-          { key: 'map',        label: '地圖',    prefix: '',      field: 'mapLink'    },
+          { key: 'web',        label: '蝬脩?',    prefix: '',      field: 'webLink'    },
+          { key: 'map',        label: '?啣?',    prefix: '',      field: 'mapLink'    },
           { key: 'tg',         label: 'Telegram',prefix: '',      field: 'tgToken'    },
         ];
         const socBtns = SOC_DEFS
@@ -2070,18 +2235,18 @@ export default {
             return { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: d.label, uri: d.prefix ? `${d.prefix}${raw}` : raw } };
           });
 
-        // 預約按鈕 URL（LIFF）
+        // ???? URL嚗IFF嚗?
         const inviteParam = inviteCode ? `&invite=${encodeURIComponent(inviteCode)}` : '';
         const buildBookingUri = (itineraryId) =>
           liffId
             ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}`
             : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}`;
 
-        // ★ 行程詳情頁 URL — 客戶瀏覽用 tour.html（純詳情頁，不是業務工具）
+        // ??銵?閰單???URL ??摰Ｘ?汗??tour.html嚗?閰單???銝璆剖?撌亙嚗?
         const buildDetailUri = (itineraryId) =>
           `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}${inviteParam}`;
 
-        // ── 單張 / 橫向輪播 用：完整大卡（hero 圖 + 詳細資訊 + 立即預約）
+        // ?? ?桀撐 / 璈怠?頛芣 ?剁?摰憭批嚗ero ??+ 閰喟敦鞈? + 蝡??嚗?
         const makeBubble = (tour) => {
           const id  = String(tour.id || tour.timestamp || '');
           const detailUri = buildDetailUri(id);
@@ -2091,20 +2256,20 @@ export default {
             hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', action: { type: 'uri', uri: detailUri } },
             body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', contents: [
               { type: 'text', text: tour.title, weight: 'bold', size: 'lg', wrap: true, color: '#0f172a' },
-              { type: 'text', text: `${tour.region || ''} · ${tour.days}天`, size: 'sm', color: '#64748b', margin: 'sm' },
+              { type: 'text', text: `${tour.region || ''} 繚 ${tour.days}憭奈, size: 'sm', color: '#64748b', margin: 'sm' },
               { type: 'text', text: `TWD ${Number(tour.price).toLocaleString()}`, weight: 'bold', size: 'xl', color: '#b82337', margin: 'md' },
             ]},
             footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', contents: [
-              { type: 'button', style: 'primary', color: '#b82337', height: 'md', action: { type: 'uri', label: '立即預約', uri: bookUri } },
+              { type: 'button', style: 'primary', color: '#b82337', height: 'md', action: { type: 'uri', label: '蝡??', uri: bookUri } },
               { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: ctaText, uri: detailUri } },
               ...socBtns
             ]}
           };
         };
 
-        // ── 列表模式：完全照 LINE 官方 list bubble 範例結構
-        //   每個行程 = 一個獨立的 box，內含：縮圖 + 標題 + 副資訊 + 價格
-        //   ★ 方案 A：整塊點擊進「詳情頁」(model.html)，預約靠詳情頁裡的按鈕
+        // ?? ?”璅∪?嚗??函 LINE 摰 list bubble 蝭?蝯?
+        //   瘥?蝔?= 銝?蝡? box嚗?恬?蝮桀? + 璅? + ?航?閮?+ ?寞
+        //   ???寞? A嚗憛??脯底????model.html)嚗?蝝?閰單??ㄐ????
         const makeListItem = (tour) => {
           const id  = String(tour.id || tour.timestamp || '');
           const detailUri = buildDetailUri(id);
@@ -2129,7 +2294,7 @@ export default {
                 contents: [
                   {
                     type: 'text',
-                    text: tour.title || '行程',
+                    text: tour.title || '銵?',
                     weight: 'bold',
                     size: 'sm',
                     wrap: true,
@@ -2137,7 +2302,7 @@ export default {
                   },
                   {
                     type: 'text',
-                    text: `${tour.region || ''}  ·  ${tour.days || ''}天`,
+                    text: `${tour.region || ''}  繚  ${tour.days || ''}憭奈,
                     size: 'xs',
                     color: '#64748b',
                     margin: 'sm'
@@ -2158,7 +2323,7 @@ export default {
 
         let flex;
         if (mode === 'multi' || mode === 'list') {
-          // ★ 列表模式：單一 bubble，每筆行程之間用 separator 分隔
+          // ???”璅∪?嚗銝 bubble嚗?蝑?蝔?? separator ??
           const itemContents = [];
           items.forEach((tour, idx) => {
             if (idx > 0) itemContents.push({ type: 'separator', margin: 'lg' });
@@ -2180,8 +2345,8 @@ export default {
               backgroundColor: '#0f172a',
               paddingAll: '16px',
               contents: [
-                { type: 'text', text: '✈️ 精選行程推薦', weight: 'bold', color: '#ffffff', size: 'lg' },
-                { type: 'text', text: `共 ${items.length} 個行程`, color: '#94a3b8', size: 'sm', margin: 'xs' }
+                { type: 'text', text: '?? 蝎暸銵??刻', weight: 'bold', color: '#ffffff', size: 'lg' },
+                { type: 'text', text: `??${items.length} ??蝔, color: '#94a3b8', size: 'sm', margin: 'xs' }
               ]
             },
             body: {
@@ -2205,33 +2370,33 @@ export default {
 
           flex = {
             type: 'flex',
-            altText: `精選行程推薦：${items[0].title} 等${items.length}條`,
+            altText: `蝎暸銵??刻嚗?{items[0].title} 蝑?{items.length}璇,
             contents: listBubble
           };
         } else {
           const bubbles = items.map(makeBubble);
-          flex = { type: 'flex', altText: `推薦行程：${items[0].title}`, contents: mode === 'carousel' ? { type: 'carousel', contents: bubbles } : bubbles[0] };
+          flex = { type: 'flex', altText: `?刻銵?嚗?{items[0].title}`, contents: mode === 'carousel' ? { type: 'carousel', contents: bubbles } : bubbles[0] };
         }
 
         return json({ success: true, flex, message: flex, count: items.length });
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // POST /api/orders/create
-      // ★ booking.html 送出預約 → 寫 Sheets → 發 Telegram 給分銷商
+      // ??booking.html ??? ??撖?Sheets ????Telegram 蝯血??瑕?
       //   body: { itinerary_id, distributor_uid, customer_*, travelers, travel_date, note }
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/orders/create' && request.method === 'POST') {
         const body       = await request.json();
         const agencySlug = url.searchParams.get('a') || 'demo';
 
-        // 基本驗證
+        // ?箸撽?
         const required = ['itinerary_id', 'distributor_uid', 'customer_name', 'customer_phone'];
         for (const f of required) {
-          if (!body[f]) return json({ success: false, error: `缺少欄位：${f}` }, 400);
+          if (!body[f]) return json({ success: false, error: `蝻箏?甈?嚗?{f}` }, 400);
         }
 
-        // 1. 呼叫 GAS 寫訂單（GAS 端會查行程、查分銷商、算佣金、寫 Orders）
+        // 1. ?澆 GAS 撖怨??殷?GAS 蝡舀??亥?蝔???雿???神 Orders嚗?
         const result = env.DB
           ? await d1CreateOrder(env, body, agencySlug)
           : await gasPost(env, {
@@ -2249,10 +2414,10 @@ export default {
             });
 
         if (!result.success) {
-          return json({ success: false, error: result.error || '訂單建立失敗' }, 500);
+          return json({ success: false, error: result.error || '閮撱箇?憭望?' }, 500);
         }
 
-        // 2. 發 Telegram 通知（用該分銷商自己的 Bot；失敗不擋訂單）
+        // 2. ??Telegram ?嚗閰脣??瑕??芸楛??Bot嚗仃?????殷?
         const dist  = result.data.distributor;
         const order = result.data.order;
         const tgToken  = dist?.tgToken  || dist?.tgtoken  || '';
@@ -2262,7 +2427,7 @@ export default {
             await sendTelegramNotification(tgToken, tgChatId, order);
           } catch (tgErr) {
             console.error('Telegram notify failed:', tgErr.message);
-            // 訂單已成立，通知失敗只記 log
+            // 閮撌脫?蝡??憭望??芾? log
           }
         }
 
@@ -2272,9 +2437,9 @@ export default {
         });
       }
 
-      // ══════════════════════════════════════════════════════════
-      // POST /api/upload-image  （R2 圖片上傳）
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
+      // POST /api/upload-image  嚗2 ??銝嚗?
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/upload-image' && request.method === 'POST') {
         const { base64, filename } = await request.json();
         const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
@@ -2286,25 +2451,24 @@ export default {
         return json({ success: true, url: `${R2_PUBLIC}/${key}` });
       }
 
-      // ══════════════════════════════════════════════════════════
-      // POST /api/upload-dm  （AI DM 解析）
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
+      // POST /api/upload-dm  嚗I DM 閫??嚗?
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/upload-dm' && request.method === 'POST') {
         const { image, images } = await request.json();
         const imageInputs = [
           ...(Array.isArray(images) ? images : []),
           ...(image ? [image] : []),
         ].filter(Boolean).slice(0, 4);
-        if (!imageInputs.length) return json({ success: false, error: '缺少 DM 圖片或 PDF 頁面資料' }, 400);
+        if (!imageInputs.length) return json({ success: false, error: '蝻箏? DM ????PDF ?鞈?' }, 400);
         const gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
           body: JSON.stringify({
             model: 'gpt-4o', response_format: { type: 'json_object' }, max_tokens: 4000, temperature: 0.7,
             messages: [{ role: 'user', content: [
-              { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 或 PDF 頁面並深度擴寫。回傳標準 JSON：
-{"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
-description 中圖片語法使用景點英文關鍵字而非URL，系統會自動替換；若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
+              { type: 'text', text: `雿????蝷曇?蝔蜇??圾?迨 DM ??PDF ?銝行楛摨行撖怒??單?皞?JSON嚗?{"title":"...","region":"??/鈭散/甇散/蝢散/憭扳?瘣??散","price":0,"days":0,"imageKeyword":"?舫??望??摮?,"description":"瘥予200摮誑銝??澆?嚗洵N憭?璅?\\n![??](?舫??望??摮?\\n?扳?...","notes":""}
+description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯望??芸??踵?嚗?嗅憭? PDF嚗?蝬?????Ｘ????蝑?蝔 },
               ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } }))
             ]}]
           })
@@ -2314,14 +2478,14 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
 
         let content = gptData.choices[0].message.content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
         const match = content.match(/\{[\s\S]*\}/);
-        if (!match) throw new Error('無法解析 GPT 回應');
+        if (!match) throw new Error('?⊥?閫?? GPT ??');
         const parsed = JSON.parse(match[0]);
 
-        // 封面圖：Unsplash → 上傳 R2
+        // 撠??Unsplash ??銝 R2
         const coverUrl = await fetchUnsplashUrl(parsed.imageKeyword || 'travel', env);
         parsed.image   = await uploadUrlToR2(coverUrl, `cover_${Date.now()}.jpg`, env);
 
-        // 內文圖片關鍵字替換為 R2 URL
+        // ?扳????摮? R2 URL
         if (parsed.description) {
           parsed.description = await replaceImageKeywords(parsed.description, env);
         }
@@ -2329,15 +2493,15 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         return json({ success: true, data: parsed });
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // POST /api/partner/register
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/partner/register' && request.method === 'POST') {
         const body       = await request.json();
         const agencySlug = url.searchParams.get('a') || 'demo';
         const result     = await gasPost(env, { action: 'registerDistributor', ...body, agency_slug: agencySlug });
         if (!result.success) {
-          const msgMap = { already_approved: '您已是核准分銷商', already_pending: '申請已送出，請等待審核' };
+          const msgMap = { already_approved: '?典歇?舀???瑕?', already_pending: '?唾?撌脤嚗?蝑?撖拇' };
           return json({ success: false, error: msgMap[result.error] || result.error });
         }
         if (env.DB) {
@@ -2357,12 +2521,12 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // GET /api/config
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/dist/profile' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
 
         const result = env.DB
           ? await d1GetDistributorProfile(env, uid)
@@ -2373,7 +2537,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
 
       if (path === '/api/dist/profile' && request.method === 'POST') {
         const body = await request.json();
-        if (!body?.uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!body?.uid) return json({ success: false, error: '蝻箏? uid' }, 400);
 
         const result = env.DB
           ? await d1UpdateDistributorProfile(env, body)
@@ -2386,7 +2550,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         const body = await request.json();
         const { tgToken, tgChatId, msg } = body || {};
         if (!tgToken || !tgChatId) {
-          return json({ success: false, error: '缺少 tgToken 或 tgChatId' }, 400);
+          return json({ success: false, error: '蝻箏? tgToken ??tgChatId' }, 400);
         }
 
         try {
@@ -2395,19 +2559,19 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: tgChatId,
-              text: msg || '✅ 測試訊息：您的 Telegram 通知設定成功！未來訂單通知會送到這裡。',
+              text: msg || '??皜祈岫閮嚗??Telegram ?閮剖???嚗靘??桅??ㄐ??,
             }),
           });
           const tgResult = await tgRes.json();
           if (tgResult.ok) {
-            return json({ success: true, message: '測試訊息已送達您的 Telegram' });
+            return json({ success: true, message: '皜祈岫閮撌脤??函? Telegram' });
           }
           return json({
             success: false,
-            error: 'TG 回傳錯誤：' + (tgResult.description || JSON.stringify(tgResult)),
+            error: 'TG ?????' + (tgResult.description || JSON.stringify(tgResult)),
           });
         } catch (err) {
-          return json({ success: false, error: '網路錯誤：' + err.message }, 500);
+          return json({ success: false, error: 'Telegram ?????' + err.message }, 500);
         }
       }
 
@@ -2417,47 +2581,47 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // GET /api/resolve-invite?code=XXXXXX
-      // ★ 優先讀 D1，沒有再 fallback GAS
-      // ══════════════════════════════════════════════════════════
+      // ???芸?霈 D1嚗??? fallback GAS
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/resolve-invite' && request.method === 'GET') {
         const code = url.searchParams.get('code');
-        if (!code) return json({ success: false, error: '缺少 code' }, 400);
+        if (!code) return json({ success: false, error: '蝻箏? code' }, 400);
         const result = await resolveInviteCodeWithFallback(env, code);
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
-      // GET /api/agent/public?code=XXXXXX 或 ?uid=Uxxx
-      // ★ 優先讀 D1，沒有再 fallback GAS
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
+      // GET /api/agent/public?code=XXXXXX ???uid=Uxxx
+      // ???芸?霈 D1嚗??? fallback GAS
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/agent/public' && request.method === 'GET') {
         const code = url.searchParams.get('code') || '';
         const uid  = url.searchParams.get('uid')  || '';
-        if (!code && !uid) return json({ success: false, error: '缺少 code 或 uid' }, 400);
+        if (!code && !uid) return json({ success: false, error: '蝻箏? code ??uid' }, 400);
         const result = await readAgentPublicProfileWithFallback(env, { code, uid });
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // GET /api/my/customers?uid=Uxxx
-      // ★ 優先讀 D1，沒有再 fallback GAS
-      // ══════════════════════════════════════════════════════════
+      // ???芸?霈 D1嚗??? fallback GAS
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/itinerary/detail' && request.method === 'GET') {
         const itineraryId = url.searchParams.get('id') || '';
         const uid = url.searchParams.get('uid') || '';
-        if (!itineraryId) return json({ success: false, error: '缺少 id' }, 400);
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!itineraryId) return json({ success: false, error: '蝻箏? id' }, 400);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
 
         if (env.DB) {
           const row = await d1GetItineraryDetail(env, itineraryId);
-          if (!row) return json({ success: false, error: '找不到此行程' }, 404);
+          if (!row) return json({ success: false, error: '?曆??唳迨銵?' }, 404);
 
           const isAdmin = ADMIN_UIDS.has(uid);
           const isOwner = String(row.owner_uid || '') === String(uid);
           if (!isAdmin && !isOwner) {
-            return json({ success: false, error: '無權限查看此行程' }, 403);
+            return json({ success: false, error: '?⊥???迨銵?' }, 403);
           }
           return json({ success: true, data: toItineraryManageModel(row) });
         }
@@ -2465,10 +2629,10 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         const allItems = await gasGet(env, { action: 'getItineraries', all: '1' });
         const items = Array.isArray(allItems) ? allItems : [];
         const item = items.find(i => String(i.id || i.timestamp || '') === String(itineraryId));
-        if (!item) return json({ success: false, error: '找不到此行程' }, 404);
+        if (!item) return json({ success: false, error: '?曆??唳迨銵?' }, 404);
         const isAdmin = ADMIN_UIDS.has(uid);
         const isOwner = String(item.owneruid || '') === String(uid);
-        if (!isAdmin && !isOwner) return json({ success: false, error: '無權限查看此行程' }, 403);
+        if (!isAdmin && !isOwner) return json({ success: false, error: '?⊥???迨銵?' }, 403);
         return json({ success: true, data: item });
       }
 
@@ -2497,36 +2661,36 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
 
       if (path === '/api/my/customers' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         const result = await readMyCustomersWithFallback(env, uid);
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
       // GET /api/my/stats?uid=Uxxx
-      // ★ 優先讀 D1，沒有再 fallback GAS
-      // ══════════════════════════════════════════════════════════
+      // ???芸?霈 D1嚗??? fallback GAS
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/my/stats' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         const result = await readMyStatsWithFallback(env, uid);
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
-      // GET /api/commission/summary?uid=管理員uid
-      // ★ 優先讀 D1，沒有再 fallback GAS
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
+      // GET /api/commission/summary?uid=蝞∠??「id
+      // ???芸?霈 D1嚗??? fallback GAS
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/commission/summary' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
-        if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+        if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         const result = await readCommissionSummaryWithFallback(env, uid);
         return json(result);
       }
 
-      // ══════════════════════════════════════════════════════════
-      // GET/POST /api/itineraries  （GAS 通用代理 + 上稿後發 TG 通知管理員）
-      // ══════════════════════════════════════════════════════════
+      // ??????????????????????????????????????????????????????????
+      // GET/POST /api/itineraries  嚗AS ?隞?? + 銝阮敺 TG ?蝞∠??∴?
+      // ??????????????????????????????????????????????????????????
       if (path === '/api/itineraries') {
         if (request.method === 'GET') {
           const params = Object.fromEntries(url.searchParams);
@@ -2537,7 +2701,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
           }
           if (action === 'checkUserStatus') {
             const uid = params.uid || '';
-            if (!uid) return json({ success: false, error: '缺少 uid' }, 400);
+            if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
             const result = await readCheckUserStatusWithFallback(env, uid);
             return json(result);
           }
@@ -2566,20 +2730,31 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
           return json(result, result.success ? 200 : 400);
         }
         const result = await gasPost(env, body);
+        if (env.DB) {
+          try {
+            if (body.action === 'addItinerary' || body.action === 'updateItinerary') {
+              await d1SyncItineraryFromGas(env, body, result);
+            } else if (body.action === 'reviewItinerary') {
+              await d1SyncItineraryReviewStatus(env, body);
+            }
+          } catch (syncErr) {
+            console.warn('sync itinerary to D1 failed:', syncErr.message);
+          }
+        }
 
-        // ★ 如果是分銷商上稿/編輯造成 pending_review，通知管理員
+        // ??憒??臬??瑕?銝阮/蝺刻摩?? pending_review嚗蝞∠???
         const isSubmitAction = body.action === 'addItinerary' || body.action === 'updateItinerary';
         if (isSubmitAction && result.success && result.reviewStatus === 'pending_review') {
           if (env.ADMIN_TG_TOKEN && env.ADMIN_TG_CHAT_ID) {
             try {
               const isUpdate = body.action === 'updateItinerary';
-              const title = result.itinerary?.title || body.title || '(未提供)';
-              const ownerName = result.itinerary?.ownerName || body.ownerName || '(未提供)';
+              const title = result.itinerary?.title || body.title || '(?芣?靘?';
+              const ownerName = result.itinerary?.ownerName || body.ownerName || '(?芣?靘?';
               await sendAdminReviewNotify(
                 env.ADMIN_TG_TOKEN,
                 env.ADMIN_TG_CHAT_ID,
                 {
-                  type: isUpdate ? '修改待審' : '新行程待審',
+                  type: isUpdate ? '靽格敺祟' : '?啗?蝔?撖?,
                   title: title,
                   ownerName: ownerName,
                   region: body.region || '',
@@ -2589,7 +2764,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
               );
             } catch (tgErr) {
               console.error('Admin TG notify failed:', tgErr.message);
-              // 不擋資料寫入
+              // 銝?鞈?撖怠
             }
           }
         }
@@ -2606,21 +2781,21 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
   }
 };
 
-// ── Telegram 通知 ─────────────────────────────────────────────
+// ?? Telegram ? ?????????????????????????????????????????????
 
 async function sendTelegramNotification(token, chatId, order) {
   const text =
-    `🎉 *新訂單通知*\n\n` +
-    `📋 訂單：\`${order.order_id}\`\n` +
-    `🏝️ 行程：${order.itinerary_title}\n` +
-    `💰 金額：NT$ ${Number(order.price).toLocaleString()}\n` +
-    `💵 您的佣金：NT$ ${Number(order.commission_amount).toLocaleString()}\n\n` +
-    `👤 客戶：${order.customer_name}\n` +
-    `📞 電話：${order.customer_phone}\n` +
-    `👥 人數：${order.travelers} 人\n` +
-    `📅 出發日：${order.travel_date || '未指定'}\n` +
-    (order.note ? `📝 備註：${order.note}\n` : '') +
-    `\n⏰ ${order.created_at}\n\n請盡快聯繫客戶 🙏`;
+    `?? *?啗??桅*\n\n` +
+    `?? 閮嚗`${order.order_id}\`\n` +
+    `??儭?銵?嚗?{order.itinerary_title}\n` +
+    `? ??嚗T$ ${Number(order.price).toLocaleString()}\n` +
+    `? ?函?雿??嚗T$ ${Number(order.commission_amount).toLocaleString()}\n\n` +
+    `? 摰Ｘ嚗?{order.customer_name}\n` +
+    `?? ?餉店嚗?{order.customer_phone}\n` +
+    `? 鈭箸嚗?{order.travelers} 鈭暝n` +
+    `?? ?箇?伐?${order.travel_date || '?芣?摰?}\n` +
+    (order.note ? `?? ?酉嚗?{order.note}\n` : '') +
+    `\n??${order.created_at}\n\n隢敹怨蝜怠恥????`;
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
@@ -2630,16 +2805,16 @@ async function sendTelegramNotification(token, chatId, order) {
   if (!res.ok) throw new Error(`Telegram API: ${await res.text()}`);
 }
 
-// ★ 新行程/修改待審 → 通知管理員
+// ???啗?蝔?靽格敺祟 ???蝞∠???
 async function sendAdminReviewNotify(token, chatId, info) {
   const text =
-    `📝 *${info.type}*\n\n` +
-    `🏝️ 行程：${info.title}\n` +
-    `👤 上稿者：${info.ownerName}\n` +
-    (info.region ? `📍 地區：${info.region}\n` : '') +
-    (info.days   ? `📅 天數：${info.days} 天\n` : '') +
-    (info.price  ? `💰 售價：NT$ ${Number(info.price).toLocaleString()}\n` : '') +
-    `\n請至 CRM 審核中心處理 → /admin.html`;
+    `?? *${info.type}*\n\n` +
+    `??儭?銵?嚗?{info.title}\n` +
+    `? 銝阮??${info.ownerName}\n` +
+    (info.region ? `?? ?啣?嚗?{info.region}\n` : '') +
+    (info.days   ? `?? 憭拇嚗?{info.days} 憭坼n` : '') +
+    (info.price  ? `? ?桀嚗T$ ${Number(info.price).toLocaleString()}\n` : '') +
+    `\n隢 CRM 撖拇銝剖??? ??/admin.html`;
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
@@ -2649,7 +2824,7 @@ async function sendAdminReviewNotify(token, chatId, info) {
   if (!res.ok) throw new Error(`Telegram API: ${await res.text()}`);
 }
 
-// ── 圖片工具 ─────────────────────────────────────────────────
+// ?? ??撌亙 ?????????????????????????????????????????????????
 
 async function fetchUnsplashUrl(keyword, env) {
   try {
@@ -2692,3 +2867,5 @@ async function replaceImageKeywords(text, env) {
   for (let i = replacements.length - 1; i >= 0; i--) result = result.replace(replacements[i].original, replacements[i].replacement);
   return result;
 }
+
+
