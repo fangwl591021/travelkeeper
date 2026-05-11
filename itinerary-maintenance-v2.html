@@ -414,7 +414,7 @@
       const lines = text.split('\n');
       const result = [];
       let current = null;
-      const headingRegex = /^蝚枯s*\d+\s*憭?*$/;
+      const headingRegex = new RegExp('^\\u7b2c\\s*\\d+\\s*\\u5929.*$');
       const imageRegex = /^!\[[^\]]*\]\(([^)]+)\)\s*$/;
 
       function pushCurrent() {
