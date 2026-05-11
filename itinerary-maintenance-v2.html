@@ -105,6 +105,7 @@
             <p id="sections-subtitle" class="text-sm text-slate-500 mt-1"></p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <button id="sanitize-btn" type="button" class="px-4 py-2.5 rounded-xl bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100"></button>
             <button id="reparse-btn" type="button" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"></button>
             <button id="add-section-btn" type="button" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"></button>
           </div>
@@ -213,6 +214,7 @@
               <input type="file" accept="image/*" class="section-file hidden">
             </label>
           </div>
+          <p class="section-image-hint mt-2 text-xs text-slate-500"></p>
         </div>
         <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <img class="section-preview w-full h-56 object-cover bg-slate-100" alt="section-preview">
@@ -250,6 +252,7 @@
       labelNotes: '\u6ce8\u610f\u4e8b\u9805',
       sectionsTitle: '\u5167\u6587\u5716\u7247\u5340\u584a\u7de8\u8f2f',
       sectionsSubtitle: '\u628a description \u5167\u7684\u6bcf\u65e5\u6bb5\u843d\u62c6\u6210\u6a19\u984c\u3001\u5716\u7247\u3001\u5167\u5bb9\u3002\u4f60\u53ef\u4ee5\u63db\u5716\uff0c\u4e0d\u9700\u8981\u518d\u624b\u6539 ![\u5716\u7247](url)\u3002',
+      sanitize: '\u6e05\u7406\u820a\u5716\u7247\u8a9e\u6cd5',
       reparse: '\u91cd\u65b0\u62c6\u6bb5',
       addSection: '\u65b0\u589e\u6bb5\u843d',
       adminTitle: '\u7ba1\u7406\u54e1\u92b7\u552e\u898f\u5247',
@@ -278,6 +281,8 @@
       distRole: '\u5206\u92b7\u5546',
       uploadSectionDone: '\u6bb5\u843d\u5716\u7247\u5df2\u66f4\u65b0',
       uploadCoverDone: '\u5c01\u9762\u5df2\u66f4\u65b0',
+      placeholderImage: '\u9019\u5f35\u662f\u820a\u793a\u610f\u5716\uff0c\u5efa\u8b70\u63db\u6210\u6b63\u5f0f\u884c\u7a0b\u5716\u3002',
+      cleanDone: '\u5df2\u6e05\u7406\u820a\u5716\u7247\u8a9e\u6cd5\u4e26\u91cd\u65b0\u62c6\u6bb5',
       reparseDone: '\u5df2\u91cd\u65b0\u62c6\u6bb5',
       saveDone: '\u5df2\u5132\u5b58\u8b8a\u66f4',
       previewNoWrite: '\u9810\u89bd\u6a21\u5f0f\u4e0d\u6703\u5beb\u5165\u6b63\u5f0f\u8cc7\u6599',
@@ -372,6 +377,7 @@
       t(document.getElementById('label-notes'), UI.labelNotes);
       t(document.getElementById('sections-title'), UI.sectionsTitle);
       t(document.getElementById('sections-subtitle'), UI.sectionsSubtitle);
+      t(document.getElementById('sanitize-btn'), UI.sanitize);
       t(document.getElementById('reparse-btn'), UI.reparse);
       t(document.getElementById('add-section-btn'), UI.addSection);
       t(document.getElementById('admin-title'), UI.adminTitle);
@@ -445,6 +451,25 @@
       return result.length ? result : [{ title: '', image: '', body: text }];
     }
 
+    function normalizeImageMarkdownLine(line) {
+      const raw = String(line || '').trim();
+      if (!raw) return line;
+      const match = raw.match(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i);
+      if (!match) return line;
+      return `![圖片](${match[1]})`;
+    }
+
+    function isPlaceholderImage(url) {
+      const value = String(url || '').toLowerCase();
+      return value.includes('loremflickr.com') || value.includes('via.placeholder.com') || value.includes('placeholder.com');
+    }
+
+    function sanitizeDescriptionMarkdown(rawText) {
+      const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
+      const lines = text.split('\n').map((line) => normalizeImageMarkdownLine(line));
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     function serializeSections(list) {
       return list.map(section => {
         const parts = [];
@@ -452,7 +477,7 @@
         const image = String(section.image || '').trim();
         const body = String(section.body || '').trim();
         if (title) parts.push(title);
-        if (image) parts.push(`![??](${image})`);
+        if (image) parts.push(`![圖片](${image})`);
         if (body) parts.push(body);
         return parts.join('\n');
       }).filter(Boolean).join('\n\n').trim();
@@ -510,14 +535,16 @@
         const bodyInput = node.querySelector('.section-body');
         const fileInput = node.querySelector('.section-file');
         const removeBtn = node.querySelector('.remove-section-btn');
+        const imageHint = node.querySelector('.section-image-hint');
 
-        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn) {
+        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !imageHint) {
           console.warn('section template missing nodes', {
             titleInput: !!titleInput,
             imageInput: !!imageInput,
             bodyInput: !!bodyInput,
             fileInput: !!fileInput,
             removeBtn: !!removeBtn,
+            imageHint: !!imageHint,
           });
           sectionsListEl.appendChild(node);
           return;
@@ -526,6 +553,7 @@
         titleInput.value = section.title || '';
         imageInput.value = section.image || '';
         bodyInput.value = section.body || '';
+        imageHint.textContent = isPlaceholderImage(section.image) ? UI.placeholderImage : '';
 
         titleInput.addEventListener('input', () => {
           sections[index].title = titleInput.value;
@@ -534,6 +562,7 @@
 
         imageInput.addEventListener('input', () => {
           sections[index].image = imageInput.value;
+          imageHint.textContent = isPlaceholderImage(imageInput.value) ? UI.placeholderImage : '';
           updateSectionPreview(index);
           syncDescriptionField();
         });
@@ -554,6 +583,7 @@
             const url = await uploadFileToR2(file);
             sections[index].image = url;
             imageInput.value = url;
+            imageHint.textContent = isPlaceholderImage(url) ? UI.placeholderImage : '';
             updateSectionPreview(index);
             syncDescriptionField();
             showToast(UI.uploadSectionDone);
@@ -713,6 +743,16 @@
       renderSections();
       syncDescriptionField();
       showToast(UI.reparseDone);
+    });
+
+    const sanitizeBtn = document.getElementById('sanitize-btn');
+    if (sanitizeBtn) sanitizeBtn.addEventListener('click', () => {
+      const cleaned = sanitizeDescriptionMarkdown(descriptionField.value);
+      descriptionField.value = cleaned;
+      sections = parseDescriptionToSections(cleaned);
+      renderSections();
+      syncDescriptionField();
+      showToast(UI.cleanDone);
     });
 
     const addSectionBtn = document.getElementById('add-section-btn');
