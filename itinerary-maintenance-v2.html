@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Itinerary Maintenance V2 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <div class="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+      <div>
+        <p class="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">Itinerary Maintenance V2</p>
+        <h1 id="heading-main" class="text-3xl md:text-4xl font-extrabold mt-1"></h1>
+        <p id="page-subtitle" class="text-sm md:text-base text-slate-500 mt-2"></p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="dashboard.html#mine" id="back-link" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"></a>
+        <a id="legacy-link" href="itinerary-maintenance.html" class="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50"></a>
+      </div>
+    </div>
+
+    <div id="preview-note" hidden class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900">
+      <p id="preview-title" class="font-semibold"></p>
+      <p id="preview-body" class="text-sm mt-1"></p>
+    </div>
+
+    <div id="loading" class="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 font-semibold"></div>
+
+    <div id="error" hidden class="bg-white rounded-3xl border border-red-200 p-10 text-center">
+      <h2 id="error-title" class="text-xl font-bold text-red-600 mb-2"></h2>
+      <p id="error-text" class="text-slate-500"></p>
+    </div>
+
+    <form id="form" hidden class="space-y-6 pb-10">
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex flex-col md:flex-row gap-5">
+          <img id="cover-preview" src="" alt="cover" class="w-full md:w-52 h-60 md:h-36 rounded-2xl object-cover bg-slate-100 shrink-0">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span id="status-pill" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">-</span>
+              <span id="role-pill" class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">-</span>
+            </div>
+            <h2 id="title-preview" class="text-2xl font-extrabold break-words"></h2>
+            <p id="meta-preview" class="text-sm md:text-base text-slate-500 mt-2"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="mb-5">
+          <h3 id="basic-title" class="text-2xl font-bold"></h3>
+          <p id="basic-subtitle" class="text-sm text-slate-500 mt-1"></p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+          <label class="block">
+            <span id="label-title" class="block text-sm font-semibold mb-2"></span>
+            <input name="title" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <div class="block">
+            <span id="label-cover" class="block text-sm font-semibold mb-2"></span>
+            <div class="flex gap-2">
+              <input name="image" class="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <label id="cover-upload-label" class="shrink-0 px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer">
+                <input id="cover-upload" type="file" accept="image/*" class="hidden">
+              </label>
+            </div>
+          </div>
+          <label class="block">
+            <span id="label-region" class="block text-sm font-semibold mb-2"></span>
+            <input name="region" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span id="label-days" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="1" name="days" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block md:col-span-2">
+            <span id="label-price" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" step="1" name="price" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block md:col-span-2">
+            <span id="label-description" class="block text-sm font-semibold mb-2"></span>
+            <textarea id="description-field" name="description" rows="12" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
+            <p id="description-hint" class="text-xs text-slate-500 mt-2"></p>
+          </label>
+          <label class="block md:col-span-2">
+            <span id="label-notes" class="block text-sm font-semibold mb-2"></span>
+            <textarea name="notes" rows="5" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div>
+            <h3 id="sections-title" class="text-2xl font-bold"></h3>
+            <p id="sections-subtitle" class="text-sm text-slate-500 mt-1"></p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="reparse-btn" type="button" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"></button>
+            <button id="add-section-btn" type="button" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"></button>
+          </div>
+        </div>
+        <div id="sections-list" class="space-y-4"></div>
+      </section>
+
+      <section id="admin-controls" hidden class="bg-white rounded-3xl border border-slate-200 p-6 md:p-8">
+        <div class="mb-5">
+          <h3 id="admin-title" class="text-2xl font-bold"></h3>
+          <p id="admin-subtitle" class="text-sm text-slate-500 mt-1"></p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+          <label class="block">
+            <span id="label-commission-mode" class="block text-sm font-semibold mb-2"></span>
+            <select name="commissionMode" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <option value="amount">固定金額</option>
+              <option value="percent">百分比</option>
+            </select>
+          </label>
+          <div></div>
+          <label class="block" id="commission-amount-wrap">
+            <span id="label-commission-amount" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" step="1" name="commissionAmount" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block" id="commission-percent-wrap">
+            <span id="label-commission-percent" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" step="0.1" name="commissionPercent" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span id="label-seat-limit" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" step="1" name="seatLimit" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span id="label-min-group" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" step="1" name="minGroupSize" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span id="label-payment-mode" class="block text-sm font-semibold mb-2"></span>
+            <select name="paymentMode" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <option value="deposit">訂金 + 尾款</option>
+              <option value="full">全額收款</option>
+            </select>
+          </label>
+          <label class="block">
+            <span id="label-deposit-ratio" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" max="100" step="1" name="depositRatio" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <label class="block">
+            <span id="label-balance-collect" class="block text-sm font-semibold mb-2"></span>
+            <select name="balanceCollect" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+              <option value="online">線上補繳</option>
+              <option value="offline">線下收取</option>
+              <option value="not_required">無尾款</option>
+            </select>
+          </label>
+          <fieldset class="md:col-span-2">
+            <legend id="label-allowed-payments" class="block text-sm font-semibold mb-2"></legend>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" name="allowedPaymentMethods" value="credit_card">
+                <span class="font-medium">信用卡</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" name="allowedPaymentMethods" value="linepay">
+                <span class="font-medium">LINE Pay</span>
+              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" name="allowedPaymentMethods" value="atm">
+                <span class="font-medium">ATM</span>
+              </label>
+            </div>
+          </fieldset>
+          <label class="flex items-center justify-between md:col-span-2 rounded-2xl border border-slate-200 px-4 py-4">
+            <div>
+              <span id="label-share-enabled" class="block text-sm font-semibold"></span>
+              <span id="label-share-enabled-hint" class="block text-xs text-slate-500 mt-1"></span>
+            </div>
+            <input type="checkbox" name="shareEnabled" class="w-5 h-5">
+          </label>
+        </div>
+      </section>
+
+      <div class="sticky bottom-3">
+        <button id="save-btn" type="submit" class="w-full rounded-2xl bg-blue-600 text-white font-bold text-lg py-4 hover:bg-blue-700 disabled:opacity-50"></button>
+      </div>
+    </form>
+  </div>
+
+  <template id="section-template">
+    <section class="rounded-3xl border border-slate-200 bg-slate-50 p-4 md:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="text-sm font-semibold text-slate-500 section-label"></div>
+        <button type="button" class="remove-section-btn px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-rose-600 font-semibold hover:bg-rose-50"></button>
+      </div>
+      <div class="grid grid-cols-1 gap-4">
+        <label class="block">
+          <span class="section-title-label block text-sm font-semibold mb-2"></span>
+          <input class="section-title w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+        </label>
+        <div>
+          <span class="section-image-label block text-sm font-semibold mb-2"></span>
+          <div class="flex gap-2">
+            <input class="section-image flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+            <label class="section-upload-label shrink-0 px-4 py-3 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer">
+              <input type="file" accept="image/*" class="section-file hidden">
+            </label>
+          </div>
+        </div>
+        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <img class="section-preview w-full h-56 object-cover bg-slate-100" alt="section-preview">
+        </div>
+        <label class="block">
+          <span class="section-body-label block text-sm font-semibold mb-2"></span>
+          <textarea rows="8" class="section-body w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
+        </label>
+      </div>
+    </section>
+  </template>
+
+  <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-semibold shadow-2xl"></div>
+
+  <script>
+    const UI = {
+      mainTitle: '\u884c\u7a0b\u7dad\u8b77',
+      subtitle: '\u7528\u4e00\u5f35\u4e7e\u6de8\u7684\u65b0\u9801\u505a\u5167\u5bb9\u7dad\u8b77\u3002\u820a\u7248\u9801\u9762\u4fdd\u7559\u4e0d\u52d5\uff0c\u65b9\u4fbf\u96a8\u6642\u9000\u56de\u3002',
+      backMine: '\u56de\u6211\u7684\u4e0a\u7a3f',
+      legacyPage: '\u820a\u7248\u9801\u9762',
+      previewTitle: '\u76ee\u524d\u662f\u9810\u89bd\u6a21\u5f0f',
+      previewBody: '\u4f60\u73fe\u5728\u662f\u7528 file:// \u958b\u555f\u9801\u9762\uff0c\u6240\u4ee5\u53ef\u4ee5\u770b\u7248\u578b\uff0c\u4f46\u4e0d\u6703\u76f4\u63a5\u8b80\u53d6\u6b63\u5f0f\u767b\u5165\u72c0\u614b\u3002\u6b63\u5f0f\u4f7f\u7528\u8acb\u5f9e\u7dda\u4e0a\u9801\u9762\u5e36 ?id=\u884c\u7a0bID \u9032\u5165\u3002',
+      loading: '\u6b63\u5728\u8b80\u53d6\u884c\u7a0b\u8cc7\u6599...',
+      errorTitle: '\u8b80\u53d6\u5931\u6557',
+      basicTitle: '\u57fa\u672c\u5167\u5bb9',
+      basicSubtitle: '\u9019\u88e1\u5148\u7dad\u8b77\u5c01\u9762\u3001\u6a19\u984c\u8207\u57fa\u672c\u6587\u5b57\u3002\u63cf\u8ff0\u5340\u4fdd\u7559\u539f\u59cb markdown\uff0c\u540c\u6642\u63d0\u4f9b\u4e0b\u9762\u7684\u5340\u584a\u7de8\u8f2f\u3002',
+      labelTitle: '\u884c\u7a0b\u6a19\u984c',
+      labelCover: '\u5c01\u9762\u5716',
+      uploadFile: '\u9078\u6a94\u4e0a\u50b3',
+      labelRegion: '\u5730\u5340',
+      labelDays: '\u5929\u6578',
+      labelPrice: '\u50f9\u683c',
+      labelDescription: '\u539f\u59cb\u63cf\u8ff0',
+      descriptionHint: '\u5982\u679c\u4f60\u76f4\u63a5\u624b\u6539\u9019\u88e1\uff0c\u6309\u4e0b\u9762\u7684\u300c\u91cd\u65b0\u62c6\u6bb5\u300d\u5c31\u6703\u540c\u6b65\u5230\u5340\u584a\u7de8\u8f2f\u3002',
+      labelNotes: '\u6ce8\u610f\u4e8b\u9805',
+      sectionsTitle: '\u5167\u6587\u5716\u7247\u5340\u584a\u7de8\u8f2f',
+      sectionsSubtitle: '\u628a description \u5167\u7684\u6bcf\u65e5\u6bb5\u843d\u62c6\u6210\u6a19\u984c\u3001\u5716\u7247\u3001\u5167\u5bb9\u3002\u4f60\u53ef\u4ee5\u63db\u5716\uff0c\u4e0d\u9700\u8981\u518d\u624b\u6539 ![\u5716\u7247](url)\u3002',
+      reparse: '\u91cd\u65b0\u62c6\u6bb5',
+      addSection: '\u65b0\u589e\u6bb5\u843d',
+      adminTitle: '\u7ba1\u7406\u54e1\u92b7\u552e\u898f\u5247',
+      adminSubtitle: '\u9019\u88e1\u7dad\u8b77\u5206\u6f64\u3001\u540d\u984d\u3001\u4ed8\u6b3e\u8207\u5206\u4eab\u898f\u5247\u3002\u4e00\u822c\u5206\u92b7\u5546\u4e0d\u6703\u770b\u5230\u9019\u584a\u3002',
+      commissionMode: '\u5206\u6f64\u6a21\u5f0f',
+      commissionAmount: '\u56fa\u5b9a\u5206\u6f64\u91d1\u984d',
+      commissionPercent: '\u5206\u6f64\u767e\u5206\u6bd4 (%)',
+      seatLimit: '\u540d\u984d\u4e0a\u9650',
+      minGroupSize: '\u6700\u4f4e\u6210\u5718\u4eba\u6578',
+      paymentMode: '\u6536\u8cbb\u6a21\u5f0f',
+      depositRatio: '\u8a02\u91d1\u6bd4\u4f8b (%)',
+      balanceCollect: '\u5c3e\u6b3e\u6536\u53d6\u65b9\u5f0f',
+      allowedPayments: '\u5141\u8a31\u4ed8\u6b3e\u65b9\u5f0f',
+      shareEnabled: '\u5141\u8a31\u5206\u4eab',
+      shareEnabledHint: '\u95dc\u9589\u5f8c\uff0c\u9019\u652f\u884c\u7a0b\u4e0d\u6703\u51fa\u73fe\u5728\u63a8\u5ee3\u8207\u5206\u4eab\u5efa\u8b70\u4e2d\u3002',
+      save: '\u5132\u5b58\u8b8a\u66f4',
+      saving: '\u5132\u5b58\u4e2d...',
+      sectionPrefix: '\u6bb5\u843d',
+      removeSection: '\u79fb\u9664\u6bb5\u843d',
+      sectionTitle: '\u6bb5\u843d\u6a19\u984c',
+      sectionImage: '\u5716\u7247\u7db2\u5740',
+      sectionBody: '\u6bb5\u843d\u5167\u5bb9',
+      noTitle: '\u672a\u547d\u540d\u884c\u7a0b',
+      previewRole: '\u9810\u89bd\u6a21\u5f0f',
+      adminRole: '\u7ba1\u7406\u54e1',
+      distRole: '\u5206\u92b7\u5546',
+      uploadSectionDone: '\u6bb5\u843d\u5716\u7247\u5df2\u66f4\u65b0',
+      uploadCoverDone: '\u5c01\u9762\u5df2\u66f4\u65b0',
+      reparseDone: '\u5df2\u91cd\u65b0\u62c6\u6bb5',
+      saveDone: '\u5df2\u5132\u5b58\u8b8a\u66f4',
+      previewNoWrite: '\u9810\u89bd\u6a21\u5f0f\u4e0d\u6703\u5beb\u5165\u6b63\u5f0f\u8cc7\u6599',
+      missingId: '\u7f3a\u5c11\u884c\u7a0b id',
+      notFound: '\u627e\u4e0d\u5230\u884c\u7a0b\u8cc7\u6599',
+      uploadFail: '\u5716\u7247\u4e0a\u50b3\u5931\u6557',
+      readFail: '\u8b80\u53d6\u5716\u7247\u5931\u6557',
+      saveFail: '\u5132\u5b58\u5931\u6557',
+      loadFail: '\u8b80\u53d6\u5931\u6557',
+    };
+
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const params = new URLSearchParams(location.search);
+    const itineraryId = params.get('id') || '';
+    const previewMode = location.protocol === 'file:';
+
+    const previewData = {
+      title: '\u9f13\u6d6a\u5dbc\u6162\u65c5\u793a\u610f\u7248',
+      image: 'https://images.unsplash.com/photo-1517154421773-0529f29ea451?auto=format&fit=crop&w=1200&q=80',
+      region: '\u570b\u65c5',
+      days: 5,
+      price: 16500,
+      description: [
+        '\u7b2c1\u5929 \u9f13\u6d6a\u5dbc\u63a2\u7d22',
+        '![\u5716\u7247](https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80)',
+        '\u62b5\u9054\u5f8c\u5148\u8d70\u9f13\u6d6a\u5dbc\u6d77\u5cb8\u6b65\u9053\uff0c\u611f\u53d7\u5cf6\u5dbc\u7bc0\u594f\uff0c\u665a\u4e0a\u5165\u4f4f\u7279\u8272\u65c5\u5bbf\u3002',
+        '',
+        '\u7b2c2\u5929 \u8001\u8857\u8207\u571f\u6a13',
+        '![\u5716\u7247](https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80)',
+        '\u5b89\u6392\u571f\u6a13\u53c3\u89c0\u8207\u8857\u5340\u6563\u7b56\uff0c\u4fdd\u7559\u5145\u5206\u62cd\u7167\u8207\u81ea\u7531\u6d3b\u52d5\u6642\u9593\u3002'
+      ].join('\n'),
+      notes: '\u793a\u610f\u6a21\u5f0f\u4e0d\u6703\u76f4\u63a5\u5beb\u5165\u6b63\u5f0f\u8cc7\u6599\u3002\n\u6b63\u5f0f\u4f7f\u7528\u6642\u8acb\u5f9e\u7dda\u4e0a\u5165\u53e3\u5e36 id \u9032\u5165\u3002',
+      reviewStatus: 'published',
+      commissionMode: 'amount',
+      commissionAmount: 1500,
+      commissionPercent: 10,
+      paymentMode: 'deposit',
+      depositRatio: 20,
+      balanceCollect: 'online',
+      seatLimit: 30,
+      minGroupSize: 10,
+      allowedPaymentMethods: ['credit_card', 'linepay', 'atm'],
+      shareEnabled: true,
+    };
+
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const errorTextEl = document.getElementById('error-text');
+    const formEl = document.getElementById('form');
+    const previewNoteEl = document.getElementById('preview-note');
+    const adminControlsEl = document.getElementById('admin-controls');
+    const saveBtn = document.getElementById('save-btn');
+    const coverPreviewEl = document.getElementById('cover-preview');
+    const titlePreviewEl = document.getElementById('title-preview');
+    const metaPreviewEl = document.getElementById('meta-preview');
+    const statusPillEl = document.getElementById('status-pill');
+    const rolePillEl = document.getElementById('role-pill');
+    const descriptionField = document.getElementById('description-field');
+    const sectionsListEl = document.getElementById('sections-list');
+    const sectionTemplate = document.getElementById('section-template');
+    const legacyLinkEl = document.getElementById('legacy-link');
+
+    let profile = null;
+    let userStatus = null;
+    let isAdmin = false;
+    let sections = [];
+
+    function t(el, value) {
+      if (el) el.textContent = value;
+    }
+
+    function bootStaticText() {
+      t(document.getElementById('heading-main'), UI.mainTitle);
+      t(document.getElementById('page-subtitle'), UI.subtitle);
+      t(document.getElementById('back-link'), UI.backMine);
+      t(document.getElementById('legacy-link'), UI.legacyPage);
+      t(document.getElementById('preview-title'), UI.previewTitle);
+      t(document.getElementById('preview-body'), UI.previewBody);
+      t(document.getElementById('loading'), UI.loading);
+      t(document.getElementById('error-title'), UI.errorTitle);
+      t(document.getElementById('basic-title'), UI.basicTitle);
+      t(document.getElementById('basic-subtitle'), UI.basicSubtitle);
+      t(document.getElementById('label-title'), UI.labelTitle);
+      t(document.getElementById('label-cover'), UI.labelCover);
+      t(document.getElementById('cover-upload-label'), UI.uploadFile);
+      t(document.getElementById('label-region'), UI.labelRegion);
+      t(document.getElementById('label-days'), UI.labelDays);
+      t(document.getElementById('label-price'), UI.labelPrice);
+      t(document.getElementById('label-description'), UI.labelDescription);
+      t(document.getElementById('description-hint'), UI.descriptionHint);
+      t(document.getElementById('label-notes'), UI.labelNotes);
+      t(document.getElementById('sections-title'), UI.sectionsTitle);
+      t(document.getElementById('sections-subtitle'), UI.sectionsSubtitle);
+      t(document.getElementById('reparse-btn'), UI.reparse);
+      t(document.getElementById('add-section-btn'), UI.addSection);
+      t(document.getElementById('admin-title'), UI.adminTitle);
+      t(document.getElementById('admin-subtitle'), UI.adminSubtitle);
+      t(document.getElementById('label-commission-mode'), UI.commissionMode);
+      t(document.getElementById('label-commission-amount'), UI.commissionAmount);
+      t(document.getElementById('label-commission-percent'), UI.commissionPercent);
+      t(document.getElementById('label-seat-limit'), UI.seatLimit);
+      t(document.getElementById('label-min-group'), UI.minGroupSize);
+      t(document.getElementById('label-payment-mode'), UI.paymentMode);
+      t(document.getElementById('label-deposit-ratio'), UI.depositRatio);
+      t(document.getElementById('label-balance-collect'), UI.balanceCollect);
+      t(document.getElementById('label-allowed-payments'), UI.allowedPayments);
+      t(document.getElementById('label-share-enabled'), UI.shareEnabled);
+      t(document.getElementById('label-share-enabled-hint'), UI.shareEnabledHint);
+      t(saveBtn, UI.save);
+    }
+
+    function showToast(message, type = 'success') {
+      const el = document.getElementById('toast');
+      el.hidden = false;
+      el.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-semibold shadow-2xl ' +
+        (type === 'error' ? 'bg-red-500' : 'bg-emerald-500');
+      el.textContent = message;
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => { el.hidden = true; }, 2600);
+    }
+
+    function showError(message) {
+      loadingEl.hidden = true;
+      formEl.hidden = true;
+      errorEl.hidden = false;
+      errorTextEl.textContent = message;
+    }
+
+    function parseDescriptionToSections(rawText) {
+      const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/\\n/g, '\n').trim();
+      if (!text) return [{ title: '', image: '', body: '' }];
+
+      const lines = text.split('\n');
+      const result = [];
+      let current = null;
+      const headingRegex = /^第\s*\d+\s*天.*$/;
+      const imageRegex = /^!\[[^\]]*\]\(([^)]+)\)\s*$/;
+
+      function pushCurrent() {
+        if (!current) return;
+        result.push({
+          title: current.title.trim(),
+          image: current.image.trim(),
+          body: current.body.join('\n').trim(),
+        });
+      }
+
+      for (const line of lines) {
+        if (headingRegex.test(line.trim())) {
+          pushCurrent();
+          current = { title: line.trim(), image: '', body: [] };
+          continue;
+        }
+        const imgMatch = line.trim().match(imageRegex);
+        if (imgMatch && current) {
+          current.image = imgMatch[1].trim();
+          continue;
+        }
+        if (!current) current = { title: '', image: '', body: [] };
+        current.body.push(line);
+      }
+
+      pushCurrent();
+      return result.length ? result : [{ title: '', image: '', body: text }];
+    }
+
+    function serializeSections(list) {
+      return list.map(section => {
+        const parts = [];
+        const title = String(section.title || '').trim();
+        const image = String(section.image || '').trim();
+        const body = String(section.body || '').trim();
+        if (title) parts.push(title);
+        if (image) parts.push(`![圖片](${image})`);
+        if (body) parts.push(body);
+        return parts.join('\n');
+      }).filter(Boolean).join('\n\n').trim();
+    }
+
+    function syncDescriptionField() {
+      descriptionField.value = serializeSections(sections);
+    }
+
+    function updateSectionPreview(index) {
+      const wrap = sectionsListEl.children[index];
+      if (!wrap) return;
+      const img = wrap.querySelector('.section-preview');
+      img.src = sections[index]?.image || 'https://via.placeholder.com/1200x700?text=No+Image';
+    }
+
+    async function uploadFileToR2(file) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error(UI.readFail));
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch(`${WORKER_URL}/api/upload-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64: dataUrl,
+          filename: file.name || `image-${Date.now()}.jpg`,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success || !json?.url) throw new Error(json?.error || UI.uploadFail);
+      return json.url;
+    }
+
+    function createEmptySection() {
+      return { title: '', image: '', body: '' };
+    }
+
+    function renderSections() {
+      sectionsListEl.innerHTML = '';
+      sections.forEach((section, index) => {
+        const node = sectionTemplate.content.firstElementChild.cloneNode(true);
+        t(node.querySelector('.section-label'), `${UI.sectionPrefix} ${index + 1}`);
+        t(node.querySelector('.remove-section-btn'), UI.removeSection);
+        t(node.querySelector('.section-title-label'), UI.sectionTitle);
+        t(node.querySelector('.section-image-label'), UI.sectionImage);
+        t(node.querySelector('.section-body-label'), UI.sectionBody);
+        t(node.querySelector('.section-upload-label'), UI.uploadFile);
+
+        const titleInput = node.querySelector('.section-title');
+        const imageInput = node.querySelector('.section-image');
+        const bodyInput = node.querySelector('.section-body');
+        const fileInput = node.querySelector('.section-file');
+        const removeBtn = node.querySelector('.remove-section-btn');
+
+        titleInput.value = section.title || '';
+        imageInput.value = section.image || '';
+        bodyInput.value = section.body || '';
+
+        titleInput.addEventListener('input', () => {
+          sections[index].title = titleInput.value;
+          syncDescriptionField();
+        });
+
+        imageInput.addEventListener('input', () => {
+          sections[index].image = imageInput.value;
+          updateSectionPreview(index);
+          syncDescriptionField();
+        });
+
+        bodyInput.addEventListener('input', () => {
+          sections[index].body = bodyInput.value;
+          syncDescriptionField();
+        });
+
+        fileInput.addEventListener('change', async () => {
+          const file = fileInput.files?.[0];
+          if (!file) return;
+          const label = fileInput.parentElement;
+          t(label, '\u4e0a\u50b3\u4e2d...');
+          label.appendChild(fileInput);
+          fileInput.classList.add('hidden');
+          try {
+            const url = await uploadFileToR2(file);
+            sections[index].image = url;
+            imageInput.value = url;
+            updateSectionPreview(index);
+            syncDescriptionField();
+            showToast(UI.uploadSectionDone);
+          } catch (err) {
+            showToast(err.message || UI.uploadFail, 'error');
+          } finally {
+            t(label, UI.uploadFile);
+            label.appendChild(fileInput);
+            fileInput.classList.add('hidden');
+            fileInput.value = '';
+          }
+        });
+
+        removeBtn.addEventListener('click', () => {
+          sections.splice(index, 1);
+          if (!sections.length) sections = [createEmptySection()];
+          renderSections();
+          syncDescriptionField();
+        });
+
+        sectionsListEl.appendChild(node);
+        updateSectionPreview(index);
+      });
+    }
+
+    function setPreview(data) {
+      coverPreviewEl.src = data.image || 'https://via.placeholder.com/1200x700?text=No+Image';
+      titlePreviewEl.textContent = data.title || UI.noTitle;
+      metaPreviewEl.textContent = `${data.region || '-'} · ${Number(data.days || 0)} 天 · NT$ ${Number(data.price || 0).toLocaleString()}`;
+      statusPillEl.textContent = data.reviewStatus || data.review_status || 'published';
+      rolePillEl.textContent = previewMode ? UI.previewRole : (isAdmin ? UI.adminRole : UI.distRole);
+    }
+
+    function syncCommissionMode() {
+      const mode = String(formEl.elements.commissionMode.value || 'amount');
+      document.getElementById('commission-amount-wrap').hidden = mode !== 'amount';
+      document.getElementById('commission-percent-wrap').hidden = mode !== 'percent';
+    }
+
+    function fillForm(data) {
+      formEl.elements.title.value = data.title || '';
+      formEl.elements.image.value = data.image || '';
+      formEl.elements.region.value = data.region || '';
+      formEl.elements.days.value = data.days || '';
+      formEl.elements.price.value = data.price || '';
+      formEl.elements.description.value = data.description || '';
+      formEl.elements.notes.value = data.notes || '';
+      formEl.elements.commissionMode.value = data.commissionMode || 'amount';
+      formEl.elements.commissionAmount.value = data.commissionAmount ?? 0;
+      formEl.elements.commissionPercent.value = data.commissionPercent ?? 0;
+      formEl.elements.paymentMode.value = data.paymentMode || 'deposit';
+      formEl.elements.depositRatio.value = data.depositRatio ?? 20;
+      formEl.elements.balanceCollect.value = data.balanceCollect || 'online';
+      formEl.elements.seatLimit.value = data.seatLimit ?? 0;
+      formEl.elements.minGroupSize.value = data.minGroupSize ?? 0;
+      formEl.elements.shareEnabled.checked = !!data.shareEnabled;
+
+      const allowed = new Set(Array.isArray(data.allowedPaymentMethods) ? data.allowedPaymentMethods : []);
+      [...formEl.querySelectorAll('input[name="allowedPaymentMethods"]')].forEach(input => {
+        input.checked = allowed.has(input.value);
+      });
+
+      sections = parseDescriptionToSections(data.description || '');
+      renderSections();
+      syncDescriptionField();
+      syncCommissionMode();
+      setPreview(data);
+    }
+
+    async function initAuthAndLoad() {
+      if (!itineraryId && !previewMode) throw new Error(UI.missingId);
+
+      if (previewMode) {
+        previewNoteEl.hidden = false;
+        adminControlsEl.hidden = false;
+        isAdmin = true;
+        fillForm(previewData);
+        loadingEl.hidden = true;
+        formEl.hidden = false;
+        return;
+      }
+
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      profile = await liff.getProfile();
+      userStatus = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`).then(r => r.json());
+      isAdmin = !!userStatus?.data?.isAdmin;
+      adminControlsEl.hidden = !isAdmin;
+
+      const detail = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}`).then(r => r.json());
+      if (!detail?.success || !detail?.data) throw new Error(detail?.error || UI.notFound);
+
+      fillForm(detail.data);
+      loadingEl.hidden = true;
+      formEl.hidden = false;
+      legacyLinkEl.href = `itinerary-maintenance.html?id=${encodeURIComponent(itineraryId)}`;
+    }
+
+    document.getElementById('cover-upload').addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const url = await uploadFileToR2(file);
+        formEl.elements.image.value = url;
+        setPreview({
+          title: formEl.elements.title.value,
+          image: url,
+          region: formEl.elements.region.value,
+          days: formEl.elements.days.value,
+          price: formEl.elements.price.value,
+          reviewStatus: statusPillEl.textContent,
+        });
+        showToast(UI.uploadCoverDone);
+      } catch (err) {
+        showToast(err.message || UI.uploadFail, 'error');
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    formEl.elements.image.addEventListener('input', () => {
+      setPreview({
+        title: formEl.elements.title.value,
+        image: formEl.elements.image.value,
+        region: formEl.elements.region.value,
+        days: formEl.elements.days.value,
+        price: formEl.elements.price.value,
+        reviewStatus: statusPillEl.textContent,
+      });
+    });
+
+    formEl.elements.title.addEventListener('input', () => {
+      titlePreviewEl.textContent = formEl.elements.title.value || UI.noTitle;
+    });
+
+    ['region', 'days', 'price'].forEach(name => {
+      formEl.elements[name].addEventListener('input', () => {
+        metaPreviewEl.textContent = `${formEl.elements.region.value || '-'} · ${Number(formEl.elements.days.value || 0)} 天 · NT$ ${Number(formEl.elements.price.value || 0).toLocaleString()}`;
+      });
+    });
+
+    formEl.elements.commissionMode.addEventListener('change', syncCommissionMode);
+
+    document.getElementById('reparse-btn').addEventListener('click', () => {
+      sections = parseDescriptionToSections(descriptionField.value);
+      renderSections();
+      syncDescriptionField();
+      showToast(UI.reparseDone);
+    });
+
+    document.getElementById('add-section-btn').addEventListener('click', () => {
+      sections.push(createEmptySection());
+      renderSections();
+      syncDescriptionField();
+    });
+
+    formEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      syncDescriptionField();
+
+      if (previewMode) {
+        showToast(UI.previewNoWrite);
+        return;
+      }
+
+      saveBtn.disabled = true;
+      t(saveBtn, UI.saving);
+
+      try {
+        const allowedPaymentMethods = [...formEl.querySelectorAll('input[name="allowedPaymentMethods"]:checked')].map(input => input.value);
+        const payload = {
+          id: itineraryId,
+          uid: profile.userId,
+          title: formEl.elements.title.value.trim(),
+          image: formEl.elements.image.value.trim(),
+          region: formEl.elements.region.value.trim(),
+          days: Number(formEl.elements.days.value || 0),
+          price: Number(formEl.elements.price.value || 0),
+          description: descriptionField.value.trim(),
+          notes: formEl.elements.notes.value.trim(),
+          paymentMode: formEl.elements.paymentMode.value,
+          depositRatio: Number(formEl.elements.depositRatio.value || 0),
+          balanceCollect: formEl.elements.balanceCollect.value,
+          allowedPaymentMethods,
+        };
+
+        if (isAdmin) {
+          payload.commissionMode = formEl.elements.commissionMode.value;
+          payload.commissionAmount = Number(formEl.elements.commissionAmount.value || 0);
+          payload.commissionPercent = Number(formEl.elements.commissionPercent.value || 0);
+          payload.seatLimit = Number(formEl.elements.seatLimit.value || 0);
+          payload.minGroupSize = Number(formEl.elements.minGroupSize.value || 0);
+          payload.shareEnabled = formEl.elements.shareEnabled.checked;
+        }
+
+        const res = await fetch(`${WORKER_URL}/api/itinerary/detail`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.success) throw new Error(json?.error || UI.saveFail);
+
+        fillForm(json.data || payload);
+        showToast(UI.saveDone);
+      } catch (err) {
+        showToast(err.message || UI.saveFail, 'error');
+      } finally {
+        saveBtn.disabled = false;
+        t(saveBtn, UI.save);
+      }
+    });
+
+    bootStaticText();
+    initAuthAndLoad().catch(err => {
+      showError(err.message || UI.loadFail);
+    });
+  </script>
+</body>
+</html>
