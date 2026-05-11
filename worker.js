@@ -518,13 +518,6 @@ async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
     createdAt
   ).run();
 
-  await env.DB.prepare(`
-    UPDATE distributors
-       SET sales_revenue = COALESCE(sales_revenue, 0) + ?,
-           updated_at = datetime('now')
-     WHERE uid = ?
-  `).bind(totalAmount, distributorUid).run();
-
   return {
     success: true,
     data: {
@@ -778,6 +771,71 @@ async function d1UpdateDistributorProfile(env, body = {}) {
   return d1GetDistributorProfile(env, normalizedUid);
 }
 
+async function d1UpsertRegisteredDistributor(env, body = {}, gasResult = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+
+  const uid = String(body.uid || '').trim();
+  if (!uid) return { success: false, error: 'MISSING_UID' };
+
+  const name = String(body.name || '').trim();
+  const phone = normalizePhoneValue(body.phone);
+  const companyName = String(body.company_name || body.companyName || '').trim();
+  const refUid = String(body.ref_uid || '').trim();
+  const agencySlug = String(body.agency_slug || body.agencySlug || 'demo').trim() || 'demo';
+  const inviteCode = String(gasResult.inviteCode || '').trim().toUpperCase();
+  const now = formatTaipeiDateTime(new Date());
+
+  const existing = await env.DB.prepare(
+    `SELECT uid, invite_code, status, joined_at, created_at
+       FROM distributors
+      WHERE uid = ?`
+  ).bind(uid).first();
+
+  const existingStatus = String(existing?.status || '').toLowerCase();
+  const preservedStatus = ['approved', 'active', 'suspended', 'rejected'].includes(existingStatus)
+    ? existingStatus
+    : 'pending';
+  const finalInviteCode = String(existing?.invite_code || '').trim().toUpperCase() || inviteCode;
+  const joinedAt = existing?.joined_at || now;
+  const createdAt = existing?.created_at || now;
+
+  const result = await env.DB.prepare(`
+    INSERT INTO distributors (
+      uid, name, phone, company_name, status, commission_pct, note, sales_revenue,
+      joined_at, ref_uid, agency_slug, can_upload, invite_code, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 0, '', 0, ?, ?, ?, 0, ?, ?, ?)
+    ON CONFLICT(uid) DO UPDATE SET
+      name = excluded.name,
+      phone = excluded.phone,
+      company_name = excluded.company_name,
+      ref_uid = excluded.ref_uid,
+      agency_slug = excluded.agency_slug,
+      invite_code = CASE
+        WHEN COALESCE(distributors.invite_code, '') = '' THEN excluded.invite_code
+        ELSE distributors.invite_code
+      END,
+      updated_at = excluded.updated_at
+  `).bind(
+    uid,
+    name,
+    phone,
+    companyName,
+    preservedStatus,
+    joinedAt,
+    refUid,
+    agencySlug,
+    finalInviteCode,
+    createdAt,
+    now
+  ).run();
+
+  if (!result.success) {
+    return { success: false, error: 'FAILED_TO_SYNC_D1_DISTRIBUTOR' };
+  }
+
+  return { success: true };
+}
+
 async function readDistributorsWithFallback(env) {
   if (env.DB) {
     try {
@@ -797,6 +855,93 @@ async function d1GetAllOrders(env) {
       ORDER BY created_at DESC`
   ).all();
   return { success: true, data: results.map(toSheetOrder) };
+}
+
+async function d1UpdateOrderStatus(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const orderId = String(body.order_id || body.orderId || '').trim();
+  const nextStatus = String(body.status || '').trim().toLowerCase();
+  if (!orderId) return { success: false, error: 'MISSING_ORDER_ID' };
+  if (!nextStatus) return { success: false, error: 'MISSING_STATUS' };
+
+  const existing = await env.DB.prepare(
+    `SELECT order_id FROM orders WHERE order_id = ?`
+  ).bind(orderId).first();
+  if (!existing) return { success: false, error: 'ORDER_NOT_FOUND' };
+
+  const now = formatTaipeiDateTime(new Date());
+  const result = await env.DB.prepare(
+    `UPDATE orders
+        SET status = ?,
+            updated_at = ?
+      WHERE order_id = ?`
+  ).bind(nextStatus, now, orderId).run();
+
+  if (!result.success) return { success: false, error: 'FAILED_TO_UPDATE_ORDER_STATUS' };
+
+  if (env.GAS_WEBAPP_URL) {
+    try {
+      await gasPost(env, { action: 'updateOrderStatus', order_id: orderId, status: nextStatus });
+    } catch (err) {
+      console.warn('sync updateOrderStatus to GAS failed:', err.message);
+    }
+  }
+
+  return { success: true, updatedAt: now };
+}
+
+async function d1MarkBalancePaid(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const orderId = String(body.order_id || body.orderId || '').trim();
+  const operatorUid = String(body.operatorUid || body.uid || '').trim();
+  if (!orderId) return { success: false, error: 'MISSING_ORDER_ID' };
+  if (!ADMIN_UIDS.has(operatorUid)) return { success: false, error: 'FORBIDDEN' };
+
+  const existing = await env.DB.prepare(
+    `SELECT order_id, balance_collect, commission_status
+       FROM orders
+      WHERE order_id = ?`
+  ).bind(orderId).first();
+  if (!existing) return { success: false, error: 'ORDER_NOT_FOUND' };
+  if (String(existing.balance_collect || '').toLowerCase() !== 'offline') {
+    return { success: false, error: 'BALANCE_COLLECT_NOT_OFFLINE' };
+  }
+
+  const now = formatTaipeiDateTime(new Date());
+  const shouldSetCommissionPayable = String(existing.commission_status || 'pending').toLowerCase() === 'pending';
+
+  const sets = [
+    `balance_status = ?`,
+    `balance_paid_at = ?`,
+    `balance_method = ?`,
+    `status = ?`,
+    `updated_at = ?`,
+  ];
+  const values = ['paid_offline', now, 'offline', 'completed', now];
+
+  if (shouldSetCommissionPayable) {
+    sets.push(`commission_status = ?`);
+    sets.push(`commission_settled_at = ?`);
+    values.push('payable', now);
+  }
+
+  const result = await env.DB.prepare(
+    `UPDATE orders
+        SET ${sets.join(', ')}
+      WHERE order_id = ?`
+  ).bind(...values, orderId).run();
+
+  if (!result.success) return { success: false, error: 'FAILED_TO_MARK_BALANCE_PAID' };
+
+  if (env.GAS_WEBAPP_URL) {
+    try {
+      await gasPost(env, { action: 'markBalancePaid', order_id: orderId, operatorUid });
+    } catch (err) {
+      console.warn('sync markBalancePaid to GAS failed:', err.message);
+    }
+  }
+
+  return { success: true, updatedAt: now };
 }
 
 async function readAllOrdersWithFallback(env) {
@@ -2145,17 +2290,22 @@ export default {
       // POST /api/upload-dm  （AI DM 解析）
       // ══════════════════════════════════════════════════════════
       if (path === '/api/upload-dm' && request.method === 'POST') {
-        const { image } = await request.json();
+        const { image, images } = await request.json();
+        const imageInputs = [
+          ...(Array.isArray(images) ? images : []),
+          ...(image ? [image] : []),
+        ].filter(Boolean).slice(0, 4);
+        if (!imageInputs.length) return json({ success: false, error: '缺少 DM 圖片或 PDF 頁面資料' }, 400);
         const gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
           body: JSON.stringify({
             model: 'gpt-4o', response_format: { type: 'json_object' }, max_tokens: 4000, temperature: 0.7,
             messages: [{ role: 'user', content: [
-              { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 並深度擴寫。回傳標準 JSON：
+              { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 或 PDF 頁面並深度擴寫。回傳標準 JSON：
 {"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
-description 中圖片語法使用景點英文關鍵字而非URL，系統會自動替換。` },
-              { type: 'image_url', image_url: { url: image } }
+description 中圖片語法使用景點英文關鍵字而非URL，系統會自動替換；若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
+              ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } }))
             ]}]
           })
         });
@@ -2189,6 +2339,20 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         if (!result.success) {
           const msgMap = { already_approved: '您已是核准分銷商', already_pending: '申請已送出，請等待審核' };
           return json({ success: false, error: msgMap[result.error] || result.error });
+        }
+        if (env.DB) {
+          try {
+            const syncResult = await d1UpsertRegisteredDistributor(
+              env,
+              { ...body, agency_slug: agencySlug },
+              result
+            );
+            if (!syncResult.success) {
+              console.warn('registerDistributor D1 sync failed:', syncResult.error);
+            }
+          } catch (err) {
+            console.warn('registerDistributor D1 sync error:', err.message);
+          }
         }
         return json(result);
       }
@@ -2393,6 +2557,14 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
           return json(result);
         }
         const body   = await request.json();
+        if (body.action === 'updateOrderStatus' && env.DB) {
+          const result = await d1UpdateOrderStatus(env, body);
+          return json(result, result.success ? 200 : 400);
+        }
+        if (body.action === 'markBalancePaid' && env.DB) {
+          const result = await d1MarkBalancePaid(env, body);
+          return json(result, result.success ? 200 : 400);
+        }
         const result = await gasPost(env, body);
 
         // ★ 如果是分銷商上稿/編輯造成 pending_review，通知管理員

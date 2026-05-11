@@ -767,19 +767,63 @@ function App() {
   const [ocrStatus,  setOcrStatus]  = useState('idle');
   const [draftData,  setDraftData]  = useState(null);
 
+  const loadPdfJs = async () => {
+    if (window.__pdfjsLibPromise) return window.__pdfjsLibPromise;
+    window.__pdfjsLibPromise = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs').then((pdfjsLib) => {
+      if (pdfjsLib?.GlobalWorkerOptions) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+      }
+      return pdfjsLib;
+    });
+    return window.__pdfjsLibPromise;
+  };
+
+  const renderPdfPagesToImages = async (file, maxPages = 4) => {
+    const pdfjsLib = await loadPdfJs();
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pageCount = Math.min(pdf.numPages, maxPages);
+    const images = [];
+    for (let i = 1; i <= pageCount; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1.6 });
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.92));
+    }
+    return images;
+  };
+
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     setOcrStatus('processing');
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        const res    = await fetch(`${WORKER_URL}/api/upload-dm`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image: ev.target.result }) });
-        const result = await res.json();
-        if (result.success) { setDraftData(result.data); setOcrStatus('done'); showToast('AI 解析成功！'); }
-        else throw new Error(result.error);
-      } catch(e) { setOcrStatus('idle'); showToast('解析失敗: '+e.message,'error'); }
-    };
-    reader.readAsDataURL(file);
+    try {
+      let payload;
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')) {
+        const images = await renderPdfPagesToImages(file, 4);
+        payload = { images, filename: file.name };
+      } else {
+        const image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.onerror = () => reject(new Error('圖片讀取失敗'));
+          reader.readAsDataURL(file);
+        });
+        payload = { image, filename: file.name };
+      }
+      const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (result.success) { setDraftData(result.data); setOcrStatus('done'); showToast('AI 解析完成'); }
+      else throw new Error(result.error);
+    } catch(e) { setOcrStatus('idle'); showToast('解析失敗: '+e.message,'error'); }
+    e.target.value = '';
   };
 
   const handlePublish = async () => {
@@ -798,7 +842,7 @@ function App() {
         <div className={`relative border-4 border-dashed rounded-[3rem] p-16 text-center transition-all ${ocrStatus==='processing' ? 'border-blue-500 bg-blue-50' : 'border-slate-100 bg-slate-50'}`}>
           {ocrStatus==='processing'
             ? <div className="flex flex-col items-center"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full spin-anim mb-4"/><p className="font-black text-blue-600">視覺模型分析中...</p></div>
-            : <><p className="text-xl font-black text-slate-600 mb-2">點擊上傳旅遊 DM 圖片</p><p className="text-slate-400 text-sm">支援 JPG / PNG</p><input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" /></>
+            : <><p className="text-xl font-black text-slate-600 mb-2">點擊上傳旅遊 DM 圖片</p><p className="text-slate-400 text-sm">支援 JPG / PNG</p><input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*,.pdf,application/pdf" /></>
           }
         </div>
         {draftData && (

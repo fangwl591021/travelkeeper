@@ -170,23 +170,67 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
     balanceCollect: 'online',
   });
 
+  const loadPdfJs = async () => {
+    if (window.__pdfjsLibPromise) return window.__pdfjsLibPromise;
+    window.__pdfjsLibPromise = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs').then((pdfjsLib) => {
+      if (pdfjsLib?.GlobalWorkerOptions) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+      }
+      return pdfjsLib;
+    });
+    return window.__pdfjsLibPromise;
+  };
+
+  const renderPdfPagesToImages = async (file, maxPages = 4) => {
+    const pdfjsLib = await loadPdfJs();
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pageCount = Math.min(pdf.numPages, maxPages);
+    const images = [];
+    for (let i = 1; i <= pageCount; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1.6 });
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.92));
+    }
+    return images;
+  };
+
   const handleAIUpload = async (e) => {
     const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const btn = e.target.parentElement;
-      btn.innerHTML = '<span class="spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span> AI 解析中…';
-      try {
-        const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ image: ev.target.result })
+    const btn = e.target.parentElement;
+    btn.innerHTML = '<span class="spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span> AI 解析中...';
+    try {
+      let payload;
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')) {
+        const images = await renderPdfPagesToImages(file, 4);
+        payload = { images, filename: file.name };
+      } else {
+        const image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target.result);
+          reader.onerror = () => reject(new Error('圖片讀取失敗'));
+          reader.readAsDataURL(file);
         });
-        const result = await res.json();
-        if (result.success) setData(prev => ({ ...prev, ...result.data }));
-      } catch(err) { alert('AI 解析失敗：' + err.message); }
-      btn.innerHTML = '🤖 AI 解析 DM';
-    };
-    reader.readAsDataURL(file);
+        payload = { image, filename: file.name };
+      }
+      const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || 'AI 解析失敗');
+      setData(prev => ({ ...prev, ...result.data }));
+    } catch(err) {
+      alert('AI 解析失敗：' + err.message);
+    }
+    btn.innerHTML = '🤖 AI 解析 DM';
+    e.target.value = '';
   };
 
   const handleImageUpload = async (e) => {
@@ -211,9 +255,9 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-2xl text-center font-black cursor-pointer hover:opacity-90 transition">
           🤖 AI 解析 DM
         </div>
-        <input type="file" accept="image/*" onChange={handleAIUpload} className="hidden" />
+        <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleAIUpload} className="hidden" />
       </label>
-      <p className="text-xs text-center text-slate-400 font-medium -mt-3">上傳旅遊 DM 圖片，AI 自動填表</p>
+      <p className="text-xs text-center text-slate-400 font-medium -mt-3">支援 JPG、PNG、PDF，PDF 會自動轉成頁面圖片交給 AI 解析</p>
 
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖</label>
