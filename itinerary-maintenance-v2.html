@@ -511,6 +511,18 @@
         const fileInput = node.querySelector('.section-file');
         const removeBtn = node.querySelector('.remove-section-btn');
 
+        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn) {
+          console.warn('section template missing nodes', {
+            titleInput: !!titleInput,
+            imageInput: !!imageInput,
+            bodyInput: !!bodyInput,
+            fileInput: !!fileInput,
+            removeBtn: !!removeBtn,
+          });
+          sectionsListEl.appendChild(node);
+          continue;
+        }
+
         titleInput.value = section.title || '';
         imageInput.value = section.image || '';
         bodyInput.value = section.body || '';
