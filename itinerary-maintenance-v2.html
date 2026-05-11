@@ -105,6 +105,7 @@
             <p id="sections-subtitle" class="text-sm text-slate-500 mt-1"></p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <button id="restore-original-btn" type="button" class="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50"></button>
             <button id="sanitize-btn" type="button" class="px-4 py-2.5 rounded-xl bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100"></button>
             <button id="reparse-btn" type="button" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"></button>
             <button id="add-section-btn" type="button" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"></button>
@@ -252,6 +253,7 @@
       labelNotes: '\u6ce8\u610f\u4e8b\u9805',
       sectionsTitle: '\u5167\u6587\u5716\u7247\u5340\u584a\u7de8\u8f2f',
       sectionsSubtitle: '\u628a description \u5167\u7684\u6bcf\u65e5\u6bb5\u843d\u62c6\u6210\u6a19\u984c\u3001\u5716\u7247\u3001\u5167\u5bb9\u3002\u4f60\u53ef\u4ee5\u63db\u5716\uff0c\u4e0d\u9700\u8981\u518d\u624b\u6539 ![\u5716\u7247](url)\u3002',
+      restoreOriginal: '\u9084\u539f\u539f\u59cb\u63cf\u8ff0',
       sanitize: '\u6e05\u7406\u820a\u5716\u7247\u8a9e\u6cd5',
       reparse: '\u91cd\u65b0\u62c6\u6bb5',
       addSection: '\u65b0\u589e\u6bb5\u843d',
@@ -284,6 +286,8 @@
       placeholderImage: '\u9019\u5f35\u662f\u820a\u793a\u610f\u5716\uff0c\u5efa\u8b70\u63db\u6210\u6b63\u5f0f\u884c\u7a0b\u5716\u3002',
       cleanDone: '\u5df2\u6e05\u7406\u820a\u5716\u7247\u8a9e\u6cd5\u4e26\u91cd\u65b0\u62c6\u6bb5',
       reparseDone: '\u5df2\u91cd\u65b0\u62c6\u6bb5',
+      restoreDone: '\u5df2\u9084\u539f\u539f\u59cb\u63cf\u8ff0',
+      noOriginalDescription: '\u6c92\u6709\u53ef\u9084\u539f\u7684\u539f\u59cb\u63cf\u8ff0',
       saveDone: '\u5df2\u5132\u5b58\u8b8a\u66f4',
       previewNoWrite: '\u9810\u89bd\u6a21\u5f0f\u4e0d\u6703\u5beb\u5165\u6b63\u5f0f\u8cc7\u6599',
       missingId: '\u7f3a\u5c11\u884c\u7a0b id',
@@ -350,6 +354,7 @@
     let userStatus = null;
     let isAdmin = false;
     let sections = [];
+    let originalDescriptionSnapshot = '';
 
     function t(el, value) {
       if (el) el.textContent = value;
@@ -377,6 +382,7 @@
       t(document.getElementById('label-notes'), UI.labelNotes);
       t(document.getElementById('sections-title'), UI.sectionsTitle);
       t(document.getElementById('sections-subtitle'), UI.sectionsSubtitle);
+      t(document.getElementById('restore-original-btn'), UI.restoreOriginal);
       t(document.getElementById('sanitize-btn'), UI.sanitize);
       t(document.getElementById('reparse-btn'), UI.reparse);
       t(document.getElementById('add-section-btn'), UI.addSection);
@@ -414,40 +420,57 @@
     }
 
     function parseDescriptionToSections(rawText) {
-      const text = String(rawText || '').replace(/\r\n/g, '\n').replace(/\\n/g, '\n').trim();
+      const text = String(rawText || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/([^\n])(!\[[^\]]*\]\(https?:\/\/[^)\s]+\))/gi, '$1\n$2')
+        .replace(/(!\[[^\]]*\]\(https?:\/\/[^)\s]+\))([^\n])/gi, '$1\n$2')
+        .trim();
       if (!text) return [{ title: '', image: '', body: '' }];
 
-      const lines = text.split('\n');
-      const result = [];
-      let current = null;
-      const headingRegex = new RegExp('^\\u7b2c\\s*\\d+\\s*\\u5929.*$');
-      const imageRegex = /^!\[[^\]]*\]\(([^)]+)\)\s*$/;
+      const imageRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i;
+      const imageLineRegex = /^!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)\s*$/;
+      const headingMatcher = /\u7b2c\s*\d+\s*\u5929[^\n]*/g;
+      const matches = [...text.matchAll(headingMatcher)];
 
-      function pushCurrent() {
-        if (!current) return;
+      if (!matches.length) {
+        const firstImage = text.match(imageRegex);
+        return [{
+          title: '',
+          image: firstImage ? firstImage[1].trim() : '',
+          body: text.replace(imageRegex, '').trim(),
+        }];
+      }
+
+      const result = [];
+      for (let i = 0; i < matches.length; i += 1) {
+        const start = matches[i].index ?? 0;
+        const end = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : text.length;
+        const chunk = text.slice(start, end).trim();
+        if (!chunk) continue;
+
+        const lines = chunk.split('\n');
+        const title = String(lines.shift() || '').trim();
+        let image = '';
+        const bodyLines = [];
+
+        for (const line of lines) {
+          const trimmed = String(line || '').trim();
+          const imageMatch = trimmed.match(imageLineRegex);
+          if (imageMatch && !image) {
+            image = imageMatch[1].trim();
+            continue;
+          }
+          bodyLines.push(line);
+        }
+
         result.push({
-          title: current.title.trim(),
-          image: current.image.trim(),
-          body: current.body.join('\n').trim(),
+          title,
+          image,
+          body: bodyLines.join('\n').trim(),
         });
       }
 
-      for (const line of lines) {
-        if (headingRegex.test(line.trim())) {
-          pushCurrent();
-          current = { title: line.trim(), image: '', body: [] };
-          continue;
-        }
-        const imgMatch = line.trim().match(imageRegex);
-        if (imgMatch && current) {
-          current.image = imgMatch[1].trim();
-          continue;
-        }
-        if (!current) current = { title: '', image: '', body: [] };
-        current.body.push(line);
-      }
-
-      pushCurrent();
       return result.length ? result : [{ title: '', image: '', body: text }];
     }
 
@@ -482,6 +505,13 @@
       });
     }
 
+    function buildSectionsWithFallback(sourceText) {
+      const source = String(sourceText || '');
+      const parsed = parseDescriptionToSections(source);
+      if (hasMeaningfulSections(parsed)) return parsed;
+      return [{ title: '', image: '', body: source }];
+    }
+
     function serializeSections(list) {
       return list.map(section => {
         const parts = [];
@@ -495,15 +525,18 @@
       }).filter(Boolean).join('\n\n').trim();
     }
 
-    function syncDescriptionField() {
-      descriptionField.value = serializeSections(sections);
+    function syncDescriptionField(fallbackText = '') {
+      const serialized = serializeSections(sections);
+      descriptionField.value = serialized || fallbackText || descriptionField.value || originalDescriptionSnapshot || '';
     }
 
     function updateSectionPreview(index) {
       const wrap = sectionsListEl.children[index];
       if (!wrap) return;
       const img = wrap.querySelector('.section-preview');
-      img.src = sections[index]?.image || 'https://via.placeholder.com/1200x700?text=No+Image';
+      const image = String(sections[index]?.image || '').trim();
+      img.src = image || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+      img.alt = image ? 'section-preview' : '';
     }
 
     async function uploadFileToR2(file) {
@@ -641,7 +674,8 @@
       formEl.elements.region.value = data.region || '';
       formEl.elements.days.value = data.days || '';
       formEl.elements.price.value = data.price || '';
-      formEl.elements.description.value = data.description || '';
+      originalDescriptionSnapshot = String(data.description || '');
+      formEl.elements.description.value = originalDescriptionSnapshot;
       formEl.elements.notes.value = data.notes || '';
       formEl.elements.commissionMode.value = data.commissionMode || 'amount';
       formEl.elements.commissionAmount.value = data.commissionAmount ?? 0;
@@ -658,9 +692,8 @@
         input.checked = allowed.has(input.value);
       });
 
-      sections = parseDescriptionToSections(data.description || '');
+      sections = buildSectionsWithFallback(originalDescriptionSnapshot);
       renderSections();
-      syncDescriptionField();
       syncCommissionMode();
       setPreview(data);
     }
@@ -751,21 +784,36 @@
 
     const reparseBtn = document.getElementById('reparse-btn');
     if (reparseBtn) reparseBtn.addEventListener('click', () => {
-      sections = parseDescriptionToSections(descriptionField.value);
+      const source = String(descriptionField.value || '').trim() ? descriptionField.value : originalDescriptionSnapshot;
+      sections = buildSectionsWithFallback(source);
       renderSections();
-      syncDescriptionField();
+      syncDescriptionField(source);
       showToast(UI.reparseDone);
+    });
+
+    const restoreOriginalBtn = document.getElementById('restore-original-btn');
+    if (restoreOriginalBtn) restoreOriginalBtn.addEventListener('click', () => {
+      const source = originalDescriptionSnapshot || descriptionField.value || '';
+      if (!String(source || '').trim()) {
+        showToast(UI.noOriginalDescription, 'error');
+        return;
+      }
+      descriptionField.value = source;
+      sections = buildSectionsWithFallback(source);
+      renderSections();
+      syncDescriptionField(source);
+      showToast(UI.restoreDone);
     });
 
     const sanitizeBtn = document.getElementById('sanitize-btn');
     if (sanitizeBtn) sanitizeBtn.addEventListener('click', () => {
-      const original = String(descriptionField.value || '');
-      const cleaned = sanitizeDescriptionMarkdown(descriptionField.value);
+      const original = String(descriptionField.value || '').trim() ? descriptionField.value : originalDescriptionSnapshot;
+      const cleaned = sanitizeDescriptionMarkdown(original);
       const parsed = parseDescriptionToSections(cleaned);
       descriptionField.value = cleaned;
       sections = hasMeaningfulSections(parsed) ? parsed : [{ title: '', image: '', body: cleaned || original }];
       renderSections();
-      syncDescriptionField();
+      syncDescriptionField(cleaned || original);
       showToast(UI.cleanDone);
     });
 
