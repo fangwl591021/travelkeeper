@@ -2441,6 +2441,7 @@ export default {
           mode = 'single',
           uid = '',
           ctaText = '?亦?銵? / 蝡?勗?',
+          centerText = '心動就要行動！回饋都在這',
           socFields = {},
           agencySlug = 'demo',
           inviteCode = '',
@@ -2453,6 +2454,9 @@ export default {
         const items   = finalIds.map(id => all.find(i => String(i.id || i.timestamp || '') === String(id))).filter(Boolean);
 
         if (items.length === 0) return json({ success: false, error: '???????' }, 400);
+        if (mode === 'travel6' && items.length !== 6) {
+          return json({ success: false, error: '旅遊六宮格需要剛好 6 個行程' }, 400);
+        }
 
         // LIFF ID 敺?config ?選?雿???? URL ???典?
         const cfgRes = await readConfigWithFallback(env, agencySlug);
@@ -2489,6 +2493,16 @@ export default {
         // ??銵?閰單???URL ??摰Ｘ?汗??tour.html嚗?閰單???銝璆剖?撌亙嚗?
         const buildDetailUri = (itineraryId) =>
           `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}${inviteParam}`;
+
+        const safeImageUrl = (url, fallback = 'https://via.placeholder.com/1040x1040') => {
+          const value = String(url || '').trim();
+          return /^https:\/\//i.test(value) ? value : fallback;
+        };
+
+        const shortText = (value, fallback = '') => {
+          const text = String(value || fallback || '').replace(/\s+/g, ' ').trim();
+          return text.length > 34 ? `${text.slice(0, 33)}…` : text;
+        };
 
         // ?? ?桀撐 / 璈怠?頛芣 ?剁?摰憭批嚗ero ??+ 閰喟敦鞈? + 蝡??嚗?
         const makeBubble = (tour) => {
@@ -2565,8 +2579,92 @@ export default {
           };
         };
 
+        const makeTravelSixTile = (tour) => {
+          const id = String(tour.id || tour.timestamp || '');
+          const detailUri = buildDetailUri(id);
+          const price = Number(tour.price || 0);
+          const caption = [
+            shortText(tour.title || '精選行程'),
+            price > 0 ? `NT$${price.toLocaleString()}` : ''
+          ].filter(Boolean).join('｜');
+          return {
+            type: 'box',
+            layout: 'vertical',
+            flex: 1,
+            cornerRadius: '10px',
+            backgroundColor: '#ffffff',
+            action: { type: 'uri', uri: detailUri },
+            contents: [
+              {
+                type: 'image',
+                url: safeImageUrl(tour.image),
+                size: 'full',
+                aspectRatio: '1:1',
+                aspectMode: 'cover'
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#fffbe6',
+                paddingAll: '6px',
+                contents: [
+                  {
+                    type: 'text',
+                    text: caption || '查看行程',
+                    size: 'xxs',
+                    weight: 'bold',
+                    color: '#334155',
+                    align: 'center',
+                    wrap: true,
+                    maxLines: 2
+                  }
+                ]
+              }
+            ]
+          };
+        };
+
+        const makeTravelSixRow = (rowItems) => ({
+          type: 'box',
+          layout: 'horizontal',
+          spacing: 'md',
+          contents: rowItems.map(makeTravelSixTile)
+        });
+
         let flex;
-        if (mode === 'multi' || mode === 'list') {
+        if (mode === 'travel6') {
+          const titleText = shortText(centerText, '心動就要行動！回饋都在這');
+          const travelBubble = {
+            type: 'bubble',
+            size: 'mega',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              backgroundColor: '#15569a',
+              paddingAll: '18px',
+              spacing: 'lg',
+              contents: [
+                makeTravelSixRow(items.slice(0, 3)),
+                {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'sm',
+                  paddingAll: '6px',
+                  contents: [
+                    { type: 'text', text: 'LINE 旅遊', color: '#ffffff', weight: 'bold', size: 'lg', align: 'center' },
+                    { type: 'text', text: titleText, color: '#ffffff', weight: 'bold', size: 'xl', align: 'center', wrap: true }
+                  ]
+                },
+                makeTravelSixRow(items.slice(3, 6))
+              ]
+            }
+          };
+          flex = {
+            type: 'flex',
+            altText: `精選 6 款旅遊行程：${titleText}`,
+            contents: travelBubble
+          };
+        } else if (mode === 'multi' || mode === 'list') {
           // ???”璅∪?嚗銝 bubble嚗?蝑?蝔?? separator ??
           const itemContents = [];
           items.forEach((tour, idx) => {

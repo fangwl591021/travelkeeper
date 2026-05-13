@@ -689,7 +689,8 @@ function PromoteModal({
   const initialIds = (initialItems || []).map(i => String(i.id || i.timestamp));
   const [selectedIds, setSelectedIds] = useState(new Set(initialIds));
   const [mode, setMode] = useState('single');
-  const [ctaText, setCtaText] = useState('查看完整行程');
+  const [ctaText, setCtaText] = useState('\u67e5\u770b\u5b8c\u6574\u884c\u7a0b');
+  const [centerText, setCenterText] = useState('\u5fc3\u52d5\u5c31\u8981\u884c\u52d5\uff01\u56de\u994b\u90fd\u5728\u9019');
   const [showSelector, setShowSelector] = useState(false);
 
   // 聯絡套件：依據 distData 有什麼欄位才顯示對應 toggle
@@ -729,7 +730,8 @@ function PromoteModal({
   useEffect(() => {
     if (selectedCount === 1 && mode !== 'single') setMode('single');
     if (selectedCount >= 2 && mode === 'single') setMode('carousel');
-  }, [selectedCount]);
+    if (selectedCount !== 6 && mode === 'travel6') setMode(selectedCount >= 2 ? 'carousel' : 'single');
+  }, [selectedCount, mode]);
 
   // 組 socFields 物件（同時包含 boolean key 跟 field 值）
   const buildSocFields = () => {
@@ -752,6 +754,7 @@ function PromoteModal({
       mode,
       socFields: buildSocFields(),
       ctaText,
+      centerText,
     });
   };
 
@@ -861,9 +864,10 @@ function PromoteModal({
           <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">② 卡片格式</p>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { v:'single',   label:'單張',   hint:'1 筆',     enabled: selectedCount === 1 },
-              { v:'carousel', label:'輪播',   hint:'2-10 筆',  enabled: selectedCount >= 2 },
-              { v:'list',     label:'列表',   hint:'2-10 筆',  enabled: selectedCount >= 2 },
+              { v:'single',   label:'\u55ae\u5f35',   hint:'1 \u7b46',     enabled: selectedCount === 1 },
+              { v:'carousel', label:'\u8f2a\u64ad',   hint:'2-10 \u7b46',  enabled: selectedCount >= 2 },
+              { v:'list',     label:'\u5217\u8868',   hint:'2-10 \u7b46',  enabled: selectedCount >= 2 },
+              { v:'travel6',  label:'\u65c5\u904a\u516d\u5bae\u683c', hint:'\u525b\u597d 6 \u7b46', enabled: selectedCount === 6 },
             ].map(m => (
               <button key={m.v} type="button"
                 onClick={() => m.enabled && setMode(m.v)}
@@ -879,9 +883,18 @@ function PromoteModal({
               </button>
             ))}
           </div>
+          {mode === 'travel6' && (
+            <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+              <label className="block text-xs font-black text-slate-700 mb-2">\u4e2d\u592e\u4e3b\u6a19\u6587\u5b57</label>
+              <input value={centerText} onChange={e => setCenterText(e.target.value)}
+                placeholder="\u5fc3\u52d5\u5c31\u8981\u884c\u52d5\uff01\u56de\u994b\u90fd\u5728\u9019"
+                className="w-full p-3 border-2 border-blue-100 rounded-xl text-sm font-medium outline-none focus:border-blue-500 bg-white"/>
+              <p className="text-[11px] text-slate-500 mt-2">\u6b64\u7248\u578b\u9700\u8981\u525b\u597d 6 \u500b\u884c\u7a0b\uff1b\u6bcf\u683c\u5716\u7247\u4ee5 1:1 \u986f\u793a\uff0c\u5efa\u8b70\u4e0a\u50b3 1040x1040 \u6b63\u65b9\u5f62\u5716\u3002</p>
+            </div>
+          )}
         </div>
 
-        {/* Step 3：附加聯絡按鈕 */}
+        {/* Step 3\uff1a\u9644\u52a0\u806f\u7d61\u6309\u9215 */}
         <div className="p-5 border-b border-slate-100">
           <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">
             ③ 附加聯絡按鈕 <span className="text-slate-400 font-normal">（選填）</span>
@@ -927,7 +940,7 @@ function PromoteModal({
             <div className="text-sm space-y-1">
               <p>📦 將推送 <span className="font-black">{selectedCount} 筆</span> 行程</p>
               <p>🎨 格式：<span className="font-black">{
-                mode === 'single' ? '單張卡片' : mode === 'carousel' ? '輪播卡片' : '列表卡片'
+                mode === 'single' ? '\u55ae\u5f35\u5361\u7247' : mode === 'carousel' ? '\u8f2a\u64ad\u5361\u7247' : mode === 'travel6' ? '\u65c5\u904a\u516d\u5bae\u683c' : '\u5217\u8868\u5361\u7247'
               }</span></p>
               <p>📞 含 <span className="font-black">{enabledSocs.size}</span> 個聯絡按鈕</p>
               <p>🏷️ 推薦碼：<span className="font-mono font-black text-emerald-600">{inviteCode || '無'}</span></p>
@@ -1560,8 +1573,9 @@ function App() {
   //   (取代 v8/v9 的 push-to-self；省 LINE token、沒 quota、客戶直接收）
   const handlePushFlex = async (opts) => {
     if (!profile?.userId) { showToast('\u8eab\u4efd\u9a57\u8b49\u5931\u6557', 'error'); return; }
-    const { ids = [], mode = 'single', socFields = {}, ctaText = '\u67e5\u770b\u5b8c\u6574\u884c\u7a0b' } = opts || {};
+    const { ids = [], mode = 'single', socFields = {}, ctaText = '\u67e5\u770b\u5b8c\u6574\u884c\u7a0b', centerText = '\u5fc3\u52d5\u5c31\u8981\u884c\u52d5\uff01\u56de\u994b\u90fd\u5728\u9019' } = opts || {};
     if (ids.length === 0) { showToast('\u8acb\u5148\u9078\u64c7\u884c\u7a0b', 'error'); return; }
+    if (mode === 'travel6' && ids.length !== 6) { showToast('\u65c5\u904a\u516d\u5bae\u683c\u9700\u8981\u525b\u597d 6 \u500b\u884c\u7a0b', 'error'); return; }
 
     // \u78ba\u8a8d LIFF \u74b0\u5883\u652f\u63f4 shareTargetPicker
     if (typeof liff === 'undefined' || !liff.isApiAvailable || !liff.isApiAvailable('shareTargetPicker')) {
@@ -1589,6 +1603,7 @@ function App() {
             mode,
             socFields,
             ctaText,
+            centerText,
             agencySlug: 'demo',
             inviteCode: myInviteCode,
           }),
