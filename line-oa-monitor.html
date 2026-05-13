@@ -95,6 +95,7 @@
             <p id="chat-meta" class="text-sm text-slate-500 mt-2"></p>
           </div>
           <div class="flex flex-wrap gap-2 items-center">
+            <button id="open-visitor-records" class="px-5 py-3 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 font-semibold">重要紀錄</button>
             <button id="mark-open" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">&#24453;&#34389;&#29702;</button>
             <button id="mark-pending" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">&#24314;&#35696;&#20013;</button>
             <button id="mark-closed" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">&#34389;&#29702;&#23436;&#30070;</button>
@@ -135,6 +136,15 @@
             <span id="suggestion-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="suggestion-list" class="space-y-3"></div>
+        </section>
+
+        <section class="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <p class="text-xl font-black">訪客重要紀錄</p>
+            <span id="visitor-record-count" class="text-emerald-700 font-semibold">0</span>
+          </div>
+          <div id="visitor-record-list" class="space-y-3"></div>
+          <button id="add-visitor-record" type="button" class="mt-3 w-full rounded-2xl bg-emerald-500 text-white font-semibold py-3 hover:bg-emerald-600">新增重要紀錄</button>
         </section>
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
@@ -193,6 +203,67 @@
     </section>
   </div>
 
+  <div id="visitor-record-modal" hidden class="fixed inset-0 z-50 bg-slate-900/45 px-4 py-6 overflow-y-auto">
+    <div class="mx-auto w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-slate-200">
+      <div class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm text-emerald-700 font-semibold">訪客資料庫</p>
+          <h3 class="text-2xl font-black mt-1">重要需求紀錄</h3>
+          <p id="visitor-record-customer" class="text-sm text-slate-500 mt-1"></p>
+        </div>
+        <button id="visitor-record-close" type="button" class="w-11 h-11 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50">✕</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <input id="visitor-record-id" type="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="block">
+            <span class="block text-sm font-semibold mb-2">類型</span>
+            <select id="visitor-record-category" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+              <option value="需求">需求</option>
+              <option value="預算">預算</option>
+              <option value="日期">日期</option>
+              <option value="人數">人數</option>
+              <option value="禁忌">禁忌</option>
+              <option value="客訴">客訴</option>
+              <option value="其他">其他</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="block text-sm font-semibold mb-2">重要度</span>
+            <select id="visitor-record-priority" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+              <option value="normal">一般</option>
+              <option value="high">重要</option>
+              <option value="low">低</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="block text-sm font-semibold mb-2">狀態</span>
+            <select id="visitor-record-status" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+              <option value="open">待處理</option>
+              <option value="follow_up">追蹤中</option>
+              <option value="done">已完成</option>
+            </select>
+          </label>
+        </div>
+        <label class="block">
+          <span class="block text-sm font-semibold mb-2">跟進日期</span>
+          <input id="visitor-record-follow-up" type="date" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+        </label>
+        <label class="block">
+          <span class="block text-sm font-semibold mb-2">重要需求內容</span>
+          <textarea id="visitor-record-content" rows="7" class="w-full rounded-2xl border border-slate-200 px-4 py-3 leading-7 outline-none focus:border-emerald-500" placeholder="例如：客戶希望 6/22 前後出發、預算 3 萬內、需要素食、住宿希望靠近車站。"></textarea>
+        </label>
+      </div>
+      <div class="px-6 py-5 border-t border-slate-200 flex flex-wrap justify-between gap-3">
+        <button id="visitor-record-archive" type="button" class="px-5 py-3 rounded-2xl bg-rose-50 text-rose-700 font-semibold hover:bg-rose-100">封存紀錄</button>
+        <div class="flex gap-3 ml-auto">
+          <button id="visitor-record-cancel" type="button" class="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200">取消</button>
+          <button id="visitor-record-save" type="button" class="px-6 py-3 rounded-2xl bg-emerald-500 text-white font-semibold hover:bg-emerald-600">儲存紀錄</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-white font-semibold shadow-2xl"></div>
 
   <script>
@@ -237,6 +308,17 @@
     const tourDrawerFrameEl = document.getElementById('tour-drawer-frame');
     const tourDrawerTitleEl = document.getElementById('tour-drawer-title');
     const tourDrawerOpenTabEl = document.getElementById('tour-drawer-open-tab');
+    const visitorRecordCountEl = document.getElementById('visitor-record-count');
+    const visitorRecordListEl = document.getElementById('visitor-record-list');
+    const visitorRecordModalEl = document.getElementById('visitor-record-modal');
+    const visitorRecordCustomerEl = document.getElementById('visitor-record-customer');
+    const visitorRecordIdEl = document.getElementById('visitor-record-id');
+    const visitorRecordCategoryEl = document.getElementById('visitor-record-category');
+    const visitorRecordPriorityEl = document.getElementById('visitor-record-priority');
+    const visitorRecordStatusEl = document.getElementById('visitor-record-status');
+    const visitorRecordFollowUpEl = document.getElementById('visitor-record-follow-up');
+    const visitorRecordContentEl = document.getElementById('visitor-record-content');
+    const visitorRecordArchiveEl = document.getElementById('visitor-record-archive');
 
     let publishedItineraries = [];
 
@@ -283,6 +365,24 @@
       if (status === 'open') return 'bg-amber-100 text-amber-700';
       if (status === 'pending') return 'bg-blue-100 text-blue-700';
       return 'bg-slate-200 text-slate-700';
+    }
+
+    function recordPriorityLabel(priority) {
+      if (priority === 'high') return '重要';
+      if (priority === 'low') return '低';
+      return '一般';
+    }
+
+    function recordStatusLabel(status) {
+      if (status === 'follow_up') return '追蹤中';
+      if (status === 'done') return '已完成';
+      return '待處理';
+    }
+
+    function recordPriorityClass(priority) {
+      if (priority === 'high') return 'bg-rose-100 text-rose-700';
+      if (priority === 'low') return 'bg-slate-100 text-slate-600';
+      return 'bg-emerald-100 text-emerald-700';
     }
 
     function formatTime(value) {
@@ -614,6 +714,7 @@
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
           ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} 則</span>` : ''}
+          ${Number(item.importantCount || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">重要 ${item.importantCount}</span>` : ''}
         `;
 
         body.appendChild(top);
@@ -670,6 +771,132 @@
       threadStatusBadgeEl.textContent = statusLabel(thread?.status || 'open');
     }
 
+    function getActiveThread() {
+      return allThreads.find(item => item.id === activeThreadId) || null;
+    }
+
+    function renderVisitorRecords(thread) {
+      const records = Array.isArray(thread?.visitorRecords) ? thread.visitorRecords : [];
+      visitorRecordCountEl.textContent = String(records.length);
+      visitorRecordListEl.innerHTML = '';
+      if (!thread) {
+        visitorRecordListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-emerald-200 bg-white/70 px-4 py-4 text-sm text-slate-400">尚未選擇聊天室。</div>';
+        return;
+      }
+      if (!records.length) {
+        visitorRecordListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-emerald-200 bg-white/70 px-4 py-4 text-sm text-slate-500">尚未建立重要需求，可把客戶預算、日期、人數、偏好或禁忌記在這裡。</div>';
+        return;
+      }
+      records.slice(0, 3).forEach(record => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'w-full text-left rounded-2xl border border-emerald-100 bg-white px-4 py-3 hover:bg-emerald-50 transition';
+
+        const top = document.createElement('div');
+        top.className = 'flex items-center justify-between gap-2 mb-2';
+        const category = document.createElement('span');
+        category.className = 'text-sm font-semibold text-slate-700';
+        category.textContent = record.category || '需求';
+        const priority = document.createElement('span');
+        priority.className = `px-2.5 py-1 rounded-full text-xs font-semibold ${recordPriorityClass(record.priority)}`;
+        priority.textContent = recordPriorityLabel(record.priority);
+        top.appendChild(category);
+        top.appendChild(priority);
+
+        const content = document.createElement('p');
+        content.className = 'text-sm leading-6 text-slate-700 line-clamp-3';
+        content.textContent = record.content || '';
+
+        const meta = document.createElement('p');
+        meta.className = 'text-xs text-slate-400 mt-2';
+        meta.textContent = [recordStatusLabel(record.status), record.followUpAt ? `跟進 ${record.followUpAt}` : '', formatTime(record.updatedAt)].filter(Boolean).join('・');
+
+        card.appendChild(top);
+        card.appendChild(content);
+        card.appendChild(meta);
+        card.addEventListener('click', () => openVisitorRecordModal(record));
+        visitorRecordListEl.appendChild(card);
+      });
+    }
+
+    function openVisitorRecordModal(record = null) {
+      const thread = getActiveThread();
+      if (!thread) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      visitorRecordCustomerEl.textContent = `${thread.name || '未命名訪客'}・${thread.userId || ''}`;
+      visitorRecordIdEl.value = record?.id || '';
+      visitorRecordCategoryEl.value = record?.category || '需求';
+      visitorRecordPriorityEl.value = record?.priority || 'normal';
+      visitorRecordStatusEl.value = record?.status || 'open';
+      visitorRecordFollowUpEl.value = record?.followUpAt ? String(record.followUpAt).slice(0, 10) : '';
+      visitorRecordContentEl.value = record?.content || '';
+      visitorRecordArchiveEl.hidden = !record?.id;
+      visitorRecordModalEl.hidden = false;
+      visitorRecordContentEl.focus();
+    }
+
+    function closeVisitorRecordModal() {
+      visitorRecordModalEl.hidden = true;
+    }
+
+    async function saveVisitorRecord() {
+      const thread = getActiveThread();
+      if (!thread) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      const content = visitorRecordContentEl.value.trim();
+      if (!content) {
+        showToast('請先填寫重要需求內容', 'error');
+        return;
+      }
+      const result = await fetchJson(`${WORKER_URL}/api/line-oa/visitor-record`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          threadId: thread.id,
+          recordId: visitorRecordIdEl.value,
+          category: visitorRecordCategoryEl.value,
+          priority: visitorRecordPriorityEl.value,
+          status: visitorRecordStatusEl.value,
+          followUpAt: visitorRecordFollowUpEl.value,
+          content,
+        }),
+      });
+      const updated = result.data;
+      const idx = allThreads.findIndex(item => item.id === updated.id);
+      if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
+      closeVisitorRecordModal();
+      renderThreadList();
+      renderActiveThread(updated);
+      showToast('重要紀錄已儲存');
+    }
+
+    async function archiveVisitorRecord() {
+      const thread = getActiveThread();
+      const recordId = visitorRecordIdEl.value;
+      if (!thread || !recordId) return;
+      const result = await fetchJson(`${WORKER_URL}/api/line-oa/visitor-record/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          threadId: thread.id,
+          recordId,
+        }),
+      });
+      const updated = result.data;
+      const idx = allThreads.findIndex(item => item.id === updated.id);
+      if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
+      closeVisitorRecordModal();
+      renderThreadList();
+      renderActiveThread(updated);
+      showToast('重要紀錄已封存');
+    }
+
     function renderActiveThread(thread) {
       if (!thread) {
         chatViewEl.hidden = true;
@@ -677,6 +904,7 @@
         suggestionListEl.innerHTML = '';
         threadTagsEl.innerHTML = '';
         suggestionCountEl.textContent = '0';
+        renderVisitorRecords(null);
         riskSummaryEl.textContent = '\u5c1a\u672a\u9078\u64c7\u804a\u5929\u5ba4\u3002';
         riskCountEl.textContent = '0';
         internalNoteEl.value = '';
@@ -711,6 +939,7 @@
       renderSuggestions(thread);
       renderItinerarySuggestions(thread);
       renderTags(thread);
+      renderVisitorRecords(thread);
 
       const merged = (thread.messages || []).map(msg => msg.text || '').join('\n');
       const hits = [
@@ -768,6 +997,15 @@
       syncToolsPanel();
     });
     document.getElementById('tour-drawer-close').addEventListener('click', closeTourDrawer);
+    document.getElementById('open-visitor-records').addEventListener('click', () => openVisitorRecordModal());
+    document.getElementById('add-visitor-record').addEventListener('click', () => openVisitorRecordModal());
+    document.getElementById('visitor-record-close').addEventListener('click', closeVisitorRecordModal);
+    document.getElementById('visitor-record-cancel').addEventListener('click', closeVisitorRecordModal);
+    document.getElementById('visitor-record-save').addEventListener('click', () => saveVisitorRecord().catch(err => showToast(err.message, 'error')));
+    document.getElementById('visitor-record-archive').addEventListener('click', () => archiveVisitorRecord().catch(err => showToast(err.message, 'error')));
+    visitorRecordModalEl.addEventListener('click', (event) => {
+      if (event.target === visitorRecordModalEl) closeVisitorRecordModal();
+    });
 
     document.getElementById('import-read').addEventListener('click', () => {
       readImportFile().catch(err => showToast(err.message, 'error'));

@@ -13,7 +13,7 @@ const ADMIN_UIDS = new Set([
   'Uf729764dbb5b652a5a90a467320bea29',
   'U58eb5c1a747450140ce1335af709ae55',
 ]);
-const R2_PUBLIC = 'https://pub-b644db8c22784d969cb4cc93b099d3df.r2.dev';
+const R2_PUBLIC = 'https://pub-06a94bc2edd3405491c7b3f741fa54f2.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
 const LINE_NEGATIVE_KEYWORDS = ['退款', '退費', '取消', '生氣', '客訴', '抱怨', '不滿', '失望', '負評', '建議'];
 const LINE_URGENT_KEYWORDS = ['立即', '現在', '趕快', '今天', '急件', '盡快', '馬上', '立刻'];
@@ -466,6 +466,39 @@ async function d1SyncItineraryReviewStatus(env, body = {}) {
     String(body.reviewNote || '').trim(),
     itineraryId
   ).run();
+}
+
+async function d1HideItinerary(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const itineraryId = String(body.id || body.itinerary_id || '').trim();
+  const operatorUid = String(body.uid || body.operatorUid || '').trim();
+  if (!itineraryId) return { success: false, error: 'Missing itinerary id' };
+
+  const existing = await env.DB.prepare(`
+    SELECT id, owner_uid
+      FROM itineraries
+     WHERE id = ?
+  `).bind(itineraryId).first();
+
+  if (!existing) {
+    return { success: false, error: 'Itinerary not found' };
+  }
+
+  const isAdmin = operatorUid ? ADMIN_UIDS.has(operatorUid) : false;
+  const isOwner = operatorUid && String(existing.owner_uid || '') === operatorUid;
+  if (operatorUid && !isAdmin && !isOwner) {
+    return { success: false, error: 'No permission to hide itinerary' };
+  }
+
+  await env.DB.prepare(`
+    UPDATE itineraries
+       SET deleted_at = datetime('now'),
+           review_status = 'hidden',
+           updated_at = datetime('now')
+     WHERE id = ?
+  `).bind(itineraryId).run();
+
+  return { success: true, id: itineraryId, hidden: true };
 }
 
 async function d1SaveItineraryDetail(env, body = {}) {
@@ -1738,6 +1771,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
 
 async function d1GetLineThreads(env) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineVisitorRequirementsTable(env);
   const { results } = await env.DB.prepare(`
     SELECT
       id,
@@ -1752,6 +1786,20 @@ async function d1GetLineThreads(env) {
       unread_count,
       tags,
       note,
+      (
+        SELECT COUNT(*)
+        FROM line_visitor_requirements req
+        WHERE req.thread_id = line_threads.id
+          AND req.archived_at = ''
+      ) AS important_count,
+      (
+        SELECT req.content
+        FROM line_visitor_requirements req
+        WHERE req.thread_id = line_threads.id
+          AND req.archived_at = ''
+        ORDER BY req.updated_at DESC, req.created_at DESC
+        LIMIT 1
+      ) AS latest_important_note,
       last_message_at
     FROM line_threads
     ORDER BY COALESCE(last_message_at, created_at) DESC
@@ -1775,13 +1823,87 @@ async function d1GetLineThreads(env) {
       assignedTo: row.assigned_to || '',
       tags: String(row.tags || '').split(',').map(v => v.trim()).filter(Boolean),
       note: row.note || '',
+      importantCount: Number(row.important_count || 0),
+      latestImportantNote: row.latest_important_note || '',
       lastMessageAt: row.last_message_at || '',
     })),
   };
 }
 
+async function ensureLineVisitorRequirementsTable(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS line_visitor_requirements (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL,
+      source_user_id TEXT NOT NULL DEFAULT '',
+      customer_name TEXT NOT NULL DEFAULT '',
+      picture_url TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT '需求',
+      content TEXT NOT NULL DEFAULT '',
+      priority TEXT NOT NULL DEFAULT 'normal'
+        CHECK (priority IN ('low', 'normal', 'high')),
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'follow_up', 'done')),
+      follow_up_at TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      archived_at TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (thread_id) REFERENCES line_threads(id)
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_visitor_requirements_thread_id
+    ON line_visitor_requirements(thread_id, archived_at, updated_at)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_visitor_requirements_source_user_id
+    ON line_visitor_requirements(source_user_id, archived_at, updated_at)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_visitor_requirements_status
+    ON line_visitor_requirements(status, priority, archived_at)
+  `).run();
+}
+
+function normalizeLineVisitorRequirement(row = {}) {
+  return {
+    id: row.id || '',
+    threadId: row.thread_id || '',
+    userId: row.source_user_id || '',
+    customerName: row.customer_name || '',
+    pictureUrl: row.picture_url || '',
+    category: row.category || '需求',
+    content: row.content || '',
+    priority: row.priority || 'normal',
+    status: row.status || 'open',
+    followUpAt: row.follow_up_at || '',
+    createdBy: row.created_by || '',
+    createdAt: row.created_at || '',
+    updatedAt: row.updated_at || '',
+  };
+}
+
+async function d1GetLineVisitorRequirements(env, threadId) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineVisitorRequirementsTable(env);
+  const { results } = await env.DB.prepare(`
+    SELECT *
+    FROM line_visitor_requirements
+    WHERE thread_id = ?
+      AND archived_at = ''
+    ORDER BY
+      CASE priority WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+      updated_at DESC,
+      created_at DESC
+  `).bind(threadId).all();
+  return (results || []).map(normalizeLineVisitorRequirement);
+}
+
 async function d1GetLineThread(env, threadId) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineVisitorRequirementsTable(env);
   const threadRow = await env.DB.prepare(`
     SELECT
       id,
@@ -1796,12 +1918,27 @@ async function d1GetLineThread(env, threadId) {
       unread_count,
       tags,
       note,
+      (
+        SELECT COUNT(*)
+        FROM line_visitor_requirements req
+        WHERE req.thread_id = line_threads.id
+          AND req.archived_at = ''
+      ) AS important_count,
+      (
+        SELECT req.content
+        FROM line_visitor_requirements req
+        WHERE req.thread_id = line_threads.id
+          AND req.archived_at = ''
+        ORDER BY req.updated_at DESC, req.created_at DESC
+        LIMIT 1
+      ) AS latest_important_note,
       last_message_at
     FROM line_threads
     WHERE id = ?
   `).bind(threadId).first();
   if (!threadRow) return { success: false, error: 'THREAD_NOT_FOUND' };
   const thread = await enrichStoredLineThreadProfile(env, threadRow);
+  const visitorRecords = await d1GetLineVisitorRequirements(env, threadId);
   const { results } = await env.DB.prepare(`
     SELECT id, message_type, sender_role, sender_id, sender_name, message_text, created_at
     FROM line_messages
@@ -1823,6 +1960,9 @@ async function d1GetLineThread(env, threadId) {
       assignedTo: thread.assigned_to || '',
       tags: String(thread.tags || '').split(',').map(v => v.trim()).filter(Boolean),
       note: thread.note || '',
+      importantCount: Number(thread.important_count || visitorRecords.length || 0),
+      latestImportantNote: thread.latest_important_note || visitorRecords[0]?.content || '',
+      visitorRecords,
       lastMessageAt: thread.last_message_at || '',
       messages: results.map(msg => ({
         id: msg.id,
@@ -1945,6 +2085,92 @@ async function d1UpdateLineThread(env, body = {}) {
     WHERE id = ?
   `).bind(...values, threadId).run();
   if (!result.success) return { success: false, error: '?湔憭望?' };
+  return d1GetLineThread(env, threadId);
+}
+
+async function d1UpsertLineVisitorRequirement(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineVisitorRequirementsTable(env);
+  const threadId = String(body.threadId || body.thread_id || body.id || '').trim();
+  const recordId = String(body.recordId || body.record_id || '').trim();
+  const content = String(body.content || '').trim();
+  if (!threadId) return { success: false, error: 'MISSING_THREAD_ID' };
+  if (!content) return { success: false, error: 'MISSING_CONTENT' };
+
+  const thread = await env.DB.prepare(`
+    SELECT id, source_user_id, display_name, picture_url
+    FROM line_threads
+    WHERE id = ?
+  `).bind(threadId).first();
+  if (!thread) return { success: false, error: 'THREAD_NOT_FOUND' };
+
+  const category = String(body.category || '需求').trim() || '需求';
+  const priority = ['low', 'normal', 'high'].includes(String(body.priority || ''))
+    ? String(body.priority)
+    : 'normal';
+  const status = ['open', 'follow_up', 'done'].includes(String(body.status || ''))
+    ? String(body.status)
+    : 'open';
+  const followUpAt = String(body.followUpAt || body.follow_up_at || '').trim();
+  const createdBy = String(body.createdBy || body.created_by || body.uid || '').trim();
+  const now = new Date().toISOString();
+
+  if (recordId) {
+    const result = await env.DB.prepare(`
+      UPDATE line_visitor_requirements
+      SET category = ?,
+          content = ?,
+          priority = ?,
+          status = ?,
+          follow_up_at = ?,
+          updated_at = ?
+      WHERE id = ?
+        AND thread_id = ?
+        AND archived_at = ''
+    `).bind(category, content, priority, status, followUpAt, now, recordId, threadId).run();
+    if (!result.success) return { success: false, error: 'UPDATE_FAILED' };
+  } else {
+    await env.DB.prepare(`
+      INSERT INTO line_visitor_requirements (
+        id, thread_id, source_user_id, customer_name, picture_url,
+        category, content, priority, status, follow_up_at, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      threadId,
+      String(thread.source_user_id || ''),
+      String(thread.display_name || ''),
+      String(thread.picture_url || ''),
+      category,
+      content,
+      priority,
+      status,
+      followUpAt,
+      createdBy,
+      now,
+      now
+    ).run();
+  }
+
+  return d1GetLineThread(env, threadId);
+}
+
+async function d1ArchiveLineVisitorRequirement(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineVisitorRequirementsTable(env);
+  const threadId = String(body.threadId || body.thread_id || '').trim();
+  const recordId = String(body.recordId || body.record_id || '').trim();
+  if (!threadId) return { success: false, error: 'MISSING_THREAD_ID' };
+  if (!recordId) return { success: false, error: 'MISSING_RECORD_ID' };
+  const result = await env.DB.prepare(`
+    UPDATE line_visitor_requirements
+    SET archived_at = ?,
+        updated_at = ?
+    WHERE id = ?
+      AND thread_id = ?
+      AND archived_at = ''
+  `).bind(new Date().toISOString(), new Date().toISOString(), recordId, threadId).run();
+  if (!result.success) return { success: false, error: 'ARCHIVE_FAILED' };
   return d1GetLineThread(env, threadId);
 }
 
@@ -2143,6 +2369,24 @@ export default {
         return json(result, result.success ? 200 : 400);
       }
 
+      if (path === '/api/line-oa/visitor-record' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1UpsertLineVisitorRequirement(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/visitor-record/archive' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1ArchiveLineVisitorRequirement(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
       // ??????????????????????????????????????????????????????????
       // GET /api/app-init?uid=xxx
       // ???垢????甈⊥??嚗?唳???閬?鞈?
@@ -2256,11 +2500,11 @@ export default {
             hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', action: { type: 'uri', uri: detailUri } },
             body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', contents: [
               { type: 'text', text: tour.title, weight: 'bold', size: 'lg', wrap: true, color: '#0f172a' },
-              { type: 'text', text: `${tour.region || ''} 繚 ${tour.days}憭奈, size: 'sm', color: '#64748b', margin: 'sm' },
+              { type: 'text', text: `${tour.region || ''} · ${tour.days || ''}天`, size: 'sm', color: '#64748b', margin: 'sm' },
               { type: 'text', text: `TWD ${Number(tour.price).toLocaleString()}`, weight: 'bold', size: 'xl', color: '#b82337', margin: 'md' },
             ]},
             footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', contents: [
-              { type: 'button', style: 'primary', color: '#b82337', height: 'md', action: { type: 'uri', label: '蝡??', uri: bookUri } },
+              { type: 'button', style: 'primary', color: '#b82337', height: 'md', action: { type: 'uri', label: '立即預約', uri: bookUri } },
               { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: ctaText, uri: detailUri } },
               ...socBtns
             ]}
@@ -2302,7 +2546,7 @@ export default {
                   },
                   {
                     type: 'text',
-                    text: `${tour.region || ''}  繚  ${tour.days || ''}憭奈,
+                    text: [tour.region || '', tour.days ? `${tour.days}天` : ''].filter(Boolean).join('  ·  '),
                     size: 'xs',
                     color: '#64748b',
                     margin: 'sm'
@@ -2345,8 +2589,8 @@ export default {
               backgroundColor: '#0f172a',
               paddingAll: '16px',
               contents: [
-                { type: 'text', text: '?? 蝎暸銵??刻', weight: 'bold', color: '#ffffff', size: 'lg' },
-                { type: 'text', text: `??${items.length} ??蝔, color: '#94a3b8', size: 'sm', margin: 'xs' }
+                { type: 'text', text: '精選行程推薦', weight: 'bold', color: '#ffffff', size: 'lg' },
+                { type: 'text', text: `共 ${items.length} 筆行程`, color: '#94a3b8', size: 'sm', margin: 'xs' }
               ]
             },
             body: {
@@ -2370,12 +2614,12 @@ export default {
 
           flex = {
             type: 'flex',
-            altText: `蝎暸銵??刻嚗?{items[0].title} 蝑?{items.length}璇,
+            altText: `精選行程：${items[0].title} 等 ${items.length} 筆`,
             contents: listBubble
           };
         } else {
           const bubbles = items.map(makeBubble);
-          flex = { type: 'flex', altText: `?刻銵?嚗?{items[0].title}`, contents: mode === 'carousel' ? { type: 'carousel', contents: bubbles } : bubbles[0] };
+          flex = { type: 'flex', altText: `行程推薦：${items[0].title}`, contents: mode === 'carousel' ? { type: 'carousel', contents: bubbles } : bubbles[0] };
         }
 
         return json({ success: true, flex, message: flex, count: items.length });
@@ -2467,8 +2711,9 @@ export default {
           body: JSON.stringify({
             model: 'gpt-4o', response_format: { type: 'json_object' }, max_tokens: 4000, temperature: 0.7,
             messages: [{ role: 'user', content: [
-              { type: 'text', text: `雿????蝷曇?蝔蜇??圾?迨 DM ??PDF ?銝行楛摨行撖怒??單?皞?JSON嚗?{"title":"...","region":"??/鈭散/甇散/蝢散/憭扳?瘣??散","price":0,"days":0,"imageKeyword":"?舫??望??摮?,"description":"瘥予200摮誑銝??澆?嚗洵N憭?璅?\\n![??](?舫??望??摮?\\n?扳?...","notes":""}
-description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯望??芸??踵?嚗?嗅憭? PDF嚗?蝬?????Ｘ????蝑?蝔 },
+              { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 或 PDF 頁面並深度擴寫。回傳標準 JSON：
+{"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
+description 中圖片語法使用景點英文關鍵字而非URL，系統會自動替換；若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
               ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } }))
             ]}]
           })
@@ -2481,9 +2726,14 @@ description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯�
         if (!match) throw new Error('?⊥?閫?? GPT ??');
         const parsed = JSON.parse(match[0]);
 
-        // 撠??Unsplash ??銝 R2
-        const coverUrl = await fetchUnsplashUrl(parsed.imageKeyword || 'travel', env);
-        parsed.image   = await uploadUrlToR2(coverUrl, `cover_${Date.now()}.jpg`, env);
+        // 封面圖優先使用原始 DM 圖 / PDF 第一頁，避免外部示意圖失效
+        const primaryImage = imageInputs[0];
+        if (typeof primaryImage === 'string' && primaryImage.startsWith('data:image/')) {
+          parsed.image = await uploadDataUrlToR2(primaryImage, `cover_${Date.now()}.jpg`, env);
+        } else {
+          const coverUrl = await fetchUnsplashUrl(parsed.imageKeyword || 'travel', env);
+          parsed.image   = await uploadUrlToR2(coverUrl, `cover_${Date.now()}.jpg`, env);
+        }
 
         // ?扳????摮? R2 URL
         if (parsed.description) {
@@ -2559,7 +2809,7 @@ description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯�
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: tgChatId,
-              text: msg || '??皜祈岫閮嚗??Telegram ?閮剖???嚗靘??桅??ㄐ??,
+              text: msg || 'Telegram 測試通知：連線成功。',
             }),
           });
           const tgResult = await tgRes.json();
@@ -2729,6 +2979,10 @@ description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯�
           const result = await d1MarkBalancePaid(env, body);
           return json(result, result.success ? 200 : 400);
         }
+        if ((body.action === 'hideItinerary' || body.action === 'deleteItinerary') && env.DB) {
+          const result = await d1HideItinerary(env, body);
+          return json(result, result.success ? 200 : 400);
+        }
         const result = await gasPost(env, body);
         if (env.DB) {
           try {
@@ -2748,13 +3002,13 @@ description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯�
           if (env.ADMIN_TG_TOKEN && env.ADMIN_TG_CHAT_ID) {
             try {
               const isUpdate = body.action === 'updateItinerary';
-              const title = result.itinerary?.title || body.title || '(?芣?靘?';
-              const ownerName = result.itinerary?.ownerName || body.ownerName || '(?芣?靘?';
+              const title = result.itinerary?.title || body.title || '(未命名)';
+              const ownerName = result.itinerary?.ownerName || body.ownerName || '(未填寫)';
               await sendAdminReviewNotify(
                 env.ADMIN_TG_TOKEN,
                 env.ADMIN_TG_CHAT_ID,
                 {
-                  type: isUpdate ? '靽格敺祟' : '?啗?蝔?撖?,
+                  type: isUpdate ? '更新行程' : '新增行程',
                   title: title,
                   ownerName: ownerName,
                   region: body.region || '',
@@ -2785,17 +3039,17 @@ description 銝剖???瘜蝙?冽暺???萄???URL嚗頂蝯�
 
 async function sendTelegramNotification(token, chatId, order) {
   const text =
-    `?? *?啗??桅*\n\n` +
-    `?? 閮嚗`${order.order_id}\`\n` +
-    `??儭?銵?嚗?{order.itinerary_title}\n` +
-    `? ??嚗T$ ${Number(order.price).toLocaleString()}\n` +
-    `? ?函?雿??嚗T$ ${Number(order.commission_amount).toLocaleString()}\n\n` +
-    `? 摰Ｘ嚗?{order.customer_name}\n` +
-    `?? ?餉店嚗?{order.customer_phone}\n` +
-    `? 鈭箸嚗?{order.travelers} 鈭暝n` +
-    `?? ?箇?伐?${order.travel_date || '?芣?摰?}\n` +
-    (order.note ? `?? ?酉嚗?{order.note}\n` : '') +
-    `\n??${order.created_at}\n\n隢敹怨蝜怠恥????`;
+    `*新增訂單通知*\n\n` +
+    `訂單：${order.order_id}\n` +
+    `行程：${order.itinerary_title}\n` +
+    `金額：NT$ ${Number(order.price || 0).toLocaleString()}\n` +
+    `佣金：NT$ ${Number(order.commission_amount || 0).toLocaleString()}\n\n` +
+    `客戶：${order.customer_name}\n` +
+    `電話：${order.customer_phone}\n` +
+    `人數：${order.travelers}\n` +
+    `出發日：${order.travel_date || '未填寫'}\n` +
+    (order.note ? `備註：${order.note}\n` : '') +
+    `\n建立時間：${order.created_at}\n\n請至後台處理。`;
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
@@ -2808,13 +3062,13 @@ async function sendTelegramNotification(token, chatId, order) {
 // ???啗?蝔?靽格敺祟 ???蝞∠???
 async function sendAdminReviewNotify(token, chatId, info) {
   const text =
-    `?? *${info.type}*\n\n` +
-    `??儭?銵?嚗?{info.title}\n` +
-    `? 銝阮??${info.ownerName}\n` +
-    (info.region ? `?? ?啣?嚗?{info.region}\n` : '') +
-    (info.days   ? `?? 憭拇嚗?{info.days} 憭坼n` : '') +
-    (info.price  ? `? ?桀嚗T$ ${Number(info.price).toLocaleString()}\n` : '') +
-    `\n隢 CRM 撖拇銝剖??? ??/admin.html`;
+    `*${info.type}*\n\n` +
+    `行程：${info.title}\n` +
+    `建立者：${info.ownerName}\n` +
+    (info.region ? `地區：${info.region}\n` : '') +
+    (info.days ? `天數：${info.days} 天\n` : '') +
+    (info.price ? `價格：NT$ ${Number(info.price).toLocaleString()}\n` : '') +
+    `\n請至後台審核。`;
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
@@ -2849,6 +3103,22 @@ async function uploadUrlToR2(imageUrl, filename, env) {
   } catch (e) {
     console.warn('R2 upload failed:', e.message);
     return imageUrl;
+  }
+}
+
+async function uploadDataUrlToR2(dataUrl, filename, env) {
+  try {
+    const match = String(dataUrl || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) throw new Error('invalid data url');
+    const contentType = match[1] || 'image/jpeg';
+    const base64Data = match[2];
+    const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    const key = `tours/${filename}`;
+    await env.TRAVEL.put(key, buffer, { httpMetadata: { contentType } });
+    return `${R2_PUBLIC}/${key}`;
+  } catch (e) {
+    console.warn('R2 data-url upload failed:', e.message);
+    return '';
   }
 }
 
