@@ -2634,6 +2634,44 @@ export default {
         let flex;
         if (mode === 'travel6') {
           const titleText = shortText(centerText, '心動就要行動！回饋都在這');
+          const firstId = String(items[0]?.id || items[0]?.timestamp || '');
+          const shareText = [
+            titleText,
+            ...items.map((tour, idx) => {
+              const id = String(tour.id || tour.timestamp || '');
+              const price = Number(tour.price || 0);
+              const parts = [
+                `${idx + 1}. ${tour.title || '精選行程'}`,
+                price > 0 ? `NT$${price.toLocaleString()}` : '',
+                buildDetailUri(id)
+              ].filter(Boolean);
+              return parts.join(' ');
+            })
+          ].join('\n');
+          const footerButtons = [
+            {
+              type: 'button',
+              style: 'primary',
+              color: '#06c755',
+              height: 'sm',
+              action: {
+                type: 'uri',
+                label: '分享行程清單',
+                uri: `https://line.me/R/share?text=${encodeURIComponent(shareText)}`
+              }
+            },
+            {
+              type: 'button',
+              style: 'secondary',
+              height: 'sm',
+              action: {
+                type: 'uri',
+                label: ctaText || '查看完整行程',
+                uri: buildDetailUri(firstId)
+              }
+            },
+            ...socBtns
+          ];
           const travelBubble = {
             type: 'bubble',
             size: 'giga',
@@ -2657,6 +2695,13 @@ export default {
                 },
                 makeTravelSixRow(items.slice(3, 6))
               ]
+            },
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'sm',
+              paddingAll: '14px',
+              contents: footerButtons
             }
           };
           flex = {
