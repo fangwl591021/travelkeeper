@@ -2636,7 +2636,7 @@ export default {
           const titleText = shortText(centerText, '心動就要行動！回饋都在這');
           const travelBubble = {
             type: 'bubble',
-            size: 'mega',
+            size: 'giga',
             body: {
               type: 'box',
               layout: 'vertical',

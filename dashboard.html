@@ -867,7 +867,6 @@ function PromoteModal({
               { v:'single',   label:'\u55ae\u5f35',   hint:'1 \u7b46',     enabled: selectedCount === 1 },
               { v:'carousel', label:'\u8f2a\u64ad',   hint:'2-10 \u7b46',  enabled: selectedCount >= 2 },
               { v:'list',     label:'\u5217\u8868',   hint:'2-10 \u7b46',  enabled: selectedCount >= 2 },
-              { v:'travel6',  label:'\u65c5\u904a\u516d\u5bae\u683c', hint:'\u525b\u597d 6 \u7b46', enabled: selectedCount === 6 },
             ].map(m => (
               <button key={m.v} type="button"
                 onClick={() => m.enabled && setMode(m.v)}
@@ -883,6 +882,24 @@ function PromoteModal({
               </button>
             ))}
           </div>
+          <button type="button"
+            onClick={() => selectedCount === 6 && setMode(mode === 'travel6' ? 'carousel' : 'travel6')}
+            disabled={selectedCount !== 6}
+            className={`mt-3 w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition ${
+              mode === 'travel6'
+                ? 'bg-blue-50 border-blue-500 text-slate-900'
+                : selectedCount === 6
+                  ? 'bg-white border-slate-200 hover:border-blue-300 text-slate-700'
+                  : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+            }`}>
+            <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-black ${
+              mode === 'travel6' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300'
+            }`}>{mode === 'travel6' ? '\u2713' : ''}</span>
+            <span className="flex-1">
+              <span className="block text-sm font-black">Giga+ 旅遊六宮格</span>
+              <span className="block text-[11px] font-medium opacity-70">勾選後使用 LINE Giga 大版型，需剛好 6 筆行程</span>
+            </span>
+          </button>
           {mode === 'travel6' && (
             <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
               <label className="block text-xs font-black text-slate-700 mb-2">\u4e2d\u592e\u4e3b\u6a19\u6587\u5b57</label>
@@ -940,7 +957,7 @@ function PromoteModal({
             <div className="text-sm space-y-1">
               <p>📦 將推送 <span className="font-black">{selectedCount} 筆</span> 行程</p>
               <p>🎨 格式：<span className="font-black">{
-                mode === 'single' ? '\u55ae\u5f35\u5361\u7247' : mode === 'carousel' ? '\u8f2a\u64ad\u5361\u7247' : mode === 'travel6' ? '\u65c5\u904a\u516d\u5bae\u683c' : '\u5217\u8868\u5361\u7247'
+                mode === 'single' ? '\u55ae\u5f35\u5361\u7247' : mode === 'carousel' ? '\u8f2a\u64ad\u5361\u7247' : mode === 'travel6' ? 'Giga+ \u516d\u5bae\u683c' : '\u5217\u8868\u5361\u7247'
               }</span></p>
               <p>📞 含 <span className="font-black">{enabledSocs.size}</span> 個聯絡按鈕</p>
               <p>🏷️ 推薦碼：<span className="font-mono font-black text-emerald-600">{inviteCode || '無'}</span></p>
