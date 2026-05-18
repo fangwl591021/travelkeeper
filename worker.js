@@ -2642,14 +2642,6 @@ export default {
           const firstId = String(items[0]?.id || items[0]?.timestamp || '');
           const shareText = [
             titleText,
-            ...items.map((tour, idx) => {
-              const price = Number(tour.price || 0);
-              const parts = [
-                `${idx + 1}. ${tour.title || '精選行程'}`,
-                price > 0 ? `NT$${price.toLocaleString()}` : ''
-              ].filter(Boolean);
-              return parts.join(' ');
-            }),
             buildDetailUri(firstId)
           ].join('\n');
           const footerButtons = [
