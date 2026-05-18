@@ -2504,6 +2504,11 @@ export default {
           return text.length > 34 ? `${text.slice(0, 33)}…` : text;
         };
 
+        const actionLabel = (value, fallback = '查看完整行程') => {
+          const text = String(value || fallback || '').replace(/\s+/g, ' ').trim();
+          return text.length > 20 ? `${text.slice(0, 19)}…` : text;
+        };
+
         // ?? ?桀撐 / 璈怠?頛芣 ?剁?摰憭批嚗ero ??+ 閰喟敦鞈? + 蝡??嚗?
         const makeBubble = (tour) => {
           const id  = String(tour.id || tour.timestamp || '');
@@ -2638,15 +2643,14 @@ export default {
           const shareText = [
             titleText,
             ...items.map((tour, idx) => {
-              const id = String(tour.id || tour.timestamp || '');
               const price = Number(tour.price || 0);
               const parts = [
                 `${idx + 1}. ${tour.title || '精選行程'}`,
-                price > 0 ? `NT$${price.toLocaleString()}` : '',
-                buildDetailUri(id)
+                price > 0 ? `NT$${price.toLocaleString()}` : ''
               ].filter(Boolean);
               return parts.join(' ');
-            })
+            }),
+            buildDetailUri(firstId)
           ].join('\n');
           const footerButtons = [
             {
@@ -2666,7 +2670,7 @@ export default {
               height: 'sm',
               action: {
                 type: 'uri',
-                label: ctaText || '查看完整行程',
+                label: actionLabel(ctaText, '查看完整行程'),
                 uri: buildDetailUri(firstId)
               }
             },
