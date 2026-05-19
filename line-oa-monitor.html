@@ -130,6 +130,38 @@
           </div>
           <span id="status-chip" class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">&#30435;&#30475;&#20013;</span>
         </div>
+        <section class="mt-4 rounded-3xl border border-slate-200 bg-white p-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <p class="text-xl font-black">受眾分析</p>
+            <span id="audience-generated-at" class="text-xs text-slate-400 font-semibold">--</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="rounded-2xl bg-slate-50 px-3 py-3">
+              <p class="text-xs text-slate-400 font-semibold">30 天活躍</p>
+              <p id="audience-active-30d" class="text-2xl font-black mt-1">0</p>
+            </div>
+            <div class="rounded-2xl bg-rose-50 px-3 py-3">
+              <p class="text-xs text-rose-400 font-semibold">高風險</p>
+              <p id="audience-high-risk" class="text-2xl font-black mt-1 text-rose-700">0</p>
+            </div>
+            <div class="rounded-2xl bg-emerald-50 px-3 py-3">
+              <p class="text-xs text-emerald-500 font-semibold">重要需求</p>
+              <p id="audience-requirements" class="text-2xl font-black mt-1 text-emerald-700">0</p>
+            </div>
+            <div class="rounded-2xl bg-sky-50 px-3 py-3">
+              <p class="text-xs text-sky-500 font-semibold">7 天訊息</p>
+              <p id="audience-messages-7d" class="text-2xl font-black mt-1 text-sky-700">0</p>
+            </div>
+          </div>
+          <div class="mt-4">
+            <p class="text-sm font-semibold text-slate-500 mb-2">需求熱度</p>
+            <div id="audience-interest-list" class="space-y-2"></div>
+          </div>
+          <div class="mt-4">
+            <p class="text-sm font-semibold text-slate-500 mb-2">常見標籤</p>
+            <div id="audience-tag-list" class="flex flex-wrap gap-2"></div>
+          </div>
+        </section>
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
             <p class="text-xl font-black">&#26368;&#26032;&#24314;&#35696;&#22238;&#35206;</p>
@@ -319,6 +351,13 @@
     const visitorRecordFollowUpEl = document.getElementById('visitor-record-follow-up');
     const visitorRecordContentEl = document.getElementById('visitor-record-content');
     const visitorRecordArchiveEl = document.getElementById('visitor-record-archive');
+    const audienceGeneratedAtEl = document.getElementById('audience-generated-at');
+    const audienceActive30dEl = document.getElementById('audience-active-30d');
+    const audienceHighRiskEl = document.getElementById('audience-high-risk');
+    const audienceRequirementsEl = document.getElementById('audience-requirements');
+    const audienceMessages7dEl = document.getElementById('audience-messages-7d');
+    const audienceInterestListEl = document.getElementById('audience-interest-list');
+    const audienceTagListEl = document.getElementById('audience-tag-list');
 
     let publishedItineraries = [];
 
@@ -546,6 +585,61 @@
         itinerarySuggestionListEl.appendChild(card);
       });
     }
+
+    function renderAudienceAnalysis(data) {
+      const overview = data?.overview || {};
+      audienceGeneratedAtEl.textContent = data?.generatedAt ? formatTime(data.generatedAt) : '--';
+      audienceActive30dEl.textContent = String(overview.activeThreads30d || 0);
+      audienceHighRiskEl.textContent = String(overview.highRiskThreads || 0);
+      audienceRequirementsEl.textContent = String(overview.totalRequirements || 0);
+      audienceMessages7dEl.textContent = String(overview.messages7d || 0);
+
+      const interests = Array.isArray(data?.interests) ? data.interests.filter(item => Number(item.count || 0) > 0) : [];
+      audienceInterestListEl.innerHTML = '';
+      if (!interests.length) {
+        audienceInterestListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-400">累積更多訊息後會顯示受眾需求熱度。</div>';
+      } else {
+        const max = Math.max(...interests.map(item => Number(item.count || 0)), 1);
+        interests.slice(0, 5).forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'space-y-1';
+          const pct = Math.max(8, Math.round((Number(item.count || 0) / max) * 100));
+          row.innerHTML = `
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="font-semibold text-slate-700">${item.label}</span>
+              <span class="text-slate-400">${item.count}</span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div class="h-full rounded-full bg-emerald-500" style="width:${pct}%"></div>
+            </div>
+          `;
+          audienceInterestListEl.appendChild(row);
+        });
+      }
+
+      const tags = Array.isArray(data?.tags) ? data.tags : [];
+      audienceTagListEl.innerHTML = '';
+      if (!tags.length) {
+        audienceTagListEl.innerHTML = '<span class="text-sm text-slate-400">尚未累積標籤</span>';
+      } else {
+        tags.slice(0, 8).forEach(tag => {
+          const pill = document.createElement('span');
+          pill.className = 'px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold';
+          pill.textContent = `${tag.label} ${tag.count}`;
+          audienceTagListEl.appendChild(pill);
+        });
+      }
+    }
+
+    async function loadAudienceAnalysis() {
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/audience?uid=${encodeURIComponent(profile.userId)}`);
+        renderAudienceAnalysis(result.data || {});
+      } catch (_err) {
+        renderAudienceAnalysis(null);
+      }
+    }
+
     async function loadPublishedItineraries() {
       try {
         const res = await fetch(WORKER_URL + '/api/itineraries?action=getItineraries');
@@ -1053,6 +1147,7 @@
         return;
       }
       await loadPublishedItineraries();
+      await loadAudienceAnalysis();
       await loadThreads();
     }
 

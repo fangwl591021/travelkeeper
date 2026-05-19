@@ -7,3 +7,9 @@ binding = "DB"
 database_name = "travelkeeper"
 database_id = "REPLACE_WITH_DATABASE_ID"
 migrations_dir = "migrations"
+
+[vars]
+# Mother-site webhook. LINE should point to this Worker, and the Worker relays to this URL.
+GAS_URL = "https://aiwe.cc/index.php/line_login/4572/"
+# Optional second observer/logger webhook. It must not consume the LINE reply token.
+# FORWARD_WEBHOOK_URL = "https://example.com/monitor-webhook"
