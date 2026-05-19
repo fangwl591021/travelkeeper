@@ -7,6 +7,3 @@ binding = "DB"
 database_name = "travelkeeper"
 database_id = "184f9dff-18fe-401f-9374-098ed7b0eb38"
 migrations_dir = "migrations"
-
-[vars]
-GAS_URL = "https://aiwe.cc/index.php/line_login/4572/"
