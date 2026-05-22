@@ -2174,6 +2174,114 @@ async function d1ArchiveLineVisitorRequirement(env, body = {}) {
   return d1GetLineThread(env, threadId);
 }
 
+function safeJsonParse(value, fallback = null) {
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function wasabiRecordPreview(record) {
+  const data = safeJsonParse(record.record_json || '{}', {});
+  const keys = data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [];
+  const nestedDataKeys = data && typeof data === 'object' && data.data && typeof data.data === 'object' && !Array.isArray(data.data)
+    ? Object.keys(data.data)
+    : [];
+  return {
+    id: record.id,
+    objectKey: record.object_key || '',
+    sourceGroup: record.source_group || '',
+    sourceId: record.source_id || '',
+    mappedTable: record.mapped_table || '',
+    mappedKey: record.mapped_key || '',
+    status: record.status || 'staged',
+    note: record.note || '',
+    importedAt: record.imported_at || '',
+    keys,
+    nestedDataKeys,
+    record: data,
+  };
+}
+
+async function d1GetWasabiImportSummary(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const records = await env.DB.prepare(`
+    SELECT source_group, COUNT(*) AS records
+    FROM wasabi_import_records
+    GROUP BY source_group
+    ORDER BY source_group
+  `).all();
+  const objects = await env.DB.prepare(`
+    SELECT source_group, COUNT(*) AS objects, SUM(size) AS bytes
+    FROM wasabi_import_objects
+    GROUP BY source_group
+    ORDER BY source_group
+  `).all();
+  const totals = await env.DB.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM wasabi_import_objects) AS objects,
+      (SELECT COUNT(*) FROM wasabi_import_records) AS records,
+      (SELECT COUNT(*) FROM orders) AS productionOrders,
+      (SELECT COUNT(*) FROM itineraries) AS productionItineraries,
+      (SELECT COUNT(*) FROM distributors) AS productionDistributors
+  `).first();
+  return {
+    success: true,
+    data: {
+      totals: {
+        objects: Number(totals?.objects || 0),
+        records: Number(totals?.records || 0),
+        productionOrders: Number(totals?.productionOrders || 0),
+        productionItineraries: Number(totals?.productionItineraries || 0),
+        productionDistributors: Number(totals?.productionDistributors || 0),
+      },
+      records: records.results || [],
+      objects: objects.results || [],
+    },
+  };
+}
+
+async function d1GetWasabiImportRecords(env, params = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const group = String(params.group || '').trim();
+  const search = String(params.search || '').trim();
+  const limit = Math.max(1, Math.min(200, Number(params.limit || 80)));
+  const offset = Math.max(0, Number(params.offset || 0));
+  const where = [];
+  const binds = [];
+  if (group && group !== 'all') {
+    where.push('source_group = ?');
+    binds.push(group);
+  }
+  if (search) {
+    where.push('(source_id LIKE ? OR object_key LIKE ? OR record_json LIKE ?)');
+    const like = `%${search}%`;
+    binds.push(like, like, like);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const countRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM wasabi_import_records ${whereSql}`
+  ).bind(...binds).first();
+  const { results } = await env.DB.prepare(`
+    SELECT id, object_key, source_group, source_id, record_json,
+           mapped_table, mapped_key, status, note, imported_at
+    FROM wasabi_import_records
+    ${whereSql}
+    ORDER BY source_group, object_key, source_id
+    LIMIT ? OFFSET ?
+  `).bind(...binds, limit, offset).all();
+  return {
+    success: true,
+    data: {
+      total: Number(countRow?.total || 0),
+      limit,
+      offset,
+      items: (results || []).map(wasabiRecordPreview),
+    },
+  };
+}
+
 async function checkEndpoint(url, options = {}) {
   if (!url) return { ok: false, status: 'missing', detail: 'not configured' };
   try {
@@ -2322,6 +2430,25 @@ export default {
       if (path === '/api/hub-test' && request.method === 'GET') {
         const status = await buildHubTestStatus(env);
         return json({ success: true, data: status });
+      }
+
+      if (path === '/api/wasabi/imports/summary' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        return json(await d1GetWasabiImportSummary(env));
+      }
+
+      if (path === '/api/wasabi/imports' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        return json(await d1GetWasabiImportRecords(env, {
+          group: url.searchParams.get('group') || '',
+          search: url.searchParams.get('search') || '',
+          limit: url.searchParams.get('limit') || '80',
+          offset: url.searchParams.get('offset') || '0',
+        }));
       }
 
       if (path === '/api/line-oa/threads' && request.method === 'GET') {
