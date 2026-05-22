@@ -503,6 +503,16 @@
           <div class="dry-run-body" id="dryRunBody">
             <div class="empty">還沒有執行檢查。先把資料標為「準備匯入」，再按「匯入前檢查」。</div>
           </div>
+          <div class="dry-run-body" style="border-top:1px solid var(--line);">
+            <div class="notice">
+              正式套用第一版只允許經銷商與舊系統參照。客戶、行程、訂單仍會被阻擋，避免影響上架、金流與佣金。
+            </div>
+            <div class="toolbar" style="grid-template-columns:minmax(220px,1fr) 180px;">
+              <input id="applyConfirmInput" placeholder="輸入 APPLY_WASABI_READY 才能套用 ready 資料" />
+              <button class="btn primary" id="applyReadyBtn">套用 ready</button>
+            </div>
+            <div class="save-msg" id="applyMsg">套用前請先執行匯入前檢查，確認沒有阻擋項目。</div>
+          </div>
         </div>
       </section>
 
@@ -570,6 +580,9 @@
       dryRunBtn: document.getElementById('dryRunBtn'),
       dryRunInlineBtn: document.getElementById('dryRunInlineBtn'),
       dryRunBody: document.getElementById('dryRunBody'),
+      applyConfirmInput: document.getElementById('applyConfirmInput'),
+      applyReadyBtn: document.getElementById('applyReadyBtn'),
+      applyMsg: document.getElementById('applyMsg'),
       groupList: document.getElementById('groupList'),
       searchInput: document.getElementById('searchInput'),
       limitSelect: document.getElementById('limitSelect'),
@@ -867,6 +880,30 @@
       }
     }
 
+    async function applyReadyRecords() {
+      if (!state.uid) {
+        els.applyMsg.textContent = '請先輸入管理員 UID。';
+        return;
+      }
+      const confirm = els.applyConfirmInput.value.trim();
+      if (confirm !== 'APPLY_WASABI_READY') {
+        els.applyMsg.textContent = '確認字串不正確，未套用。';
+        return;
+      }
+      els.applyReadyBtn.disabled = true;
+      els.applyMsg.textContent = '正式套用 ready 資料中...';
+      try {
+        const result = await apiPost('/api/wasabi/imports/apply', { confirm });
+        els.applyMsg.textContent = `套用完成：新增/更新 ${formatNumber(result.applied || 0)} 筆，參照 ${formatNumber(result.skipped || 0)} 筆，錯誤 ${formatNumber((result.errors || []).length)} 筆。`;
+        await refreshAll();
+        await runDryRun();
+      } catch (err) {
+        els.applyMsg.textContent = `套用失敗：${err.message}`;
+      } finally {
+        els.applyReadyBtn.disabled = false;
+      }
+    }
+
     els.adminUid.value = state.uid;
     els.saveUidBtn.addEventListener('click', () => {
       state.uid = els.adminUid.value.trim();
@@ -876,6 +913,7 @@
     els.refreshBtn.addEventListener('click', refreshAll);
     els.dryRunBtn.addEventListener('click', runDryRun);
     els.dryRunInlineBtn.addEventListener('click', runDryRun);
+    els.applyReadyBtn.addEventListener('click', applyReadyRecords);
     els.saveClassifyBtn.addEventListener('click', saveClassification);
     els.searchBtn.addEventListener('click', () => {
       state.search = els.searchInput.value.trim();

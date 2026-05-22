@@ -15,6 +15,7 @@ const ADMIN_UIDS = new Set([
 ]);
 const WASABI_IMPORT_STATUSES = new Set(['staged', 'reviewed', 'ready', 'ignored']);
 const WASABI_IMPORT_TABLES = new Set(['', 'distributors', 'customers', 'itineraries', 'orders', 'legacy_reference']);
+const WASABI_APPLY_TABLES = new Set(['distributors', 'legacy_reference']);
 const R2_PUBLIC = 'https://pub-06a94bc2edd3405491c7b3f741fa54f2.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
 const LINE_NEGATIVE_KEYWORDS = ['退款', '退費', '取消', '生氣', '客訴', '抱怨', '不滿', '失望', '負評', '建議'];
@@ -2365,6 +2366,14 @@ function inferWasabiImportKey(item) {
   return '';
 }
 
+function normalizeWasabiImportKey(target, key) {
+  const value = String(key || '').trim();
+  if ((target === 'distributors' || target === 'customers') && /^line_U/i.test(value)) {
+    return value.replace(/^line_/i, '');
+  }
+  return value;
+}
+
 async function d1CheckWasabiTargetExists(env, target, key) {
   if (!target || !key) return false;
   if (target === 'distributors') {
@@ -2420,10 +2429,13 @@ async function d1DryRunWasabiProductionImport(env, params = {}) {
       reasons.push('保留為舊系統參照，不寫入正式表');
     } else if (!WASABI_IMPORT_TABLES.has(target)) {
       reasons.push('目標資料類型不允許');
+    } else if (!WASABI_APPLY_TABLES.has(target)) {
+      reasons.push('此目標資料尚未開放正式套用，避免影響上架、訂單或佣金資料');
     } else if (!key) {
       reasons.push('缺少對應鍵值，無法判斷新增或更新');
     } else {
-      exists = await d1CheckWasabiTargetExists(env, target, key);
+      const normalizedKey = normalizeWasabiImportKey(target, key);
+      exists = await d1CheckWasabiTargetExists(env, target, normalizedKey);
       action = exists ? 'update' : 'create';
       reasons.push(exists ? '正式表已有相同鍵值，匯入時會更新' : '正式表沒有相同鍵值，匯入時會新增');
     }
@@ -2434,7 +2446,8 @@ async function d1DryRunWasabiProductionImport(env, params = {}) {
       sourceId: row.source_id || '',
       objectKey: row.object_key || '',
       target,
-      key,
+      key: normalizeWasabiImportKey(target, key),
+      sourceKey: key,
       action,
       exists,
       note: row.note || '',
@@ -2442,6 +2455,150 @@ async function d1DryRunWasabiProductionImport(env, params = {}) {
     });
   }
   return { success: true, data: { summary, items, limited: summary.ready > limit, limit } };
+}
+
+function appendWasabiNote(existing, addition) {
+  const left = String(existing || '').trim();
+  const right = String(addition || '').trim();
+  if (!left) return right;
+  if (!right) return left;
+  return `${left}\n${right}`;
+}
+
+function wasabiImportLabel(row) {
+  return `Wasabi import ${row.source_group || ''}/${row.source_id || row.id || ''}`.trim();
+}
+
+async function d1EnsureWasabiInviteCodeAvailable(env, uid, inviteCode) {
+  const code = String(inviteCode || '').trim();
+  if (!code) return { ok: true };
+  const row = await env.DB.prepare(`
+    SELECT uid
+    FROM distributors
+    WHERE invite_code = ?
+      AND uid <> ?
+  `).bind(code, uid).first();
+  if (row) return { ok: false, error: `INVITE_CODE_CONFLICT:${code}` };
+  return { ok: true };
+}
+
+async function d1ApplyWasabiDistributor(env, row, dryItem) {
+  const data = safeJsonParse(row.record_json || '{}', {});
+  const key = normalizeWasabiImportKey('distributors', dryItem.key || inferWasabiImportKey(row));
+  if (!key) return { ok: false, error: 'MISSING_DISTRIBUTOR_UID' };
+
+  const name = pickWasabiValue(data, ['name', 'displayName', 'display_name', 'user_name', 'data.name', 'data.displayName', 'data.display_name']);
+  const phone = pickWasabiValue(data, ['phone', 'mobile', 'tel', 'data.phone', 'data.mobile', 'data.tel']);
+  const email = pickWasabiValue(data, ['email', 'data.email']);
+  const company = pickWasabiValue(data, ['company_name', 'company', 'brand', 'data.company_name', 'data.company', 'data.brand']);
+  const avatar = pickWasabiValue(data, ['pictureUrl', 'picture_url', 'avatar', 'data.pictureUrl', 'data.picture_url', 'data.avatar']);
+  const inviteCode = row.source_group === 'referral_code'
+    ? pickWasabiValue(data, ['ref_code'])
+    : pickWasabiValue(data, ['invite_code', 'ref_code', 'data.invite_code', 'data.ref_code']);
+  const inviteCheck = await d1EnsureWasabiInviteCodeAvailable(env, key, inviteCode);
+  if (!inviteCheck.ok) return inviteCheck;
+
+  const now = new Date().toISOString();
+  const importNote = appendWasabiNote(row.note, `${wasabiImportLabel(row)} applied to distributors`);
+  await env.DB.prepare(`
+    INSERT INTO distributors (
+      uid, name, phone, email, company_name, status, note, sales_revenue,
+      joined_at, ref_uid, agency_slug, can_upload, invite_code, avatar, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?, '', 'demo', 0, ?, ?, ?, ?)
+    ON CONFLICT(uid) DO UPDATE SET
+      name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE distributors.name END,
+      phone = CASE WHEN excluded.phone <> '' THEN excluded.phone ELSE distributors.phone END,
+      email = CASE WHEN excluded.email <> '' THEN excluded.email ELSE distributors.email END,
+      company_name = CASE WHEN excluded.company_name <> '' THEN excluded.company_name ELSE distributors.company_name END,
+      invite_code = CASE WHEN excluded.invite_code <> '' THEN excluded.invite_code ELSE distributors.invite_code END,
+      avatar = CASE WHEN excluded.avatar <> '' THEN excluded.avatar ELSE distributors.avatar END,
+      note = CASE
+        WHEN distributors.note = '' THEN excluded.note
+        WHEN excluded.note = '' THEN distributors.note
+        ELSE distributors.note || char(10) || excluded.note
+      END,
+      updated_at = excluded.updated_at
+  `).bind(key, name, phone, email, company, importNote, now, inviteCode, avatar, now, now).run();
+
+  return { ok: true, target: 'distributors', key };
+}
+
+async function d1MarkWasabiRecordApplied(env, row, result) {
+  const now = new Date().toISOString();
+  const appliedNote = appendWasabiNote(row.note, `[${now}] applied: ${result.target || 'legacy_reference'} ${result.key || ''}`.trim());
+  await env.DB.prepare(`
+    UPDATE wasabi_import_records
+    SET status = 'reviewed',
+        mapped_key = CASE WHEN mapped_key = '' THEN ? ELSE mapped_key END,
+        note = ?
+    WHERE id = ?
+  `).bind(result.key || '', appliedNote, row.id).run();
+}
+
+async function d1ApplyWasabiProductionImport(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const confirm = String(body.confirm || '').trim();
+  if (confirm !== 'APPLY_WASABI_READY') {
+    return { success: false, error: 'CONFIRMATION_REQUIRED' };
+  }
+
+  const dry = await d1DryRunWasabiProductionImport(env, { target: 'all', limit: 500 });
+  const dryData = dry.data || {};
+  if (dryData.limited) return { success: false, error: 'TOO_MANY_READY_RECORDS', data: dryData };
+  if ((dryData.summary?.blocked || 0) > 0) return { success: false, error: 'DRY_RUN_HAS_BLOCKED_ITEMS', data: dryData };
+  if ((dryData.summary?.ready || 0) <= 0) return { success: true, data: { applied: 0, skipped: 0, errors: [], dryRun: dryData } };
+
+  const { results } = await env.DB.prepare(`
+    SELECT id, object_key, source_group, source_id, record_json,
+           mapped_table, mapped_key, status, note, imported_at
+    FROM wasabi_import_records
+    WHERE status = 'ready'
+    ORDER BY mapped_table, source_group, object_key
+    LIMIT 500
+  `).all();
+
+  const dryItemsById = new Map((dryData.items || []).map(item => [item.id, item]));
+  const applied = [];
+  const skipped = [];
+  const errors = [];
+
+  for (const row of results || []) {
+    const dryItem = dryItemsById.get(row.id);
+    if (!dryItem) {
+      errors.push({ id: row.id, error: 'MISSING_DRY_RUN_ITEM' });
+      continue;
+    }
+    try {
+      if (row.mapped_table === 'legacy_reference') {
+        const result = { ok: true, target: 'legacy_reference', key: dryItem.key || '' };
+        await d1MarkWasabiRecordApplied(env, row, result);
+        skipped.push({ id: row.id, target: result.target, key: result.key });
+      } else if (row.mapped_table === 'distributors') {
+        const result = await d1ApplyWasabiDistributor(env, row, dryItem);
+        if (!result.ok) {
+          errors.push({ id: row.id, error: result.error || 'APPLY_DISTRIBUTOR_FAILED' });
+          continue;
+        }
+        await d1MarkWasabiRecordApplied(env, row, result);
+        applied.push({ id: row.id, target: result.target, key: result.key });
+      } else {
+        errors.push({ id: row.id, error: `TARGET_NOT_ENABLED:${row.mapped_table || ''}` });
+      }
+    } catch (err) {
+      errors.push({ id: row.id, error: err.message || String(err) });
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    data: {
+      applied: applied.length,
+      skipped: skipped.length,
+      errors,
+      appliedItems: applied,
+      skippedItems: skipped,
+    },
+  };
 }
 
 async function checkEndpoint(url, options = {}) {
@@ -2630,6 +2787,15 @@ export default {
           target: url.searchParams.get('target') || '',
           limit: url.searchParams.get('limit') || '200',
         }));
+      }
+
+      if (path === '/api/wasabi/imports/apply' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1ApplyWasabiProductionImport(env, body);
+        return json(result, result.success ? 200 : 400);
       }
 
       if (path === '/api/line-oa/threads' && request.method === 'GET') {

@@ -107,3 +107,32 @@ Current safe workflow:
 
 The dry-run endpoint is read-only. It does not write to `orders`, `itineraries`, `distributors`, or `customers`.
 
+## Apply gate
+
+Production apply is intentionally narrow in the first release.
+
+Endpoint:
+
+- `POST /api/wasabi/imports/apply`
+
+Required body:
+
+```json
+{
+  "uid": "ADMIN_UID",
+  "confirm": "APPLY_WASABI_READY"
+}
+```
+
+Current apply support:
+
+| Target | Behavior |
+| --- | --- |
+| `distributors` | Insert or update distributor profile fields, defaulting new records to `pending` |
+| `legacy_reference` | Mark as reviewed reference, without writing production business tables |
+| `customers` | Blocked for now because the production table requires a phone-primary key |
+| `itineraries` | Blocked for now to avoid publishing or altering travel products unexpectedly |
+| `orders` | Blocked for now to avoid affecting payment, commission, and settlement state |
+
+The apply endpoint first runs the dry-run internally. If any ready item is blocked, apply is refused.
+
