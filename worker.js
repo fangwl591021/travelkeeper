@@ -2328,6 +2328,122 @@ async function d1ClassifyWasabiImportRecord(env, body = {}) {
   return { success: true, data: await d1GetWasabiImportRecordById(env, id) };
 }
 
+function pickWasabiValue(data, paths = []) {
+  for (const path of paths) {
+    const parts = path.split('.');
+    let current = data;
+    for (const part of parts) {
+      if (!current || typeof current !== 'object') {
+        current = null;
+        break;
+      }
+      current = current[part];
+    }
+    if (current !== undefined && current !== null && String(current).trim()) {
+      return String(current).trim();
+    }
+  }
+  return '';
+}
+
+function inferWasabiImportKey(item) {
+  if (item.mapped_key) return String(item.mapped_key).trim();
+  const data = safeJsonParse(item.record_json || '{}', {});
+  const target = String(item.mapped_table || '').trim();
+  if (target === 'distributors') {
+    return pickWasabiValue(data, ['uid', 'userId', 'line_user_id', 'owner_user_id', 'data.uid', 'data.userId', 'data.line_user_id']);
+  }
+  if (target === 'customers') {
+    return pickWasabiValue(data, ['customer_phone', 'phone', 'mobile', 'tel', 'data.customer_phone', 'data.phone', 'data.mobile', 'data.userId']);
+  }
+  if (target === 'itineraries') {
+    return pickWasabiValue(data, ['id', 'itinerary_id', 'course_id', 'tour_id', 'data.id', 'data.course_id', 'data.tour_id']);
+  }
+  if (target === 'orders') {
+    return pickWasabiValue(data, ['order_id', 'id', 'orderNo', 'data.order_id', 'data.id', 'data.orderNo']);
+  }
+  return '';
+}
+
+async function d1CheckWasabiTargetExists(env, target, key) {
+  if (!target || !key) return false;
+  if (target === 'distributors') {
+    return !!(await env.DB.prepare('SELECT uid FROM distributors WHERE uid = ?').bind(key).first());
+  }
+  if (target === 'customers') {
+    return !!(await env.DB.prepare('SELECT customer_phone FROM customers WHERE customer_phone = ? OR customer_line_uid = ?').bind(key, key).first());
+  }
+  if (target === 'itineraries') {
+    return !!(await env.DB.prepare('SELECT id FROM itineraries WHERE id = ?').bind(key).first());
+  }
+  if (target === 'orders') {
+    return !!(await env.DB.prepare('SELECT order_id FROM orders WHERE order_id = ?').bind(key).first());
+  }
+  return false;
+}
+
+async function d1DryRunWasabiProductionImport(env, params = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const targetFilter = String(params.target || '').trim();
+  const limit = Math.max(1, Math.min(500, Number(params.limit || 200)));
+  const where = ["status = 'ready'"];
+  const binds = [];
+  if (targetFilter && targetFilter !== 'all') {
+    where.push('mapped_table = ?');
+    binds.push(targetFilter);
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+  const totalRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM wasabi_import_records ${whereSql}`
+  ).bind(...binds).first();
+  const { results } = await env.DB.prepare(`
+    SELECT id, object_key, source_group, source_id, record_json,
+           mapped_table, mapped_key, status, note, imported_at
+    FROM wasabi_import_records
+    ${whereSql}
+    ORDER BY mapped_table, source_group, object_key
+    LIMIT ?
+  `).bind(...binds, limit).all();
+
+  const items = [];
+  const summary = { ready: Number(totalRow?.total || 0), create: 0, update: 0, blocked: 0, reference: 0 };
+  for (const row of results || []) {
+    const target = String(row.mapped_table || '').trim();
+    const key = inferWasabiImportKey(row);
+    const reasons = [];
+    let action = 'blocked';
+    let exists = false;
+    if (!target) {
+      reasons.push('尚未指定目標資料');
+    } else if (target === 'legacy_reference') {
+      action = 'reference';
+      reasons.push('保留為舊系統參照，不寫入正式表');
+    } else if (!WASABI_IMPORT_TABLES.has(target)) {
+      reasons.push('目標資料類型不允許');
+    } else if (!key) {
+      reasons.push('缺少對應鍵值，無法判斷新增或更新');
+    } else {
+      exists = await d1CheckWasabiTargetExists(env, target, key);
+      action = exists ? 'update' : 'create';
+      reasons.push(exists ? '正式表已有相同鍵值，匯入時會更新' : '正式表沒有相同鍵值，匯入時會新增');
+    }
+    summary[action] += 1;
+    items.push({
+      id: row.id,
+      sourceGroup: row.source_group || '',
+      sourceId: row.source_id || '',
+      objectKey: row.object_key || '',
+      target,
+      key,
+      action,
+      exists,
+      note: row.note || '',
+      reasons,
+    });
+  }
+  return { success: true, data: { summary, items, limited: summary.ready > limit, limit } };
+}
+
 async function checkEndpoint(url, options = {}) {
   if (!url) return { ok: false, status: 'missing', detail: 'not configured' };
   try {
@@ -2504,6 +2620,16 @@ export default {
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1ClassifyWasabiImportRecord(env, body);
         return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wasabi/imports/dry-run' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        return json(await d1DryRunWasabiProductionImport(env, {
+          target: url.searchParams.get('target') || '',
+          limit: url.searchParams.get('limit') || '200',
+        }));
       }
 
       if (path === '/api/line-oa/threads' && request.method === 'GET') {

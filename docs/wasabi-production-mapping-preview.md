@@ -87,13 +87,23 @@ These can be used as reference or imported as new customer/member records after 
 
 Do not upsert directly into production yet.
 
-Next safe step:
+Current safe workflow:
 
-1. Build an admin-only preview page or D1 query for `wasabi_import_records`.
-2. Let the operator classify each group:
+1. Use `wasabi-import-preview.html` to review `wasabi_import_records`.
+2. Let the operator classify individual records:
    - import as customers
    - import as distributors
    - import as itineraries
    - keep as historical reference only
-3. Only after classification, create explicit one-way upsert scripts per target table.
+3. Mark only confirmed records as `ready`.
+4. Run the import dry-run API before any production write:
+   - `GET /api/wasabi/imports/dry-run?uid=ADMIN_UID`
+5. Review the dry-run report:
+   - `create`: production table does not yet have the mapped key
+   - `update`: production table already has the mapped key
+   - `blocked`: missing target table, missing key, or invalid mapping
+   - `reference`: keep as historical reference only
+6. Only after dry-run is reviewed, create explicit one-way upsert logic per target table.
+
+The dry-run endpoint is read-only. It does not write to `orders`, `itineraries`, `distributors`, or `customers`.
 

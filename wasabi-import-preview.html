@@ -343,6 +343,75 @@
       display: flex;
       gap: 8px;
     }
+    .dry-run {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .dry-run-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .dry-run-head h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .dry-run-body {
+      padding: 16px 18px;
+    }
+    .dry-stats {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(96px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .dry-stat {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .dry-stat b {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .dry-stat span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .dry-list {
+      display: grid;
+      gap: 8px;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .dry-item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fff;
+    }
+    .dry-item strong {
+      display: block;
+      margin-bottom: 6px;
+      overflow-wrap: anywhere;
+    }
+    .dry-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
     @media (max-width: 1180px) {
       .main { grid-template-columns: 280px minmax(0, 1fr); }
       .panel.right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); min-height: auto; }
@@ -356,6 +425,7 @@
       .toolbar { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
       .classify-grid { grid-template-columns: 1fr; }
+      .dry-stats { grid-template-columns: repeat(2, minmax(96px, 1fr)); }
     }
   </style>
 </head>
@@ -370,6 +440,7 @@
       <div class="actions">
         <a class="btn" href="./dashboard.html">回 Dashboard</a>
         <a class="btn" href="./itinerary-maintenance-list.html">行程維護</a>
+        <button class="btn" id="dryRunBtn">匯入前檢查</button>
         <button class="btn primary" id="refreshBtn">重新讀取</button>
       </div>
     </header>
@@ -418,6 +489,19 @@
           <div class="pager-buttons">
             <button class="btn" id="prevBtn">上一頁</button>
             <button class="btn" id="nextBtn">下一頁</button>
+          </div>
+        </div>
+
+        <div class="dry-run" id="dryRunPanel">
+          <div class="dry-run-head">
+            <div>
+              <h2>正式匯入前檢查</h2>
+              <div class="record-meta">只檢查 status=ready 的資料，不會寫入正式表。</div>
+            </div>
+            <button class="btn" id="dryRunInlineBtn">重新檢查</button>
+          </div>
+          <div class="dry-run-body" id="dryRunBody">
+            <div class="empty">還沒有執行檢查。先把資料標為「準備匯入」，再按「匯入前檢查」。</div>
           </div>
         </div>
       </section>
@@ -483,6 +567,9 @@
       adminUid: document.getElementById('adminUid'),
       saveUidBtn: document.getElementById('saveUidBtn'),
       refreshBtn: document.getElementById('refreshBtn'),
+      dryRunBtn: document.getElementById('dryRunBtn'),
+      dryRunInlineBtn: document.getElementById('dryRunInlineBtn'),
+      dryRunBody: document.getElementById('dryRunBody'),
       groupList: document.getElementById('groupList'),
       searchInput: document.getElementById('searchInput'),
       limitSelect: document.getElementById('limitSelect'),
@@ -624,6 +711,59 @@
       if (!state.selectedId && state.items[0]) selectRecord(state.items[0].id);
     }
 
+    function dryActionLabel(action) {
+      return {
+        create: '將新增',
+        update: '將更新',
+        blocked: '阻擋',
+        reference: '僅參照',
+      }[action] || action || '-';
+    }
+
+    function dryActionClass(action) {
+      if (action === 'create') return 'chip';
+      if (action === 'update') return 'chip warn';
+      if (action === 'reference') return 'chip';
+      return 'chip warn';
+    }
+
+    function renderDryRun(data) {
+      const summary = data.summary || {};
+      const items = data.items || [];
+      const stats = [
+        ['ready', '準備匯入'],
+        ['create', '將新增'],
+        ['update', '將更新'],
+        ['blocked', '阻擋'],
+        ['reference', '僅參照'],
+      ].map(([key, label]) => `
+        <div class="dry-stat">
+          <b>${formatNumber(summary[key] || 0)}</b>
+          <span>${escapeHtml(label)}</span>
+        </div>
+      `).join('');
+      const limited = data.limited ? '<div class="notice">ready 資料超過本次顯示上限，請縮小目標類型或分批檢查。</div>' : '';
+      const list = items.length ? items.map(item => `
+        <div class="dry-item">
+          <strong>${escapeHtml(item.sourceId || item.id)}</strong>
+          <div class="chips">
+            <span class="${dryActionClass(item.action)}">${escapeHtml(dryActionLabel(item.action))}</span>
+            <span class="chip">${escapeHtml(item.target || '未指定')}</span>
+            <span class="chip">${escapeHtml(item.key || '無 key')}</span>
+          </div>
+          <div class="dry-meta">
+            ${escapeHtml(item.objectKey)}<br>
+            ${escapeHtml((item.reasons || []).join('；'))}
+          </div>
+        </div>
+      `).join('') : '<div class="empty">目前沒有 status=ready 的資料需要檢查。</div>';
+      els.dryRunBody.innerHTML = `
+        <div class="dry-stats">${stats}</div>
+        ${limited}
+        <div class="dry-list">${list}</div>
+      `;
+    }
+
     function selectRecord(id) {
       const item = state.items.find(row => row.id === id);
       if (!item) return;
@@ -713,6 +853,20 @@
       }
     }
 
+    async function runDryRun() {
+      if (!state.uid) {
+        els.dryRunBody.innerHTML = '<div class="empty">請先輸入管理員 UID。</div>';
+        return;
+      }
+      els.dryRunBody.innerHTML = '<div class="empty">檢查 ready 暫存資料中...</div>';
+      try {
+        const data = await apiGet('/api/wasabi/imports/dry-run', { target: 'all', limit: 200 });
+        renderDryRun(data);
+      } catch (err) {
+        els.dryRunBody.innerHTML = `<div class="empty">檢查失敗：${escapeHtml(err.message)}</div>`;
+      }
+    }
+
     els.adminUid.value = state.uid;
     els.saveUidBtn.addEventListener('click', () => {
       state.uid = els.adminUid.value.trim();
@@ -720,6 +874,8 @@
       refreshAll();
     });
     els.refreshBtn.addEventListener('click', refreshAll);
+    els.dryRunBtn.addEventListener('click', runDryRun);
+    els.dryRunInlineBtn.addEventListener('click', runDryRun);
     els.saveClassifyBtn.addEventListener('click', saveClassification);
     els.searchBtn.addEventListener('click', () => {
       state.search = els.searchInput.value.trim();
