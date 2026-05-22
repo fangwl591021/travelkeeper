@@ -13,6 +13,8 @@ const ADMIN_UIDS = new Set([
   'Uf729764dbb5b652a5a90a467320bea29',
   'U58eb5c1a747450140ce1335af709ae55',
 ]);
+const WASABI_IMPORT_STATUSES = new Set(['staged', 'reviewed', 'ready', 'ignored']);
+const WASABI_IMPORT_TABLES = new Set(['', 'distributors', 'customers', 'itineraries', 'orders', 'legacy_reference']);
 const R2_PUBLIC = 'https://pub-06a94bc2edd3405491c7b3f741fa54f2.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
 const LINE_NEGATIVE_KEYWORDS = ['退款', '退費', '取消', '生氣', '客訴', '抱怨', '不滿', '失望', '負評', '建議'];
@@ -2218,6 +2220,12 @@ async function d1GetWasabiImportSummary(env) {
     GROUP BY source_group
     ORDER BY source_group
   `).all();
+  const statuses = await env.DB.prepare(`
+    SELECT status, COUNT(*) AS records
+    FROM wasabi_import_records
+    GROUP BY status
+    ORDER BY status
+  `).all();
   const totals = await env.DB.prepare(`
     SELECT
       (SELECT COUNT(*) FROM wasabi_import_objects) AS objects,
@@ -2238,6 +2246,7 @@ async function d1GetWasabiImportSummary(env) {
       },
       records: records.results || [],
       objects: objects.results || [],
+      statuses: statuses.results || [],
     },
   };
 }
@@ -2255,9 +2264,9 @@ async function d1GetWasabiImportRecords(env, params = {}) {
     binds.push(group);
   }
   if (search) {
-    where.push('(source_id LIKE ? OR object_key LIKE ? OR record_json LIKE ?)');
+    where.push('(id LIKE ? OR source_id LIKE ? OR object_key LIKE ? OR record_json LIKE ? OR mapped_table LIKE ? OR mapped_key LIKE ? OR note LIKE ?)');
     const like = `%${search}%`;
-    binds.push(like, like, like);
+    binds.push(like, like, like, like, like, like, like);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const countRow = await env.DB.prepare(
@@ -2280,6 +2289,43 @@ async function d1GetWasabiImportRecords(env, params = {}) {
       items: (results || []).map(wasabiRecordPreview),
     },
   };
+}
+
+async function d1GetWasabiImportRecordById(env, id) {
+  const record = await env.DB.prepare(`
+    SELECT id, object_key, source_group, source_id, record_json,
+           mapped_table, mapped_key, status, note, imported_at
+    FROM wasabi_import_records
+    WHERE id = ?
+  `).bind(id).first();
+  return record ? wasabiRecordPreview(record) : null;
+}
+
+async function d1ClassifyWasabiImportRecord(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const id = String(body.id || '').trim();
+  const status = String(body.status || 'staged').trim();
+  const mappedTable = String(body.mappedTable || body.mapped_table || '').trim();
+  const mappedKey = String(body.mappedKey || body.mapped_key || '').trim().slice(0, 240);
+  const note = String(body.note || '').trim().slice(0, 1200);
+
+  if (!id) return { success: false, error: 'MISSING_ID' };
+  if (!WASABI_IMPORT_STATUSES.has(status)) return { success: false, error: 'INVALID_STATUS' };
+  if (!WASABI_IMPORT_TABLES.has(mappedTable)) return { success: false, error: 'INVALID_MAPPED_TABLE' };
+
+  const existing = await d1GetWasabiImportRecordById(env, id);
+  if (!existing) return { success: false, error: 'NOT_FOUND' };
+
+  await env.DB.prepare(`
+    UPDATE wasabi_import_records
+    SET status = ?,
+        mapped_table = ?,
+        mapped_key = ?,
+        note = ?
+    WHERE id = ?
+  `).bind(status, mappedTable, mappedKey, note, id).run();
+
+  return { success: true, data: await d1GetWasabiImportRecordById(env, id) };
 }
 
 async function checkEndpoint(url, options = {}) {
@@ -2449,6 +2495,15 @@ export default {
           limit: url.searchParams.get('limit') || '80',
           offset: url.searchParams.get('offset') || '0',
         }));
+      }
+
+      if (path === '/api/wasabi/imports/classify' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1ClassifyWasabiImportRecord(env, body);
+        return json(result, result.success ? 200 : 400);
       }
 
       if (path === '/api/line-oa/threads' && request.method === 'GET') {

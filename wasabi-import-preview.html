@@ -275,6 +275,42 @@
       font-size: 13px;
       line-height: 1.55;
     }
+    .classify-card {
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .classify-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 13px 14px;
+      color: var(--ink);
+      background: white;
+      outline: none;
+      resize: vertical;
+      font: inherit;
+    }
+    textarea:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+    .save-msg {
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
     .detail-title {
       font-size: 24px;
       line-height: 1.2;
@@ -319,6 +355,7 @@
       .workspace { padding: 16px; }
       .toolbar { grid-template-columns: 1fr; }
       .stats { grid-template-columns: 1fr; }
+      .classify-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -389,6 +426,40 @@
         <h2 class="detail-title" id="detailTitle">尚未選取資料</h2>
         <div class="detail-meta" id="detailMeta">請從中間列表點一筆 Wasabi 暫存資料查看內容。</div>
         <div class="key-list" id="detailKeys"></div>
+        <div class="classify-card">
+          <div class="classify-grid">
+            <div class="field" style="margin-bottom:0;">
+              <label for="classifyStatus">處理狀態</label>
+              <select id="classifyStatus">
+                <option value="staged">待處理</option>
+                <option value="reviewed">已確認</option>
+                <option value="ready">準備匯入</option>
+                <option value="ignored">忽略</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label for="mappedTable">目標資料</label>
+              <select id="mappedTable">
+                <option value="">未指定</option>
+                <option value="distributors">經銷商</option>
+                <option value="customers">客戶</option>
+                <option value="itineraries">行程</option>
+                <option value="orders">訂單</option>
+                <option value="legacy_reference">舊系統參照</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="mappedKey">對應鍵值</label>
+            <input id="mappedKey" placeholder="例如：LINE UID、行程 ID、訂單編號；不確定可先空白" />
+          </div>
+          <div class="field">
+            <label for="classifyNote">分類備註</label>
+            <textarea id="classifyNote" placeholder="記錄判斷依據，例如：像是舊會員資料，但 LINE UID 與目前經銷商 UID 不一致。"></textarea>
+          </div>
+          <button class="btn primary" id="saveClassifyBtn" style="width:100%;">儲存分類標記</button>
+          <div class="save-msg" id="classifyMsg">只更新 Wasabi 暫存表，不會寫入正式表。</div>
+        </div>
         <pre class="json-box" id="detailJson">{}</pre>
       </aside>
     </main>
@@ -424,6 +495,12 @@
       detailMeta: document.getElementById('detailMeta'),
       detailKeys: document.getElementById('detailKeys'),
       detailJson: document.getElementById('detailJson'),
+      classifyStatus: document.getElementById('classifyStatus'),
+      mappedTable: document.getElementById('mappedTable'),
+      mappedKey: document.getElementById('mappedKey'),
+      classifyNote: document.getElementById('classifyNote'),
+      saveClassifyBtn: document.getElementById('saveClassifyBtn'),
+      classifyMsg: document.getElementById('classifyMsg'),
       statObjects: document.getElementById('statObjects'),
       statRecords: document.getElementById('statRecords'),
       statOrders: document.getElementById('statOrders'),
@@ -455,6 +532,22 @@
         if (value !== undefined && value !== null && String(value) !== '') url.searchParams.set(key, value);
       });
       const res = await fetch(url.toString());
+      const text = await res.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch (_) { data = { success: false, error: text || `HTTP ${res.status}` }; }
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      return data.data || data;
+    }
+
+    async function apiPost(path, body = {}) {
+      if (!state.uid) throw new Error('請先輸入管理員 UID');
+      const res = await fetch(new URL(path, API_BASE).toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: state.uid, ...body }),
+      });
       const text = await res.text();
       let data = null;
       try { data = JSON.parse(text); } catch (_) { data = { success: false, error: text || `HTTP ${res.status}` }; }
@@ -550,6 +643,40 @@
         ? keys.map(key => `<span class="chip">${escapeHtml(key)}</span>`).join('')
         : '<span class="chip warn">沒有可列出的欄位</span>';
       els.detailJson.textContent = JSON.stringify(item.record || {}, null, 2);
+      els.classifyStatus.value = item.status || 'staged';
+      els.mappedTable.value = item.mappedTable || '';
+      els.mappedKey.value = item.mappedKey || '';
+      els.classifyNote.value = item.note || '';
+      els.classifyMsg.textContent = '只更新 Wasabi 暫存表，不會寫入正式表。';
+    }
+
+    async function saveClassification() {
+      const item = state.items.find(row => row.id === state.selectedId);
+      if (!item) {
+        els.classifyMsg.textContent = '請先選一筆資料。';
+        return;
+      }
+      els.saveClassifyBtn.disabled = true;
+      els.classifyMsg.textContent = '儲存中...';
+      try {
+        const updated = await apiPost('/api/wasabi/imports/classify', {
+          id: item.id,
+          status: els.classifyStatus.value,
+          mappedTable: els.mappedTable.value,
+          mappedKey: els.mappedKey.value,
+          note: els.classifyNote.value,
+        });
+        const index = state.items.findIndex(row => row.id === item.id);
+        if (index >= 0) state.items[index] = updated;
+        renderRecords({ total: state.total, limit: state.limit, offset: state.offset, items: state.items });
+        selectRecord(updated.id);
+        await loadSummary();
+        els.classifyMsg.textContent = '已儲存分類標記。';
+      } catch (err) {
+        els.classifyMsg.textContent = `儲存失敗：${err.message}`;
+      } finally {
+        els.saveClassifyBtn.disabled = false;
+      }
     }
 
     async function loadSummary() {
@@ -593,6 +720,7 @@
       refreshAll();
     });
     els.refreshBtn.addEventListener('click', refreshAll);
+    els.saveClassifyBtn.addEventListener('click', saveClassification);
     els.searchBtn.addEventListener('click', () => {
       state.search = els.searchInput.value.trim();
       state.limit = Number(els.limitSelect.value || 80);
