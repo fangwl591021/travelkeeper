@@ -370,6 +370,63 @@ MOTHER_SYNC_ENABLED=0
 
 Keep `MOTHER_SYNC_ENABLED=0` until health checks, field mapping, and dry-run logs are verified.
 
+## Wasabi Storage Mode
+
+If the mother site does not provide a business API yet, TravelKeeper may use Wasabi as the mother storage layer. This is storage, not business logic.
+
+Use only this TravelKeeper-owned prefix:
+
+```text
+travelkeeper/
+```
+
+Recommended object paths:
+
+```text
+travelkeeper/distributors/<uid>.json
+travelkeeper/itineraries/<itinerary_id>.json
+travelkeeper/customers/<customer_phone>.json
+travelkeeper/orders/<order_id>.json
+travelkeeper/payments/<merchant_order_no>.json
+travelkeeper/commissions/<order_id>.json
+travelkeeper/sync-log/<yyyy>/<mm>/<id>.json
+travelkeeper/_diagnostics/*.json
+```
+
+Do not read or write these non-TravelKeeper paths:
+
+```text
+shops/action/
+tonyuse/imports/line-engine/
+tonyuse/users/
+tonyuse/referrals/
+```
+
+Required Worker variables for Wasabi storage mode:
+
+```text
+WASABI_ENDPOINT=https://s3.us-west-1.wasabisys.com
+WASABI_REGION=us-west-1
+WASABI_BUCKET=<bucket>
+WASABI_PREFIX=travelkeeper
+WASABI_ACCESS_KEY_ID=<secret>
+WASABI_SECRET_ACCESS_KEY=<secret>
+MOTHER_STORAGE_WRITE_ENABLED=0
+```
+
+Diagnostics:
+
+- `GET /api/mother/health?uid=<admin_uid>` checks D1 sync map and Wasabi config.
+- `POST /api/mother/storage-probe` can write/read/delete one diagnostic object only when `MOTHER_STORAGE_WRITE_ENABLED=1` and the request body includes `confirm = "PROBE_TRAVELKEEPER_WASABI"`.
+
+Storage object rules:
+
+1. Every JSON object must include `project = "travelkeeper"`.
+2. Every JSON object must include `entity_type`, `local_id`, and `updated_at`.
+3. Object keys must stay under the configured `WASABI_PREFIX`.
+4. The Worker must reject product, course, point, or unrelated LINE card data.
+5. Wasabi objects are an archive/sync layer. D1 remains the live operational database.
+
 ## Rejection Rules
 
 Reject or ignore payloads when:
@@ -388,4 +445,3 @@ Reject or ignore payloads when:
 3. Add `/api/mother/health` diagnostic endpoint.
 4. Add dry-run push endpoint for one itinerary and one order.
 5. Enable write-back only after dry-run response is visible in admin UI.
-

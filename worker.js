@@ -2738,6 +2738,213 @@ async function hmacSha256Hex(secret, message) {
   return [...new Uint8Array(signature)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+async function sha256Hex(message) {
+  const bytes = typeof message === 'string'
+    ? new TextEncoder().encode(message)
+    : message;
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function encodeS3Key(key) {
+  return String(key || '')
+    .split('/')
+    .map(part => encodeURIComponent(part))
+    .join('/');
+}
+
+function getWasabiStorageConfig(env) {
+  const region = String(env.WASABI_REGION || 'us-west-1').trim();
+  const endpoint = String(env.WASABI_ENDPOINT || `https://s3.${region}.wasabisys.com`).trim().replace(/\/+$/, '');
+  const bucket = String(env.WASABI_BUCKET || '').trim();
+  const prefix = String(env.WASABI_PREFIX || 'travelkeeper').trim().replace(/^\/+|\/+$/g, '') || 'travelkeeper';
+  return {
+    endpoint,
+    region,
+    bucket,
+    prefix,
+    hasAccessKey: !!env.WASABI_ACCESS_KEY_ID,
+    hasSecretKey: !!env.WASABI_SECRET_ACCESS_KEY,
+    writeEnabled: String(env.MOTHER_STORAGE_WRITE_ENABLED || '0') === '1',
+  };
+}
+
+function buildWasabiObjectUrl(config, key, query = '') {
+  const url = `${config.endpoint}/${config.bucket}/${encodeS3Key(key)}`;
+  return query ? `${url}?${query}` : url;
+}
+
+async function deriveAwsSigningKey(secret, dateStamp, region, service) {
+  const encoder = new TextEncoder();
+  const sign = async (key, value) => {
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      key,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    return new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(value)));
+  };
+  const kDate = await sign(encoder.encode(`AWS4${secret}`), dateStamp);
+  const kRegion = await sign(kDate, region);
+  const kService = await sign(kRegion, service);
+  return await sign(kService, 'aws4_request');
+}
+
+async function signWasabiRequest(env, method, key, { query = '', body = '', contentType = 'application/json' } = {}) {
+  const config = getWasabiStorageConfig(env);
+  if (!config.bucket) throw new Error('WASABI_BUCKET not configured');
+  if (!env.WASABI_ACCESS_KEY_ID) throw new Error('WASABI_ACCESS_KEY_ID not configured');
+  if (!env.WASABI_SECRET_ACCESS_KEY) throw new Error('WASABI_SECRET_ACCESS_KEY not configured');
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const service = 's3';
+  const host = new URL(config.endpoint).host;
+  const canonicalUri = `/${config.bucket}/${encodeS3Key(key)}`;
+  const payloadHash = await sha256Hex(body || '');
+  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [
+    method,
+    canonicalUri,
+    query,
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+  const scope = `${dateStamp}/${config.region}/${service}/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    scope,
+    await sha256Hex(canonicalRequest),
+  ].join('\n');
+  const signingKey = await deriveAwsSigningKey(env.WASABI_SECRET_ACCESS_KEY, dateStamp, config.region, service);
+  const signature = await hmacSha256HexBytes(signingKey, stringToSign);
+  const authorization = `AWS4-HMAC-SHA256 Credential=${env.WASABI_ACCESS_KEY_ID}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return {
+    url: buildWasabiObjectUrl(config, key, query),
+    headers: {
+      'Authorization': authorization,
+      'Content-Type': contentType,
+      'X-Amz-Content-Sha256': payloadHash,
+      'X-Amz-Date': amzDate,
+    },
+  };
+}
+
+async function hmacSha256HexBytes(rawKey, message) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    rawKey,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return [...new Uint8Array(signature)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function wasabiFetch(env, method, key, options = {}) {
+  const signed = await signWasabiRequest(env, method, key, options);
+  const res = await fetch(signed.url, {
+    method,
+    headers: signed.headers,
+    body: method === 'GET' || method === 'HEAD' ? undefined : options.body,
+  });
+  const text = method === 'HEAD' ? '' : await res.text();
+  return {
+    ok: res.ok,
+    status: res.status,
+    detail: res.ok ? 'ok' : text.slice(0, 200),
+    text,
+  };
+}
+
+async function checkWasabiTravelKeeperStorage(env) {
+  const config = getWasabiStorageConfig(env);
+  const missing = [];
+  if (!config.bucket) missing.push('WASABI_BUCKET');
+  if (!config.hasAccessKey) missing.push('WASABI_ACCESS_KEY_ID');
+  if (!config.hasSecretKey) missing.push('WASABI_SECRET_ACCESS_KEY');
+  if (missing.length) {
+    return {
+      ok: false,
+      status: 'missing',
+      detail: `${missing.join(', ')} not configured`,
+      config: redactWasabiConfig(config),
+    };
+  }
+
+  try {
+    const probeKey = `${config.prefix}/_diagnostics/health.json`;
+    const result = await wasabiFetch(env, 'HEAD', probeKey, { contentType: 'application/json' });
+    const ok = result.ok || result.status === 404;
+    return {
+      ok,
+      status: result.status,
+      detail: ok ? `TravelKeeper prefix reachable: ${config.prefix}` : result.detail,
+      config: redactWasabiConfig(config),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 'error',
+      detail: err.message || String(err),
+      config: redactWasabiConfig(config),
+    };
+  }
+}
+
+function redactWasabiConfig(config) {
+  return {
+    endpoint: config.endpoint,
+    region: config.region,
+    bucket: config.bucket,
+    prefix: config.prefix,
+    hasAccessKey: config.hasAccessKey,
+    hasSecretKey: config.hasSecretKey,
+    writeEnabled: config.writeEnabled,
+  };
+}
+
+async function runWasabiTravelKeeperProbe(env, body = {}) {
+  const config = getWasabiStorageConfig(env);
+  if (!config.writeEnabled) return { success: false, error: 'MOTHER_STORAGE_WRITE_DISABLED' };
+  if (String(body.confirm || '') !== 'PROBE_TRAVELKEEPER_WASABI') {
+    return { success: false, error: 'CONFIRMATION_REQUIRED' };
+  }
+
+  const key = `${config.prefix}/_diagnostics/probe-${Date.now()}.json`;
+  const payload = JSON.stringify({
+    project: 'travelkeeper',
+    type: 'storage_probe',
+    created_at: new Date().toISOString(),
+  });
+
+  const write = await wasabiFetch(env, 'PUT', key, { body: payload, contentType: 'application/json' });
+  if (!write.ok) return { success: false, error: 'WRITE_FAILED', data: { key, write } };
+
+  const read = await wasabiFetch(env, 'GET', key, { contentType: 'application/json' });
+  if (!read.ok) return { success: false, error: 'READ_FAILED', data: { key, write, read } };
+
+  const remove = await wasabiFetch(env, 'DELETE', key, { contentType: 'application/json' });
+  return {
+    success: remove.ok,
+    error: remove.ok ? '' : 'DELETE_FAILED',
+    data: {
+      key,
+      write: { ok: write.ok, status: write.status },
+      read: { ok: read.ok, status: read.status, matches: read.text === payload },
+      delete: { ok: remove.ok, status: remove.status },
+    },
+  };
+}
+
 function getMotherApiBaseUrl(env) {
   return String(env.MOTHER_API_BASE_URL || '').trim().replace(/\/+$/, '');
 }
@@ -2793,10 +3000,12 @@ async function buildMotherHealthStatus(env) {
   const mother = config.hasBaseUrl && config.hasApiKey && config.hasHmacSecret
     ? await signedMotherFetch(env, '/health')
     : { ok: false, status: 'missing', detail: 'Mother API env vars not fully configured' };
+  const storage = await checkWasabiTravelKeeperStorage(env);
 
   return {
     db,
     mother,
+    storage,
     config,
     endpoints: {
       health: config.hasBaseUrl ? `${getMotherApiBaseUrl(env)}/health` : '',
@@ -2913,6 +3122,15 @@ export default {
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const status = await buildMotherHealthStatus(env);
         return json({ success: true, data: status });
+      }
+
+      if (path === '/api/mother/storage-probe' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await runWasabiTravelKeeperProbe(env, body);
+        return json(result, result.success ? 200 : 400);
       }
 
       if (path === '/api/wasabi/imports/summary' && request.method === 'GET') {
