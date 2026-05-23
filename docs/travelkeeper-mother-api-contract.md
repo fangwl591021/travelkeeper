@@ -426,6 +426,10 @@ Diagnostics:
 - `POST /api/mother/export-customers` exports a controlled batch of D1 customers. Body supports `operatorUid`, `ids`, `limit`, `offset`, `ownerUid`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
 - `POST /api/mother/export-order` exports one D1 order to `travelkeeper/orders/<order_id>.json`. Body uses `operatorUid` for admin authorization and `orderId`, `order_id`, or `id` for the target order.
 - `POST /api/mother/export-orders` exports a controlled batch of D1 orders. Body supports `operatorUid`, `ids`, `limit`, `offset`, `distributorUid`, `status`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
+- `POST /api/mother/export-payment` exports one D1 payment attempt to `travelkeeper/payments/<merchant_order_no>.json`. Body uses `operatorUid` for admin authorization and `merchantOrderNo`, `merchant_order_no`, `paymentId`, or `id` for the target payment.
+- `POST /api/mother/export-payments` exports a controlled batch of D1 payment attempts. Body supports `operatorUid`, `ids`, `limit`, `offset`, `orderId`, `status`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
+- `POST /api/mother/export-commission` exports one order commission state to `travelkeeper/commissions/<order_id>.json`. Body uses `operatorUid` for admin authorization and `orderId`, `order_id`, or `id` for the target order.
+- `POST /api/mother/export-commissions` exports a controlled batch of order commission states. Body supports `operatorUid`, `ids`, `limit`, `offset`, `distributorUid`, `status`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
 
 Storage object rules:
 

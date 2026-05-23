@@ -3117,6 +3117,48 @@ function buildMotherOrderPayload(row) {
   };
 }
 
+function buildMotherPaymentPayload(row) {
+  return {
+    project: 'travelkeeper',
+    entity_type: 'payment',
+    local_id: row.merchant_order_no || row.id || '',
+    id: row.id || '',
+    order_id: row.order_id || '',
+    leg: row.leg || '',
+    merchant_order_no: row.merchant_order_no || '',
+    amount: Number(row.amount || 0),
+    status: row.status || 'created',
+    method: row.method || '',
+    trade_no: row.trade_no || '',
+    raw_notify_json: row.raw_notify_json || '',
+    created_at: row.created_at || '',
+    updated_at: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function buildMotherCommissionPayload(row) {
+  return {
+    project: 'travelkeeper',
+    entity_type: 'commission',
+    local_id: row.order_id || '',
+    order_id: row.order_id || '',
+    itinerary_id: row.itinerary_id || '',
+    itinerary_title: row.itinerary_title || '',
+    distributor_uid: row.distributor_uid || '',
+    customer_name: row.customer_name || '',
+    customer_phone: row.customer_phone || '',
+    order_status: row.status || 'pending',
+    total_amount: Number(row.total_amount || 0),
+    commission_amount: Number(row.commission_amount || 0),
+    commission_status: row.commission_status || 'pending',
+    commission_settled_at: row.commission_settled_at || '',
+    commission_paid_out_at: row.commission_paid_out_at || '',
+    source: row.source || 'referral',
+    created_at: row.created_at || '',
+    updated_at: row.updated_at || new Date().toISOString(),
+  };
+}
+
 async function d1UpsertMotherSyncMap(env, { entityType, localId, motherId = '', status, checksum = '', error = '' }) {
   const now = new Date().toISOString();
   const id = `${entityType}:${localId}`;
@@ -3189,6 +3231,233 @@ async function exportItineraryToWasabiStorage(env, body = {}) {
       checksum,
       write: { ok: write.ok, status: write.status },
       verify: { ok: read.ok, status: read.status, matches: verified },
+    },
+  };
+}
+
+async function d1GetPaymentDetail(env, id) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return null;
+  return env.DB.prepare(
+    'SELECT * FROM payment_attempts WHERE merchant_order_no = ? OR id = ?'
+  ).bind(normalizedId, normalizedId).first();
+}
+
+async function exportPaymentToWasabiStorage(env, body = {}) {
+  const id = String(body.merchantOrderNo || body.merchant_order_no || body.paymentId || body.id || '').trim();
+  if (!id) return { success: false, error: 'MISSING_PAYMENT_ID' };
+  const row = await d1GetPaymentDetail(env, id);
+  if (!row) return { success: false, error: 'PAYMENT_NOT_FOUND' };
+
+  const payload = buildMotherPaymentPayload(row);
+  const validationError = validateTravelKeeperStoragePayload(payload);
+  if (validationError) return { success: false, error: validationError };
+
+  const config = getWasabiStorageConfig(env);
+  const key = `${config.prefix}/payments/${safeStorageId(payload.local_id)}.json`;
+  const jsonBody = stableJson(payload);
+  const checksum = await sha256Hex(jsonBody);
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+
+  if (dryRun) {
+    return { success: true, data: { dryRun: true, key, checksum, payload } };
+  }
+  if (!config.writeEnabled) return { success: false, error: 'MOTHER_STORAGE_WRITE_DISABLED' };
+
+  const write = await wasabiFetch(env, 'PUT', key, { body: jsonBody, contentType: 'application/json' });
+  if (!write.ok) {
+    await d1UpsertMotherSyncMap(env, {
+      entityType: 'payment',
+      localId: payload.local_id,
+      motherId: key,
+      status: 'failed',
+      checksum,
+      error: write.detail || `HTTP ${write.status}`,
+    });
+    return { success: false, error: 'WRITE_FAILED', data: { key, write } };
+  }
+
+  const read = await wasabiFetch(env, 'GET', key, { contentType: 'application/json' });
+  const verified = read.ok && read.text === jsonBody;
+  await d1UpsertMotherSyncMap(env, {
+    entityType: 'payment',
+    localId: payload.local_id,
+    motherId: key,
+    status: verified ? 'synced' : 'failed',
+    checksum,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+  });
+
+  return {
+    success: verified,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+    data: {
+      key,
+      checksum,
+      write: { ok: write.ok, status: write.status },
+      verify: { ok: read.ok, status: read.status, matches: verified },
+    },
+  };
+}
+
+async function d1ListPaymentIdsForMotherExport(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+  const maxBatch = dryRun ? 100 : 20;
+  if (Array.isArray(body.ids) && body.ids.length) {
+    return body.ids
+      .map(id => String(id || '').trim())
+      .filter(Boolean)
+      .slice(0, maxBatch);
+  }
+
+  const limit = Math.min(Math.max(Number(body.limit || maxBatch), 1), maxBatch);
+  const offset = Math.max(Number(body.offset || 0), 0);
+  const orderId = String(body.orderId || body.order_id || '').trim();
+  const status = String(body.status || '').trim();
+  let query = "SELECT COALESCE(NULLIF(merchant_order_no, ''), id) AS id FROM payment_attempts WHERE id <> ''";
+  const bind = [];
+  if (orderId) {
+    query += ' AND order_id = ?';
+    bind.push(orderId);
+  }
+  if (status) {
+    query += ' AND status = ?';
+    bind.push(status);
+  }
+  query += ' ORDER BY updated_at DESC, created_at DESC LIMIT ? OFFSET ?';
+  bind.push(limit, offset);
+
+  const { results } = await env.DB.prepare(query).bind(...bind).all();
+  return results.map(row => String(row.id || '').trim()).filter(Boolean);
+}
+
+async function exportPaymentsToWasabiStorage(env, body = {}) {
+  const ids = await d1ListPaymentIdsForMotherExport(env, body);
+  const results = [];
+  for (const id of ids) {
+    try {
+      const result = await exportPaymentToWasabiStorage(env, { ...body, id });
+      results.push({
+        id,
+        success: !!result.success,
+        key: result.data?.key || '',
+        checksum: result.data?.checksum || '',
+        error: result.error || '',
+      });
+    } catch (err) {
+      results.push({
+        id,
+        success: false,
+        key: '',
+        checksum: '',
+        error: err?.message || 'EXPORT_FAILED',
+      });
+    }
+  }
+
+  return {
+    success: results.every(item => item.success),
+    data: {
+      dryRun: body.dryRun === true || String(body.dryRun || '') === '1',
+      requested: ids.length,
+      synced: results.filter(item => item.success).length,
+      failed: results.filter(item => !item.success).length,
+      results,
+    },
+  };
+}
+
+async function exportCommissionToWasabiStorage(env, body = {}) {
+  const id = String(body.orderId || body.order_id || body.id || '').trim();
+  if (!id) return { success: false, error: 'MISSING_ORDER_ID' };
+  const row = await d1GetOrderDetail(env, id);
+  if (!row) return { success: false, error: 'ORDER_NOT_FOUND' };
+
+  const payload = buildMotherCommissionPayload(row);
+  const validationError = validateTravelKeeperStoragePayload(payload);
+  if (validationError) return { success: false, error: validationError };
+
+  const config = getWasabiStorageConfig(env);
+  const key = `${config.prefix}/commissions/${safeStorageId(payload.local_id)}.json`;
+  const jsonBody = stableJson(payload);
+  const checksum = await sha256Hex(jsonBody);
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+
+  if (dryRun) {
+    return { success: true, data: { dryRun: true, key, checksum, payload } };
+  }
+  if (!config.writeEnabled) return { success: false, error: 'MOTHER_STORAGE_WRITE_DISABLED' };
+
+  const write = await wasabiFetch(env, 'PUT', key, { body: jsonBody, contentType: 'application/json' });
+  if (!write.ok) {
+    await d1UpsertMotherSyncMap(env, {
+      entityType: 'commission',
+      localId: payload.local_id,
+      motherId: key,
+      status: 'failed',
+      checksum,
+      error: write.detail || `HTTP ${write.status}`,
+    });
+    return { success: false, error: 'WRITE_FAILED', data: { key, write } };
+  }
+
+  const read = await wasabiFetch(env, 'GET', key, { contentType: 'application/json' });
+  const verified = read.ok && read.text === jsonBody;
+  await d1UpsertMotherSyncMap(env, {
+    entityType: 'commission',
+    localId: payload.local_id,
+    motherId: key,
+    status: verified ? 'synced' : 'failed',
+    checksum,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+  });
+
+  return {
+    success: verified,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+    data: {
+      key,
+      checksum,
+      write: { ok: write.ok, status: write.status },
+      verify: { ok: read.ok, status: read.status, matches: verified },
+    },
+  };
+}
+
+async function exportCommissionsToWasabiStorage(env, body = {}) {
+  const ids = await d1ListOrderIdsForMotherExport(env, body);
+  const results = [];
+  for (const id of ids) {
+    try {
+      const result = await exportCommissionToWasabiStorage(env, { ...body, id });
+      results.push({
+        id,
+        success: !!result.success,
+        key: result.data?.key || '',
+        checksum: result.data?.checksum || '',
+        error: result.error || '',
+      });
+    } catch (err) {
+      results.push({
+        id,
+        success: false,
+        key: '',
+        checksum: '',
+        error: err?.message || 'EXPORT_FAILED',
+      });
+    }
+  }
+
+  return {
+    success: results.every(item => item.success),
+    data: {
+      dryRun: body.dryRun === true || String(body.dryRun || '') === '1',
+      requested: ids.length,
+      synced: results.filter(item => item.success).length,
+      failed: results.filter(item => !item.success).length,
+      results,
     },
   };
 }
@@ -3904,6 +4173,42 @@ export default {
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
         if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportOrdersToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 207);
+      }
+
+      if (path === '/api/mother/export-payment' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
+        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportPaymentToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/mother/export-payments' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
+        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportPaymentsToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 207);
+      }
+
+      if (path === '/api/mother/export-commission' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
+        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportCommissionToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/mother/export-commissions' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
+        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportCommissionsToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
 
