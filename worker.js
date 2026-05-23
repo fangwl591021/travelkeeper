@@ -2725,6 +2725,94 @@ async function buildHubTestStatus(env) {
   };
 }
 
+async function hmacSha256Hex(secret, message) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  return [...new Uint8Array(signature)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function getMotherApiBaseUrl(env) {
+  return String(env.MOTHER_API_BASE_URL || '').trim().replace(/\/+$/, '');
+}
+
+function buildMotherConfig(env) {
+  return {
+    enabled: String(env.MOTHER_SYNC_ENABLED || '0') === '1',
+    hasBaseUrl: !!getMotherApiBaseUrl(env),
+    hasApiKey: !!env.MOTHER_API_KEY,
+    hasHmacSecret: !!env.MOTHER_HMAC_SECRET,
+  };
+}
+
+async function signedMotherFetch(env, path, options = {}) {
+  const baseUrl = getMotherApiBaseUrl(env);
+  if (!baseUrl) return { ok: false, status: 'missing', detail: 'MOTHER_API_BASE_URL not configured' };
+  if (!env.MOTHER_API_KEY) return { ok: false, status: 'missing', detail: 'MOTHER_API_KEY not configured' };
+  if (!env.MOTHER_HMAC_SECRET) return { ok: false, status: 'missing', detail: 'MOTHER_HMAC_SECRET not configured' };
+
+  const method = options.method || 'GET';
+  const body = options.body || '';
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = await hmacSha256Hex(env.MOTHER_HMAC_SECRET, `${timestamp}.${body}`);
+  const headers = {
+    'Authorization': `Bearer ${env.MOTHER_API_KEY}`,
+    'X-TK-Timestamp': timestamp,
+    'X-TK-Signature': `sha256=${signature}`,
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  try {
+    const res = await fetch(`${baseUrl}${path}`, { method, headers, body });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (err) { data = null; }
+    return {
+      ok: res.ok,
+      status: res.status,
+      detail: res.ok ? 'ok' : text.slice(0, 160),
+      data,
+    };
+  } catch (err) {
+    return { ok: false, status: 'error', detail: err.message || String(err) };
+  }
+}
+
+async function buildMotherHealthStatus(env) {
+  const config = buildMotherConfig(env);
+  const db = env.DB
+    ? await checkMotherSyncTable(env)
+    : { ok: false, status: 'missing', detail: 'D1 binding missing' };
+  const mother = config.hasBaseUrl && config.hasApiKey && config.hasHmacSecret
+    ? await signedMotherFetch(env, '/health')
+    : { ok: false, status: 'missing', detail: 'Mother API env vars not fully configured' };
+
+  return {
+    db,
+    mother,
+    config,
+    endpoints: {
+      health: config.hasBaseUrl ? `${getMotherApiBaseUrl(env)}/health` : '',
+    },
+  };
+}
+
+async function checkMotherSyncTable(env) {
+  try {
+    const row = await env.DB.prepare(`SELECT COUNT(*) AS count FROM mother_sync_map`).first();
+    return { ok: true, status: 'ok', detail: `${Number(row?.count || 0)} sync records` };
+  } catch (err) {
+    return { ok: false, status: 'error', detail: err.message || String(err) };
+  }
+}
+
 function renderHubTestHtml(status, origin) {
   const row = (label, item) => {
     const color = item.ok ? '#16a34a' : '#dc2626';
@@ -2816,6 +2904,14 @@ export default {
 
       if (path === '/api/hub-test' && request.method === 'GET') {
         const status = await buildHubTestStatus(env);
+        return json({ success: true, data: status });
+      }
+
+      if (path === '/api/mother/health' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const status = await buildMotherHealthStatus(env);
         return json({ success: true, data: status });
       }
 
