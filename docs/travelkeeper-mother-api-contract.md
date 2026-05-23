@@ -422,6 +422,8 @@ Diagnostics:
 - `POST /api/mother/export-itineraries` exports a controlled batch of D1 itineraries. Body supports `ids`, `limit`, `offset`, `status`, `includeDeleted`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
 - `POST /api/mother/export-distributor` exports one D1 distributor to `travelkeeper/distributors/<uid>.json`. Body uses `operatorUid` for admin authorization and `uid` or `id` for the target distributor.
 - `POST /api/mother/export-distributors` exports a controlled batch of D1 distributors. Body supports `operatorUid`, `ids`, `limit`, `offset`, `status`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
+- `POST /api/mother/export-customer` exports one D1 customer to `travelkeeper/customers/<customer_phone>.json`. Body uses `operatorUid` for admin authorization and `customerPhone`, `customer_phone`, or `id` for the target customer.
+- `POST /api/mother/export-customers` exports a controlled batch of D1 customers. Body supports `operatorUid`, `ids`, `limit`, `offset`, `ownerUid`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
 
 Storage object rules:
 
