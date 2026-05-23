@@ -3086,6 +3086,59 @@ async function exportItineraryToWasabiStorage(env, body = {}) {
   };
 }
 
+async function d1ListItineraryIdsForMotherExport(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  if (Array.isArray(body.ids) && body.ids.length) {
+    return body.ids
+      .map(id => String(id || '').trim())
+      .filter(Boolean)
+      .slice(0, 100);
+  }
+
+  const limit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
+  const includeDeleted = body.includeDeleted === true || String(body.includeDeleted || '') === '1';
+  const status = String(body.status || '').trim();
+  let query = 'SELECT id FROM itineraries WHERE 1 = 1';
+  const bind = [];
+
+  if (!includeDeleted) query += " AND (deleted_at IS NULL OR deleted_at = '')";
+  if (status) {
+    query += ' AND review_status = ?';
+    bind.push(status);
+  }
+  query += ' ORDER BY updated_at DESC, created_at DESC LIMIT ?';
+  bind.push(limit);
+
+  const { results } = await env.DB.prepare(query).bind(...bind).all();
+  return results.map(row => String(row.id || '').trim()).filter(Boolean);
+}
+
+async function exportItinerariesToWasabiStorage(env, body = {}) {
+  const ids = await d1ListItineraryIdsForMotherExport(env, body);
+  const results = [];
+  for (const id of ids) {
+    const result = await exportItineraryToWasabiStorage(env, { ...body, id });
+    results.push({
+      id,
+      success: !!result.success,
+      key: result.data?.key || '',
+      checksum: result.data?.checksum || '',
+      error: result.error || '',
+    });
+  }
+
+  return {
+    success: results.every(item => item.success),
+    data: {
+      dryRun: body.dryRun === true || String(body.dryRun || '') === '1',
+      requested: ids.length,
+      synced: results.filter(item => item.success).length,
+      failed: results.filter(item => !item.success).length,
+      results,
+    },
+  };
+}
+
 function getMotherApiBaseUrl(env) {
   return String(env.MOTHER_API_BASE_URL || '').trim().replace(/\/+$/, '');
 }
@@ -3281,6 +3334,15 @@ export default {
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportItineraryToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/mother/export-itineraries' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportItinerariesToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 207);
       }
 
       if (path === '/api/wasabi/imports/summary' && request.method === 'GET') {
