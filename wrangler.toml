@@ -2,8 +2,19 @@ name = "travelkeeper-worker"
 main = "worker.js"
 compatibility_date = "2026-05-08"
 
+[vars]
+WASABI_ENDPOINT = "https://s3.us-west-1.wasabisys.com"
+WASABI_REGION = "us-west-1"
+WASABI_BUCKET = "tonyuse"
+WASABI_PREFIX = "travelkeeper"
+MOTHER_STORAGE_WRITE_ENABLED = "1"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "travelkeeper"
 database_id = "184f9dff-18fe-401f-9374-098ed7b0eb38"
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "TRAVEL"
+bucket_name = "travelkeeper-assets"

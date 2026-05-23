@@ -2945,6 +2945,147 @@ async function runWasabiTravelKeeperProbe(env, body = {}) {
   };
 }
 
+function safeStorageId(value) {
+  return encodeURIComponent(String(value || '').trim()).replace(/%2F/gi, '-');
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = stableValue(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
+function stableJson(value) {
+  return JSON.stringify(stableValue(value), null, 2);
+}
+
+function buildMotherItineraryPayload(row) {
+  const methods = String(row.allowed_payment_methods || 'credit_card,linepay,atm')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+  return {
+    project: 'travelkeeper',
+    entity_type: 'itinerary',
+    local_id: row.id || '',
+    title: row.title || '',
+    region: row.region || '',
+    price: Number(row.price || 0),
+    days: Number(row.days || 0),
+    image: row.image || '',
+    description: row.description || '',
+    notes: row.notes || '',
+    owner_uid: row.owner_uid || '',
+    owner_name: row.owner_name || '',
+    review_status: row.review_status || 'published',
+    review_note: row.review_note || '',
+    payment_mode: row.payment_mode || 'deposit',
+    deposit_ratio: Number(row.deposit_ratio || 20),
+    balance_collect: row.balance_collect || 'online',
+    commission_mode: row.commission_mode || 'amount',
+    commission_amount: Number(row.commission_amount || 0),
+    commission_percent: Number(row.commission_percent || 0),
+    seat_limit: Number(row.seat_limit || 0),
+    min_group_size: Number(row.min_group_size || 0),
+    allowed_payment_methods: methods,
+    share_enabled: Number(row.share_enabled ?? 1) === 1,
+    deleted_at: row.deleted_at || '',
+    created_at: row.created_at || '',
+    updated_at: row.updated_at || new Date().toISOString(),
+  };
+}
+
+function validateTravelKeeperStoragePayload(payload) {
+  if (!payload || typeof payload !== 'object') return 'INVALID_PAYLOAD';
+  if (payload.project !== 'travelkeeper') return 'INVALID_PROJECT';
+  if (!payload.entity_type) return 'MISSING_ENTITY_TYPE';
+  if (!payload.local_id) return 'MISSING_LOCAL_ID';
+  if (!payload.updated_at) return 'MISSING_UPDATED_AT';
+  if (['product', 'course', 'point', 'line_card'].includes(payload.entity_type)) return 'UNRELATED_ENTITY_TYPE';
+  return '';
+}
+
+async function d1UpsertMotherSyncMap(env, { entityType, localId, motherId = '', status, checksum = '', error = '' }) {
+  const now = new Date().toISOString();
+  const id = `${entityType}:${localId}`;
+  await env.DB.prepare(`
+    INSERT INTO mother_sync_map (
+      id, entity_type, local_id, mother_id, direction, status, checksum,
+      last_pushed_at, last_error, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'push', ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(entity_type, local_id) DO UPDATE SET
+      mother_id = excluded.mother_id,
+      direction = 'push',
+      status = excluded.status,
+      checksum = excluded.checksum,
+      last_pushed_at = excluded.last_pushed_at,
+      last_error = excluded.last_error,
+      updated_at = excluded.updated_at
+  `).bind(id, entityType, localId, motherId, status, checksum, now, error, now, now).run();
+}
+
+async function exportItineraryToWasabiStorage(env, body = {}) {
+  const id = String(body.id || body.itineraryId || '').trim();
+  if (!id) return { success: false, error: 'MISSING_ITINERARY_ID' };
+  const row = await d1GetItineraryDetail(env, id);
+  if (!row) return { success: false, error: 'ITINERARY_NOT_FOUND' };
+
+  const payload = buildMotherItineraryPayload(row);
+  const validationError = validateTravelKeeperStoragePayload(payload);
+  if (validationError) return { success: false, error: validationError };
+
+  const config = getWasabiStorageConfig(env);
+  const key = `${config.prefix}/itineraries/${safeStorageId(id)}.json`;
+  const jsonBody = stableJson(payload);
+  const checksum = await sha256Hex(jsonBody);
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+
+  if (dryRun) {
+    return { success: true, data: { dryRun: true, key, checksum, payload } };
+  }
+  if (!config.writeEnabled) return { success: false, error: 'MOTHER_STORAGE_WRITE_DISABLED' };
+
+  const write = await wasabiFetch(env, 'PUT', key, { body: jsonBody, contentType: 'application/json' });
+  if (!write.ok) {
+    await d1UpsertMotherSyncMap(env, {
+      entityType: 'itinerary',
+      localId: id,
+      motherId: key,
+      status: 'failed',
+      checksum,
+      error: write.detail || `HTTP ${write.status}`,
+    });
+    return { success: false, error: 'WRITE_FAILED', data: { key, write } };
+  }
+
+  const read = await wasabiFetch(env, 'GET', key, { contentType: 'application/json' });
+  const verified = read.ok && read.text === jsonBody;
+  await d1UpsertMotherSyncMap(env, {
+    entityType: 'itinerary',
+    localId: id,
+    motherId: key,
+    status: verified ? 'synced' : 'failed',
+    checksum,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+  });
+
+  return {
+    success: verified,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+    data: {
+      key,
+      checksum,
+      write: { ok: write.ok, status: write.status },
+      verify: { ok: read.ok, status: read.status, matches: verified },
+    },
+  };
+}
+
 function getMotherApiBaseUrl(env) {
   return String(env.MOTHER_API_BASE_URL || '').trim().replace(/\/+$/, '');
 }
@@ -3130,6 +3271,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await runWasabiTravelKeeperProbe(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/mother/export-itinerary' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportItineraryToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
