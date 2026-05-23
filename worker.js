@@ -15,7 +15,7 @@ const ADMIN_UIDS = new Set([
 ]);
 const WASABI_IMPORT_STATUSES = new Set(['staged', 'reviewed', 'ready', 'ignored']);
 const WASABI_IMPORT_TABLES = new Set(['', 'distributors', 'customers', 'itineraries', 'orders', 'legacy_reference']);
-const WASABI_APPLY_TABLES = new Set(['distributors', 'legacy_reference']);
+const WASABI_APPLY_TABLES = new Set(['distributors', 'customers', 'legacy_reference']);
 const R2_PUBLIC = 'https://pub-06a94bc2edd3405491c7b3f741fa54f2.r2.dev';
 const ENDPOINT  = 'https://fangwl591021.github.io/travelkeeper/';
 const LINE_NEGATIVE_KEYWORDS = ['退款', '退費', '取消', '生氣', '客訴', '抱怨', '不滿', '失望', '負評', '建議'];
@@ -2355,7 +2355,7 @@ function inferWasabiImportKey(item) {
     return pickWasabiValue(data, ['uid', 'userId', 'line_user_id', 'owner_user_id', 'data.uid', 'data.userId', 'data.line_user_id']);
   }
   if (target === 'customers') {
-    return pickWasabiValue(data, ['customer_phone', 'phone', 'mobile', 'tel', 'data.customer_phone', 'data.phone', 'data.mobile', 'data.userId']);
+    return pickWasabiValue(data, ['customer_phone', 'phone', 'mobile', 'tel', 'data.customer_phone', 'data.phone', 'data.mobile']);
   }
   if (target === 'itineraries') {
     return pickWasabiValue(data, ['id', 'itinerary_id', 'course_id', 'tour_id', 'data.id', 'data.course_id', 'data.tour_id']);
@@ -2433,6 +2433,10 @@ async function d1DryRunWasabiProductionImport(env, params = {}) {
       reasons.push('此目標資料尚未開放正式套用，避免影響上架、訂單或佣金資料');
     } else if (!key) {
       reasons.push('缺少對應鍵值，無法判斷新增或更新');
+    } else if (target === 'customers' && !pickWasabiValue(safeJsonParse(row.record_json || '{}', {}), ['customer_phone', 'phone', 'mobile', 'tel', 'data.customer_phone', 'data.phone', 'data.mobile'])) {
+      reasons.push('客戶資料缺少電話，不能寫入以電話為主鍵的 customers');
+    } else if (target === 'customers' && !(await d1ResolveWasabiCustomerOwner(env))) {
+      reasons.push('找不到可歸屬的管理員 owner，不能新增 customers');
     } else {
       const normalizedKey = normalizeWasabiImportKey(target, key);
       exists = await d1CheckWasabiTargetExists(env, target, normalizedKey);
@@ -2523,6 +2527,62 @@ async function d1ApplyWasabiDistributor(env, row, dryItem) {
   return { ok: true, target: 'distributors', key };
 }
 
+async function d1ResolveWasabiCustomerOwner(env) {
+  for (const uid of ADMIN_UIDS) {
+    const owner = await env.DB.prepare('SELECT uid, name FROM distributors WHERE uid = ?').bind(uid).first();
+    if (owner?.uid) return { uid: owner.uid, name: owner.name || '' };
+  }
+  return null;
+}
+
+async function d1ApplyWasabiCustomer(env, row, dryItem) {
+  const data = safeJsonParse(row.record_json || '{}', {});
+  const phone = pickWasabiValue(data, ['customer_phone', 'phone', 'mobile', 'tel', 'data.customer_phone', 'data.phone', 'data.mobile']);
+  if (!phone) return { ok: false, error: 'MISSING_CUSTOMER_PHONE' };
+
+  const name = pickWasabiValue(data, [
+    'customer_name',
+    'name',
+    'displayName',
+    'display_name',
+    'data.customer_name',
+    'data.name',
+    'data.displayName',
+    'data.display_name',
+  ]);
+  const lineUid = normalizeWasabiImportKey('customers', pickWasabiValue(data, [
+    'customer_line_uid',
+    'line_user_id',
+    'userId',
+    'data.customer_line_uid',
+    'data.line_user_id',
+    'data.userId',
+  ]));
+  const owner = await d1ResolveWasabiCustomerOwner(env);
+  if (!owner) return { ok: false, error: 'MISSING_CUSTOMER_OWNER' };
+  const now = new Date().toISOString();
+  const sourceNote = appendWasabiNote(row.note, `${wasabiImportLabel(row)} applied to customers`);
+
+  await env.DB.prepare(`
+    INSERT INTO customers (
+      customer_phone, customer_name, customer_line_uid, owner_uid, owner_name,
+      first_order_at, last_order_at, total_orders, total_amount, source, note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, '', '', 0, 0, 'wasabi_member_import', ?, ?, ?)
+    ON CONFLICT(customer_phone) DO UPDATE SET
+      customer_name = CASE WHEN excluded.customer_name <> '' THEN excluded.customer_name ELSE customers.customer_name END,
+      customer_line_uid = CASE WHEN excluded.customer_line_uid <> '' THEN excluded.customer_line_uid ELSE customers.customer_line_uid END,
+      source = CASE WHEN customers.source = '' OR customers.source = 'referral' THEN excluded.source ELSE customers.source END,
+      note = CASE
+        WHEN customers.note = '' THEN excluded.note
+        WHEN excluded.note = '' THEN customers.note
+        ELSE customers.note || char(10) || excluded.note
+      END,
+      updated_at = excluded.updated_at
+  `).bind(phone, name, lineUid, owner.uid, owner.name, sourceNote, now, now).run();
+
+  return { ok: true, target: 'customers', key: phone };
+}
+
 async function d1MarkWasabiRecordApplied(env, row, result) {
   const now = new Date().toISOString();
   const appliedNote = appendWasabiNote(row.note, `[${now}] applied: ${result.target || 'legacy_reference'} ${result.key || ''}`.trim());
@@ -2577,6 +2637,14 @@ async function d1ApplyWasabiProductionImport(env, body = {}) {
         const result = await d1ApplyWasabiDistributor(env, row, dryItem);
         if (!result.ok) {
           errors.push({ id: row.id, error: result.error || 'APPLY_DISTRIBUTOR_FAILED' });
+          continue;
+        }
+        await d1MarkWasabiRecordApplied(env, row, result);
+        applied.push({ id: row.id, target: result.target, key: result.key });
+      } else if (row.mapped_table === 'customers') {
+        const result = await d1ApplyWasabiCustomer(env, row, dryItem);
+        if (!result.ok) {
+          errors.push({ id: row.id, error: result.error || 'APPLY_CUSTOMER_FAILED' });
           continue;
         }
         await d1MarkWasabiRecordApplied(env, row, result);
