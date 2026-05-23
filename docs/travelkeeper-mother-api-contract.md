@@ -419,7 +419,9 @@ Diagnostics:
 - `GET /api/mother/health?uid=<admin_uid>` checks D1 sync map and Wasabi config.
 - `POST /api/mother/storage-probe` can write/read/delete one diagnostic object only when `MOTHER_STORAGE_WRITE_ENABLED=1` and the request body includes `confirm = "PROBE_TRAVELKEEPER_WASABI"`.
 - `POST /api/mother/export-itinerary` exports one D1 itinerary to `travelkeeper/itineraries/<itinerary_id>.json`.
-- `POST /api/mother/export-itineraries` exports a controlled batch of D1 itineraries. Body supports `ids`, `limit`, `status`, `includeDeleted`, and `dryRun`.
+- `POST /api/mother/export-itineraries` exports a controlled batch of D1 itineraries. Body supports `ids`, `limit`, `offset`, `status`, `includeDeleted`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
+- `POST /api/mother/export-distributor` exports one D1 distributor to `travelkeeper/distributors/<uid>.json`. Body uses `operatorUid` for admin authorization and `uid` or `id` for the target distributor.
+- `POST /api/mother/export-distributors` exports a controlled batch of D1 distributors. Body supports `operatorUid`, `ids`, `limit`, `offset`, `status`, and `dryRun`. Non-dry-run batches are capped at 20 records per call.
 
 Storage object rules:
 

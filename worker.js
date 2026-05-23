@@ -3010,6 +3010,52 @@ function validateTravelKeeperStoragePayload(payload) {
   return '';
 }
 
+function buildMotherDistributorPayload(row) {
+  const status = String(row.status || 'pending').toLowerCase() === 'active'
+    ? 'approved'
+    : String(row.status || 'pending').toLowerCase();
+  return {
+    project: 'travelkeeper',
+    entity_type: 'distributor',
+    local_id: row.uid || '',
+    uid: row.uid || '',
+    name: row.name || '',
+    phone: row.phone || '',
+    email: row.email || '',
+    company_name: row.company_name || '',
+    tax_id: row.tax_id || '',
+    invite_code: row.invite_code || '',
+    status,
+    can_upload: Number(row.can_upload || 0) === 1,
+    commission_pct: Number(row.commission_pct || 0),
+    sales_revenue: Number(row.sales_revenue || 0),
+    note: row.note || '',
+    ref_uid: row.ref_uid || '',
+    agency_slug: row.agency_slug || 'demo',
+    profile: {
+      avatar: row.avatar || '',
+      bio: row.bio || '',
+      oa_intro: row.oa_intro || '',
+      line_link: row.line_link || '',
+      line_at_link: row.line_at_link || '',
+      line_at_id: row.line_at_id || '',
+      fb_link: row.fb_link || '',
+      ig_link: row.ig_link || '',
+      web_link: row.web_link || '',
+      map_link: row.map_link || '',
+    },
+    bank: {
+      bank_name: row.bank_name || '',
+      bank_branch: row.bank_branch || '',
+      bank_account: row.bank_account || '',
+      bank_holder: row.bank_holder || '',
+    },
+    joined_at: row.joined_at || '',
+    created_at: row.created_at || '',
+    updated_at: row.updated_at || new Date().toISOString(),
+  };
+}
+
 async function d1UpsertMotherSyncMap(env, { entityType, localId, motherId = '', status, checksum = '', error = '' }) {
   const now = new Date().toISOString();
   const id = `${entityType}:${localId}`;
@@ -3086,16 +3132,146 @@ async function exportItineraryToWasabiStorage(env, body = {}) {
   };
 }
 
-async function d1ListItineraryIdsForMotherExport(env, body = {}) {
+async function d1GetDistributorDetail(env, uid) {
   if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return null;
+  return env.DB.prepare('SELECT * FROM distributors WHERE uid = ?').bind(normalizedUid).first();
+}
+
+async function exportDistributorToWasabiStorage(env, body = {}) {
+  const uid = String(body.uid || body.id || '').trim();
+  if (!uid) return { success: false, error: 'MISSING_DISTRIBUTOR_UID' };
+  const row = await d1GetDistributorDetail(env, uid);
+  if (!row) return { success: false, error: 'DISTRIBUTOR_NOT_FOUND' };
+
+  const payload = buildMotherDistributorPayload(row);
+  const validationError = validateTravelKeeperStoragePayload(payload);
+  if (validationError) return { success: false, error: validationError };
+
+  const config = getWasabiStorageConfig(env);
+  const key = `${config.prefix}/distributors/${safeStorageId(uid)}.json`;
+  const jsonBody = stableJson(payload);
+  const checksum = await sha256Hex(jsonBody);
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+
+  if (dryRun) {
+    return { success: true, data: { dryRun: true, key, checksum, payload } };
+  }
+  if (!config.writeEnabled) return { success: false, error: 'MOTHER_STORAGE_WRITE_DISABLED' };
+
+  const write = await wasabiFetch(env, 'PUT', key, { body: jsonBody, contentType: 'application/json' });
+  if (!write.ok) {
+    await d1UpsertMotherSyncMap(env, {
+      entityType: 'distributor',
+      localId: uid,
+      motherId: key,
+      status: 'failed',
+      checksum,
+      error: write.detail || `HTTP ${write.status}`,
+    });
+    return { success: false, error: 'WRITE_FAILED', data: { key, write } };
+  }
+
+  const read = await wasabiFetch(env, 'GET', key, { contentType: 'application/json' });
+  const verified = read.ok && read.text === jsonBody;
+  await d1UpsertMotherSyncMap(env, {
+    entityType: 'distributor',
+    localId: uid,
+    motherId: key,
+    status: verified ? 'synced' : 'failed',
+    checksum,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+  });
+
+  return {
+    success: verified,
+    error: verified ? '' : 'VERIFY_READ_MISMATCH',
+    data: {
+      key,
+      checksum,
+      write: { ok: write.ok, status: write.status },
+      verify: { ok: read.ok, status: read.status, matches: verified },
+    },
+  };
+}
+
+async function d1ListDistributorIdsForMotherExport(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+  const maxBatch = dryRun ? 100 : 20;
   if (Array.isArray(body.ids) && body.ids.length) {
     return body.ids
       .map(id => String(id || '').trim())
       .filter(Boolean)
-      .slice(0, 100);
+      .slice(0, maxBatch);
   }
 
-  const limit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
+  const limit = Math.min(Math.max(Number(body.limit || maxBatch), 1), maxBatch);
+  const offset = Math.max(Number(body.offset || 0), 0);
+  const status = String(body.status || '').trim();
+  let query = 'SELECT uid FROM distributors WHERE 1 = 1';
+  const bind = [];
+  if (status) {
+    query += ' AND status = ?';
+    bind.push(status);
+  }
+  query += ' ORDER BY updated_at DESC, created_at DESC LIMIT ? OFFSET ?';
+  bind.push(limit, offset);
+
+  const { results } = await env.DB.prepare(query).bind(...bind).all();
+  return results.map(row => String(row.uid || '').trim()).filter(Boolean);
+}
+
+async function exportDistributorsToWasabiStorage(env, body = {}) {
+  const ids = await d1ListDistributorIdsForMotherExport(env, body);
+  const results = [];
+  for (const uid of ids) {
+    try {
+      const result = await exportDistributorToWasabiStorage(env, { ...body, uid });
+      results.push({
+        uid,
+        success: !!result.success,
+        key: result.data?.key || '',
+        checksum: result.data?.checksum || '',
+        error: result.error || '',
+      });
+    } catch (err) {
+      results.push({
+        uid,
+        success: false,
+        key: '',
+        checksum: '',
+        error: err?.message || 'EXPORT_FAILED',
+      });
+    }
+  }
+
+  return {
+    success: results.every(item => item.success),
+    data: {
+      dryRun: body.dryRun === true || String(body.dryRun || '') === '1',
+      requested: ids.length,
+      synced: results.filter(item => item.success).length,
+      failed: results.filter(item => !item.success).length,
+      results,
+    },
+  };
+}
+
+async function d1ListItineraryIdsForMotherExport(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const dryRun = body.dryRun === true || String(body.dryRun || '') === '1';
+  const maxBatch = dryRun ? 100 : 20;
+  if (Array.isArray(body.ids) && body.ids.length) {
+    return body.ids
+      .map(id => String(id || '').trim())
+      .filter(Boolean)
+      .slice(0, maxBatch);
+  }
+
+  const limit = Math.min(Math.max(Number(body.limit || maxBatch), 1), maxBatch);
+  const offset = Math.max(Number(body.offset || 0), 0);
   const includeDeleted = body.includeDeleted === true || String(body.includeDeleted || '') === '1';
   const status = String(body.status || '').trim();
   let query = 'SELECT id FROM itineraries WHERE 1 = 1';
@@ -3106,8 +3282,8 @@ async function d1ListItineraryIdsForMotherExport(env, body = {}) {
     query += ' AND review_status = ?';
     bind.push(status);
   }
-  query += ' ORDER BY updated_at DESC, created_at DESC LIMIT ?';
-  bind.push(limit);
+  query += ' ORDER BY updated_at DESC, created_at DESC LIMIT ? OFFSET ?';
+  bind.push(limit, offset);
 
   const { results } = await env.DB.prepare(query).bind(...bind).all();
   return results.map(row => String(row.id || '').trim()).filter(Boolean);
@@ -3117,14 +3293,24 @@ async function exportItinerariesToWasabiStorage(env, body = {}) {
   const ids = await d1ListItineraryIdsForMotherExport(env, body);
   const results = [];
   for (const id of ids) {
-    const result = await exportItineraryToWasabiStorage(env, { ...body, id });
-    results.push({
-      id,
-      success: !!result.success,
-      key: result.data?.key || '',
-      checksum: result.data?.checksum || '',
-      error: result.error || '',
-    });
+    try {
+      const result = await exportItineraryToWasabiStorage(env, { ...body, id });
+      results.push({
+        id,
+        success: !!result.success,
+        key: result.data?.key || '',
+        checksum: result.data?.checksum || '',
+        error: result.error || '',
+      });
+    } catch (err) {
+      results.push({
+        id,
+        success: false,
+        key: '',
+        checksum: '',
+        error: err?.message || 'EXPORT_FAILED',
+      });
+    }
   }
 
   return {
@@ -3342,6 +3528,24 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportItinerariesToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 207);
+      }
+
+      if (path === '/api/mother/export-distributor' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
+        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportDistributorToWasabiStorage(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/mother/export-distributors' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
+        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await exportDistributorsToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
 
