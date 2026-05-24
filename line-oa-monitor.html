@@ -367,6 +367,22 @@
       return 'bg-slate-200 text-slate-700';
     }
 
+    function syncStatusButtons(status) {
+      const activeStatus = status || '';
+      [
+        ['mark-open', 'open'],
+        ['mark-pending', 'pending'],
+        ['mark-closed', 'closed'],
+      ].forEach(([id, value]) => {
+        const button = document.getElementById(id);
+        if (!button) return;
+        const active = activeStatus === value;
+        button.className = active
+          ? 'px-5 py-3 rounded-xl border border-slate-900 bg-slate-900 text-white font-semibold'
+          : 'px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50';
+      });
+    }
+
     function recordPriorityLabel(priority) {
       if (priority === 'high') return '重要';
       if (priority === 'low') return '低';
@@ -909,6 +925,7 @@
         riskCountEl.textContent = '0';
         internalNoteEl.value = '';
         panelDraftEl.value = '';
+        syncStatusButtons('');
         return;
       }
 
@@ -940,6 +957,7 @@
       renderItinerarySuggestions(thread);
       renderTags(thread);
       renderVisitorRecords(thread);
+      syncStatusButtons(thread.status || 'open');
 
       const merged = (thread.messages || []).map(msg => msg.text || '').join('\n');
       const hits = [
@@ -956,18 +974,35 @@
 
     async function updateThreadMeta(patch) {
       const threadId = activeThreadId;
-      if (!threadId) return;
-      const result = await fetchJson(`${WORKER_URL}/api/line-oa/thread`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: profile.userId, id: threadId, ...patch }),
+      if (!threadId) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      const statusButtons = ['mark-open', 'mark-pending', 'mark-closed']
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
+      statusButtons.forEach(button => {
+        button.disabled = true;
+        button.classList.add('opacity-60');
       });
-      const updated = result.data;
-      const idx = allThreads.findIndex(item => item.id === updated.id);
-      if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
-      renderThreadList();
-      renderActiveThread(updated);
-      showToast('\u804a\u5929\u5ba4\u72c0\u614b\u5df2\u66f4\u65b0');
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/thread`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: profile.userId, id: threadId, ...patch }),
+        });
+        const updated = result.data;
+        const idx = allThreads.findIndex(item => item.id === updated.id);
+        if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
+        renderThreadList();
+        renderActiveThread(updated);
+        showToast('\u804a\u5929\u5ba4\u72c0\u614b\u5df2\u66f4\u65b0');
+      } finally {
+        statusButtons.forEach(button => {
+          button.disabled = false;
+          button.classList.remove('opacity-60');
+        });
+      }
     }
 
     document.querySelectorAll('.thread-filter').forEach(button => {
