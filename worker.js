@@ -309,6 +309,17 @@ async function d1GetItineraryDetail(env, id) {
 function normalizeGasItinerary(item = {}) {
   const id = String(item.id || item.timestamp || '').trim();
   if (!id) return null;
+  const description = String(
+    item.description ||
+    item.desc ||
+    item.detail ||
+    item.details ||
+    item.content ||
+    item.itineraryDescription ||
+    item.itinerary_description ||
+    item.schedule ||
+    ''
+  ).trim();
   return {
     id,
     title: String(item.title || '').trim(),
@@ -316,7 +327,7 @@ function normalizeGasItinerary(item = {}) {
     price: Number(item.price || 0),
     days: Number(item.days || 0),
     image: String(item.image || '').trim(),
-    description: String(item.description || item.desc || '').trim(),
+    description,
     notes: String(item.notes || item.note || '').trim(),
     owner_uid: String(item.owneruid || item.ownerUid || '').trim(),
     owner_name: String(item.ownername || item.ownerName || '').trim(),
@@ -376,6 +387,62 @@ function pickGasItinerary(items = [], body = {}, gasResult = {}) {
     : sameRegion;
 
   return samePrice[0] || sameRegion[0] || sameTitle[0] || sameOwner[0] || normalized[0];
+}
+
+async function d1BackfillMissingItineraryTextFromGas(env, row) {
+  if (!env.DB || !env.GAS_WEBAPP_URL || !row?.id) return row;
+  const hasDescription = String(row.description || '').trim();
+  const hasImage = String(row.image || '').trim();
+  if (hasDescription && hasImage) return row;
+
+  try {
+    const allItems = await gasGet(env, { action: 'getItineraries', all: '1' });
+    const items = Array.isArray(allItems) ? allItems : [];
+    const picked = items
+      .map(normalizeGasItinerary)
+      .filter(Boolean)
+      .find(item => String(item.id) === String(row.id));
+    if (!picked) return row;
+
+    const merged = {
+      ...row,
+      title: String(row.title || '').trim() || picked.title,
+      region: String(row.region || '').trim() || picked.region,
+      price: Number(row.price || 0) || picked.price,
+      days: Number(row.days || 0) || picked.days,
+      image: hasImage || picked.image,
+      description: hasDescription || picked.description,
+      notes: String(row.notes || '').trim() || picked.notes,
+    };
+
+    if (String(merged.description || '').trim() || String(merged.image || '').trim()) {
+      await env.DB.prepare(`
+        UPDATE itineraries
+           SET title = ?,
+               region = ?,
+               price = ?,
+               days = ?,
+               image = ?,
+               description = ?,
+               notes = ?,
+               updated_at = datetime('now')
+         WHERE id = ?
+      `).bind(
+        merged.title,
+        merged.region,
+        merged.price,
+        merged.days,
+        merged.image,
+        merged.description,
+        merged.notes,
+        merged.id
+      ).run();
+    }
+    return merged;
+  } catch (err) {
+    console.warn('backfill itinerary text from GAS failed:', err.message);
+    return row;
+  }
 }
 
 async function d1UpsertGasItinerary(env, itinerary) {
@@ -5056,7 +5123,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
 
         if (env.DB) {
-          const row = await d1GetItineraryDetail(env, itineraryId);
+          let row = await d1GetItineraryDetail(env, itineraryId);
           if (!row) return json({ success: false, error: '?曆??唳迨銵?' }, 404);
 
           const isAdmin = ADMIN_UIDS.has(uid);
@@ -5064,6 +5131,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
           if (!isAdmin && !isOwner) {
             return json({ success: false, error: '?⊥???迨銵?' }, 403);
           }
+          row = await d1BackfillMissingItineraryTextFromGas(env, row);
           return json({ success: true, data: toItineraryManageModel(row) });
         }
 

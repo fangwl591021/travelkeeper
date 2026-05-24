@@ -360,6 +360,40 @@
       if (el) el.textContent = value;
     }
 
+    function firstText(source, keys) {
+      for (const key of keys) {
+        const value = source?.[key];
+        if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+      }
+      return '';
+    }
+
+    function normalizeItineraryData(data = {}) {
+      return {
+        ...data,
+        id: firstText(data, ['id', 'timestamp']) || data.id || data.timestamp || '',
+        title: firstText(data, ['title', 'name', 'tourTitle', 'itineraryTitle']) || '',
+        image: firstText(data, ['image', 'cover', 'coverImage', 'imageUrl', 'thumbnail']) || '',
+        region: firstText(data, ['region', 'area', 'category']) || '',
+        days: data.days ?? data.dayCount ?? data.duration ?? '',
+        price: data.price ?? data.amount ?? data.salePrice ?? '',
+        description: firstText(data, [
+          'description',
+          'desc',
+          'detail',
+          'details',
+          'content',
+          'body',
+          'itineraryDescription',
+          'itinerary_description',
+          'schedule',
+          'dailyDescription',
+          'daily_description'
+        ]),
+        notes: firstText(data, ['notes', 'note', 'notice', 'remarks']) || '',
+      };
+    }
+
     function bootStaticText() {
       t(document.getElementById('heading-main'), UI.mainTitle);
       t(document.getElementById('page-subtitle'), UI.subtitle);
@@ -669,6 +703,7 @@
     }
 
     function fillForm(data) {
+      data = normalizeItineraryData(data);
       formEl.elements.title.value = data.title || '';
       formEl.elements.image.value = data.image || '';
       formEl.elements.region.value = data.region || '';
@@ -698,6 +733,32 @@
       setPreview(data);
     }
 
+    async function hydrateMissingTextFromList(data) {
+      const normalized = normalizeItineraryData(data);
+      if (String(normalized.description || '').trim() && String(normalized.image || '').trim()) return normalized;
+      try {
+        const list = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r => r.json());
+        const items = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
+        const match = items
+          .map(normalizeItineraryData)
+          .find(item => String(item.id || item.timestamp || '') === String(itineraryId));
+        if (!match) return normalized;
+        return {
+          ...normalized,
+          title: normalized.title || match.title,
+          image: normalized.image || match.image,
+          region: normalized.region || match.region,
+          days: normalized.days || match.days,
+          price: normalized.price || match.price,
+          description: normalized.description || match.description,
+          notes: normalized.notes || match.notes,
+        };
+      } catch (err) {
+        console.warn('hydrate itinerary text from list failed:', err);
+        return normalized;
+      }
+    }
+
     async function initAuthAndLoad() {
       if (!itineraryId && !previewMode) throw new Error(UI.missingId);
 
@@ -725,7 +786,7 @@
       const detail = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}`).then(r => r.json());
       if (!detail?.success || !detail?.data) throw new Error(detail?.error || UI.notFound);
 
-      fillForm(detail.data);
+      fillForm(await hydrateMissingTextFromList(detail.data));
       loadingEl.hidden = true;
       formEl.hidden = false;
       legacyLinkEl.href = `itinerary-maintenance.html?id=${encodeURIComponent(itineraryId)}`;
