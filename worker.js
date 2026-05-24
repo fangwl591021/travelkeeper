@@ -5033,10 +5033,10 @@ export default {
 
       if (path === '/api/itinerary/fix-section-image' && request.method === 'POST') {
         const body = await request.json().catch(() => ({}));
-        const keyword = buildSectionImageKeyword(body);
-        const fixedUrl = await createFixedSectionImage(keyword, env);
+        const searchPlan = await buildSectionImageSearchPlan(body, env);
+        const fixedUrl = await createFixedSectionImage(searchPlan.queries, env);
         if (!fixedUrl) return json({ success: false, error: '圖片修補失敗' }, 500);
-        return json({ success: true, url: fixedUrl, keyword });
+        return json({ success: true, url: fixedUrl, keyword: searchPlan.keyword, queries: searchPlan.queries });
       }
 
       // ??????????????????????????????????????????????????????????
@@ -5425,19 +5425,60 @@ async function sendAdminReviewNotify(token, chatId, info) {
 
 // ?? ??撌亙 ?????????????????????????????????????????????????
 
-function buildSectionImageKeyword(body = {}) {
-  const raw = [
-    body.title,
-    String(body.body || '').split(/\r?\n/).find(line => String(line || '').trim()),
-  ].filter(Boolean).join(' ');
-  const cleaned = String(raw || '')
+function normalizeSectionImageKeyword(value) {
+  return String(value || '')
     .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
     .replace(/https?:\/\/\S+/g, ' ')
     .replace(/第\s*(?:\d+|[一二三四五六七八九十百]+)\s*天/g, ' ')
     .replace(/[|｜:：,，.。;；()（）【】\[\]{}]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function buildSectionImageKeyword(body = {}) {
+  const title = normalizeSectionImageKeyword(body.title);
+  const firstBodyLine = normalizeSectionImageKeyword(
+    String(body.body || '').split(/\r?\n/).find(line => String(line || '').trim()) || ''
+  );
+  const cleaned = title || firstBodyLine || 'travel itinerary scenic spot';
   return (cleaned || 'travel itinerary scenic spot').slice(0, 80);
+}
+
+async function translateSectionImageKeyword(keyword, body, env) {
+  if (!env.OPENAI_API_KEY) return '';
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        max_tokens: 60,
+        messages: [{
+          role: 'user',
+          content: `把這個旅遊行程段落標題轉成最適合找真實風景照片的英文搜尋詞。只輸出英文關鍵字，不要句子，不要標點。\n標題：${keyword}\n內文參考：${String(body?.body || '').slice(0, 160)}`
+        }],
+      }),
+    });
+    const data = await res.json();
+    return normalizeSectionImageKeyword(data?.choices?.[0]?.message?.content || '').slice(0, 80);
+  } catch (e) {
+    console.warn('section keyword translation failed:', e.message);
+    return '';
+  }
+}
+
+async function buildSectionImageSearchPlan(body = {}, env) {
+  const keyword = buildSectionImageKeyword(body);
+  const translated = await translateSectionImageKeyword(keyword, body, env);
+  const queries = [translated, keyword]
+    .concat(String(body.body || '').split(/\r?\n/).slice(0, 2).map(normalizeSectionImageKeyword))
+    .map(q => String(q || '').trim())
+    .filter(Boolean);
+  return {
+    keyword,
+    queries: [...new Set(queries)].slice(0, 5),
+  };
 }
 
 function seededPhotoUrl(keyword) {
@@ -5507,19 +5548,17 @@ async function fetchRepairImageSource(keyword, env) {
   return seededPhotoUrl(keyword);
 }
 
-async function createFixedSectionImage(keyword, env) {
+async function createFixedSectionImage(queries, env) {
+  const list = Array.isArray(queries) && queries.length ? queries : [queries || 'travel itinerary scenic spot'];
   const filename = `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
-  const sourceUrl = await fetchRepairImageSource(keyword, env);
-  let url = await uploadUrlToR2(sourceUrl, filename, env);
-  if (url && url.startsWith(R2_PUBLIC)) return url;
-
-  const seededUrl = seededPhotoUrl(keyword);
-  if (seededUrl !== sourceUrl) {
-    url = await uploadUrlToR2(seededUrl, filename, env);
+  for (const query of list) {
+    const sourceUrl = await fetchRepairImageSource(query, env);
+    let url = await uploadUrlToR2(sourceUrl, filename, env);
     if (url && url.startsWith(R2_PUBLIC)) return url;
   }
 
-  return uploadDataUrlToR2(buildFallbackSectionSvg(keyword), filename.replace(/\.jpg$/i, '.svg'), env);
+  const fallbackKeyword = list[0] || 'travel itinerary scenic spot';
+  return uploadDataUrlToR2(buildFallbackSectionSvg(fallbackKeyword), filename.replace(/\.jpg$/i, '.svg'), env);
 }
 
 async function fetchUnsplashUrl(keyword, env) {
