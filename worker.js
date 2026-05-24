@@ -1506,6 +1506,20 @@ function resolveLinePushTarget(thread = {}) {
   return null;
 }
 
+function decodeBase64DataUrl(value = '') {
+  const input = String(value || '').trim();
+  if (!input) return null;
+  const match = input.match(/^data:([^;,]+);base64,(.+)$/i);
+  const contentType = match ? match[1] : 'image/png';
+  const base64 = match ? match[2] : input;
+  const normalized = base64.replace(/\s+/g, '');
+  if (!normalized) return null;
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return { contentType, bytes };
+}
+
 async function pushLineTextMessage(env, to, text) {
   if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
     throw new Error('LINE_CHANNEL_ACCESS_TOKEN missing');
@@ -2265,6 +2279,58 @@ async function d1SendLineOaReply(env, body = {}) {
     sent: true,
     line: { status: lineResult.status },
   };
+}
+
+async function publishLineRichMenu(env, body = {}) {
+  const richMenu = body.richMenu || body.linePayload || body.rendered?.linePayload || body.rendered?.richMenu || null;
+  const image = decodeBase64DataUrl(body.imageBase64 || body.image || '');
+  const setDefault = body.setDefault === true;
+
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return { success: false, error: 'LINE_CHANNEL_ACCESS_TOKEN_MISSING' };
+  if (!richMenu || typeof richMenu !== 'object') return { success: false, error: 'MISSING_RICH_MENU_JSON' };
+  if (!richMenu.size || !Array.isArray(richMenu.areas)) return { success: false, error: 'INVALID_RICH_MENU_JSON' };
+  if (!image?.bytes?.length) return { success: false, error: 'MISSING_IMAGE_BASE64' };
+  if (!/^image\/(png|jpeg|jpg)$/i.test(image.contentType)) return { success: false, error: 'UNSUPPORTED_IMAGE_TYPE' };
+
+  const auth = { Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` };
+  const createRes = await fetch('https://api.line.me/v2/bot/richmenu', {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify(richMenu),
+  });
+  const created = await createRes.json().catch(() => ({}));
+  if (!createRes.ok) {
+    return { success: false, error: 'LINE_CREATE_RICH_MENU_FAILED', status: createRes.status, detail: created };
+  }
+
+  const richMenuId = created.richMenuId;
+  const uploadRes = await fetch(`https://api-data.line.me/v2/bot/richmenu/${encodeURIComponent(richMenuId)}/content`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': image.contentType === 'image/jpg' ? 'image/jpeg' : image.contentType },
+    body: image.bytes,
+  });
+  const uploadText = await uploadRes.text().catch(() => '');
+  if (!uploadRes.ok) {
+    await fetch(`https://api.line.me/v2/bot/richmenu/${encodeURIComponent(richMenuId)}`, {
+      method: 'DELETE',
+      headers: auth,
+    }).catch(() => null);
+    return { success: false, error: 'LINE_UPLOAD_RICH_MENU_IMAGE_FAILED', status: uploadRes.status, detail: uploadText };
+  }
+
+  let defaultResult = null;
+  if (setDefault) {
+    const defaultRes = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${encodeURIComponent(richMenuId)}`, {
+      method: 'POST',
+      headers: auth,
+    });
+    defaultResult = { ok: defaultRes.ok, status: defaultRes.status, detail: await defaultRes.text().catch(() => '') };
+    if (!defaultRes.ok) {
+      return { success: false, error: 'LINE_SET_DEFAULT_RICH_MENU_FAILED', richMenuId, defaultResult };
+    }
+  }
+
+  return { success: true, data: { richMenuId, setDefault, defaultResult } };
 }
 
 async function d1UpsertLineVisitorRequirement(env, body = {}) {
@@ -4486,6 +4552,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1SendLineOaReply(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/rich-menu/publish' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await publishLineRichMenu(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
