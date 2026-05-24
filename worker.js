@@ -5034,9 +5034,16 @@ export default {
       if (path === '/api/itinerary/fix-section-image' && request.method === 'POST') {
         const body = await request.json().catch(() => ({}));
         const searchPlan = await buildSectionImageSearchPlan(body, env);
-        const fixedUrl = await createFixedSectionImage(searchPlan.queries, env);
-        if (!fixedUrl) return json({ success: false, error: '圖片修補失敗' }, 500);
-        return json({ success: true, url: fixedUrl, keyword: searchPlan.keyword, queries: searchPlan.queries });
+        const fixed = await createFixedSectionImage(searchPlan.queries, env);
+        if (!fixed?.url) return json({ success: false, error: '圖片修補失敗' }, 500);
+        return json({
+          success: true,
+          url: fixed.url,
+          keyword: searchPlan.keyword,
+          queries: searchPlan.queries,
+          sourceQuery: fixed.sourceQuery || '',
+          sourceUrl: fixed.sourceUrl || '',
+        });
       }
 
       // ??????????????????????????????????????????????????????????
@@ -5435,6 +5442,15 @@ function normalizeSectionImageKeyword(value) {
     .trim();
 }
 
+function extractEnglishSearchKeyword(value) {
+  const english = String(value || '')
+    .replace(/[^a-zA-Z0-9\s&'-]/g, ' ')
+    .replace(/\b(photo|photos|picture|pictures|image|images|scenery|scenic|spot|attraction|travel)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return english.length >= 3 ? english.slice(0, 80) : '';
+}
+
 function buildSectionImageKeyword(body = {}) {
   const title = normalizeSectionImageKeyword(body.title);
   const firstBodyLine = normalizeSectionImageKeyword(
@@ -5461,7 +5477,8 @@ async function translateSectionImageKeyword(keyword, body, env) {
       }),
     });
     const data = await res.json();
-    return normalizeSectionImageKeyword(data?.choices?.[0]?.message?.content || '').slice(0, 80);
+    const raw = normalizeSectionImageKeyword(data?.choices?.[0]?.message?.content || '').slice(0, 80);
+    return extractEnglishSearchKeyword(raw) || raw;
   } catch (e) {
     console.warn('section keyword translation failed:', e.message);
     return '';
@@ -5471,7 +5488,9 @@ async function translateSectionImageKeyword(keyword, body, env) {
 async function buildSectionImageSearchPlan(body = {}, env) {
   const keyword = buildSectionImageKeyword(body);
   const translated = await translateSectionImageKeyword(keyword, body, env);
-  const queries = [translated, keyword]
+  const translatedEnglish = extractEnglishSearchKeyword(translated);
+  const keywordEnglish = extractEnglishSearchKeyword(keyword);
+  const queries = [translatedEnglish, translated, keywordEnglish, keyword]
     .concat(String(body.body || '').split(/\r?\n/).slice(0, 2).map(normalizeSectionImageKeyword))
     .map(q => String(q || '').trim())
     .filter(Boolean);
@@ -5545,7 +5564,7 @@ async function fetchRepairImageSource(keyword, env) {
   }
   const commonsUrl = await fetchCommonsImageUrl(keyword);
   if (commonsUrl) return commonsUrl;
-  return seededPhotoUrl(keyword);
+  return '';
 }
 
 async function createFixedSectionImage(queries, env) {
@@ -5553,12 +5572,14 @@ async function createFixedSectionImage(queries, env) {
   const filename = `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
   for (const query of list) {
     const sourceUrl = await fetchRepairImageSource(query, env);
+    if (!sourceUrl) continue;
     let url = await uploadUrlToR2(sourceUrl, filename, env);
-    if (url && url.startsWith(R2_PUBLIC)) return url;
+    if (url && url.startsWith(R2_PUBLIC)) return { url, sourceQuery: query, sourceUrl };
   }
 
   const fallbackKeyword = list[0] || 'travel itinerary scenic spot';
-  return uploadDataUrlToR2(buildFallbackSectionSvg(fallbackKeyword), filename.replace(/\.jpg$/i, '.svg'), env);
+  const fallbackUrl = await uploadDataUrlToR2(buildFallbackSectionSvg(fallbackKeyword), filename.replace(/\.jpg$/i, '.svg'), env);
+  return { url: fallbackUrl, sourceQuery: fallbackKeyword, sourceUrl: 'generated-fallback-svg' };
 }
 
 async function fetchUnsplashUrl(keyword, env) {
