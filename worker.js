@@ -5472,7 +5472,7 @@ async function translateSectionImageKeyword(keyword, body, env) {
         max_tokens: 60,
         messages: [{
           role: 'user',
-          content: `把這個旅遊行程段落標題轉成最適合找真實風景照片的英文搜尋詞。只輸出英文關鍵字，不要句子，不要標點。\n標題：${keyword}\n內文參考：${String(body?.body || '').slice(0, 160)}`
+          content: `把這個旅遊行程段落標題轉成最適合找真實旅遊照片的英文地點搜尋詞。若是知名地標，輸出官方英文名稱加城市；只輸出 ASCII 英文關鍵字，不要中文、日文、句子、標點，也不要 photo/image/scenery 這類泛詞。\n標題：${keyword}\n內文參考：${String(body?.body || '').slice(0, 160)}`
         }],
       }),
     });
@@ -5536,21 +5536,48 @@ function buildFallbackSectionSvg(keyword) {
   return encodeSvgDataUrl(svg);
 }
 
+function imageQueryTokens(keyword) {
+  return String(keyword || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff\s-]/g, ' ')
+    .split(/\s+/)
+    .map(token => token.trim())
+    .filter(token => token && token.length >= 2 && !['and', 'the', 'with', 'tour', 'trip', 'day'].includes(token));
+}
+
+function scoreCommonsImageTitle(title, keyword) {
+  const haystack = String(title || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ');
+  const tokens = imageQueryTokens(keyword);
+  if (!tokens.length) return 0;
+  return tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
+}
+
 async function fetchCommonsImageUrl(keyword) {
   try {
     const query = String(keyword || 'travel scenic').slice(0, 80);
-    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=4&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url&iiurlwidth=1600&format=json&origin=*`;
+    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=8&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url&iiurlwidth=1600&format=json&origin=*`;
     const res = await fetch(apiUrl, { headers: { 'User-Agent': 'TravelKeeper/1.0' } });
     if (!res.ok) return '';
     const data = await res.json();
     const pages = Object.values(data?.query?.pages || {});
+    const candidates = [];
     for (const page of pages) {
       const info = page?.imageinfo?.[0];
       const url = info?.thumburl || info?.url || '';
       if (/^https?:\/\//i.test(url) && /\.(?:jpg|jpeg|png|webp)(?:[?#].*)?$/i.test(url.split('?')[0])) {
-        return url;
+        const score = scoreCommonsImageTitle(page?.title || '', query);
+        if (score > 0) candidates.push({ url, score, width: Number(info?.thumbwidth || 0), height: Number(info?.thumbheight || 0) });
       }
     }
+    candidates.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const aRatio = a.width && a.height ? Math.abs((a.width / a.height) - (16 / 9)) : 9;
+      const bRatio = b.width && b.height ? Math.abs((b.width / b.height) - (16 / 9)) : 9;
+      return aRatio - bRatio;
+    });
+    return candidates[0]?.url || '';
   } catch (e) {
     console.warn('Commons image lookup failed:', e.message);
   }
@@ -5565,6 +5592,37 @@ async function fetchRepairImageSource(keyword, env) {
   const commonsUrl = await fetchCommonsImageUrl(keyword);
   if (commonsUrl) return commonsUrl;
   return '';
+}
+
+async function generateSectionImageWithOpenAI(keyword, env) {
+  if (!env.OPENAI_API_KEY) return '';
+  try {
+    const prompt = [
+      'Create a realistic horizontal travel editorial image for this itinerary section.',
+      `Place or theme: ${String(keyword || 'travel destination').slice(0, 120)}.`,
+      'Style: natural daylight, professional travel photography, no text, no watermark, no logos, no poster layout.',
+      'Composition: landmark or street scene clearly matching the place, suitable as a 16:9 itinerary cover.'
+    ].join(' ');
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-image-1',
+        prompt,
+        size: '1536x1024',
+      }),
+    });
+    const data = await res.json();
+    const b64 = data?.data?.[0]?.b64_json || '';
+    if (!res.ok || !b64) {
+      console.warn('OpenAI image generation failed:', data?.error?.message || res.status);
+      return '';
+    }
+    return `data:image/png;base64,${b64}`;
+  } catch (e) {
+    console.warn('OpenAI image generation failed:', e.message);
+    return '';
+  }
 }
 
 async function createFixedSectionImage(queries, env) {
@@ -5584,6 +5642,12 @@ async function createFixedSectionImage(queries, env) {
   }
 
   const fallbackKeyword = list[0] || 'travel itinerary scenic spot';
+  const generatedDataUrl = await generateSectionImageWithOpenAI(fallbackKeyword, env);
+  if (generatedDataUrl) {
+    const generatedUrl = await uploadDataUrlToR2(generatedDataUrl, filename.replace(/\.jpg$/i, '.png'), env);
+    if (generatedUrl) return { url: generatedUrl, sourceQuery: fallbackKeyword, sourceUrl: 'openai-image-generation' };
+  }
+
   const fallbackUrl = await uploadDataUrlToR2(buildFallbackSectionSvg(fallbackKeyword), filename.replace(/\.jpg$/i, '.svg'), env);
   return { url: fallbackUrl, sourceQuery: fallbackKeyword, sourceUrl: 'generated-fallback-svg' };
 }
