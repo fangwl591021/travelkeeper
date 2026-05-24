@@ -491,11 +491,13 @@
         .replace(/\\n/g, '\n')
         .replace(/([^\n])(!\[[^\]]*\]\(https?:\/\/[^)\s]+\))/gi, '$1\n$2')
         .replace(/(!\[[^\]]*\]\(https?:\/\/[^)\s]+\))([^\n])/gi, '$1\n$2')
+        .replace(/([^\n])(\s*\u7b2c\s*(?:\d+|[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e]+)\s*\u5929)/g, '$1\n$2')
         .trim();
       if (!text) return [{ title: '', image: '', body: '' }];
 
       const imageRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i;
-      const imageLineRegex = /^!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)\s*$/;
+      const imageAnyRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i;
+      const bareImageUrlRegex = /^(https?:\/\/\S+\.(?:jpg|jpeg|png|webp|gif)(?:\?\S*)?)$/i;
       const dayCharCodes = new Set([0x4e00, 0x4e8c, 0x4e09, 0x56db, 0x4e94, 0x516d, 0x4e03, 0x516b, 0x4e5d, 0x5341, 0x767e]);
       const isDayHeadingLine = (line) => {
         const value = String(line || '').trim().replace(/^[\u200b\ufeff\s]+/, '');
@@ -525,14 +527,23 @@
 
       const lineGroups = [];
       let currentGroup = null;
+      const introLines = [];
       for (const line of text.split('\n')) {
         if (isDayHeadingLine(line)) {
           if (currentGroup) lineGroups.push(currentGroup);
+          if (!currentGroup && introLines.some(item => String(item || '').trim())) {
+            lineGroups.push({ title: '\u884c\u7a0b\u7e3d\u89bd', lines: introLines.slice() });
+          }
           currentGroup = { title: getDayHeadingTitle(line), lines: [] };
           continue;
         }
-        if (currentGroup) currentGroup.lines.push(line);
+        if (currentGroup) {
+          currentGroup.lines.push(line);
+        } else {
+          introLines.push(line);
+        }
       }
+      if (currentGroup) lineGroups.push(currentGroup);
 
       if (!lineGroups.length) {
         const firstImage = text.match(imageRegex);
@@ -549,9 +560,16 @@
 
         for (const line of group.lines) {
           const trimmed = String(line || '').trim();
-          const imageMatch = trimmed.match(imageLineRegex);
+          const imageMatch = trimmed.match(imageAnyRegex);
           if (imageMatch && !image) {
             image = imageMatch[1].trim();
+            const cleanedLine = String(line || '').replace(imageAnyRegex, '').trim();
+            if (cleanedLine) bodyLines.push(cleanedLine);
+            continue;
+          }
+          const bareImageMatch = trimmed.match(bareImageUrlRegex);
+          if (bareImageMatch && !image) {
+            image = bareImageMatch[1].trim();
             continue;
           }
           bodyLines.push(line);
@@ -654,7 +672,10 @@
         String(section?.image || '').trim() ||
         String(section?.body || '').trim()
       ).length;
-      sectionsDebugEl.textContent = `診斷：description ${source.length} 字，段落 ${sections.length} 筆，有內容 ${meaningful} 筆，第一行：${firstLine.slice(0, 50)}`;
+      const titles = sections
+        .map((section, index) => String(section?.title || '').trim() || `段落${index + 1}`)
+        .join('、');
+      sectionsDebugEl.textContent = `診斷：description ${source.length} 字，段落 ${sections.length} 筆，有內容 ${meaningful} 筆，第一行：${firstLine.slice(0, 50)}；標題：${titles}`;
     }
 
     async function uploadFileToR2(file) {
