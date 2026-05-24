@@ -113,9 +113,9 @@
         <div class="border-t border-slate-200 bg-white px-4 py-3">
           <div id="reply-suggestions" class="flex flex-wrap gap-3 mb-4"></div>
           <div class="flex items-end gap-3">
-            <button class="w-10 h-10 rounded-full border border-slate-300 bg-white text-lg text-slate-500">&#9786;</button>
-            <button class="w-10 h-10 rounded-full border border-slate-300 bg-white text-lg text-slate-500">&#128206;</button>
-            <button class="w-10 h-10 rounded-full border border-slate-300 bg-white text-xl text-slate-500">&#65291;</button>
+            <button id="reply-emoji" type="button" title="插入表情" class="w-10 h-10 rounded-full border border-slate-300 bg-white text-lg text-slate-500 hover:bg-slate-50">&#9786;</button>
+            <button id="reply-attach" type="button" title="附件提醒" class="w-10 h-10 rounded-full border border-slate-300 bg-white text-lg text-slate-500 hover:bg-slate-50">&#128206;</button>
+            <button id="reply-quick" type="button" title="快速片語" class="w-10 h-10 rounded-full border border-slate-300 bg-white text-xl text-slate-500 hover:bg-slate-50">&#65291;</button>
             <textarea id="draft-reply" rows="5" class="flex-1 min-h-[160px] rounded-3xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" placeholder="AI &#24314;&#35696;&#22238;&#35206;&#26371;&#25918;&#22312;&#36889;&#35041;&#65292;&#26041;&#20415;&#20154;&#24037;&#35079;&#35069;&#36028;&#22238; LINE OA&#12290;"></textarea>
             <div class="flex flex-col gap-2">
               <button id="send-reply" class="rounded-2xl bg-emerald-500 text-white font-semibold px-5 py-3 hover:bg-emerald-600">送出</button>
@@ -294,6 +294,7 @@
     const chatMessagesEl = document.getElementById('chat-messages');
     const suggestionListEl = document.getElementById('suggestion-list');
     const suggestionCountEl = document.getElementById('suggestion-count');
+    const replySuggestionsEl = document.getElementById('reply-suggestions');
     const threadTagsEl = document.getElementById('thread-tags');
     const threadStatusBadgeEl = document.getElementById('thread-status-badge');
     const riskSummaryEl = document.getElementById('risk-summary');
@@ -326,6 +327,15 @@
     const visitorRecordArchiveEl = document.getElementById('visitor-record-archive');
 
     let publishedItineraries = [];
+    let replyToolMode = '';
+
+    const QUICK_REPLY_TEXTS = [
+      '您好，收到您的訊息了，我先幫您確認行程與名額，稍後回覆您。',
+      '請問您預計幾位出發？方便也提供想出發的日期或區間嗎？',
+      '我先整理幾個適合的行程給您參考，您可以再告訴我偏好的預算與地區。',
+      '如果要報名，我可以先幫您確認名額與付款方式。'
+    ];
+    const QUICK_EMOJIS = ['😊', '🙏', '👍', '✨'];
 
     function showToast(message, type = 'success') {
       const el = document.getElementById('toast');
@@ -334,6 +344,36 @@
         (type === 'error' ? 'bg-red-500' : 'bg-emerald-500');
       el.textContent = message;
       setTimeout(() => { el.hidden = true; }, 2400);
+    }
+
+    function insertIntoDraft(text) {
+      const insertText = String(text || '');
+      const start = panelDraftEl.selectionStart ?? panelDraftEl.value.length;
+      const end = panelDraftEl.selectionEnd ?? panelDraftEl.value.length;
+      panelDraftEl.value = panelDraftEl.value.slice(0, start) + insertText + panelDraftEl.value.slice(end);
+      const nextPos = start + insertText.length;
+      panelDraftEl.focus();
+      panelDraftEl.setSelectionRange(nextPos, nextPos);
+    }
+
+    function renderReplyQuickTools(mode = '') {
+      replyToolMode = mode;
+      replySuggestionsEl.innerHTML = '';
+      if (!mode) return;
+      const items = mode === 'emoji' ? QUICK_EMOJIS : QUICK_REPLY_TEXTS;
+      items.forEach(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = mode === 'emoji'
+          ? 'rounded-full border border-slate-200 bg-white px-3 py-2 text-lg hover:bg-slate-50'
+          : 'rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 hover:bg-emerald-100';
+        button.textContent = item;
+        button.addEventListener('click', () => {
+          insertIntoDraft(mode === 'emoji' ? item : `${item}${panelDraftEl.value.trim() ? '' : ''}`);
+          showToast(mode === 'emoji' ? '已插入表情' : '已帶入快速片語');
+        });
+        replySuggestionsEl.appendChild(button);
+      });
     }
 
     function openTourDrawer(url, title) {
@@ -925,6 +965,7 @@
         chatViewEl.hidden = true;
         chatEmptyEl.hidden = false;
         suggestionListEl.innerHTML = '';
+        replySuggestionsEl.innerHTML = '';
         threadTagsEl.innerHTML = '';
         suggestionCountEl.textContent = '0';
         renderVisitorRecords(null);
@@ -932,6 +973,7 @@
         riskCountEl.textContent = '0';
         internalNoteEl.value = '';
         panelDraftEl.value = '';
+        replyToolMode = '';
         syncStatusButtons('');
         return;
       }
@@ -1062,6 +1104,18 @@
     });
 
     threadSearchEl.addEventListener('input', renderThreadList);
+
+    document.getElementById('reply-emoji').addEventListener('click', () => {
+      renderReplyQuickTools(replyToolMode === 'emoji' ? '' : 'emoji');
+    });
+
+    document.getElementById('reply-attach').addEventListener('click', () => {
+      showToast('目前監看台已開放文字回覆；圖片與檔案請先在 LINE OA 後台傳送。', 'error');
+    });
+
+    document.getElementById('reply-quick').addEventListener('click', () => {
+      renderReplyQuickTools(replyToolMode === 'quick' ? '' : 'quick');
+    });
 
     document.getElementById('send-reply').addEventListener('click', () => {
       sendReply().catch(err => showToast(err.message || '送出失敗', 'error'));
