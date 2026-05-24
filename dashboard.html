@@ -2645,7 +2645,7 @@ function App() {
                   <p className="text-blue-600 text-sm font-medium mt-1">分享此連結給想申請的業務夥伴</p>
                 </div>
                 <button onClick={() => {
-                  const url = `${window.location.origin}${window.location.pathname.replace(/dashboard\.html|admin\.html|crm\.html$/,'')}register.html?a=demo`;
+                  const url = `${window.location.origin}${window.location.pathname.replace(/dashboard\.html|admin\.html|crm\.html$/,'')}register.html`;
                   navigator.clipboard.writeText(url).then(() => showToast('連結已複製！'));
                 }} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition">
                   複製申請連結
