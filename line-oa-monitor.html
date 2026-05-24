@@ -285,6 +285,8 @@
     const LIFF_ID = '2009367829-BDZCGti8';
     const NEGATIVE_KEYWORDS = ['\u9000\u6b3e', '\u9000\u8cbb', '\u751f\u6c23', '\u5931\u671b', '\u53d6\u6d88', '\u62b1\u6028', '\u5ba2\u670d\u5dee', '\u5dee\u8a55', '\u8ca0\u8a55', '\u6295\u8a34'];
     const URGENT_KEYWORDS = ['\u7acb\u5373', '\u76e1\u5feb', '\u7dca\u6025', '\u4eca\u5929', '\u99ac\u4e0a', '\u8655\u7406', '\u5ba2\u670d', '\u9000\u6b3e'];
+    const DOCUMENT_SERVICE_KEYWORDS = ['證件辦理', '台胞證', '護照', '簽證', '證照', '證件', '身分證', '身份證', '大頭照', '資料照', '補件', 'OCR'];
+    const DOCUMENT_UPLOAD_KEYWORDS = ['上傳資料', '上傳照片', '資料照片', '證件照片', '請上傳', '補件', 'OCR', '檢核', '檢查資料'];
 
     let profile = null;
     let userStatus = null;
@@ -477,9 +479,58 @@
       container.textContent = String(item.name || '?').trim().slice(0, 1);
     }
 
+    function threadText(thread) {
+      return (thread?.messages || []).map(m => m.text || '').join('\n');
+    }
+
+    function hasImageUpload(thread) {
+      return (thread?.messages || []).some(message => {
+        const type = String(message.type || '').toLowerCase();
+        const text = String(message.text || '').toLowerCase();
+        return type === 'image' || text.includes('[image]') || text.includes('[photo]') || text.includes('[圖片]');
+      });
+    }
+
+    function hasDocumentIntent(text) {
+      return DOCUMENT_SERVICE_KEYWORDS.some(keyword => String(text || '').includes(keyword));
+    }
+
+    function hasDocumentUploadRequest(text) {
+      return DOCUMENT_UPLOAD_KEYWORDS.some(keyword => String(text || '').includes(keyword));
+    }
+
+    function buildDocumentServiceSuggestion(thread) {
+      const haystack = threadText(thread);
+      const documentIntent = hasDocumentIntent(haystack);
+      const imageUploaded = hasImageUpload(thread);
+      const requestedUpload = hasDocumentUploadRequest(haystack);
+      if (documentIntent) {
+        if (imageUploaded) {
+          return '您好，已收到您提供的證件資料照片。系統會先檢查照片是否清楚、欄位是否完整，以及是否符合台胞證、護照等證件辦理需求；確認正確後才會建立到客戶檔案並進入辦理流程。若資料不清楚或項目不符，會再請您依提示重新補件。';
+        }
+        return '您好，若您要辦理台胞證、護照或其他證件，請先告訴我們要辦理的項目。確認後，我們會依序請您上傳清楚的資料照片，系統會先做 OCR 檢核；資料完整且正確後，才會建立到客戶檔案並進入辦理流程。';
+      }
+      if (imageUploaded && !requestedUpload) {
+        return '您好，我有收到您上傳的圖片。請問您需要哪一項服務呢？例如證件辦理、行程諮詢、訂單協助或付款問題，我再依照服務內容協助您。';
+      }
+      return '';
+    }
+
+    function getDerivedThreadTags(thread) {
+      const haystack = threadText(thread);
+      const tags = [];
+      if (hasDocumentIntent(haystack)) tags.push('證件辦理');
+      if (hasImageUpload(thread) && !hasDocumentUploadRequest(haystack) && !hasDocumentIntent(haystack)) tags.push('圖片待確認');
+      return tags;
+    }
+
     function buildSuggestions(thread) {
-      const haystack = (thread.messages || []).map(m => m.text || '').join('\n');
+      const haystack = threadText(thread);
       const suggestions = [];
+      const documentSuggestion = buildDocumentServiceSuggestion(thread);
+      if (documentSuggestion) {
+        suggestions.push(documentSuggestion);
+      }
       if (/(\u65e5\u672c|\u6eab\u6cc9|\u8cde\u96ea|\u8cde\u696d|\u4e5d\u5dde|\u5bb6\u65cf|\u89aa\u5b50)/.test(haystack)) {
         suggestions.push('\u60a8\u597d\uff0c\u82e5\u60a8\u60f3\u53c3\u8003\u65e5\u672c\u3001\u6eab\u6cc9\u6216\u89aa\u5b50\u65c5\u904a\u65b9\u5411\uff0c\u6211\u5011\u9019\u908a\u6709\u5e7e\u652f\u9069\u5408\u7684\u884c\u7a0b\u53ef\u4ee5\u63d0\u4f9b\u60a8\u53c3\u8003\uff0c\u6211\u518d\u5e6b\u60a8\u6574\u7406\u6210\u6bd4\u8f03\u61f6\u4eba\u597d\u6311\u9078\u7684\u9078\u9805\u3002');
       }
@@ -833,7 +884,8 @@
 
     function renderTags(thread) {
       threadTagsEl.innerHTML = '';
-      (thread?.tags || []).forEach(tag => {
+      const tags = [...new Set([...(thread?.tags || []), ...getDerivedThreadTags(thread)])];
+      tags.forEach(tag => {
         const pill = document.createElement('span');
         pill.className = 'px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-sm font-semibold';
         pill.textContent = tag;
