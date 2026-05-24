@@ -24,10 +24,11 @@
       <div class="px-5 py-4 border-b border-slate-200">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-full bg-emerald-500 text-white grid place-items-center font-bold text-lg">OA</div>
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <h1 class="text-xl font-bold">LINE OA &#31649;&#29702;&#24460;&#21488;</h1>
             <p class="text-sm text-slate-500 mt-1">&#30435;&#30475;&#27169;&#24335;&#65292;&#19981;&#33258;&#21205;&#22238;&#35206;</p>
           </div>
+          <button id="back-page" type="button" class="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">回上頁</button>
         </div>
       </div>
 
@@ -141,6 +142,16 @@
             <span id="suggestion-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="suggestion-list" class="space-y-3"></div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <p class="text-lg font-bold">CRM 客戶資料</p>
+            <span id="crm-status-pill" class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">未選擇</span>
+          </div>
+          <div id="crm-panel" class="space-y-3 text-sm text-slate-600">
+            <div class="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-slate-400">選擇聊天室後顯示客戶資料。</div>
+          </div>
         </section>
 
         <section class="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-4">
@@ -295,6 +306,8 @@
     const suggestionListEl = document.getElementById('suggestion-list');
     const suggestionCountEl = document.getElementById('suggestion-count');
     const replySuggestionsEl = document.getElementById('reply-suggestions');
+    const crmPanelEl = document.getElementById('crm-panel');
+    const crmStatusPillEl = document.getElementById('crm-status-pill');
     const threadTagsEl = document.getElementById('thread-tags');
     const threadStatusBadgeEl = document.getElementById('thread-status-badge');
     const riskSummaryEl = document.getElementById('risk-summary');
@@ -374,6 +387,67 @@
         });
         replySuggestionsEl.appendChild(button);
       });
+    }
+
+    function renderCrmPanel(thread) {
+      if (!thread) {
+        crmStatusPillEl.className = 'px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold';
+        crmStatusPillEl.textContent = '未選擇';
+        crmPanelEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-slate-400">選擇聊天室後顯示客戶資料。</div>';
+        return;
+      }
+      crmStatusPillEl.className = `px-3 py-1 rounded-full text-xs font-semibold ${statusClass(thread.status || 'open')}`;
+      crmStatusPillEl.textContent = statusLabel(thread.status || 'open');
+      const initials = String(thread.name || '客').trim().slice(0, 1);
+      const avatarHtml = thread.pictureUrl
+        ? `<img src="${thread.pictureUrl}" alt="${thread.name || 'customer'}" class="w-12 h-12 rounded-full object-cover">`
+        : `<div class="w-12 h-12 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold">${initials}</div>`;
+      const tags = (thread.tags || []).map(tag => `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs">${tag}</span>`).join('');
+      crmPanelEl.innerHTML = `
+        <div class="flex items-center gap-3">
+          ${avatarHtml}
+          <div class="min-w-0">
+            <p class="font-bold text-slate-900 truncate">${thread.name || '未命名客戶'}</p>
+            <p class="text-xs text-slate-400 truncate">${thread.userId || '沒有 User ID'}</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-2xl bg-slate-50 px-3 py-2">
+            <p class="text-xs text-slate-400">風險</p>
+            <p class="font-semibold text-slate-800">${riskLabel(thread.risk || 'low')}</p>
+          </div>
+          <div class="rounded-2xl bg-slate-50 px-3 py-2">
+            <p class="text-xs text-slate-400">未讀</p>
+            <p class="font-semibold text-slate-800">${Number(thread.unread || 0)} 則</p>
+          </div>
+          <div class="rounded-2xl bg-slate-50 px-3 py-2">
+            <p class="text-xs text-slate-400">最後互動</p>
+            <p class="font-semibold text-slate-800">${formatTime(thread.lastMessageAt) || '-'}</p>
+          </div>
+          <div class="rounded-2xl bg-slate-50 px-3 py-2">
+            <p class="text-xs text-slate-400">重要紀錄</p>
+            <p class="font-semibold text-slate-800">${Number(thread.importantCount || 0)} 筆</p>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">最近訊息</p>
+          <p class="rounded-2xl bg-slate-50 px-3 py-2 leading-6 text-slate-700">${thread.summary || '尚無摘要'}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">${tags || '<span class="text-xs text-slate-400">尚未建立標籤</span>'}</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="crm-copy-user-id" type="button" class="rounded-2xl border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">複製 User ID</button>
+          <button id="crm-add-record" type="button" class="rounded-2xl bg-emerald-500 py-2 text-sm font-semibold text-white hover:bg-emerald-600">新增重要紀錄</button>
+        </div>
+      `;
+      document.getElementById('crm-copy-user-id').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(thread.userId || '');
+          showToast('已複製 User ID');
+        } catch (_err) {
+          showToast('複製失敗', 'error');
+        }
+      });
+      document.getElementById('crm-add-record').addEventListener('click', () => openVisitorRecordModal());
     }
 
     function openTourDrawer(url, title) {
@@ -968,6 +1042,7 @@
         replySuggestionsEl.innerHTML = '';
         threadTagsEl.innerHTML = '';
         suggestionCountEl.textContent = '0';
+        renderCrmPanel(null);
         renderVisitorRecords(null);
         riskSummaryEl.textContent = '\u5c1a\u672a\u9078\u64c7\u804a\u5929\u5ba4\u3002';
         riskCountEl.textContent = '0';
@@ -1005,6 +1080,7 @@
       renderSuggestions(thread);
       renderItinerarySuggestions(thread);
       renderTags(thread);
+      renderCrmPanel(thread);
       renderVisitorRecords(thread);
       syncStatusButtons(thread.status || 'open');
 
@@ -1110,7 +1186,7 @@
     });
 
     document.getElementById('reply-attach').addEventListener('click', () => {
-      showToast('目前監看台已開放文字回覆；圖片與檔案請先在 LINE OA 後台傳送。', 'error');
+      showToast('目前只能從這裡送文字；圖片、PDF、檔案請回 LINE OA 後台傳。', 'error');
     });
 
     document.getElementById('reply-quick').addEventListener('click', () => {
@@ -1150,6 +1226,14 @@
     });
 
     document.getElementById('import-save').addEventListener('click', saveImportedThread);
+
+    document.getElementById('back-page').addEventListener('click', () => {
+      if (history.length > 1) {
+        history.back();
+        return;
+      }
+      location.href = './dashboard.html';
+    });
 
     document.getElementById('save-thread-meta').addEventListener('click', () => {
       const active = allThreads.find(item => item.id === activeThreadId);
