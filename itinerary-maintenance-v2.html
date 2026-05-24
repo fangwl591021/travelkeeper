@@ -103,6 +103,7 @@
           <div>
             <h3 id="sections-title" class="text-2xl font-bold"></h3>
             <p id="sections-subtitle" class="text-sm text-slate-500 mt-1"></p>
+            <p id="sections-debug" class="text-xs text-slate-400 mt-2"></p>
           </div>
           <div class="flex flex-wrap gap-2">
             <button id="restore-original-btn" type="button" class="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50"></button>
@@ -369,6 +370,7 @@
     const statusPillEl = document.getElementById('status-pill');
     const rolePillEl = document.getElementById('role-pill');
     const descriptionField = document.getElementById('description-field');
+    const sectionsDebugEl = document.getElementById('sections-debug');
     const sectionsListEl = document.getElementById('sections-list');
     const sectionTemplate = document.getElementById('section-template');
     const legacyLinkEl = document.getElementById('legacy-link');
@@ -495,7 +497,23 @@
       const imageLineRegex = /^!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)\s*$/;
       const dayCharCodes = new Set([0x4e00, 0x4e8c, 0x4e09, 0x56db, 0x4e94, 0x516d, 0x4e03, 0x516b, 0x4e5d, 0x5341, 0x767e]);
       const isDayHeadingLine = (line) => {
-        const value = String(line || '').trim();
+        const value = String(line || '').trim().replace(/^[\u200b\ufeff\s]+/, '');
+        const firstDayPrefix = value.indexOf(String.fromCharCode(0x7b2c));
+        if (firstDayPrefix < 0 || firstDayPrefix > 12) return false;
+        const candidate = value.slice(firstDayPrefix);
+        const dayIndex = candidate.indexOf(String.fromCharCode(0x5929));
+        if (dayIndex <= 1 || dayIndex > 8) return false;
+        const marker = candidate.slice(1, dayIndex).replace(/\s+/g, '');
+        if (!marker) return false;
+        return /^[0-9]+$/.test(marker) || [...marker].every(char => dayCharCodes.has(char.charCodeAt(0)));
+      };
+      const getDayHeadingTitle = (line) => {
+        const value = String(line || '').trim().replace(/^[\u200b\ufeff\s]+/, '');
+        const firstDayPrefix = value.indexOf(String.fromCharCode(0x7b2c));
+        return firstDayPrefix > 0 ? value.slice(firstDayPrefix).trim() : value;
+      };
+      const isStrictDayHeadingLine = (line) => {
+        const value = String(line || '').trim().replace(/^[\u200b\ufeff\s]+/, '');
         if (value.charCodeAt(0) !== 0x7b2c) return false;
         const dayIndex = value.indexOf(String.fromCharCode(0x5929));
         if (dayIndex <= 1) return false;
@@ -509,7 +527,7 @@
       for (const line of text.split('\n')) {
         if (isDayHeadingLine(line)) {
           if (currentGroup) lineGroups.push(currentGroup);
-          currentGroup = { title: String(line || '').trim(), lines: [] };
+          currentGroup = { title: getDayHeadingTitle(line), lines: [] };
           continue;
         }
         if (currentGroup) currentGroup.lines.push(line);
@@ -626,6 +644,18 @@
       img.alt = image ? 'section-preview' : '';
     }
 
+    function updateSectionsDebug(sourceText = '') {
+      if (!sectionsDebugEl) return;
+      const source = String(sourceText || descriptionField?.value || originalDescriptionSnapshot || '');
+      const firstLine = source.split(/\r?\n/).find(line => String(line || '').trim()) || '';
+      const meaningful = sections.filter(section =>
+        String(section?.title || '').trim() ||
+        String(section?.image || '').trim() ||
+        String(section?.body || '').trim()
+      ).length;
+      sectionsDebugEl.textContent = `診斷：description ${source.length} 字，段落 ${sections.length} 筆，有內容 ${meaningful} 筆，第一行：${firstLine.slice(0, 50)}`;
+    }
+
     async function uploadFileToR2(file) {
       const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -739,6 +769,7 @@
         sectionsListEl.appendChild(node);
         updateSectionPreview(index);
       });
+      updateSectionsDebug();
     }
 
     function setPreview(data) {
@@ -786,6 +817,7 @@
         sections = [{ title: '', image: '', body: sectionSource }];
       }
       renderSections();
+      updateSectionsDebug(sectionSource);
       syncCommissionMode();
       setPreview(data);
     }
