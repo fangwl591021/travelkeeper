@@ -1217,6 +1217,263 @@ async function d1MarkBalancePaid(env, body = {}) {
   return { success: true, updatedAt: now };
 }
 
+function getNewebPayConfig(env) {
+  const merchantId = String(env.NEWEBPAY_MERCHANT_ID || '').trim();
+  const hashKey = String(env.NEWEBPAY_HASH_KEY || '').trim();
+  const hashIv = String(env.NEWEBPAY_HASH_IV || '').trim();
+  const mpgUrl = String(env.NEWEBPAY_MPG_URL || 'https://ccore.newebpay.com/MPG/mpg_gateway').trim();
+  const version = String(env.NEWEBPAY_VERSION || '2.0').trim();
+  if (!merchantId || !hashKey || !hashIv) return { ok: false, error: 'NEWEBPAY_SECRET_MISSING' };
+  if (hashKey.length !== 32 || hashIv.length !== 16) return { ok: false, error: 'NEWEBPAY_SECRET_LENGTH_INVALID' };
+  return { ok: true, merchantId, hashKey, hashIv, mpgUrl, version };
+}
+
+function buildNewebPayMerchantOrderNo(orderId, leg) {
+  const shortOrder = String(orderId || '').replace(/[^A-Za-z0-9]/g, '').slice(-12);
+  const legCode = String(leg || 'deposit').toLowerCase() === 'balance' ? 'B' : 'D';
+  const stamp = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `TK${legCode}${shortOrder}${stamp}${rand}`.slice(0, 30);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizePaymentMethod(raw) {
+  const value = String(raw || '').toUpperCase();
+  if (value.includes('LINE')) return 'linepay';
+  if (value.includes('VACC') || value.includes('ATM')) return 'vacc';
+  if (value.includes('CREDIT') || value.includes('CREDITCARD')) return 'credit_card';
+  return value.toLowerCase();
+}
+
+function parseNewebPayDecryptedPayload(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {}
+  const params = new URLSearchParams(raw);
+  const obj = {};
+  for (const [key, value] of params.entries()) obj[key] = value;
+  return obj;
+}
+
+async function buildNewebPayTrade(env, tradeData) {
+  const cfg = getNewebPayConfig(env);
+  if (!cfg.ok) return { success: false, error: cfg.error };
+  const tradeQuery = new URLSearchParams(tradeData).toString();
+  const tradeInfo = await aes256CbcEncryptHex(tradeQuery, cfg.hashKey, cfg.hashIv);
+  const tradeSha = (await sha256Hex(`HashKey=${cfg.hashKey}&${tradeInfo}&HashIV=${cfg.hashIv}`)).toUpperCase();
+  return {
+    success: true,
+    cfg,
+    tradeInfo,
+    tradeSha,
+    formHtml: `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>前往藍新金流</title></head><body>
+<form id="newebpay-form" method="post" action="${escapeHtml(cfg.mpgUrl)}">
+  <input type="hidden" name="MerchantID" value="${escapeHtml(cfg.merchantId)}">
+  <input type="hidden" name="TradeInfo" value="${escapeHtml(tradeInfo)}">
+  <input type="hidden" name="TradeSha" value="${escapeHtml(tradeSha)}">
+  <input type="hidden" name="Version" value="${escapeHtml(cfg.version)}">
+</form>
+<script>document.getElementById('newebpay-form').submit();</script>
+</body></html>`
+  };
+}
+
+async function d1CreateNewebPayForm(env, request, body = {}) {
+  if (!env.DB) return { success: false, error: 'D1_REQUIRED' };
+  const cfg = getNewebPayConfig(env);
+  if (!cfg.ok) return { success: false, error: cfg.error };
+
+  const orderId = String(body.order_id || body.orderId || '').trim();
+  const leg = String(body.leg || 'deposit').trim().toLowerCase() === 'balance' ? 'balance' : 'deposit';
+  if (!orderId) return { success: false, error: 'MISSING_ORDER_ID' };
+
+  const order = await env.DB.prepare(
+    `SELECT o.*, i.allowed_payment_methods
+       FROM orders o
+       LEFT JOIN itineraries i ON i.id = o.itinerary_id
+      WHERE o.order_id = ?`
+  ).bind(orderId).first();
+  if (!order) return { success: false, error: 'ORDER_NOT_FOUND' };
+
+  const amount = leg === 'balance'
+    ? Number(order.balance_amount || 0)
+    : Number(order.deposit_amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'PAYMENT_AMOUNT_INVALID' };
+  if (leg === 'deposit' && String(order.deposit_status || '').toLowerCase() === 'paid') {
+    return { success: false, error: 'DEPOSIT_ALREADY_PAID' };
+  }
+  if (leg === 'balance') {
+    if (String(order.balance_collect || '').toLowerCase() !== 'online') return { success: false, error: 'BALANCE_NOT_ONLINE' };
+    if (['paid_online', 'paid_offline'].includes(String(order.balance_status || '').toLowerCase())) {
+      return { success: false, error: 'BALANCE_ALREADY_PAID' };
+    }
+  }
+
+  const merchantOrderNo = buildNewebPayMerchantOrderNo(orderId, leg);
+  const paymentId = merchantOrderNo;
+  const now = formatTaipeiDateTime(new Date());
+  const origin = new URL(request.url).origin;
+  const allowed = new Set(String(order.allowed_payment_methods || 'credit_card,linepay,atm').split(',').map(s => s.trim().toLowerCase()));
+  const itemDesc = String(`${order.itinerary_title || 'TravelKeeper 行程'} ${leg === 'balance' ? '尾款' : '訂金'}`).slice(0, 50);
+  const tradeData = {
+    MerchantID: cfg.merchantId,
+    RespondType: 'JSON',
+    TimeStamp: Math.floor(Date.now() / 1000),
+    Version: cfg.version,
+    MerchantOrderNo: merchantOrderNo,
+    Amt: Math.round(amount),
+    ItemDesc: itemDesc,
+    NotifyURL: `${origin}/api/payment/notify`,
+    ReturnURL: `${origin}/api/payment/return?order_id=${encodeURIComponent(orderId)}&leg=${encodeURIComponent(leg)}`,
+    ClientBackURL: `${ENDPOINT}thank-you.html?order_id=${encodeURIComponent(orderId)}&leg=${encodeURIComponent(leg)}`,
+    Email: '',
+    LoginType: 0,
+  };
+  if (allowed.has('credit_card')) tradeData.CREDIT = 1;
+  if (allowed.has('linepay')) tradeData.LINEPAY = 1;
+  if (allowed.has('atm') || allowed.has('vacc')) tradeData.VACC = 1;
+
+  const built = await buildNewebPayTrade(env, tradeData);
+  if (!built.success) return built;
+
+  await env.DB.prepare(
+    `INSERT INTO payment_attempts (
+       id, order_id, leg, merchant_order_no, amount, status, method, trade_no, raw_notify_json, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, 'created', '', '', '', ?, ?)`
+  ).bind(paymentId, orderId, leg, merchantOrderNo, Math.round(amount), now, now).run();
+
+  return {
+    success: true,
+    data: {
+      payment_id: paymentId,
+      merchant_order_no: merchantOrderNo,
+      amount: Math.round(amount),
+      form_html: built.formHtml,
+    },
+  };
+}
+
+async function readPaymentRequestData(request) {
+  const contentType = request.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) return await request.json().catch(() => ({}));
+  const form = await request.formData().catch(() => null);
+  if (form) return Object.fromEntries(form.entries());
+  const text = await request.text().catch(() => '');
+  return Object.fromEntries(new URLSearchParams(text).entries());
+}
+
+async function d1HandleNewebPayNotify(env, body = {}) {
+  if (!env.DB) return { success: false, error: 'D1_REQUIRED' };
+  const cfg = getNewebPayConfig(env);
+  if (!cfg.ok) return { success: false, error: cfg.error };
+  const tradeInfo = String(body.TradeInfo || body.TradeInfo_ || body.tradeInfo || '').trim();
+  const tradeSha = String(body.TradeSha || body.TradeSha_ || body.tradeSha || '').trim().toUpperCase();
+  if (!tradeInfo || !tradeSha) return { success: false, error: 'MISSING_TRADE_INFO' };
+
+  const expectedSha = (await sha256Hex(`HashKey=${cfg.hashKey}&${tradeInfo}&HashIV=${cfg.hashIv}`)).toUpperCase();
+  if (tradeSha !== expectedSha) return { success: false, error: 'TRADE_SHA_MISMATCH' };
+
+  const decryptedText = await aes256CbcDecryptText(tradeInfo, cfg.hashKey, cfg.hashIv);
+  const payload = parseNewebPayDecryptedPayload(decryptedText);
+  const result = payload.Result || payload.result || payload;
+  const merchantOrderNo = String(result.MerchantOrderNo || payload.MerchantOrderNo || '').trim();
+  if (!merchantOrderNo) return { success: false, error: 'MISSING_MERCHANT_ORDER_NO' };
+
+  const attempt = await env.DB.prepare(
+    `SELECT * FROM payment_attempts WHERE merchant_order_no = ?`
+  ).bind(merchantOrderNo).first();
+  if (!attempt) return { success: false, error: 'PAYMENT_ATTEMPT_NOT_FOUND' };
+
+  const status = String(payload.Status || payload.status || '').toUpperCase();
+  const message = String(payload.Message || payload.message || '');
+  const paymentType = normalizePaymentMethod(result.PaymentType || result.PaymentMethod || result.PayType || '');
+  const tradeNo = String(result.TradeNo || result.TradeNO || result.TradeSN || '').trim();
+  const paidAt = String(result.PayTime || result.payTime || '').trim() || formatTaipeiDateTime(new Date());
+  const isPaid = status === 'SUCCESS';
+  const nextAttemptStatus = isPaid ? 'paid' : 'failed';
+  const rawJson = JSON.stringify({ received: body, decrypted: payload, message });
+  const now = formatTaipeiDateTime(new Date());
+
+  await env.DB.prepare(
+    `UPDATE payment_attempts
+        SET status = ?, method = ?, trade_no = ?, raw_notify_json = ?, updated_at = ?
+      WHERE merchant_order_no = ?`
+  ).bind(nextAttemptStatus, paymentType, tradeNo, rawJson, now, merchantOrderNo).run();
+
+  if (isPaid) {
+    if (String(attempt.leg || '').toLowerCase() === 'balance') {
+      const order = await env.DB.prepare(
+        `SELECT balance_collect, commission_status FROM orders WHERE order_id = ?`
+      ).bind(attempt.order_id).first();
+      const shouldSetCommissionPayable = String(order?.commission_status || 'pending').toLowerCase() === 'pending';
+      const sets = [
+        `balance_status = ?`,
+        `balance_paid_at = ?`,
+        `balance_method = ?`,
+        `balance_trade_no = ?`,
+        `status = ?`,
+        `updated_at = ?`,
+      ];
+      const values = ['paid_online', paidAt, paymentType, tradeNo, 'completed', now];
+      if (shouldSetCommissionPayable) {
+        sets.push(`commission_status = ?`);
+        sets.push(`commission_settled_at = ?`);
+        values.push('payable', now);
+      }
+      await env.DB.prepare(
+        `UPDATE orders SET ${sets.join(', ')} WHERE order_id = ?`
+      ).bind(...values, attempt.order_id).run();
+    } else {
+      await env.DB.prepare(
+        `UPDATE orders
+            SET deposit_status = ?,
+                deposit_paid_at = ?,
+                deposit_method = ?,
+                deposit_trade_no = ?,
+                status = ?,
+                updated_at = ?
+          WHERE order_id = ?`
+      ).bind('paid', paidAt, paymentType, tradeNo, 'confirmed', now, attempt.order_id).run();
+    }
+  } else {
+    const column = String(attempt.leg || '').toLowerCase() === 'balance' ? 'balance_status' : 'deposit_status';
+    await env.DB.prepare(
+      `UPDATE orders SET ${column} = ?, updated_at = ? WHERE order_id = ?`
+    ).bind('failed', now, attempt.order_id).run();
+  }
+
+  return { success: true, orderId: attempt.order_id, leg: attempt.leg, status: nextAttemptStatus };
+}
+
+async function d1GetOrderStatus(env, orderId, customerLineUid = '') {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const normalizedOrderId = String(orderId || '').trim();
+  if (!normalizedOrderId) return { success: false, error: 'MISSING_ORDER_ID' };
+
+  let row;
+  if (customerLineUid) {
+    row = await env.DB.prepare(
+      `SELECT * FROM orders WHERE order_id = ? AND customer_line_uid = ?`
+    ).bind(normalizedOrderId, String(customerLineUid || '').trim()).first();
+  } else {
+    row = await env.DB.prepare(
+      `SELECT * FROM orders WHERE order_id = ?`
+    ).bind(normalizedOrderId).first();
+  }
+  if (!row) return { success: false, error: 'ORDER_NOT_FOUND' };
+  return { success: true, data: row };
+}
+
 async function readAllOrdersWithFallback(env) {
   if (env.DB) {
     try {
@@ -2990,6 +3247,52 @@ async function sha256Hex(message) {
     : message;
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function bytesToHex(bytes) {
+  return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToBytes(hex) {
+  const clean = String(hex || '').trim();
+  if (!/^[0-9a-fA-F]+$/.test(clean) || clean.length % 2 !== 0) return new Uint8Array();
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < clean.length; i += 2) bytes[i / 2] = parseInt(clean.slice(i, i + 2), 16);
+  return bytes;
+}
+
+async function aes256CbcEncryptHex(plainText, key, iv) {
+  const encoder = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(key),
+    { name: 'AES-CBC' },
+    false,
+    ['encrypt']
+  );
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-CBC', iv: encoder.encode(iv) },
+    cryptoKey,
+    encoder.encode(plainText)
+  );
+  return bytesToHex(encrypted);
+}
+
+async function aes256CbcDecryptText(cipherHex, key, iv) {
+  const encoder = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(key),
+    { name: 'AES-CBC' },
+    false,
+    ['decrypt']
+  );
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-CBC', iv: encoder.encode(iv) },
+    cryptoKey,
+    hexToBytes(cipherHex)
+  );
+  return new TextDecoder().decode(decrypted);
 }
 
 function encodeS3Key(key) {
@@ -4963,6 +5266,51 @@ export default {
         }
 
         return json({ success: true, flex, message: flex, count: items.length });
+      }
+
+      if (path === '/api/orders/status' && request.method === 'GET') {
+        const orderId = url.searchParams.get('order_id') || url.searchParams.get('orderId') || '';
+        const customerLineUid = url.searchParams.get('customer_line_uid') || '';
+        const result = env.DB
+          ? await d1GetOrderStatus(env, orderId, customerLineUid)
+          : await gasGet(env, { action: 'getOrderStatus', order_id: orderId, customer_line_uid: customerLineUid });
+        return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/payment/create' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const result = await d1CreateNewebPayForm(env, request, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/payment/notify' && request.method === 'POST') {
+        const body = await readPaymentRequestData(request);
+        const result = await d1HandleNewebPayNotify(env, body);
+        if (!result.success) {
+          console.warn('[payment notify] failed:', result.error);
+          return new Response(`0|${result.error || 'ERROR'}`, { status: 400, headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS } });
+        }
+        return new Response('1|OK', { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS } });
+      }
+
+      if (path === '/api/payment/return' && (request.method === 'GET' || request.method === 'POST')) {
+        const requestUrl = new URL(request.url);
+        let orderId = requestUrl.searchParams.get('order_id') || '';
+        let leg = requestUrl.searchParams.get('leg') || 'deposit';
+        if (request.method === 'POST') {
+          try {
+            const body = await readPaymentRequestData(request);
+            const result = await d1HandleNewebPayNotify(env, body);
+            if (result.success) {
+              orderId = result.orderId || orderId;
+              leg = result.leg || leg;
+            }
+          } catch (err) {
+            console.warn('[payment return] notify parse skipped:', err.message);
+          }
+        }
+        const redirectUrl = `${ENDPOINT}thank-you.html?order_id=${encodeURIComponent(orderId)}&leg=${encodeURIComponent(leg || 'deposit')}`;
+        return Response.redirect(redirectUrl, 302);
       }
 
       // ??????????????????????????????????????????????????????????
