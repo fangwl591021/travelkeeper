@@ -590,7 +590,20 @@
 
     function syncDescriptionField(fallbackText = '') {
       const serialized = serializeSections(sections);
+      if (!serialized && !fallbackText && originalDescriptionSnapshot) {
+        descriptionField.value = originalDescriptionSnapshot;
+        return;
+      }
       descriptionField.value = serialized || fallbackText || descriptionField.value || originalDescriptionSnapshot || '';
+    }
+
+    function recoverDescriptionSource() {
+      const current = String(descriptionField.value || '').trim();
+      if (current) return current;
+      if (String(originalDescriptionSnapshot || '').trim()) return originalDescriptionSnapshot;
+      const title = String(formEl?.elements?.title?.value || '').trim();
+      const notes = String(formEl?.elements?.notes?.value || '').trim();
+      return [title, notes].filter(Boolean).join('\n');
     }
 
     function updateSectionPreview(index) {
@@ -756,7 +769,8 @@
         input.checked = allowed.has(input.value);
       });
 
-      sections = buildSectionsWithFallback(originalDescriptionSnapshot);
+      const sectionSource = originalDescriptionSnapshot || String(data.notes || '');
+      sections = buildSectionsWithFallback(sectionSource);
       renderSections();
       syncCommissionMode();
       setPreview(data);
@@ -882,7 +896,7 @@
 
     const reparseBtn = document.getElementById('reparse-btn');
     if (reparseBtn) reparseBtn.addEventListener('click', () => {
-      const source = String(descriptionField.value || '').trim() ? descriptionField.value : originalDescriptionSnapshot;
+      const source = recoverDescriptionSource();
       sections = buildSectionsWithFallback(source);
       renderSections();
       syncDescriptionField(source);
@@ -905,7 +919,7 @@
 
     const sanitizeBtn = document.getElementById('sanitize-btn');
     if (sanitizeBtn) sanitizeBtn.addEventListener('click', () => {
-      const original = String(descriptionField.value || '').trim() ? descriptionField.value : originalDescriptionSnapshot;
+      const original = recoverDescriptionSource();
       const cleaned = sanitizeDescriptionMarkdown(original);
       const parsed = parseDescriptionToSections(cleaned);
       descriptionField.value = cleaned;
