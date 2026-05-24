@@ -5034,12 +5034,7 @@ export default {
       if (path === '/api/itinerary/fix-section-image' && request.method === 'POST') {
         const body = await request.json().catch(() => ({}));
         const keyword = buildSectionImageKeyword(body);
-        const sourceUrl = await fetchUnsplashUrl(keyword, env);
-        const fixedUrl = await uploadUrlToR2(
-          sourceUrl,
-          `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`,
-          env
-        );
+        const fixedUrl = await createFixedSectionImage(keyword, env);
         if (!fixedUrl) return json({ success: false, error: '圖片修補失敗' }, 500);
         return json({ success: true, url: fixedUrl, keyword });
       }
@@ -5443,6 +5438,88 @@ function buildSectionImageKeyword(body = {}) {
     .replace(/\s+/g, ' ')
     .trim();
   return (cleaned || 'travel itinerary scenic spot').slice(0, 80);
+}
+
+function seededPhotoUrl(keyword) {
+  const seed = encodeURIComponent(String(keyword || 'travel').replace(/\s+/g, '-').slice(0, 80));
+  return `https://picsum.photos/seed/${seed}/1600/900`;
+}
+
+function encodeSvgDataUrl(svg) {
+  const bytes = new TextEncoder().encode(svg);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
+
+function buildFallbackSectionSvg(keyword) {
+  const safeText = String(keyword || 'TravelKeeper').replace(/[<>&"]/g, '').slice(0, 36);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="0.52" stop-color="#ecfeff"/>
+      <stop offset="1" stop-color="#dcfce7"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#94a3b8" stroke-opacity=".22"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+  <circle cx="1260" cy="170" r="160" fill="#38bdf8" opacity=".18"/>
+  <circle cx="260" cy="720" r="220" fill="#22c55e" opacity=".14"/>
+  <text x="110" y="150" font-size="42" font-weight="700" fill="#0f766e" font-family="Arial, sans-serif">TravelKeeper</text>
+  <text x="110" y="455" font-size="92" font-weight="800" fill="#0f172a" font-family="Arial, sans-serif">${safeText}</text>
+  <text x="112" y="545" font-size="34" font-weight="500" fill="#475569" font-family="Arial, sans-serif">行程圖片待替換，已先建立可顯示備用圖</text>
+</svg>`;
+  return encodeSvgDataUrl(svg);
+}
+
+async function fetchCommonsImageUrl(keyword) {
+  try {
+    const query = String(keyword || 'travel scenic').slice(0, 80);
+    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=4&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url&iiurlwidth=1600&format=json&origin=*`;
+    const res = await fetch(apiUrl, { headers: { 'User-Agent': 'TravelKeeper/1.0' } });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const pages = Object.values(data?.query?.pages || {});
+    for (const page of pages) {
+      const info = page?.imageinfo?.[0];
+      const url = info?.thumburl || info?.url || '';
+      if (/^https?:\/\//i.test(url) && /\.(?:jpg|jpeg|png|webp)(?:[?#].*)?$/i.test(url.split('?')[0])) {
+        return url;
+      }
+    }
+  } catch (e) {
+    console.warn('Commons image lookup failed:', e.message);
+  }
+  return '';
+}
+
+async function fetchRepairImageSource(keyword, env) {
+  if (env.UNSPLASH_API_KEY) {
+    const unsplashUrl = await fetchUnsplashUrl(keyword, env);
+    if (unsplashUrl && !isGeneratedPlaceholderImageUrl(unsplashUrl)) return unsplashUrl;
+  }
+  const commonsUrl = await fetchCommonsImageUrl(keyword);
+  if (commonsUrl) return commonsUrl;
+  return seededPhotoUrl(keyword);
+}
+
+async function createFixedSectionImage(keyword, env) {
+  const filename = `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
+  const sourceUrl = await fetchRepairImageSource(keyword, env);
+  let url = await uploadUrlToR2(sourceUrl, filename, env);
+  if (url && url.startsWith(R2_PUBLIC)) return url;
+
+  const seededUrl = seededPhotoUrl(keyword);
+  if (seededUrl !== sourceUrl) {
+    url = await uploadUrlToR2(seededUrl, filename, env);
+    if (url && url.startsWith(R2_PUBLIC)) return url;
+  }
+
+  return uploadDataUrlToR2(buildFallbackSectionSvg(keyword), filename.replace(/\.jpg$/i, '.svg'), env);
 }
 
 async function fetchUnsplashUrl(keyword, env) {
