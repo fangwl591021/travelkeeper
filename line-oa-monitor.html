@@ -40,9 +40,11 @@
           <label class="block text-sm font-semibold mb-2">&#32842;&#22825;&#23460;&#25628;&#23563;</label>
           <input id="thread-search" class="w-full rounded-full border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" placeholder="&#25628;&#23563;&#32842;&#22825;&#12289;&#29992;&#25142;&#21517;&#31281;&#12289;&#29992;&#25142; ID&#12289;&#27161;&#31844;">
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button class="thread-filter rounded-full px-4 py-2 bg-slate-900 text-white text-sm font-semibold" data-filter="all">&#20840;&#37096;</button>
           <button class="thread-filter rounded-full px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold" data-filter="open">&#24453;&#22238;&#35206;</button>
+          <button class="thread-filter rounded-full px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold" data-filter="pending">處理中</button>
+          <button class="thread-filter rounded-full px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold" data-filter="closed">已處理</button>
           <button class="thread-filter rounded-full px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold" data-filter="risk">&#39640;&#39080;&#38570;</button>
         </div>
       </div>
@@ -96,9 +98,9 @@
           </div>
           <div class="flex flex-wrap gap-2 items-center">
             <button id="open-visitor-records" class="px-5 py-3 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 font-semibold">重要紀錄</button>
-            <button id="mark-open" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">&#24453;&#34389;&#29702;</button>
-            <button id="mark-pending" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">&#24314;&#35696;&#20013;</button>
-            <button id="mark-closed" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">&#34389;&#29702;&#23436;&#30070;</button>
+            <button id="mark-open" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">待回覆</button>
+            <button id="mark-pending" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">處理中</button>
+            <button id="mark-closed" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">已處理</button>
           </div>
         </div>
 
@@ -357,8 +359,8 @@
 
     function statusLabel(status) {
       if (status === 'open') return '\u5f85\u56de\u8986';
-      if (status === 'pending') return '\u5efa\u8b70\u4e2d';
-      return '\u8655\u7406\u5b8c\u7562';
+      if (status === 'pending') return '處理中';
+      return '已處理';
     }
 
     function statusClass(status) {
@@ -582,6 +584,8 @@
       const keyword = String(threadSearchEl.value || '').trim();
       return allThreads.filter(item => {
         if (currentFilter === 'open' && item.status !== 'open') return false;
+        if (currentFilter === 'pending' && item.status !== 'pending') return false;
+        if (currentFilter === 'closed' && item.status !== 'closed') return false;
         if (currentFilter === 'risk' && item.risk !== 'high') return false;
         if (!keyword) return true;
         const haystack = [item.name, item.userId, item.summary, item.assignedTo, ...(item.tags || [])].join(' ');
