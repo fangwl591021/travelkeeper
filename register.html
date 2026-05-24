@@ -147,8 +147,9 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
             if (stData.success) {
               const { role, distributorData } = stData.data;
               if (role === 'distributor') {
-                if (distributorData?.status === 'active')  { setStep('already');  return; }
-                if (distributorData?.status === 'pending') { setStep('pending');  return; }
+                const distributorStatus = String(distributorData?.status || stData.data.status || '').toLowerCase();
+                if (['approved', 'active'].includes(distributorStatus)) { setStep('already'); return; }
+                if (distributorStatus === 'pending') { setStep('pending'); return; }
               }
             }
             setStep('form');
