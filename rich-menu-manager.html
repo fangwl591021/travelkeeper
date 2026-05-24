@@ -148,6 +148,39 @@
     const WORKER_URL = "https://travelkeeper-worker.fangwl591021.workers.dev";
     const LIFF_ID = "2009367829-BDZCGti8";
     const hub = createMyCardHub();
+    const FALLBACK_TEMPLATES = [
+      {
+        template_id: "rich-menu-basic-2500",
+        name: "標準圖文選單 2500 x 1686",
+        sample_data: {
+          name: "TravelKeeper 主選單",
+          chatBarText: "選單",
+          selected: true,
+          size: { width: 2500, height: 1686 },
+          areas: [
+            { bounds: { x: 0, y: 0, width: 1250, height: 843 }, action: { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/" } },
+            { bounds: { x: 1250, y: 0, width: 1250, height: 843 }, action: { type: "message", text: "查詢行程" } },
+            { bounds: { x: 0, y: 843, width: 833, height: 843 }, action: { type: "message", text: "熱門推薦" } },
+            { bounds: { x: 833, y: 843, width: 834, height: 843 }, action: { type: "message", text: "客服協助" } },
+            { bounds: { x: 1667, y: 843, width: 833, height: 843 }, action: { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/line-oa-monitor.html" } }
+          ]
+        }
+      },
+      {
+        template_id: "rich-menu-basic-2500x843",
+        name: "精簡圖文選單 2500 x 843",
+        sample_data: {
+          name: "TravelKeeper 精簡選單",
+          chatBarText: "選單",
+          selected: true,
+          size: { width: 2500, height: 843 },
+          areas: [
+            { bounds: { x: 0, y: 0, width: 1250, height: 843 }, action: { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/" } },
+            { bounds: { x: 1250, y: 0, width: 1250, height: 843 }, action: { type: "message", text: "客服協助" } }
+          ]
+        }
+      }
+    ];
 
     let profile = null;
     let templates = [];
@@ -187,6 +220,17 @@
 
     function clone(value) {
       return JSON.parse(JSON.stringify(value || {}));
+    }
+
+    function getFallbackTemplate(templateId) {
+      return FALLBACK_TEMPLATES.find((template) => template.template_id === templateId) || FALLBACK_TEMPLATES[0];
+    }
+
+    function setTemplateOptions(list) {
+      templates = list?.length ? list : FALLBACK_TEMPLATES;
+      els.templateSelect.innerHTML = templates.map((template) =>
+        `<option value="${escapeHtml(template.template_id)}">${escapeHtml(template.name || template.template_id)}</option>`
+      ).join("");
     }
 
     function safeParseConfig() {
@@ -302,26 +346,70 @@
 
     async function loadTemplates() {
       els.templateSelect.innerHTML = `<option>讀取中...</option>`;
-      const result = await hub.richMenu.listTemplates();
-      templates = result.templates || [];
-      els.templateSelect.innerHTML = templates.map((template) =>
-        `<option value="${escapeHtml(template.template_id)}">${escapeHtml(template.name || template.template_id)}</option>`
-      ).join("");
+      try {
+        const result = await hub.richMenu.listTemplates();
+        setTemplateOptions(result.templates || []);
+      } catch (err) {
+        console.warn("rich menu template API failed, using fallback templates", err);
+        setTemplateOptions(FALLBACK_TEMPLATES);
+        showToast("模板 API 暫時讀不到，已使用本地保底模板。", "error");
+      }
       if (templates[0]) writeConfig(templates[0].sample_data || {});
       showToast(`已載入 ${templates.length} 個模板。`);
     }
 
     async function loadTemplateById(templateId) {
-      const result = await hub.richMenu.getTemplate(templateId);
-      const template = result.template || result;
-      els.templateSelect.value = template.template_id || templateId;
-      writeConfig(template.sample_data || {});
+      const fallback = getFallbackTemplate(templateId);
+      if (fallback) {
+        els.templateSelect.value = fallback.template_id;
+        writeConfig(fallback.sample_data || {});
+      }
+      try {
+        const result = await hub.richMenu.getTemplate(templateId);
+        const template = result.template || result;
+        els.templateSelect.value = template.template_id || templateId;
+        writeConfig(template.sample_data || fallback.sample_data || {});
+      } catch (err) {
+        console.warn("rich menu template detail failed, using fallback template", err);
+        if (!fallback) showToast(`模板讀取失敗：${err.message}`, "error");
+      }
+    }
+
+    function localValidateConfig(config) {
+      const issues = [];
+      if (!config?.name) issues.push("缺少選單名稱");
+      if (!config?.chatBarText) issues.push("缺少聊天列文字");
+      if (!config?.size?.width || !config?.size?.height) issues.push("缺少尺寸");
+      if (!Array.isArray(config?.areas) || config.areas.length === 0) issues.push("至少需要一個點擊區域");
+      (config?.areas || []).forEach((area, index) => {
+        if (!area.bounds) issues.push(`區塊 ${index + 1} 缺少座標`);
+        if (!area.action?.type) issues.push(`區塊 ${index + 1} 缺少動作`);
+        if (area.action?.type === "uri" && !area.action.uri) issues.push(`區塊 ${index + 1} 缺少網址`);
+        if (area.action?.type === "message" && !area.action.text) issues.push(`區塊 ${index + 1} 缺少訊息文字`);
+      });
+      return { valid: issues.length === 0, issues, richMenu: buildLinePayload(config) };
+    }
+
+    function buildLinePayload(config) {
+      return {
+        size: config.size,
+        selected: config.selected !== false,
+        name: config.name || "TravelKeeper Rich Menu",
+        chatBarText: config.chatBarText || "選單",
+        areas: Array.isArray(config.areas) ? config.areas : []
+      };
     }
 
     async function validateConfig() {
       const config = syncBasicsToConfig();
       if (!config) return null;
-      const result = await hub.richMenu.validate(config);
+      let result = null;
+      try {
+        result = await hub.richMenu.validate(config);
+      } catch (err) {
+        console.warn("rich menu validate API failed, using local validation", err);
+        result = localValidateConfig(config);
+      }
       const issues = result.issues || [];
       const valid = result.valid !== false && issues.length === 0;
       els.validationResult.textContent = valid ? "驗證通過，可以產生 Rich Menu JSON。" : `驗證未通過：${issues.join("；") || "請檢查設定。"}`;
@@ -333,8 +421,13 @@
       const validation = await validateConfig();
       if (!validation) return null;
       const config = safeParseConfig();
-      const result = await hub.richMenu.render(config);
-      renderedPayload = result.linePayload || result.richMenu || result;
+      try {
+        const result = await hub.richMenu.render(config);
+        renderedPayload = result.linePayload || result.richMenu || result;
+      } catch (err) {
+        console.warn("rich menu render API failed, using local renderer", err);
+        renderedPayload = buildLinePayload(config);
+      }
       els.renderedJson.value = JSON.stringify(renderedPayload, null, 2);
       showToast("已產生 LINE Rich Menu JSON。");
       return renderedPayload;
