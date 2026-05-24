@@ -3,531 +3,799 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>圖文選單管理 | TravelKeeper</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>圖文選單工具 | TravelKeeper</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: 'Noto Sans TC', sans-serif; background: #f4f7fb; }
-    [hidden] { display: none !important; }
-    textarea, input, select { font: inherit; }
-    .menu-preview { background-image: linear-gradient(90deg, rgba(15,23,42,.06) 1px, transparent 1px), linear-gradient(rgba(15,23,42,.06) 1px, transparent 1px); background-size: 36px 36px; }
+    :root {
+      --line-green: #16bf7a;
+      --line-bg: #f4f6f8;
+      --line-border: #e5e7eb;
+      --header-height: 72px;
+      --sidebar-width: 240px;
+      --panel-width: 390px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: #0f172a;
+      background: var(--line-bg);
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    .workspace-hidden { display: none !important; }
+    .app-header {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: var(--header-height);
+      z-index: 120;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 24px;
+      background: #fff;
+      border-bottom: 1px solid var(--line-border);
+    }
+    .app-sidebar {
+      position: fixed;
+      top: var(--header-height);
+      left: 0;
+      bottom: 0;
+      width: var(--sidebar-width);
+      z-index: 110;
+      overflow: auto;
+      background: #fff;
+      border-right: 1px solid var(--line-border);
+    }
+    .app-main {
+      position: absolute;
+      top: var(--header-height);
+      left: var(--sidebar-width);
+      right: var(--panel-width);
+      bottom: 0;
+      overflow: auto;
+      background: var(--line-bg);
+    }
+    .app-panel {
+      position: fixed;
+      top: var(--header-height);
+      right: 0;
+      bottom: 0;
+      width: var(--panel-width);
+      z-index: 110;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-left: 1px solid var(--line-border);
+    }
+    .nav-cat-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 18px 22px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      color: #475569;
+      font-size: 14px;
+      font-weight: 700;
+      transition: all .18s;
+    }
+    .nav-cat-btn:hover,
+    .nav-cat-btn.active {
+      color: var(--line-green);
+      background: #ecfdf5;
+      border-right: 4px solid var(--line-green);
+    }
+    .input-field {
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 2px solid #dbe4ef;
+      border-radius: 10px;
+      outline: none;
+      background: #fff;
+      font-size: 13px;
+    }
+    .input-field:focus { border-color: var(--line-green); }
+    .btn-line {
+      border: 0;
+      border-radius: 9px;
+      background: var(--line-green);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+      transition: .18s;
+    }
+    .btn-line:hover { filter: brightness(.96); transform: translateY(-1px); }
+    .tool-btn {
+      border: 2px solid #e2e8f0;
+      border-radius: 9px;
+      background: #fff;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: .18s;
+    }
+    .tool-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+    .danger-btn {
+      border: 2px solid #ffe4e6;
+      border-radius: 9px;
+      background: #fff;
+      color: #e11d48;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+    #menu-canvas-container {
+      max-width: min(92%, 920px);
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      box-shadow: 0 24px 55px -38px rgba(15, 23, 42, .65);
+    }
+    .area-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 14px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .03);
+    }
+    .area-card + .area-card { margin-top: 14px; }
+    @media (max-width: 1180px) {
+      body { overflow: auto; }
+      .app-header, .app-sidebar, .app-main, .app-panel { position: static; width: auto; height: auto; inset: auto; }
+      .app-header { min-height: var(--header-height); flex-wrap: wrap; }
+      .app-main { min-height: 620px; }
+      .app-panel { border-left: 0; border-top: 1px solid var(--line-border); }
+    }
   </style>
 </head>
-<body class="min-h-screen text-slate-900">
-  <div class="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
-    <header class="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-      <div>
-        <p class="text-xs font-bold tracking-[0.28em] text-slate-400">LINE OA</p>
-        <h1 class="mt-1 text-3xl font-black md:text-4xl">圖文選單管理</h1>
-        <p class="mt-2 text-sm leading-6 text-slate-500">讀取 MyCard Hub 模板，調整按鈕區域，先驗證再由 Worker 後端發布到 LINE。</p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <a href="./dashboard.html" class="rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50">回 Dashboard</a>
-        <a href="./line-oa-monitor.html" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800">LINE OA 監看</a>
-      </div>
-    </header>
-
-    <div id="toast" hidden class="fixed right-5 top-5 z-50 max-w-md rounded-2xl bg-slate-900 px-5 py-4 text-sm font-bold text-white shadow-2xl"></div>
-
-    <main class="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <aside class="space-y-4">
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h2 class="text-lg font-bold">模板</h2>
-              <p class="mt-1 text-sm text-slate-500">選擇 LINE 常用尺寸。</p>
-            </div>
-            <button id="reload-templates" type="button" class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200">重載</button>
-          </div>
-          <select id="template-select" class="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500"></select>
-          <div class="mt-3 grid grid-cols-2 gap-2">
-            <button id="load-basic" type="button" class="rounded-2xl bg-blue-600 px-3 py-3 text-sm font-bold text-white hover:bg-blue-700">2500 x 1686</button>
-            <button id="load-compact" type="button" class="rounded-2xl bg-slate-900 px-3 py-3 text-sm font-bold text-white hover:bg-slate-800">2500 x 843</button>
-          </div>
-        </section>
-
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="text-lg font-bold">基本設定</h2>
-          <div class="mt-4 space-y-3">
-            <label class="block">
-              <span class="text-sm font-bold text-slate-600">選單名稱</span>
-              <input id="config-name" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" placeholder="例如：TravelKeeper 主選單">
-            </label>
-            <label class="block">
-              <span class="text-sm font-bold text-slate-600">聊天列文字</span>
-              <input id="config-chatbar" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" placeholder="例如：選單">
-            </label>
-            <label class="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
-              <input id="config-selected" type="checkbox" class="h-5 w-5 rounded border-slate-300">
-              <span class="text-sm font-bold text-slate-700">預設展開圖文選單</span>
-            </label>
-          </div>
-        </section>
-
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="text-lg font-bold">選單圖片</h2>
-          <p id="image-hint" class="mt-1 text-sm text-slate-500">圖片尺寸需符合模板尺寸。</p>
-          <input id="menu-image" type="file" accept="image/png,image/jpeg" class="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
-          <div id="image-meta" class="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">尚未選擇圖片。</div>
-          <label class="mt-3 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <input id="set-default" type="checkbox" class="h-5 w-5 rounded border-amber-300">
-            <span class="text-sm font-bold text-amber-800">發布後設為官方帳號預設圖文選單</span>
-          </label>
-        </section>
-      </aside>
-
-      <section class="space-y-4">
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 class="text-xl font-bold">按鈕區域</h2>
-              <p class="mt-1 text-sm text-slate-500">調整每個熱區的動作。URI 會打開網址，訊息會送出文字。</p>
-            </div>
-            <button id="apply-area-table" type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800">套用區域設定</button>
-          </div>
-          <div class="overflow-x-auto rounded-2xl border border-slate-200">
-            <table class="min-w-full text-sm">
-              <thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th class="px-3 py-3">區塊</th>
-                  <th class="px-3 py-3">座標</th>
-                  <th class="px-3 py-3">動作</th>
-                  <th class="px-3 py-3">內容</th>
-                </tr>
-              </thead>
-              <tbody id="area-rows" class="divide-y divide-slate-100"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="grid gap-4 lg:grid-cols-2">
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <h2 class="text-xl font-bold">設定 JSON</h2>
-              <button id="format-config" type="button" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">格式化</button>
-            </div>
-            <textarea id="config-json" rows="18" class="w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-xs leading-5 outline-none focus:border-blue-500"></textarea>
-          </div>
-
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <h2 class="text-xl font-bold">產生結果</h2>
-              <button id="copy-rendered" type="button" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">複製</button>
-            </div>
-            <div id="validation-result" class="mb-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">尚未驗證。</div>
-            <textarea id="rendered-json" rows="14" readonly class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-xs leading-5 text-slate-700"></textarea>
-            <div class="mt-4 grid gap-2 sm:grid-cols-3">
-              <button id="validate-config" type="button" class="rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">驗證</button>
-              <button id="render-config" type="button" class="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700">產生 JSON</button>
-              <button id="publish-menu" type="button" class="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-600">發布</button>
-            </div>
-          </div>
-        </section>
-
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div class="mb-3 flex items-center justify-between gap-3">
-            <h2 class="text-xl font-bold">圖片預覽</h2>
-            <span id="preview-size" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">尚未載入模板</span>
-          </div>
-          <div class="menu-preview overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
-            <div id="preview-shell" class="relative mx-auto aspect-[2500/843] max-h-[520px] w-full bg-white">
-              <img id="preview-image" alt="圖文選單預覽" class="h-full w-full object-contain" hidden>
-              <div id="preview-empty" class="grid h-full place-items-center text-sm font-bold text-slate-400">請先選擇圖文選單圖片。</div>
-              <div id="preview-areas" class="absolute inset-0"></div>
-            </div>
-          </div>
-        </section>
-      </section>
-    </main>
+<body>
+  <div id="loader" class="fixed inset-0 z-[700] workspace-hidden flex flex-col items-center justify-center bg-white/90">
+    <div class="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+    <div class="text-sm font-bold text-slate-500">處理中...</div>
   </div>
+  <div id="toast" class="fixed bottom-8 left-1/2 z-[800] workspace-hidden -translate-x-1/2 rounded-full bg-slate-900 px-7 py-3 text-sm font-bold text-white shadow-2xl"></div>
 
-  <script type="module">
-    import { createMyCardHub } from "https://myvard.fangwl591021.workers.dev/sdk/mycard-hub.js";
+  <header class="app-header">
+    <div class="flex items-center gap-3">
+      <div class="grid h-11 w-11 place-items-center rounded-full bg-emerald-500 text-lg font-black text-white">OA</div>
+      <div>
+        <div class="text-lg font-black">LINE OA 圖文選單工具</div>
+        <div class="text-xs font-bold text-slate-400">照 mylittlesys 操作台：上傳圖片、畫點擊區、右側設定</div>
+      </div>
+    </div>
 
+    <div class="ml-auto flex flex-wrap items-center gap-4">
+      <label class="flex flex-col">
+        <span class="mb-1 text-[10px] font-black uppercase tracking-wider text-blue-600">專案名稱</span>
+        <input id="save-filename" class="w-52 border-b-2 border-slate-300 bg-transparent py-1 text-sm font-bold outline-none focus:border-emerald-500" value="TravelKeeper 主選單">
+      </label>
+      <label class="flex flex-col">
+        <span class="mb-1 text-[10px] font-black uppercase tracking-wider text-blue-600">選單橫標</span>
+        <input id="rich-menu-chatbar" maxlength="14" class="w-36 border-b-2 border-slate-300 bg-transparent py-1 text-sm font-bold outline-none focus:border-emerald-500" value="選單">
+      </label>
+      <div class="flex items-center gap-2 text-xs font-bold text-slate-500">
+        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+        Token 由 Worker Secret 發布
+      </div>
+      <button class="tool-btn px-4 py-2" onclick="document.getElementById('img-upload').click()">選擇圖片</button>
+      <button class="tool-btn px-4 py-2" onclick="saveProject()">儲存專案</button>
+      <button class="btn-line px-5 py-2" onclick="doUploadRichMenu()">上傳並生效</button>
+      <input type="file" id="img-upload" class="hidden" accept="image/png,image/jpeg,image/jpg">
+    </div>
+  </header>
+
+  <aside class="app-sidebar">
+    <div class="border-b border-slate-100 p-5">
+      <div class="text-xl font-black">TravelKeeper</div>
+      <div class="mt-1 text-sm font-bold text-slate-400">LINE OA 區</div>
+    </div>
+    <a href="./dashboard.html" class="nav-cat-btn text-decoration-none">
+      <span>← 回 Dashboard</span>
+    </a>
+    <a href="./line-oa-monitor.html" class="nav-cat-btn text-decoration-none">
+      <span>LINE OA 監看</span>
+    </a>
+    <div class="nav-cat-btn active">
+      <span>圖文選單工具</span>
+      <span>›</span>
+    </div>
+    <div class="p-5 text-sm leading-7 text-slate-500">
+      <p class="font-bold text-slate-700">操作方式</p>
+      <p>1. 選擇 2500 x 843 或 2500 x 1686。</p>
+      <p>2. 上傳對應尺寸圖片。</p>
+      <p>3. 按「開始劃定區域」在圖片上框出按鈕。</p>
+      <p>4. 到右側設定每個區域的動作。</p>
+    </div>
+  </aside>
+
+  <main class="app-main">
+    <div id="menu-workspace" class="flex min-h-full w-full flex-col items-center bg-slate-50">
+      <div class="sticky top-0 z-50 flex w-full flex-wrap items-center justify-center gap-3 border-b border-slate-200 bg-white/95 px-5 py-3 shadow-sm">
+        <button id="menu-draw-btn" onclick="MenuModule.toggleDrawMode()" class="rounded-md bg-slate-900 px-9 py-2.5 text-sm font-black text-white shadow-md transition hover:bg-slate-700">開始劃定區域</button>
+        <button onclick="MenuModule.clearAreas()" class="danger-btn px-5 py-2.5">清空區域</button>
+        <button onclick="MenuModule.newBlank(2500, 843)" class="tool-btn px-5 py-2.5">2500 x 843</button>
+        <button onclick="MenuModule.newBlank(2500, 1686)" class="tool-btn px-5 py-2.5">2500 x 1686</button>
+        <button onclick="MenuModule.applyJsonFromText()" class="tool-btn px-5 py-2.5">更新畫布</button>
+        <button onclick="copyJsonText()" class="tool-btn px-5 py-2.5 text-emerald-700">Copy JSON</button>
+      </div>
+
+      <div class="flex w-full flex-col items-center p-10">
+        <div id="menu-canvas-container" class="inline-block overflow-hidden p-4">
+          <canvas id="menu-canvas"></canvas>
+        </div>
+        <div class="mt-5 flex items-center gap-4 rounded-full bg-slate-200/60 px-5 py-2 text-xs font-bold text-slate-500">
+          <span id="canvas-size-label">LINE Rich Menu 2500 x 843</span>
+          <span>座標以原始寬度 2500px 自動換算</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="app-panel">
+    <div class="border-b border-slate-100 bg-slate-50 px-6 py-4">
+      <div class="text-sm font-black tracking-widest text-slate-600">屬性設定</div>
+      <div id="auth-state" class="mt-1 text-xs font-bold text-slate-400">LIFF 身分確認中</div>
+    </div>
+    <div class="border-b border-slate-100 p-5">
+      <label class="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <input id="set-default" type="checkbox" class="h-5 w-5 rounded border-amber-300" checked>
+        <span class="text-sm font-bold text-amber-900">發布後設為官方帳號預設選單</span>
+      </label>
+    </div>
+    <div id="editor-ui" class="no-scrollbar flex-1 overflow-y-auto p-5 text-sm">
+      <div class="grid h-full place-items-center text-center font-bold text-slate-400">請先上傳圖片，或建立空白尺寸。</div>
+    </div>
+    <details class="border-t border-slate-100 bg-white">
+      <summary class="cursor-pointer px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-500">Rich Menu JSON</summary>
+      <textarea id="json-output" class="h-56 w-full resize-none border-0 bg-slate-950 p-4 font-mono text-xs text-emerald-100 outline-none"></textarea>
+    </details>
+  </aside>
+
+  <script>
     const WORKER_URL = "https://travelkeeper-worker.fangwl591021.workers.dev";
     const LIFF_ID = "2009367829-BDZCGti8";
-    const hub = createMyCardHub();
-    const FALLBACK_TEMPLATES = [
-      {
-        template_id: "rich-menu-basic-2500",
-        name: "標準圖文選單 2500 x 1686",
-        sample_data: {
-          name: "TravelKeeper 主選單",
-          chatBarText: "選單",
-          selected: true,
-          size: { width: 2500, height: 1686 },
-          areas: [
-            { bounds: { x: 0, y: 0, width: 1250, height: 843 }, action: { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/" } },
-            { bounds: { x: 1250, y: 0, width: 1250, height: 843 }, action: { type: "message", text: "查詢行程" } },
-            { bounds: { x: 0, y: 843, width: 833, height: 843 }, action: { type: "message", text: "熱門推薦" } },
-            { bounds: { x: 833, y: 843, width: 834, height: 843 }, action: { type: "message", text: "客服協助" } },
-            { bounds: { x: 1667, y: 843, width: 833, height: 843 }, action: { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/line-oa-monitor.html" } }
-          ]
-        }
-      },
-      {
-        template_id: "rich-menu-basic-2500x843",
-        name: "精簡圖文選單 2500 x 843",
-        sample_data: {
-          name: "TravelKeeper 精簡選單",
-          chatBarText: "選單",
-          selected: true,
-          size: { width: 2500, height: 843 },
-          areas: [
-            { bounds: { x: 0, y: 0, width: 1250, height: 843 }, action: { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/" } },
-            { bounds: { x: 1250, y: 0, width: 1250, height: 843 }, action: { type: "message", text: "客服協助" } }
-          ]
-        }
-      }
-    ];
+    let currentProfile = null;
+    let lastUploadedBase64 = "";
 
-    let profile = null;
-    let templates = [];
-    let currentConfig = null;
-    let imageBase64 = "";
-    let renderedPayload = null;
+    function toggleLoader(show) {
+      document.getElementById("loader").classList.toggle("workspace-hidden", !show);
+    }
 
-    const $ = (id) => document.getElementById(id);
-    const els = {
-      toast: $("toast"),
-      templateSelect: $("template-select"),
-      configName: $("config-name"),
-      configChatbar: $("config-chatbar"),
-      configSelected: $("config-selected"),
-      imageHint: $("image-hint"),
-      menuImage: $("menu-image"),
-      imageMeta: $("image-meta"),
-      setDefault: $("set-default"),
-      areaRows: $("area-rows"),
-      configJson: $("config-json"),
-      renderedJson: $("rendered-json"),
-      validationResult: $("validation-result"),
-      previewSize: $("preview-size"),
-      previewShell: $("preview-shell"),
-      previewImage: $("preview-image"),
-      previewEmpty: $("preview-empty"),
-      previewAreas: $("preview-areas"),
-    };
-
-    function showToast(message, type = "success") {
-      els.toast.textContent = message;
-      els.toast.className = `fixed right-5 top-5 z-50 max-w-md rounded-2xl px-5 py-4 text-sm font-bold text-white shadow-2xl ${type === "error" ? "bg-rose-500" : "bg-slate-900"}`;
-      els.toast.hidden = false;
+    function showToast(message) {
+      const el = document.getElementById("toast");
+      el.textContent = message;
+      el.classList.remove("workspace-hidden");
       clearTimeout(showToast.timer);
-      showToast.timer = setTimeout(() => { els.toast.hidden = true; }, 2800);
-    }
-
-    function clone(value) {
-      return JSON.parse(JSON.stringify(value || {}));
-    }
-
-    function getFallbackTemplate(templateId) {
-      return FALLBACK_TEMPLATES.find((template) => template.template_id === templateId) || FALLBACK_TEMPLATES[0];
-    }
-
-    function setTemplateOptions(list) {
-      templates = list?.length ? list : FALLBACK_TEMPLATES;
-      els.templateSelect.innerHTML = templates.map((template) =>
-        `<option value="${escapeHtml(template.template_id)}">${escapeHtml(template.name || template.template_id)}</option>`
-      ).join("");
-    }
-
-    function safeParseConfig() {
-      try {
-        return JSON.parse(els.configJson.value || "{}");
-      } catch (err) {
-        showToast(`JSON 格式錯誤：${err.message}`, "error");
-        return null;
-      }
-    }
-
-    function writeConfig(config, { syncForm = true } = {}) {
-      currentConfig = clone(config);
-      els.configJson.value = JSON.stringify(currentConfig, null, 2);
-      if (syncForm) {
-        els.configName.value = currentConfig.name || "";
-        els.configChatbar.value = currentConfig.chatBarText || "";
-        els.configSelected.checked = currentConfig.selected !== false;
-      }
-      renderAreaRows();
-      renderPreview();
-      renderedPayload = null;
-      els.renderedJson.value = "";
-      els.validationResult.textContent = "設定已更新，尚未驗證。";
-      els.validationResult.className = "mb-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600";
-    }
-
-    function syncBasicsToConfig() {
-      const config = safeParseConfig();
-      if (!config) return null;
-      config.name = els.configName.value.trim() || "TravelKeeper Rich Menu";
-      config.chatBarText = els.configChatbar.value.trim() || "選單";
-      config.selected = els.configSelected.checked;
-      writeConfig(config, { syncForm: false });
-      return config;
-    }
-
-    function areaActionValue(action = {}) {
-      if (action.type === "message") return action.text || "";
-      if (action.type === "richmenuswitch") return `${action.richMenuAliasId || ""}|${action.data || ""}`;
-      return action.uri || "";
-    }
-
-    function renderAreaRows() {
-      const areas = Array.isArray(currentConfig?.areas) ? currentConfig.areas : [];
-      els.areaRows.innerHTML = areas.map((area, index) => {
-        const bounds = area.bounds || {};
-        const action = area.action || {};
-        const type = action.type || "uri";
-        const value = areaActionValue(action);
-        return `
-          <tr data-index="${index}">
-            <td class="whitespace-nowrap px-3 py-3 font-bold text-slate-700">區塊 ${index + 1}</td>
-            <td class="whitespace-nowrap px-3 py-3 text-xs text-slate-500">${bounds.x || 0}, ${bounds.y || 0}, ${bounds.width || 0} x ${bounds.height || 0}</td>
-            <td class="px-3 py-3">
-              <select data-area-type="${index}" class="w-36 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
-                <option value="uri" ${type === "uri" ? "selected" : ""}>開啟網址</option>
-                <option value="message" ${type === "message" ? "selected" : ""}>送出文字</option>
-                <option value="richmenuswitch" ${type === "richmenuswitch" ? "selected" : ""}>切換選單</option>
-              </select>
-            </td>
-            <td class="px-3 py-3">
-              <input data-area-value="${index}" value="${escapeHtml(value)}" class="min-w-[260px] w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="網址、文字，或 alias|data">
-            </td>
-          </tr>
-        `;
-      }).join("") || `<tr><td colspan="4" class="px-3 py-8 text-center text-sm font-bold text-slate-400">目前沒有熱區。</td></tr>`;
-    }
-
-    function applyAreaTable() {
-      const config = syncBasicsToConfig();
-      if (!config) return;
-      config.areas = (config.areas || []).map((area, index) => {
-        const type = document.querySelector(`[data-area-type="${index}"]`)?.value || "uri";
-        const value = document.querySelector(`[data-area-value="${index}"]`)?.value.trim() || "";
-        const next = { ...area, action: { type } };
-        if (type === "message") next.action.text = value || `選單 ${index + 1}`;
-        else if (type === "richmenuswitch") {
-          const [richMenuAliasId, data] = value.split("|");
-          next.action.richMenuAliasId = (richMenuAliasId || "").trim() || `MENU_${index + 1}`;
-          next.action.data = (data || "").trim() || `switch-${index + 1}`;
-        } else {
-          next.action.uri = value || "https://fangwl591021.github.io/travelkeeper/";
-        }
-        return next;
-      });
-      writeConfig(config);
-      showToast("已套用區域設定。");
-    }
-
-    function renderPreview() {
-      const size = currentConfig?.size || { width: 2500, height: 843 };
-      const width = Number(size.width || 2500);
-      const height = Number(size.height || 843);
-      els.previewShell.style.aspectRatio = `${width} / ${height}`;
-      els.previewSize.textContent = `${width} x ${height}`;
-      els.imageHint.textContent = `建議上傳 ${width} x ${height} 的 PNG 或 JPG。`;
-      els.previewAreas.innerHTML = (currentConfig?.areas || []).map((area, index) => {
-        const b = area.bounds || {};
-        const left = (Number(b.x || 0) / width) * 100;
-        const top = (Number(b.y || 0) / height) * 100;
-        const w = (Number(b.width || 0) / width) * 100;
-        const h = (Number(b.height || 0) / height) * 100;
-        return `<div class="absolute grid place-items-center border-2 border-blue-500/70 bg-blue-500/10 text-xs font-black text-blue-700" style="left:${left}%;top:${top}%;width:${w}%;height:${h}%;">${index + 1}</div>`;
-      }).join("");
+      showToast.timer = setTimeout(() => el.classList.add("workspace-hidden"), 2400);
     }
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
       }[char]));
     }
 
-    async function loadTemplates() {
-      els.templateSelect.innerHTML = `<option>讀取中...</option>`;
-      try {
-        const result = await hub.richMenu.listTemplates();
-        setTemplateOptions(result.templates || []);
-      } catch (err) {
-        console.warn("rich menu template API failed, using fallback templates", err);
-        setTemplateOptions(FALLBACK_TEMPLATES);
-        showToast("模板 API 暫時讀不到，已使用本地保底模板。", "error");
-      }
-      if (templates[0]) writeConfig(templates[0].sample_data || {});
-      showToast(`已載入 ${templates.length} 個模板。`);
+    function safeActionValue(action) {
+      if (!action) return "";
+      if (action.type === "message") return action.text || "";
+      if (action.type === "postback") return action.data || "";
+      if (action.type === "richmenuswitch") return `${action.richMenuAliasId || ""}|${action.data || ""}`;
+      return action.uri || "";
     }
 
-    async function loadTemplateById(templateId) {
-      const fallback = getFallbackTemplate(templateId);
-      if (fallback) {
-        els.templateSelect.value = fallback.template_id;
-        writeConfig(fallback.sample_data || {});
-      }
-      try {
-        const result = await hub.richMenu.getTemplate(templateId);
-        const template = result.template || result;
-        els.templateSelect.value = template.template_id || templateId;
-        writeConfig(template.sample_data || fallback.sample_data || {});
-      } catch (err) {
-        console.warn("rich menu template detail failed, using fallback template", err);
-        if (!fallback) showToast(`模板讀取失敗：${err.message}`, "error");
-      }
-    }
+    window.MenuModule = (function() {
+      let canvas = null;
+      let isDrawingMode = false;
+      let isMouseDown = false;
+      let currentRect = null;
+      let startX = 0;
+      let startY = 0;
+      let currentImgHeight = 843;
 
-    function localValidateConfig(config) {
-      const issues = [];
-      if (!config?.name) issues.push("缺少選單名稱");
-      if (!config?.chatBarText) issues.push("缺少聊天列文字");
-      if (!config?.size?.width || !config?.size?.height) issues.push("缺少尺寸");
-      if (!Array.isArray(config?.areas) || config.areas.length === 0) issues.push("至少需要一個點擊區域");
-      (config?.areas || []).forEach((area, index) => {
-        if (!area.bounds) issues.push(`區塊 ${index + 1} 缺少座標`);
-        if (!area.action?.type) issues.push(`區塊 ${index + 1} 缺少動作`);
-        if (area.action?.type === "uri" && !area.action.uri) issues.push(`區塊 ${index + 1} 缺少網址`);
-        if (area.action?.type === "message" && !area.action.text) issues.push(`區塊 ${index + 1} 缺少訊息文字`);
-      });
-      return { valid: issues.length === 0, issues, richMenu: buildLinePayload(config) };
-    }
-
-    function buildLinePayload(config) {
-      return {
-        size: config.size,
-        selected: config.selected !== false,
-        name: config.name || "TravelKeeper Rich Menu",
-        chatBarText: config.chatBarText || "選單",
-        areas: Array.isArray(config.areas) ? config.areas : []
-      };
-    }
-
-    async function validateConfig() {
-      const config = syncBasicsToConfig();
-      if (!config) return null;
-      let result = null;
-      try {
-        result = await hub.richMenu.validate(config);
-      } catch (err) {
-        console.warn("rich menu validate API failed, using local validation", err);
-        result = localValidateConfig(config);
-      }
-      const issues = result.issues || [];
-      const valid = result.valid !== false && issues.length === 0;
-      els.validationResult.textContent = valid ? "驗證通過，可以產生 Rich Menu JSON。" : `驗證未通過：${issues.join("；") || "請檢查設定。"}`;
-      els.validationResult.className = `mb-3 rounded-2xl px-4 py-3 text-sm ${valid ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600"}`;
-      return result;
-    }
-
-    async function renderRichMenu() {
-      const validation = await validateConfig();
-      if (!validation) return null;
-      const config = safeParseConfig();
-      try {
-        const result = await hub.richMenu.render(config);
-        renderedPayload = result.linePayload || result.richMenu || result;
-      } catch (err) {
-        console.warn("rich menu render API failed, using local renderer", err);
-        renderedPayload = buildLinePayload(config);
-      }
-      els.renderedJson.value = JSON.stringify(renderedPayload, null, 2);
-      showToast("已產生 LINE Rich Menu JSON。");
-      return renderedPayload;
-    }
-
-    async function publishMenu() {
-      const richMenu = renderedPayload || await renderRichMenu();
-      if (!richMenu) return;
-      if (!imageBase64) {
-        showToast("請先上傳圖文選單圖片。", "error");
-        return;
-      }
-      if (!profile?.userId) {
-        showToast("尚未取得管理員 LINE 身分，請重新開啟頁面。", "error");
-        return;
-      }
-      if (!confirm("確定要發布到 LINE 官方帳號？發布後會建立新的圖文選單。")) return;
-      const res = await fetch(`${WORKER_URL}/api/line-oa/rich-menu/publish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: profile.userId,
-          richMenu,
-          imageBase64,
-          setDefault: els.setDefault.checked,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.success === false) {
-        showToast(`發布失敗：${data.error || res.status}`, "error");
-        console.error("publish rich menu failed", data);
-        return;
-      }
-      showToast(`發布成功：${data.data?.richMenuId || ""}`);
-    }
-
-    function bindEvents() {
-      $("reload-templates").addEventListener("click", () => loadTemplates().catch((err) => showToast(err.message, "error")));
-      $("load-basic").addEventListener("click", () => loadTemplateById(hub.richMenu.ids.basic2500).catch((err) => showToast(err.message, "error")));
-      $("load-compact").addEventListener("click", () => loadTemplateById(hub.richMenu.ids.basic2500x843).catch((err) => showToast(err.message, "error")));
-      els.templateSelect.addEventListener("change", () => loadTemplateById(els.templateSelect.value).catch((err) => showToast(err.message, "error")));
-      $("apply-area-table").addEventListener("click", applyAreaTable);
-      $("format-config").addEventListener("click", () => {
-        const config = safeParseConfig();
-        if (config) writeConfig(config);
-      });
-      $("validate-config").addEventListener("click", () => validateConfig().catch((err) => showToast(err.message, "error")));
-      $("render-config").addEventListener("click", () => renderRichMenu().catch((err) => showToast(err.message, "error")));
-      $("publish-menu").addEventListener("click", () => publishMenu().catch((err) => showToast(err.message, "error")));
-      $("copy-rendered").addEventListener("click", async () => {
-        await navigator.clipboard.writeText(els.renderedJson.value || "");
-        showToast("已複製產生結果。");
-      });
-      [els.configName, els.configChatbar, els.configSelected].forEach((el) => {
-        el.addEventListener("change", syncBasicsToConfig);
-      });
-      els.menuImage.addEventListener("change", async () => {
-        const file = els.menuImage.files?.[0];
-        if (!file) return;
-        imageBase64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result || ""));
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
+      function ensureCanvas() {
+        if (canvas) return canvas;
+        canvas = new fabric.Canvas("menu-canvas", {
+          selection: true,
+          preserveObjectStacking: true,
         });
-        els.previewImage.src = imageBase64;
-        els.previewImage.hidden = false;
-        els.previewEmpty.hidden = true;
-        const img = new Image();
-        img.onload = () => {
-          els.imageMeta.textContent = `${file.name}，${img.naturalWidth} x ${img.naturalHeight}，${Math.round(file.size / 1024)} KB`;
-        };
-        img.src = imageBase64;
+        canvas.on("mouse:down", onMouseDown);
+        canvas.on("mouse:move", onMouseMove);
+        canvas.on("mouse:up", onMouseUp);
+        canvas.on("object:modified", () => MenuModule.updateOutput(true));
+        canvas.on("object:moved", () => MenuModule.updateOutput(true));
+        canvas.on("object:scaled", () => MenuModule.updateOutput(true));
+        document.addEventListener("keydown", (event) => {
+          if (event.key !== "Delete" && event.key !== "Backspace") return;
+          if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+          const active = canvas.getActiveObject();
+          if (!active || active.type !== "rect") return;
+          canvas.remove(active);
+          MenuModule.updateOutput();
+        });
+        return canvas;
+      }
+
+      function onMouseDown(event) {
+        const c = ensureCanvas();
+        if (!isDrawingMode) return;
+        const pointer = c.getPointer(event.e);
+        if (c.findTarget(event.e)) return;
+        isMouseDown = true;
+        startX = pointer.x;
+        startY = pointer.y;
+        currentRect = new fabric.Rect({
+          left: startX,
+          top: startY,
+          width: 0,
+          height: 0,
+          fill: "rgba(22,191,122,.28)",
+          stroke: "#16bf7a",
+          strokeWidth: 2,
+          transparentCorners: false,
+          cornerColor: "#16bf7a",
+        });
+        currentRect.action = { type: "uri", uri: "https://fangwl591021.github.io/travelkeeper/" };
+        c.add(currentRect);
+        c.setActiveObject(currentRect);
+      }
+
+      function onMouseMove(event) {
+        if (!isDrawingMode || !isMouseDown || !currentRect) return;
+        const c = ensureCanvas();
+        const pointer = c.getPointer(event.e);
+        currentRect.set({
+          left: Math.min(startX, pointer.x),
+          top: Math.min(startY, pointer.y),
+          width: Math.abs(pointer.x - startX),
+          height: Math.abs(pointer.y - startY),
+        });
+        c.renderAll();
+      }
+
+      function onMouseUp() {
+        if (!isDrawingMode || !isMouseDown) return;
+        const c = ensureCanvas();
+        isMouseDown = false;
+        if (currentRect && (currentRect.width < 5 || currentRect.height < 5)) {
+          c.remove(currentRect);
+        } else if (currentRect) {
+          currentRect.setCoords();
+        }
+        currentRect = null;
+        isDrawingMode = false;
+        setDrawButton(false);
+        MenuModule.updateOutput();
+      }
+
+      function setDrawButton(active) {
+        const btn = document.getElementById("menu-draw-btn");
+        const c = ensureCanvas();
+        if (active) {
+          btn.textContent = "劃定中...";
+          btn.className = "rounded-md bg-emerald-500 px-9 py-2.5 text-sm font-black text-white shadow-md transition";
+          c.defaultCursor = "crosshair";
+          c.selection = false;
+        } else {
+          btn.textContent = "開始劃定區域";
+          btn.className = "rounded-md bg-slate-900 px-9 py-2.5 text-sm font-black text-white shadow-md transition hover:bg-slate-700";
+          c.defaultCursor = "default";
+          c.selection = true;
+        }
+      }
+
+      function normalizeAction(action) {
+        const type = action?.type || "uri";
+        if (type === "message") return { type: "message", text: action.text || "客服協助" };
+        if (type === "postback") return { type: "postback", data: action.data || "action=menu", displayText: action.text || "" };
+        if (type === "richmenuswitch") return { type: "richmenuswitch", richMenuAliasId: action.richMenuAliasId || "MENU名稱", data: action.data || "切換選單" };
+        return { type: "uri", uri: action?.uri || "https://fangwl591021.github.io/travelkeeper/" };
+      }
+
+      function renderAreaEditor() {
+        const c = ensureCanvas();
+        const rects = c.getObjects("rect");
+        const editor = document.getElementById("editor-ui");
+        if (!rects.length) {
+          editor.innerHTML = `
+            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+              <div class="text-base font-black text-slate-700">尚未劃定點擊區域</div>
+              <div class="mt-2 text-sm leading-6 text-slate-500">按左側「開始劃定區域」，在圖片上拖曳框出可點擊範圍。</div>
+            </div>`;
+          return;
+        }
+        editor.innerHTML = rects.map((area, index) => {
+          const action = normalizeAction(area.action);
+          const type = action.type || "uri";
+          return `
+            <div class="area-card">
+              <div class="mb-3 flex items-center justify-between">
+                <span class="rounded-full bg-emerald-500 px-4 py-1 text-xs font-black text-white">區域 #${index + 1}</span>
+                <button class="danger-btn px-3 py-1" onclick="MenuModule.removeArea(${index})">刪除</button>
+              </div>
+              <label class="mb-3 block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">動作類型</span>
+                <select class="input-field" onchange="MenuModule.updateAreaProp(${index}, 'type', this.value)">
+                  <option value="uri" ${type === "uri" ? "selected" : ""}>超連結 URI</option>
+                  <option value="message" ${type === "message" ? "selected" : ""}>送出文字 Message</option>
+                  <option value="postback" ${type === "postback" ? "selected" : ""}>回傳資料 Postback</option>
+                  <option value="richmenuswitch" ${type === "richmenuswitch" ? "selected" : ""}>切換選單 Rich Menu Switch</option>
+                </select>
+              </label>
+              ${renderActionFields(index, action)}
+              <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-400">
+                <div>X ${Math.round(area.left || 0)}</div>
+                <div>Y ${Math.round(area.top || 0)}</div>
+                <div>W ${Math.round(area.width * (area.scaleX || 1))}</div>
+                <div>H ${Math.round(area.height * (area.scaleY || 1))}</div>
+              </div>
+            </div>`;
+        }).join("");
+      }
+
+      function renderActionFields(index, action) {
+        if (action.type === "message") {
+          return `
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">送出的文字</span>
+              <input class="input-field" value="${escapeHtml(action.text || "")}" oninput="MenuModule.updateAreaProp(${index}, 'text', this.value)" placeholder="例如：查詢行程">
+            </label>`;
+        }
+        if (action.type === "postback") {
+          return `
+            <label class="mb-3 block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">回傳資料 data</span>
+              <input class="input-field font-mono" value="${escapeHtml(action.data || "")}" oninput="MenuModule.updateAreaProp(${index}, 'data', this.value)" placeholder="action=keyword&keyword=xxxx">
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">顯示文字 displayText</span>
+              <input class="input-field" value="${escapeHtml(action.displayText || "")}" oninput="MenuModule.updateAreaProp(${index}, 'displayText', this.value)" placeholder="可留空">
+            </label>`;
+        }
+        if (action.type === "richmenuswitch") {
+          return `
+            <label class="mb-3 block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">目標選單別名</span>
+              <input class="input-field font-mono" value="${escapeHtml(action.richMenuAliasId || "")}" oninput="MenuModule.updateAreaProp(${index}, 'richMenuAliasId', this.value)" placeholder="MENU名稱">
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">說明文字 data</span>
+              <input class="input-field" value="${escapeHtml(action.data || "")}" oninput="MenuModule.updateAreaProp(${index}, 'data', this.value)" placeholder="切換選單">
+            </label>`;
+        }
+        return `
+          <label class="block">
+            <span class="mb-1 block text-xs font-bold text-slate-500">超連結網址</span>
+            <input class="input-field font-mono" value="${escapeHtml(action.uri || "")}" oninput="MenuModule.updateAreaProp(${index}, 'uri', this.value)" placeholder="https://...">
+          </label>`;
+      }
+
+      return {
+        init() {
+          ensureCanvas();
+          this.newBlank(2500, 843);
+        },
+        newBlank(width, height) {
+          const c = ensureCanvas();
+          lastUploadedBase64 = "";
+          currentImgHeight = height;
+          const displayWidth = Math.min(760, Math.max(560, window.innerWidth - 720));
+          const displayHeight = Math.round(displayWidth * height / width);
+          c.clear();
+          c.setWidth(displayWidth);
+          c.setHeight(displayHeight);
+          c.setBackgroundColor("#fff", c.renderAll.bind(c));
+          document.getElementById("canvas-size-label").textContent = `LINE Rich Menu ${width} x ${height}`;
+          this.updateOutput();
+        },
+        load(name, json, base64) {
+          const c = ensureCanvas();
+          let data = {};
+          try {
+            if (typeof json === "string") {
+              try {
+                data = JSON.parse(json);
+              } catch (plainErr) {
+                data = JSON.parse(decodeURIComponent(json));
+              }
+            } else {
+              data = json;
+            }
+          } catch (err) {
+            data = { size: { width: 2500, height: currentImgHeight }, areas: [] };
+          }
+          const width = Number(data.size?.width || 2500);
+          const height = Number(data.size?.height || currentImgHeight || 843);
+          currentImgHeight = height;
+          document.getElementById("save-filename").value = name || document.getElementById("save-filename").value || "TravelKeeper 主選單";
+          document.getElementById("rich-menu-chatbar").value = data.chatBarText || document.getElementById("rich-menu-chatbar").value || "選單";
+          document.getElementById("canvas-size-label").textContent = `LINE Rich Menu ${width} x ${height}`;
+          const displayWidth = Math.min(760, Math.max(560, window.innerWidth - 720));
+          const displayHeight = Math.round(displayWidth * height / width);
+          c.clear();
+          c.setWidth(displayWidth);
+          c.setHeight(displayHeight);
+
+          const finish = () => {
+            this.importAreas(data.areas || [], displayWidth / width, false);
+            this.updateOutput();
+          };
+
+          if (base64) {
+            fabric.Image.fromURL(base64, (img) => {
+              c.setBackgroundImage(img, c.renderAll.bind(c), {
+                scaleX: displayWidth / img.width,
+                scaleY: displayHeight / img.height,
+              });
+              finish();
+            }, { crossOrigin: "anonymous" });
+          } else {
+            c.setBackgroundColor("#fff", c.renderAll.bind(c));
+            finish();
+          }
+        },
+        toggleDrawMode() {
+          ensureCanvas();
+          isDrawingMode = !isDrawingMode;
+          setDrawButton(isDrawingMode);
+        },
+        updateOutput(skipRenderUI) {
+          const c = ensureCanvas();
+          const scale = 2500 / c.getWidth();
+          const areas = c.getObjects("rect").map((area) => ({
+            bounds: {
+              x: Math.round(area.left * scale),
+              y: Math.round(area.top * scale),
+              width: Math.round(area.width * (area.scaleX || 1) * scale),
+              height: Math.round(area.height * (area.scaleY || 1) * scale),
+            },
+            action: normalizeAction(area.action),
+          }));
+          const payload = {
+            size: { width: 2500, height: currentImgHeight },
+            selected: true,
+            name: document.getElementById("save-filename").value || "TravelKeeper 主選單",
+            chatBarText: document.getElementById("rich-menu-chatbar").value || "選單",
+            areas,
+          };
+          document.getElementById("json-output").value = JSON.stringify(payload, null, 2);
+          if (!skipRenderUI) renderAreaEditor();
+          this.refreshCanvasLabels();
+        },
+        refreshCanvasLabels() {
+          const c = ensureCanvas();
+          c.getObjects("text").forEach((label) => c.remove(label));
+          c.getObjects("rect").forEach((rect, index) => {
+            const label = new fabric.Text(`#${index + 1}`, {
+              left: rect.left + 7,
+              top: rect.top + 7,
+              fontSize: 14,
+              fill: "#064e3b",
+              fontWeight: "bold",
+              selectable: false,
+              evented: false,
+              backgroundColor: "rgba(255,255,255,.85)",
+            });
+            c.add(label);
+          });
+          c.renderAll();
+        },
+        updateAreaProp(index, prop, value) {
+          const rect = ensureCanvas().getObjects("rect")[index];
+          if (!rect) return;
+          rect.action = normalizeAction(rect.action);
+          if (prop === "type") {
+            rect.action = normalizeAction({ type: value });
+          } else {
+            rect.action[prop] = value;
+          }
+          this.updateOutput();
+        },
+        removeArea(index) {
+          const c = ensureCanvas();
+          const rect = c.getObjects("rect")[index];
+          if (!rect) return;
+          c.remove(rect);
+          this.updateOutput();
+        },
+        importAreas(areas, scale, update = true) {
+          const c = ensureCanvas();
+          c.getObjects("rect").forEach((rect) => c.remove(rect));
+          areas.forEach((area) => {
+            const rect = new fabric.Rect({
+              left: area.bounds.x * scale,
+              top: area.bounds.y * scale,
+              width: area.bounds.width * scale,
+              height: area.bounds.height * scale,
+              fill: "rgba(22,191,122,.28)",
+              stroke: "#16bf7a",
+              strokeWidth: 2,
+              transparentCorners: false,
+              cornerColor: "#16bf7a",
+            });
+            rect.action = normalizeAction(area.action);
+            c.add(rect);
+          });
+          c.renderAll();
+          if (update) this.updateOutput();
+        },
+        clearAreas() {
+          const c = ensureCanvas();
+          c.getObjects("rect").forEach((rect) => c.remove(rect));
+          this.updateOutput();
+        },
+        applyJsonFromText() {
+          try {
+            const data = JSON.parse(document.getElementById("json-output").value || "{}");
+            this.load(document.getElementById("save-filename").value || "TravelKeeper 主選單", JSON.stringify(data), lastUploadedBase64);
+            showToast("已依 JSON 更新畫布");
+          } catch (err) {
+            alert("JSON 格式有誤：" + err.message);
+          }
+        },
+      };
+    })();
+
+    function copyJsonText() {
+      const value = document.getElementById("json-output").value;
+      if (!value) return alert("目前沒有可複製的 JSON");
+      navigator.clipboard.writeText(value).then(() => showToast("JSON 已複製"));
+    }
+
+    function saveProject() {
+      const data = {
+        name: document.getElementById("save-filename").value || "TravelKeeper 主選單",
+        chatBarText: document.getElementById("rich-menu-chatbar").value || "選單",
+        richMenu: document.getElementById("json-output").value,
+        imageBase64: lastUploadedBase64,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem("travelkeeper.richMenuDraft", JSON.stringify(data));
+      showToast("已儲存在此瀏覽器草稿");
+    }
+
+    function restoreProject() {
+      const raw = localStorage.getItem("travelkeeper.richMenuDraft");
+      if (!raw) return false;
+      try {
+        const data = JSON.parse(raw);
+        if (data.name) document.getElementById("save-filename").value = data.name;
+        if (data.chatBarText) document.getElementById("rich-menu-chatbar").value = data.chatBarText;
+        if (data.imageBase64) lastUploadedBase64 = data.imageBase64;
+        if (data.richMenu) MenuModule.load(data.name, data.richMenu, data.imageBase64 || "");
+        showToast("已載入上次草稿");
+        return true;
+      } catch (err) {
+        console.warn("restore draft failed", err);
+        return false;
+      }
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
+    }
+
+    document.getElementById("img-upload").addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (file.size > 1024 * 1024) {
+        alert("LINE 圖文選單圖片建議小於 1MB，請先壓縮後再上傳。");
+        event.target.value = "";
+        return;
+      }
+      toggleLoader(true);
+      try {
+        const base64 = await readFileAsDataUrl(file);
+        lastUploadedBase64 = base64;
+        const image = new Image();
+        image.onload = () => {
+          const height = Math.round((image.height / image.width) * 2500);
+          const config = {
+            size: { width: 2500, height },
+            selected: true,
+            name: document.getElementById("save-filename").value || "TravelKeeper 主選單",
+            chatBarText: document.getElementById("rich-menu-chatbar").value || "選單",
+            areas: [],
+          };
+          MenuModule.load(config.name, JSON.stringify(config), base64);
+          toggleLoader(false);
+          showToast(`圖片已載入：${image.width} x ${image.height}`);
+        };
+        image.onerror = () => {
+          toggleLoader(false);
+          alert("圖片讀取失敗，請換一張 PNG 或 JPG。");
+        };
+        image.src = base64;
+      } catch (err) {
+        toggleLoader(false);
+        alert("圖片讀取失敗：" + err.message);
+      }
+    });
+
+    async function doUploadRichMenu() {
+      const richMenuText = document.getElementById("json-output").value;
+      if (!richMenuText) return alert("JSON 結構異常");
+      if (!lastUploadedBase64) return alert("請先選擇圖文選單圖片");
+      if (!currentProfile?.userId) return alert("尚未取得管理員 LINE 身分，請重新開啟或從 LIFF 登入。");
+
+      let richMenu;
+      try {
+        richMenu = JSON.parse(richMenuText);
+      } catch (err) {
+        return alert("JSON 格式有誤：" + err.message);
+      }
+      richMenu.name = document.getElementById("save-filename").value || richMenu.name || "TravelKeeper 主選單";
+      richMenu.chatBarText = document.getElementById("rich-menu-chatbar").value || richMenu.chatBarText || "選單";
+      richMenu.selected = true;
+
+      if (!richMenu.areas?.length) {
+        if (!confirm("目前沒有任何點擊區域，仍要發布嗎？")) return;
+      }
+      if (!confirm("確定要發布到 LINE 官方帳號？這會新增一組圖文選單，並可設為預設。")) return;
+
+      toggleLoader(true);
+      try {
+        const res = await fetch(`${WORKER_URL}/api/line-oa/rich-menu/publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid: currentProfile.userId,
+            richMenu,
+            imageBase64: lastUploadedBase64,
+            setDefault: document.getElementById("set-default").checked,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        showToast(`發布成功：${data.data?.richMenuId || ""}`);
+        saveProject();
+      } catch (err) {
+        alert("發布失敗：" + err.message);
+      } finally {
+        toggleLoader(false);
+      }
     }
 
     async function initAuth() {
-      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-      if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: location.href });
-        return false;
-      }
-      profile = await liff.getProfile();
-      return true;
-    }
-
-    async function init() {
-      bindEvents();
+      const authState = document.getElementById("auth-state");
       try {
-        await initAuth();
+        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+        if (!liff.isLoggedIn()) {
+          authState.textContent = "尚未登入，發布時需要管理員身分";
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+        currentProfile = await liff.getProfile();
+        authState.textContent = `管理員：${currentProfile.displayName || currentProfile.userId}`;
       } catch (err) {
         console.warn("LIFF init failed", err);
-        showToast("LIFF 登入未完成，仍可先編輯與驗證，發布會需要管理員身分。", "error");
+        authState.textContent = "LIFF 未完成，可先編輯，發布需要管理員身分";
       }
-      await loadTemplates();
     }
 
-    init().catch((err) => {
-      console.error(err);
-      showToast(`讀取失敗：${err.message}`, "error");
+    window.addEventListener("load", async () => {
+      MenuModule.init();
+      if (!restoreProject()) {
+        MenuModule.newBlank(2500, 843);
+      }
+      await initAuth();
     });
   </script>
 </body>
