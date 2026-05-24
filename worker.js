@@ -703,7 +703,7 @@ async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
   const distributor = await env.DB.prepare(
     `SELECT * FROM distributors WHERE uid = ?`
   ).bind(distributorUid).first();
-  if (!distributor) return { success: false, error: '?曆??啣??瑕?' };
+  if (!distributor) return { success: false, error: '找不到分銷商資料' };
 
   const price = Number(itinerary.price || 0);
   const totalAmount = price * travelers;
@@ -4635,7 +4635,7 @@ export default {
           itineraryIds = [],
           mode = 'single',
           uid = '',
-          ctaText = '?亦?銵? / 蝡?勗?',
+          ctaText = '查看完整行程',
           centerText = '心動就要行動！回饋都在這',
           socFields = {},
           agencySlug = 'demo',
@@ -4659,12 +4659,12 @@ export default {
 
         // ?舐窗??
         const SOC_DEFS = [
-          { key: 'phone',      label: '?餉店',    prefix: 'tel:',  field: 'phone'      },
+          { key: 'phone',      label: '電話',    prefix: 'tel:',  field: 'phone'      },
           { key: 'line',       label: 'LINE',    prefix: '',      field: 'lineLink'   },
           { key: 'lineAt',     label: 'LINE@',   prefix: '',      field: 'lineAtLink' },
           { key: 'fb',         label: 'Facebook',prefix: '',      field: 'fbLink'     },
-          { key: 'web',        label: '蝬脩?',    prefix: '',      field: 'webLink'    },
-          { key: 'map',        label: '?啣?',    prefix: '',      field: 'mapLink'    },
+          { key: 'web',        label: '網站',    prefix: '',      field: 'webLink'    },
+          { key: 'map',        label: '地圖',    prefix: '',      field: 'mapLink'    },
           { key: 'tg',         label: 'Telegram',prefix: '',      field: 'tgToken'    },
         ];
         const socBtns = SOC_DEFS
@@ -4711,7 +4711,7 @@ export default {
           const bookUri = buildBookingUri(id);
           return {
             type: 'bubble', size: 'mega',
-            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', action: { type: 'uri', uri: detailUri } },
+            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', gravity: 'top', action: { type: 'uri', uri: detailUri } },
             body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', contents: [
               { type: 'text', text: tour.title, weight: 'bold', size: 'lg', wrap: true, color: '#0f172a' },
               { type: 'text', text: `${tour.region || ''} · ${tour.days || ''}天`, size: 'sm', color: '#64748b', margin: 'sm' },
@@ -4743,6 +4743,7 @@ export default {
                 size: 'sm',
                 aspectRatio: '4:3',
                 aspectMode: 'cover',
+                gravity: 'top',
                 flex: 2
               },
               {
@@ -4752,7 +4753,7 @@ export default {
                 contents: [
                   {
                     type: 'text',
-                    text: tour.title || '銵?',
+                    text: tour.title || '行程',
                     weight: 'bold',
                     size: 'sm',
                     wrap: true,
@@ -4800,7 +4801,8 @@ export default {
                 url: safeImageUrl(tour.image),
                 size: 'full',
                 aspectRatio: '1:1',
-                aspectMode: 'cover'
+                aspectMode: 'cover',
+                gravity: 'top'
               },
               {
                 type: 'box',
@@ -5037,8 +5039,9 @@ export default {
         const imageInputs = [
           ...(Array.isArray(images) ? images : []),
           ...(image ? [image] : []),
-        ].filter(Boolean).slice(0, 4);
+        ].filter(Boolean).slice(0, 8);
         if (!imageInputs.length) return json({ success: false, error: '蝻箏? DM ????PDF ?鞈?' }, 400);
+        const sourceSceneUrls = await uploadSourceImagesToR2(imageInputs, env);
         const gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
@@ -5047,7 +5050,7 @@ export default {
             messages: [{ role: 'user', content: [
               { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 或 PDF 頁面並深度擴寫。回傳標準 JSON：
 {"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
-description 中圖片語法使用景點英文關鍵字而非URL，系統會自動替換；若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
+description 中圖片語法只放每日對應頁面或景點關鍵字，不要輸出 placehold.co、loremflickr、via.placeholder 這類暫示圖網址；若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
               ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } }))
             ]}]
           })
@@ -5061,9 +5064,8 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
         const parsed = JSON.parse(match[0]);
 
         // 封面圖優先使用原始 DM 圖 / PDF 第一頁，避免外部示意圖失效
-        const primaryImage = imageInputs[0];
-        if (typeof primaryImage === 'string' && primaryImage.startsWith('data:image/')) {
-          parsed.image = await uploadDataUrlToR2(primaryImage, `cover_${Date.now()}.jpg`, env);
+        if (sourceSceneUrls[0]) {
+          parsed.image = sourceSceneUrls[0];
         } else {
           const coverUrl = await fetchUnsplashUrl(parsed.imageKeyword || 'travel', env);
           parsed.image   = await uploadUrlToR2(coverUrl, `cover_${Date.now()}.jpg`, env);
@@ -5071,7 +5073,7 @@ description 中圖片語法使用景點英文關鍵字而非URL，系統會自�
 
         // ?扳????摮? R2 URL
         if (parsed.description) {
-          parsed.description = await replaceImageKeywords(parsed.description, env);
+          parsed.description = await replaceImageKeywords(parsed.description, env, sourceSceneUrls);
         }
 
         return json({ success: true, data: parsed });
@@ -5457,15 +5459,46 @@ async function uploadDataUrlToR2(dataUrl, filename, env) {
   }
 }
 
-async function replaceImageKeywords(text, env) {
+function isGeneratedPlaceholderImageUrl(url) {
+  return /(?:placehold\.co|placeholder\.com|via\.placeholder|loremflickr\.com)/i.test(String(url || ''));
+}
+
+async function uploadSourceImagesToR2(imageInputs, env) {
+  const urls = [];
+  for (let i = 0; i < imageInputs.length; i++) {
+    const input = imageInputs[i];
+    let url = '';
+    if (typeof input === 'string' && input.startsWith('data:image/')) {
+      url = await uploadDataUrlToR2(input, `scene_${Date.now()}_${i + 1}.jpg`, env);
+    } else if (typeof input === 'string' && /^https?:\/\//i.test(input)) {
+      url = await uploadUrlToR2(input, `scene_${Date.now()}_${i + 1}.jpg`, env);
+    }
+    if (url) urls.push(url);
+  }
+  return urls;
+}
+
+async function replaceImageKeywords(text, env, sourceImageUrls = []) {
   const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
   const replacements = [];
   let match;
+  let sourceIndex = 0;
   while ((match = regex.exec(text)) !== null) {
-    const keyword = match[2];
-    if (keyword.startsWith('http')) continue;
-    const unsplashUrl = await fetchUnsplashUrl(keyword, env);
-    const r2Url       = await uploadUrlToR2(unsplashUrl, `scene_${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`, env);
+    const keyword = String(match[2] || '').trim();
+    let r2Url = '';
+    if (sourceImageUrls.length) {
+      r2Url = sourceImageUrls[Math.min(sourceIndex, sourceImageUrls.length - 1)];
+      sourceIndex++;
+    } else if (/^https?:\/\//i.test(keyword) && !isGeneratedPlaceholderImageUrl(keyword)) {
+      continue;
+    } else {
+      const lookupKeyword = isGeneratedPlaceholderImageUrl(keyword)
+        ? (match[1] || 'travel')
+        : keyword;
+      const unsplashUrl = await fetchUnsplashUrl(lookupKeyword, env);
+      r2Url = await uploadUrlToR2(unsplashUrl, `scene_${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`, env);
+    }
+    if (!r2Url) continue;
     replacements.push({ original: match[0], replacement: `![${match[1]}](${r2Url})` });
   }
   let result = text;
