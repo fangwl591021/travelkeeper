@@ -212,6 +212,7 @@
           <span class="section-image-label block text-sm font-semibold mb-2"></span>
           <div class="flex gap-2">
             <input class="section-image flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+            <button type="button" class="fix-section-image-btn shrink-0 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100 text-amber-700 font-semibold"></button>
             <label class="section-upload-label shrink-0 px-4 py-3 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer">
               <span class="section-upload-text"></span>
               <input type="file" accept="image/*" class="section-file hidden">
@@ -279,11 +280,14 @@
       sectionTitle: '\u6bb5\u843d\u6a19\u984c',
       sectionImage: '\u5716\u7247\u7db2\u5740',
       sectionBody: '\u6bb5\u843d\u5167\u5bb9',
+      fixImage: '\u4fee\u88dc\u5716\u7247',
+      fixingImage: '\u4fee\u88dc\u4e2d...',
       noTitle: '\u672a\u547d\u540d\u884c\u7a0b',
       previewRole: '\u9810\u89bd\u6a21\u5f0f',
       adminRole: '\u7ba1\u7406\u54e1',
       distRole: '\u5206\u92b7\u5546',
       uploadSectionDone: '\u6bb5\u843d\u5716\u7247\u5df2\u66f4\u65b0',
+      fixImageDone: '\u5df2\u4fee\u88dc\u6bb5\u843d\u5716\u7247',
       uploadCoverDone: '\u5c01\u9762\u5df2\u66f4\u65b0',
       placeholderImage: '\u9019\u5f35\u662f\u820a\u793a\u610f\u5716\uff0c\u5efa\u8b70\u63db\u6210\u6b63\u5f0f\u884c\u7a0b\u5716\u3002',
       repairedLegacyImage: '\u5df2\u88dc\u4e0a\u53ef\u986f\u793a\u7684\u5099\u7528\u5716\uff0c\u6b63\u5f0f\u4e0a\u7dda\u524d\u4ecd\u5efa\u8b70\u63db\u6210\u81ea\u6709\u5716\u3002',
@@ -296,6 +300,7 @@
       missingId: '\u7f3a\u5c11\u884c\u7a0b id\u3002\u8acb\u5f9e\u300c\u56de\u6211\u7684\u4e0a\u7a3f\u300d\u9078\u64c7\u4e00\u7b46\u884c\u7a0b\uff0c\u6216\u4f7f\u7528 itinerary-maintenance-v2.html?id=\u884c\u7a0bID \u9032\u5165\u3002',
       notFound: '\u627e\u4e0d\u5230\u884c\u7a0b\u8cc7\u6599',
       uploadFail: '\u5716\u7247\u4e0a\u50b3\u5931\u6557',
+      fixImageFail: '\u5716\u7247\u4fee\u88dc\u5931\u6557',
       readFail: '\u8b80\u53d6\u5716\u7247\u5931\u6557',
       saveFail: '\u5132\u5b58\u5931\u6557',
       loadFail: '\u8b80\u53d6\u5931\u6557',
@@ -738,6 +743,21 @@
       return json.url;
     }
 
+    async function fixSectionImageWithWorker(section) {
+      const res = await fetch(`${WORKER_URL}/api/itinerary/fix-section-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: section?.title || '',
+          body: section?.body || '',
+          currentImage: section?.image || '',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success || !json?.url) throw new Error(json?.error || UI.fixImageFail);
+      return json.url;
+    }
+
     function createEmptySection() {
       return { title: '', image: '', body: '' };
     }
@@ -759,8 +779,9 @@
         const removeBtn = node.querySelector('.remove-section-btn');
         const imageHint = node.querySelector('.section-image-hint');
         const uploadText = node.querySelector('.section-upload-text');
+        const fixImageBtn = node.querySelector('.fix-section-image-btn');
 
-        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !imageHint || !uploadText) {
+        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !imageHint || !uploadText || !fixImageBtn) {
           console.warn('section template missing nodes', {
             titleInput: !!titleInput,
             imageInput: !!imageInput,
@@ -769,12 +790,14 @@
             removeBtn: !!removeBtn,
             imageHint: !!imageHint,
             uploadText: !!uploadText,
+            fixImageBtn: !!fixImageBtn,
           });
           sectionsListEl.appendChild(node);
           return;
         }
 
         t(uploadText, UI.uploadFile);
+        t(fixImageBtn, UI.fixImage);
         titleInput.value = section.title || '';
         titleInput.setAttribute('value', titleInput.value);
         imageInput.value = section.image || '';
@@ -826,6 +849,29 @@
             t(uploadText, UI.uploadFile);
             fileInput.classList.add('hidden');
             fileInput.value = '';
+          }
+        });
+
+        fixImageBtn.addEventListener('click', async () => {
+          sections[index].title = titleInput.value;
+          sections[index].body = bodyInput.value;
+          sections[index].image = imageInput.value;
+          fixImageBtn.disabled = true;
+          t(fixImageBtn, UI.fixingImage);
+          try {
+            const url = await fixSectionImageWithWorker(sections[index]);
+            sections[index].image = url;
+            imageInput.value = url;
+            imageInput.setAttribute('value', url);
+            imageHint.textContent = isPlaceholderImage(url) ? UI.placeholderImage : '';
+            updateSectionPreview(index);
+            syncDescriptionField();
+            showToast(UI.fixImageDone);
+          } catch (err) {
+            showToast(err.message || UI.fixImageFail, 'error');
+          } finally {
+            fixImageBtn.disabled = false;
+            t(fixImageBtn, UI.fixImage);
           }
         });
 

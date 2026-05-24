@@ -5031,6 +5031,19 @@ export default {
         return json({ success: true, url: `${R2_PUBLIC}/${key}` });
       }
 
+      if (path === '/api/itinerary/fix-section-image' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const keyword = buildSectionImageKeyword(body);
+        const sourceUrl = await fetchUnsplashUrl(keyword, env);
+        const fixedUrl = await uploadUrlToR2(
+          sourceUrl,
+          `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`,
+          env
+        );
+        if (!fixedUrl) return json({ success: false, error: '圖片修補失敗' }, 500);
+        return json({ success: true, url: fixedUrl, keyword });
+      }
+
       // ??????????????????????????????????????????????????????????
       // POST /api/upload-dm  嚗I DM 閫??嚗?
       // ??????????????????????????????????????????????????????????
@@ -5416,6 +5429,21 @@ async function sendAdminReviewNotify(token, chatId, info) {
 }
 
 // ?? ??撌亙 ?????????????????????????????????????????????????
+
+function buildSectionImageKeyword(body = {}) {
+  const raw = [
+    body.title,
+    String(body.body || '').split(/\r?\n/).find(line => String(line || '').trim()),
+  ].filter(Boolean).join(' ');
+  const cleaned = String(raw || '')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/第\s*(?:\d+|[一二三四五六七八九十百]+)\s*天/g, ' ')
+    .replace(/[|｜:：,，.。;；()（）【】\[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (cleaned || 'travel itinerary scenic spot').slice(0, 80);
+}
 
 async function fetchUnsplashUrl(keyword, env) {
   try {
