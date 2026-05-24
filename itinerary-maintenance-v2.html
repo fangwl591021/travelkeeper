@@ -394,6 +394,12 @@
       };
     }
 
+    function richerText(primary, secondary) {
+      const a = String(primary || '').trim();
+      const b = String(secondary || '').trim();
+      return b.length > a.length ? b : a;
+    }
+
     function bootStaticText() {
       t(document.getElementById('heading-main'), UI.mainTitle);
       t(document.getElementById('page-subtitle'), UI.subtitle);
@@ -735,9 +741,10 @@
 
     async function hydrateMissingTextFromList(data) {
       const normalized = normalizeItineraryData(data);
-      if (String(normalized.description || '').trim() && String(normalized.image || '').trim()) return normalized;
       try {
-        const list = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r => r.json());
+        const list = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1&_=${Date.now()}`, {
+          cache: 'no-store',
+        }).then(r => r.json());
         const items = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
         const match = items
           .map(normalizeItineraryData)
@@ -750,8 +757,8 @@
           region: normalized.region || match.region,
           days: normalized.days || match.days,
           price: normalized.price || match.price,
-          description: normalized.description || match.description,
-          notes: normalized.notes || match.notes,
+          description: richerText(normalized.description, match.description),
+          notes: richerText(normalized.notes, match.notes),
         };
       } catch (err) {
         console.warn('hydrate itinerary text from list failed:', err);
@@ -779,11 +786,15 @@
       }
 
       profile = await liff.getProfile();
-      userStatus = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`).then(r => r.json());
+      userStatus = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}&_=${Date.now()}`, {
+        cache: 'no-store',
+      }).then(r => r.json());
       isAdmin = !!userStatus?.data?.isAdmin;
       adminControlsEl.hidden = !isAdmin;
 
-      const detail = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}`).then(r => r.json());
+      const detail = await fetch(`${WORKER_URL}/api/itinerary/detail?id=${encodeURIComponent(itineraryId)}&uid=${encodeURIComponent(profile.userId)}&_=${Date.now()}`, {
+        cache: 'no-store',
+      }).then(r => r.json());
       if (!detail?.success || !detail?.data) throw new Error(detail?.error || UI.notFound);
 
       fillForm(await hydrateMissingTextFromList(detail.data));

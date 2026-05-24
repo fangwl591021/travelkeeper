@@ -1423,16 +1423,21 @@ function App() {
   };
 
   const handleDelete = async (item) => {
-    if (!confirm(`確定刪除「${item.title}」？`)) return;
+    if (!confirm('確定隱藏這筆行程？隱藏後不會顯示在一般列表。')) return;
     try {
+      const operatorUid = profile?.userId || '';
+      if (!operatorUid) {
+        showToast('隱藏失敗：尚未取得登入身分', 'error');
+        return;
+      }
       const res = await fetch(`${WORKER_URL}/api/itineraries`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'deleteItinerary', id: String(item.id||item.timestamp) })
+        body: JSON.stringify({ action:'hideItinerary', id: String(item.id||item.timestamp), uid: operatorUid, operatorUid })
       });
       const result = await res.json();
-      if (result.success) { showToast('已刪除'); await reloadItineraries(); }
-      else showToast('刪除失敗', 'error');
-    } catch(e) { showToast('操作失敗', 'error'); }
+      if (result.success) { showToast('已隱藏'); await reloadItineraries(); }
+      else showToast('隱藏失敗：' + (result.error || ''), 'error');
+    } catch(e) { showToast('隱藏失敗：' + (e.message || ''), 'error'); }
   };
 
   const handleReview = async (status) => {

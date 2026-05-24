@@ -543,6 +543,7 @@ async function d1HideItinerary(env, body = {}) {
   const itineraryId = String(body.id || body.itinerary_id || '').trim();
   const operatorUid = String(body.uid || body.operatorUid || '').trim();
   if (!itineraryId) return { success: false, error: 'Missing itinerary id' };
+  if (!operatorUid) return { success: false, error: 'Missing operator uid' };
 
   const existing = await env.DB.prepare(`
     SELECT id, owner_uid
@@ -556,7 +557,7 @@ async function d1HideItinerary(env, body = {}) {
 
   const isAdmin = operatorUid ? ADMIN_UIDS.has(operatorUid) : false;
   const isOwner = operatorUid && String(existing.owner_uid || '') === operatorUid;
-  if (operatorUid && !isAdmin && !isOwner) {
+  if (!isAdmin && !isOwner) {
     return { success: false, error: 'No permission to hide itinerary' };
   }
 
