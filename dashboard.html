@@ -2819,10 +2819,12 @@ function App() {
                             {/* 非勾選模式時顯示「編輯」按鈕（只給有權的人）*/}
                             {!selectingMode && canEditThis && (
                               <div className="mt-auto flex gap-2">
-                                <button onClick={(e) => { e.stopPropagation(); setEditing(item); setCreating(false); }}
+                                <a
+                                  href={`itinerary-maintenance-v2.html?id=${encodeURIComponent(String(item.id||item.timestamp||''))}`}
+                                  onClick={(e) => e.stopPropagation()}
                                   className="flex-1 bg-slate-100 text-slate-600 font-black py-2 rounded-xl hover:bg-slate-200 transition text-xs">
                                   ✏️ 編輯
-                                </button>
+                                </a>
                               </div>
                             )}
                           </div>
@@ -2889,15 +2891,17 @@ function App() {
                       )}
                       <div className="mt-3 flex gap-2">
                         <a
-                          href={`itinerary-maintenance.html?id=${encodeURIComponent(String(item.id||item.timestamp||''))}`}
+                          href={`itinerary-maintenance-v2.html?id=${encodeURIComponent(String(item.id||item.timestamp||''))}`}
                           className="text-slate-700 hover:bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold"
                         >
                           進入維護
                         </a>
-                        <button onClick={()=>{ setEditing(item); setCreating(false); }}
-                          className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg text-xs font-bold">
+                        <a
+                          href={`itinerary-maintenance-v2.html?id=${encodeURIComponent(String(item.id||item.timestamp||''))}`}
+                          className="text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg text-xs font-bold"
+                        >
                           ✏️ 編輯
-                        </button>
+                        </a>
                         <button onClick={()=>handleDelete(item)}
                           className="text-red-500 hover:bg-red-50 px-3 py-1 rounded-lg text-xs font-bold">
                           🗑️ 刪除
