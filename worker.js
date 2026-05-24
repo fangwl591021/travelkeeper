@@ -913,6 +913,10 @@ async function d1GetDistributors(env) {
   const { results } = await env.DB.prepare(
     `SELECT *
        FROM distributors
+      WHERE COALESCE(TRIM(name), '') <> ''
+         OR COALESCE(TRIM(phone), '') <> ''
+         OR COALESCE(TRIM(company_name), '') <> ''
+         OR COALESCE(TRIM(email), '') <> ''
       ORDER BY created_at DESC`
   ).all();
   return results.map(toSheetDistributor);
