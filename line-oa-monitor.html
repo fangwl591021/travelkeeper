@@ -8,7 +8,7 @@
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Noto Sans TC', sans-serif; background: #eef3f8; }
+    body { font-family: 'Noto Sans TC', sans-serif; background: #eef3f8; font-size: 15px; }
     [hidden] { display: none !important; }
     .grid-bg {
       background-image:
@@ -23,9 +23,9 @@
     <aside class="w-[390px] shrink-0 border-r border-slate-200 bg-white flex flex-col">
       <div class="px-5 py-4 border-b border-slate-200">
         <div class="flex items-center gap-4">
-          <div class="w-14 h-14 rounded-full bg-emerald-500 text-white grid place-items-center font-bold text-xl">OA</div>
+          <div class="w-12 h-12 rounded-full bg-emerald-500 text-white grid place-items-center font-bold text-lg">OA</div>
           <div class="min-w-0">
-            <h1 class="text-2xl font-black">LINE OA &#31649;&#29702;&#24460;&#21488;</h1>
+            <h1 class="text-xl font-bold">LINE OA &#31649;&#29702;&#24460;&#21488;</h1>
             <p class="text-sm text-slate-500 mt-1">&#30435;&#30475;&#27169;&#24335;&#65292;&#19981;&#33258;&#21205;&#22238;&#35206;</p>
           </div>
         </div>
@@ -82,25 +82,25 @@
     </aside>
 
     <main class="min-w-0 flex-1 flex flex-col bg-white border-r border-slate-200">
-      <div id="chat-empty" class="flex-1 grid place-items-center text-slate-400 font-bold text-xl px-8 text-center">
+      <div id="chat-empty" class="flex-1 grid place-items-center text-slate-400 font-semibold text-base px-8 text-center">
         &#23578;&#26410;&#36984;&#25799;&#32842;&#22825;&#23460;&#65292;&#25110;&#30446;&#21069;&#27794;&#26377;&#20219;&#20309;&#30495;&#23526;&#23565;&#35441;&#21487;&#39023;&#31034;&#12290;
       </div>
 
       <div id="chat-view" hidden class="flex-1 flex flex-col min-h-0">
-        <div class="px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4">
+        <div class="px-5 py-3 border-b border-slate-200 flex items-start justify-between gap-4">
           <div class="min-w-0">
             <div class="flex items-center gap-3">
-              <div id="chat-avatar" class="w-12 h-12 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold text-lg shrink-0 overflow-hidden"></div>
-              <h2 id="chat-name" class="text-3xl font-black truncate"></h2>
+              <div id="chat-avatar" class="w-10 h-10 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold text-base shrink-0 overflow-hidden"></div>
+              <h2 id="chat-name" class="text-2xl font-bold truncate"></h2>
               <span id="chat-risk-pill" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">&#20302;&#39080;&#38570;</span>
             </div>
             <p id="chat-meta" class="text-sm text-slate-500 mt-2"></p>
           </div>
           <div class="flex flex-wrap gap-2 items-center">
-            <button id="open-visitor-records" class="px-5 py-3 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 font-semibold">重要紀錄</button>
-            <button id="mark-open" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">待回覆</button>
-            <button id="mark-pending" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">處理中</button>
-            <button id="mark-closed" class="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold">已處理</button>
+            <button id="open-visitor-records" class="px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-semibold">重要紀錄</button>
+            <button id="mark-open" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">待回覆</button>
+            <button id="mark-pending" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">處理中</button>
+            <button id="mark-closed" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">已處理</button>
           </div>
         </div>
 
@@ -113,11 +113,14 @@
         <div class="border-t border-slate-200 bg-white px-4 py-3">
           <div id="reply-suggestions" class="flex flex-wrap gap-3 mb-4"></div>
           <div class="flex items-end gap-3">
-            <button class="w-11 h-11 rounded-full border border-slate-300 bg-white text-xl text-slate-500">&#9786;</button>
-            <button class="w-11 h-11 rounded-full border border-slate-300 bg-white text-xl text-slate-500">&#128206;</button>
-            <button class="w-11 h-11 rounded-full border border-slate-300 bg-white text-2xl text-slate-500">&#65291;</button>
-            <textarea id="draft-reply" rows="7" class="flex-1 min-h-[240px] rounded-3xl border border-slate-200 px-4 py-4 text-base leading-7 outline-none focus:border-emerald-500" placeholder="AI &#24314;&#35696;&#22238;&#35206;&#26371;&#25918;&#22312;&#36889;&#35041;&#65292;&#26041;&#20415;&#20154;&#24037;&#35079;&#35069;&#36028;&#22238; LINE OA&#12290;"></textarea>
-            <button id="copy-reply" class="rounded-2xl bg-emerald-500 text-white font-semibold px-6 py-3 hover:bg-emerald-600">&#35079;&#35069;</button>
+            <button class="w-10 h-10 rounded-full border border-slate-300 bg-white text-lg text-slate-500">&#9786;</button>
+            <button class="w-10 h-10 rounded-full border border-slate-300 bg-white text-lg text-slate-500">&#128206;</button>
+            <button class="w-10 h-10 rounded-full border border-slate-300 bg-white text-xl text-slate-500">&#65291;</button>
+            <textarea id="draft-reply" rows="5" class="flex-1 min-h-[160px] rounded-3xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" placeholder="AI &#24314;&#35696;&#22238;&#35206;&#26371;&#25918;&#22312;&#36889;&#35041;&#65292;&#26041;&#20415;&#20154;&#24037;&#35079;&#35069;&#36028;&#22238; LINE OA&#12290;"></textarea>
+            <div class="flex flex-col gap-2">
+              <button id="send-reply" class="rounded-2xl bg-emerald-500 text-white font-semibold px-5 py-3 hover:bg-emerald-600">送出</button>
+              <button id="copy-reply" class="rounded-2xl bg-slate-100 text-slate-700 font-semibold px-5 py-3 hover:bg-slate-200">&#35079;&#35069;</button>
+            </div>
           </div>
         </div>
       </div>
@@ -127,14 +130,14 @@
       <div class="px-5 py-4 border-b border-slate-200">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <h2 class="text-2xl font-black">AI &#21161;&#29702;</h2>
+            <h2 class="text-xl font-bold">AI &#21161;&#29702;</h2>
             <p class="text-sm text-slate-500 mt-1">&#20777;&#25552;&#20379;&#31649;&#29702;&#21729;&#21443;&#32771;</p>
           </div>
           <span id="status-chip" class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">&#30435;&#30475;&#20013;</span>
         </div>
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">&#26368;&#26032;&#24314;&#35696;&#22238;&#35206;</p>
+            <p class="text-lg font-bold">&#26368;&#26032;&#24314;&#35696;&#22238;&#35206;</p>
             <span id="suggestion-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="suggestion-list" class="space-y-3"></div>
@@ -142,7 +145,7 @@
 
         <section class="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">訪客重要紀錄</p>
+            <p class="text-lg font-bold">訪客重要紀錄</p>
             <span id="visitor-record-count" class="text-emerald-700 font-semibold">0</span>
           </div>
           <div id="visitor-record-list" class="space-y-3"></div>
@@ -151,7 +154,7 @@
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">&#34892;&#31243;&#21443;&#32771;</p>
+            <p class="text-lg font-bold">&#34892;&#31243;&#21443;&#32771;</p>
             <span id="itinerary-suggestion-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="itinerary-suggestion-list" class="space-y-3"></div>
@@ -159,25 +162,25 @@
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">&#23565;&#35441;&#27161;&#31844;</p>
+            <p class="text-lg font-bold">&#23565;&#35441;&#27161;&#31844;</p>
             <span id="thread-status-badge" class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">&#24453;&#22238;&#35206;</span>
           </div>
           <div id="thread-tags" class="flex flex-wrap gap-2 mb-3"></div>
           <div class="flex gap-2">
             <input id="custom-tag" class="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" placeholder="&#26032;&#22686;&#33258;&#35330;&#27161;&#31844;">
-            <button id="add-tag" class="rounded-2xl bg-emerald-500 text-white font-semibold px-5 py-3 hover:bg-emerald-600">&#26032;&#22686;</button>
+            <button id="add-tag" class="rounded-2xl bg-emerald-500 text-white font-semibold px-4 py-3 hover:bg-emerald-600">&#26032;&#22686;</button>
           </div>
         </section>
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
-          <p class="text-xl font-black mb-3">&#20633;&#35387;</p>
+          <p class="text-lg font-bold mb-3">&#20633;&#35387;</p>
           <textarea id="internal-note" rows="5" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" placeholder="&#20839;&#37096;&#20633;&#35387;&#65292;&#19981;&#26371;&#30332;&#36865;&#32102;&#29992;&#25142;&#12290;"></textarea>
           <button id="save-thread-meta" class="mt-3 w-full rounded-2xl bg-slate-900 text-white font-semibold py-3 hover:bg-slate-800">&#20786;&#23384;&#20633;&#35387;&#33287;&#27161;&#31844;</button>
         </section>
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-xl font-black">&#37325;&#35201;&#35338;&#24687;&#36890;&#22577;</p>
+            <p class="text-lg font-bold">&#37325;&#35201;&#35338;&#24687;&#36890;&#22577;</p>
             <span id="risk-count" class="text-slate-500 font-semibold">0</span>
           </div>
           <div id="risk-summary" class="text-sm text-slate-600 leading-7">
@@ -210,7 +213,7 @@
       <div class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
         <div>
           <p class="text-sm text-emerald-700 font-semibold">訪客資料庫</p>
-          <h3 class="text-2xl font-black mt-1">重要需求紀錄</h3>
+          <h3 class="text-xl font-bold mt-1">重要需求紀錄</h3>
           <p id="visitor-record-customer" class="text-sm text-slate-500 mt-1"></p>
         </div>
         <button id="visitor-record-close" type="button" class="w-11 h-11 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50">✕</button>
@@ -380,8 +383,8 @@
         if (!button) return;
         const active = activeStatus === value;
         button.className = active
-          ? 'px-5 py-3 rounded-xl border border-slate-900 bg-slate-900 text-white font-semibold'
-          : 'px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50';
+          ? 'px-4 py-2 rounded-xl border border-slate-900 bg-slate-900 text-white text-sm font-semibold'
+          : 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50';
       });
     }
 
@@ -690,12 +693,12 @@
         const active = activeThreadId === item.id;
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = `w-full text-left rounded-3xl border px-4 py-4 transition ${active ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`;
+        card.className = `w-full text-left rounded-3xl border px-4 py-3 transition ${active ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`;
         const layout = document.createElement('div');
         layout.className = 'flex items-start gap-3';
 
         const avatar = document.createElement('div');
-        avatar.className = 'w-14 h-14 rounded-full grid place-items-center font-bold text-xl shrink-0 overflow-hidden';
+        avatar.className = 'w-12 h-12 rounded-full grid place-items-center font-bold text-lg shrink-0 overflow-hidden';
         renderAvatar(avatar, item, active);
 
         const body = document.createElement('div');
@@ -708,7 +711,7 @@
         titleWrap.className = 'min-w-0';
 
         const title = document.createElement('p');
-        title.className = 'font-bold text-lg truncate';
+        title.className = 'font-bold text-base truncate';
         title.textContent = item.name || '未命名聊天室';
 
         const userId = document.createElement('p');
@@ -725,11 +728,11 @@
         top.appendChild(time);
 
         const summary = document.createElement('p');
-        summary.className = 'text-sm text-slate-600 mt-2 line-clamp-3';
+        summary.className = 'text-sm text-slate-600 mt-1.5 line-clamp-3';
         summary.textContent = item.summary || '';
 
         const pills = document.createElement('div');
-        pills.className = 'flex flex-wrap gap-2 mt-3';
+        pills.className = 'flex flex-wrap gap-2 mt-2.5';
         pills.innerHTML = `
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
@@ -935,7 +938,7 @@
 
       chatViewEl.hidden = false;
       chatEmptyEl.hidden = true;
-      chatAvatarEl.className = 'w-12 h-12 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold text-lg shrink-0 overflow-hidden';
+      chatAvatarEl.className = 'w-10 h-10 rounded-full bg-slate-100 text-slate-700 grid place-items-center font-bold text-base shrink-0 overflow-hidden';
       renderAvatar(chatAvatarEl, thread, false);
       chatNameEl.textContent = thread.name || '\u672a\u547d\u540d\u804a\u5929\u5ba4';
       chatMetaEl.textContent = `\u5171 ${thread.messages.length} \u5247\u8a0a\u606f\u30fb\u7528\u6236 ID ${thread.userId || ""}`;
@@ -948,9 +951,9 @@
         const row = document.createElement('div');
         row.className = `flex ${side === 'right' ? 'justify-end' : 'justify-start'}`;
         row.innerHTML = `
-          <div class="max-w-[72%] bg-white text-slate-900 border ${side === 'right' ? 'border-emerald-200' : 'border-slate-200'} rounded-[24px] px-5 py-4 shadow-sm">
+          <div class="max-w-[72%] bg-white text-slate-900 border ${side === 'right' ? 'border-emerald-200' : 'border-slate-200'} rounded-[22px] px-4 py-3 shadow-sm">
             <p class="font-semibold text-xs text-slate-400 mb-2">${msg.senderName || (side === 'left' ? '\u7528\u6236' : '\u5ba2\u670d')}</p>
-            <p class="font-medium leading-7 whitespace-pre-wrap">${msg.text || ''}</p>
+            <p class="text-sm font-medium leading-6 whitespace-pre-wrap">${msg.text || ''}</p>
             <p class="text-xs text-slate-500 mt-3">${formatTime(msg.createdAt)}</p>
           </div>
         `;
@@ -1009,6 +1012,44 @@
       }
     }
 
+    async function sendReply() {
+      const thread = getActiveThread();
+      const text = (panelDraftEl.value || '').trim();
+      if (!thread) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      if (!text) {
+        showToast('請先輸入要回覆的內容', 'error');
+        panelDraftEl.focus();
+        return;
+      }
+      const sendButton = document.getElementById('send-reply');
+      sendButton.disabled = true;
+      sendButton.classList.add('opacity-60');
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            threadId: thread.id,
+            text,
+          }),
+        });
+        const updated = result.data;
+        const idx = allThreads.findIndex(item => item.id === updated.id);
+        if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
+        renderThreadList();
+        renderActiveThread(updated);
+        panelDraftEl.value = '';
+        showToast('已送出 LINE 回覆');
+      } finally {
+        sendButton.disabled = false;
+        sendButton.classList.remove('opacity-60');
+      }
+    }
+
     document.querySelectorAll('.thread-filter').forEach(button => {
       button.addEventListener('click', () => {
         currentFilter = button.dataset.filter || 'all';
@@ -1021,6 +1062,10 @@
     });
 
     threadSearchEl.addEventListener('input', renderThreadList);
+
+    document.getElementById('send-reply').addEventListener('click', () => {
+      sendReply().catch(err => showToast(err.message || '送出失敗', 'error'));
+    });
 
     document.getElementById('copy-reply').addEventListener('click', async () => {
       try {

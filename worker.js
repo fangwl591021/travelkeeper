@@ -1426,6 +1426,40 @@ async function replyLineMessage(env, replyPayload) {
   }
 }
 
+function resolveLinePushTarget(thread = {}) {
+  const threadId = String(thread.id || '').trim();
+  const userId = String(thread.source_user_id || '').trim();
+  const groupOrRoomId = String(thread.source_group_id || '').trim();
+  if (threadId.startsWith('user:') && userId) return { type: 'user', to: userId };
+  if (threadId.startsWith('group:') && groupOrRoomId) return { type: 'group', to: groupOrRoomId };
+  if (threadId.startsWith('room:') && groupOrRoomId) return { type: 'room', to: groupOrRoomId };
+  if (userId) return { type: 'user', to: userId };
+  if (groupOrRoomId) return { type: 'group_or_room', to: groupOrRoomId };
+  return null;
+}
+
+async function pushLineTextMessage(env, to, text) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+    throw new Error('LINE_CHANNEL_ACCESS_TOKEN missing');
+  }
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({
+      to,
+      messages: [{ type: 'text', text }],
+    }),
+  });
+  const responseText = await res.text();
+  if (!res.ok) {
+    throw new Error(`LINE push failed (${res.status}): ${responseText.slice(0, 300)}`);
+  }
+  return { status: res.status, body: responseText };
+}
+
 async function forwardWebhookToSecondary(env, rawBody, signature) {
   const forwardUrl = String(env.FORWARD_WEBHOOK_URL || '').trim();
   if (!forwardUrl) return { forwarded: false, skipped: true };
@@ -2089,6 +2123,80 @@ async function d1UpdateLineThread(env, body = {}) {
   `).bind(...values, threadId).run();
   if (!result.success) return { success: false, error: '?湔憭望?' };
   return d1GetLineThread(env, threadId);
+}
+
+async function d1SendLineOaReply(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const uid = String(body.uid || '').trim();
+  const threadId = String(body.threadId || body.thread_id || body.id || '').trim();
+  const text = String(body.text || '').trim();
+  const dryRun = body.dryRun === true;
+  if (!uid) return { success: false, error: 'MISSING_UID' };
+  if (!threadId) return { success: false, error: 'MISSING_THREAD_ID' };
+  if (!text) return { success: false, error: 'MISSING_TEXT' };
+  if (text.length > 5000) return { success: false, error: 'TEXT_TOO_LONG' };
+
+  const thread = await env.DB.prepare(`
+    SELECT id, display_name, source_user_id, source_group_id
+    FROM line_threads
+    WHERE id = ?
+  `).bind(threadId).first();
+  if (!thread) return { success: false, error: 'THREAD_NOT_FOUND' };
+
+  const target = resolveLinePushTarget(thread);
+  if (!target?.to) return { success: false, error: 'LINE_TARGET_NOT_FOUND' };
+
+  if (dryRun) {
+    return {
+      success: true,
+      data: {
+        dryRun: true,
+        threadId,
+        targetType: target.type,
+        targetPreview: `${target.to.slice(0, 6)}...${target.to.slice(-6)}`,
+        hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
+      },
+    };
+  }
+
+  let lineResult = null;
+  try {
+    lineResult = await pushLineTextMessage(env, target.to, text);
+  } catch (err) {
+    return { success: false, error: 'LINE_PUSH_FAILED', detail: err.message || String(err) };
+  }
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO line_messages (
+      id, thread_id, line_event_id, reply_token, message_type, sender_role,
+      sender_id, sender_name, message_text, raw_json, created_at
+    ) VALUES (?, ?, '', '', 'text', 'guide', ?, ?, ?, ?, ?)
+  `).bind(
+    crypto.randomUUID(),
+    threadId,
+    uid,
+    '客服',
+    text,
+    JSON.stringify({ kind: 'manual_reply', targetType: target.type, line: lineResult }),
+    now
+  ).run();
+
+  await env.DB.prepare(`
+    UPDATE line_threads
+    SET status = 'pending',
+        summary = ?,
+        unread_count = 0,
+        last_message_at = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).bind(text, now, now, threadId).run();
+
+  const updated = await d1GetLineThread(env, threadId);
+  return {
+    ...updated,
+    sent: true,
+    line: { status: lineResult.status },
+  };
 }
 
 async function d1UpsertLineVisitorRequirement(env, body = {}) {
@@ -4301,6 +4409,15 @@ export default {
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
         const result = await d1UpdateLineThread(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/reply' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1SendLineOaReply(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
