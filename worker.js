@@ -5575,6 +5575,12 @@ async function createFixedSectionImage(queries, env) {
     if (!sourceUrl) continue;
     let url = await uploadUrlToR2(sourceUrl, filename, env);
     if (url && url.startsWith(R2_PUBLIC)) return { url, sourceQuery: query, sourceUrl };
+    if (url && /^https?:\/\//i.test(url) && !isGeneratedPlaceholderImageUrl(url)) {
+      return { url, sourceQuery: query, sourceUrl, stored: false };
+    }
+    if (/^https?:\/\//i.test(sourceUrl) && !isGeneratedPlaceholderImageUrl(sourceUrl)) {
+      return { url: sourceUrl, sourceQuery: query, sourceUrl, stored: false };
+    }
   }
 
   const fallbackKeyword = list[0] || 'travel itinerary scenic spot';
