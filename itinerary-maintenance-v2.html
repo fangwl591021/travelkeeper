@@ -286,6 +286,7 @@
       uploadSectionDone: '\u6bb5\u843d\u5716\u7247\u5df2\u66f4\u65b0',
       uploadCoverDone: '\u5c01\u9762\u5df2\u66f4\u65b0',
       placeholderImage: '\u9019\u5f35\u662f\u820a\u793a\u610f\u5716\uff0c\u5efa\u8b70\u63db\u6210\u6b63\u5f0f\u884c\u7a0b\u5716\u3002',
+      repairedLegacyImage: '\u5df2\u88dc\u4e0a\u53ef\u986f\u793a\u7684\u5099\u7528\u5716\uff0c\u6b63\u5f0f\u4e0a\u7dda\u524d\u4ecd\u5efa\u8b70\u63db\u6210\u81ea\u6709\u5716\u3002',
       cleanDone: '\u5df2\u6e05\u7406\u820a\u5716\u7247\u8a9e\u6cd5\u4e26\u91cd\u65b0\u62c6\u6bb5',
       reparseDone: '\u5df2\u91cd\u65b0\u62c6\u6bb5',
       restoreDone: '\u5df2\u9084\u539f\u539f\u59cb\u63cf\u8ff0',
@@ -549,7 +550,7 @@
         const firstImage = text.match(imageRegex);
         return [{
           title: '',
-          image: firstImage ? firstImage[1].trim() : '',
+          image: firstImage ? repairedLegacyImageUrl(firstImage[1].trim()) : '',
           body: text.replace(imageRegex, '').trim(),
         }];
       }
@@ -577,12 +578,46 @@
 
         return {
           title: group.title,
-          image,
+          image: repairedLegacyImageUrl(image, group.title),
           body: bodyLines.join('\n').trim(),
         };
       });
 
       return result.length ? result : [{ title: '', image: '', body: text }];
+    }
+
+    function legacyImageKeyword(url) {
+      const value = String(url || '').trim();
+      if (!/loremflickr\.com/i.test(value)) return '';
+      try {
+        const parsed = new URL(value);
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        return decodeURIComponent(parts.slice(2).join(' ') || parts.at(-1) || '').replace(/[,+]+/g, ' ').trim();
+      } catch (_) {
+        return decodeURIComponent(value.split('/').pop() || '').replace(/[,+]+/g, ' ').trim();
+      }
+    }
+
+    function visiblePlaceholderImageUrl(label) {
+      const text = String(label || '\u5f85\u88dc\u6b63\u5f0f\u5716\u7247').trim().slice(0, 24);
+      return `https://placehold.co/1600x900/e0f2fe/0f172a?text=${encodeURIComponent(text)}`;
+    }
+
+    function repairedLegacyImageUrl(url, title = '') {
+      const value = String(url || '').trim();
+      if (!/loremflickr\.com/i.test(value)) return value;
+      const keyword = legacyImageKeyword(value);
+      const haystack = `${title} ${keyword}`.toLowerCase();
+      if (/tulou|土樓|土楼/.test(haystack)) {
+        return 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Zhenchenglou.JPG?width=1600';
+      }
+      if (/zhangzhou|漳州|ancient/.test(haystack)) {
+        return 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Zhangzhou_Wenmiao_20120225-22.jpg?width=1600';
+      }
+      if (/zhongshan|中山/.test(haystack)) {
+        return 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Xiamen_Zhongshan_Road_Pedestrian_Street.jpg?width=1600';
+      }
+      return visiblePlaceholderImageUrl(keyword || title);
     }
 
     function normalizeImageMarkdownLine(line) {
@@ -659,6 +694,10 @@
       if (!wrap) return;
       const img = wrap.querySelector('.section-preview');
       const image = String(sections[index]?.image || '').trim();
+      img.onerror = () => {
+        const fallback = visiblePlaceholderImageUrl(sections[index]?.title || UI.noTitle);
+        if (img.src !== fallback) img.src = fallback;
+      };
       img.src = image || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
       img.alt = image ? 'section-preview' : '';
     }
@@ -742,7 +781,9 @@
         imageInput.setAttribute('value', imageInput.value);
         bodyInput.value = section.body || '';
         bodyInput.textContent = bodyInput.value;
-        imageHint.textContent = isPlaceholderImage(section.image) ? UI.placeholderImage : '';
+        imageHint.textContent = /commons\.wikimedia\.org\/wiki\/Special:Redirect\/file/i.test(section.image || '')
+          ? UI.repairedLegacyImage
+          : (isPlaceholderImage(section.image) ? UI.placeholderImage : '');
 
         titleInput.addEventListener('input', () => {
           sections[index].title = titleInput.value;
@@ -750,8 +791,12 @@
         });
 
         imageInput.addEventListener('input', () => {
-          sections[index].image = imageInput.value;
-          imageHint.textContent = isPlaceholderImage(imageInput.value) ? UI.placeholderImage : '';
+          sections[index].image = repairedLegacyImageUrl(imageInput.value, sections[index].title);
+          imageInput.value = sections[index].image;
+          imageInput.setAttribute('value', sections[index].image);
+          imageHint.textContent = /commons\.wikimedia\.org\/wiki\/Special:Redirect\/file/i.test(sections[index].image || '')
+            ? UI.repairedLegacyImage
+            : (isPlaceholderImage(sections[index].image) ? UI.placeholderImage : '');
           updateSectionPreview(index);
           syncDescriptionField();
         });
