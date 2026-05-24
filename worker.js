@@ -5709,10 +5709,10 @@ async function fetchUnsplashImageUrl(keyword, env) {
 }
 
 async function fetchRepairImageSource(keyword, env) {
-  const commonsUrl = await fetchCommonsImageUrl(keyword);
-  if (commonsUrl) return commonsUrl;
   const unsplashUrl = await fetchUnsplashImageUrl(keyword, env);
   if (unsplashUrl) return unsplashUrl;
+  const commonsUrl = await fetchCommonsImageUrl(keyword);
+  if (commonsUrl) return commonsUrl;
   return '';
 }
 
