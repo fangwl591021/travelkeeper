@@ -289,7 +289,7 @@
     let userStatus = null;
     let currentFilter = 'all';
     let allThreads = [];
-    let activeThreadId = '';
+    let activeThreadId = new URLSearchParams(location.search).get('thread') || '';
 
     const threadListEl = document.getElementById('thread-list');
     const threadSearchEl = document.getElementById('thread-search');
@@ -1172,11 +1172,9 @@
     });
 
     document.getElementById('open-customer-crm').addEventListener('click', () => {
-      if (!getActiveThread()) {
-        showToast('請先選擇一個聊天室，才能建立這位客戶的 CRM 紀錄。', 'error');
-        return;
-      }
-      openVisitorRecordModal();
+      const thread = getActiveThread();
+      const suffix = thread?.id ? `?thread=${encodeURIComponent(thread.id)}` : '';
+      location.href = `./crm.html${suffix}`;
     });
 
     document.getElementById('save-thread-meta').addEventListener('click', () => {

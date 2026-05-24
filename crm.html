@@ -3,29 +3,465 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CRM | 旅遊管家</title>
-  <meta http-equiv="refresh" content="0; url=dashboard.html#orders">
-  <script>
-    // ★ crm.html 已併入 dashboard.html
-    // 預設跳到 #orders（訂單頁），但若原本帶 query/hash 也保留
-    (function(){
-      const search = location.search || '';
-      const hash   = location.hash || '#orders';   // 預設訂單頁
-      location.replace('dashboard.html' + search + hash);
-    })();
-  </script>
+  <title>TravelKeeper 客戶 CRM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
-    body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;color:#64748b;background:#f8fafc}
-    .box{text-align:center}
-    .spin{display:inline-block;width:32px;height:32px;border:3px solid #cbd5e1;border-top-color:#2563eb;border-radius:50%;animation:s 0.8s linear infinite;margin-bottom:12px}
-    @keyframes s{to{transform:rotate(360deg)}}
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f4f7fb; }
+    [hidden] { display: none !important; }
+    .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
   </style>
 </head>
-<body>
-  <div class="box">
-    <div class="spin"></div>
-    <p>正在前往新版儀表板…</p>
-    <p><a href="dashboard.html#orders" style="color:#2563eb;font-weight:bold;text-decoration:none">點我手動前往 →</a></p>
+<body class="min-h-screen text-slate-900">
+  <div class="mx-auto max-w-[1500px] px-5 py-6">
+    <header class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <p class="text-xs font-bold tracking-[0.24em] text-slate-400">TRAVELKEEPER CRM</p>
+        <h1 class="mt-2 text-3xl font-black">客戶 CRM</h1>
+        <p class="mt-2 text-slate-500">把 LINE 聊天室裡的人建立成客戶檔；問卷、預算、日期、人數與偏好都是客戶檔的寫入項目。</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="./line-oa-monitor.html" class="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800">聊天室監控</a>
+        <button id="broadcast-button" type="button" class="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-600">分時推播工作台</button>
+      </div>
+    </header>
+
+    <section id="preview-note" hidden class="mt-5 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+      本地預覽模式無法載入真實 CRM。請使用 GitHub Pages 線上頁面查看資料。
+    </section>
+
+    <section class="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-6">
+        <label class="block lg:col-span-2">
+          <span class="mb-2 block text-sm font-bold text-slate-700">搜尋</span>
+          <input id="search-input" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500" placeholder="姓名、User ID、訊息、紀錄內容">
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-sm font-bold text-slate-700">處理狀態</span>
+          <select id="status-filter" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+            <option value="all">不限</option>
+            <option value="open">待回覆</option>
+            <option value="pending">處理中</option>
+            <option value="closed">已處理</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-sm font-bold text-slate-700">風險</span>
+          <select id="risk-filter" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+            <option value="all">不限</option>
+            <option value="high">高風險</option>
+            <option value="medium">中風險</option>
+            <option value="low">低風險</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-sm font-bold text-slate-700">紀錄類型</span>
+          <select id="category-filter" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+            <option value="all">不限</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-sm font-bold text-slate-700">紀錄狀態</span>
+          <select id="record-status-filter" class="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+            <option value="all">不限</option>
+            <option value="open">待處理</option>
+            <option value="follow_up">追蹤中</option>
+            <option value="done">已完成</option>
+          </select>
+        </label>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <button id="load-crm" type="button" class="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">載入 CRM</button>
+        <button id="download-csv" type="button" class="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-200">下載 CSV</button>
+        <span id="load-state" class="self-center text-sm text-slate-500">尚未載入</span>
+      </div>
+    </section>
+
+    <section class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-3xl bg-slate-900 p-5 text-white">
+        <p class="text-sm text-slate-300">客戶檔案</p>
+        <p id="stat-customers" class="mt-3 text-4xl font-black">0</p>
+      </div>
+      <div class="rounded-3xl bg-blue-600 p-5 text-white">
+        <p class="text-sm text-blue-100">已建立紀錄</p>
+        <p id="stat-records" class="mt-3 text-4xl font-black">0</p>
+      </div>
+      <div class="rounded-3xl bg-emerald-600 p-5 text-white">
+        <p class="text-sm text-emerald-100">問卷紀錄</p>
+        <p id="stat-surveys" class="mt-3 text-4xl font-black">0</p>
+      </div>
+      <div class="rounded-3xl bg-rose-500 p-5 text-white">
+        <p class="text-sm text-rose-100">高風險 / 待追蹤</p>
+        <p id="stat-alerts" class="mt-3 text-4xl font-black">0</p>
+      </div>
+    </section>
+
+    <section class="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
+      <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-xl font-black">處理狀態</h2>
+          <span id="status-total" class="text-sm font-bold text-slate-400">0</span>
+        </div>
+        <div id="status-bars" class="space-y-3"></div>
+      </div>
+      <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-xl font-black">需求類型</h2>
+          <span id="category-total" class="text-sm font-bold text-slate-400">0</span>
+        </div>
+        <div id="category-bars" class="space-y-3"></div>
+      </div>
+      <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-xl font-black">風險分布</h2>
+          <span id="risk-total" class="text-sm font-bold text-slate-400">0</span>
+        </div>
+        <div id="risk-bars" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <section class="mt-5 rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 class="text-xl font-black">客戶名單</h2>
+          <p class="mt-1 text-sm text-slate-500">每一列都是一個 LINE 聊天室客戶檔，可回到聊天室繼續追蹤。</p>
+        </div>
+        <p id="table-count" class="text-sm font-bold text-slate-400">0 筆</p>
+      </div>
+      <div class="overflow-auto scrollbar-thin">
+        <table class="min-w-[1100px] w-full text-left text-sm">
+          <thead class="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="px-5 py-4">客戶</th>
+              <th class="px-5 py-4">狀態</th>
+              <th class="px-5 py-4">風險</th>
+              <th class="px-5 py-4">紀錄摘要</th>
+              <th class="px-5 py-4">問卷 / 偏好</th>
+              <th class="px-5 py-4">最後互動</th>
+              <th class="px-5 py-4">操作</th>
+            </tr>
+          </thead>
+          <tbody id="customer-table" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <div id="empty-state" hidden class="px-5 py-12 text-center text-slate-400 font-bold">沒有符合條件的客戶檔案。</div>
+    </section>
   </div>
+
+  <div id="toast" hidden class="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-2xl px-5 py-3 font-bold text-white shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const statusLabels = { open: '待回覆', pending: '處理中', closed: '已處理' };
+    const riskLabels = { high: '高風險', medium: '中風險', low: '低風險' };
+    const recordStatusLabels = { open: '待處理', follow_up: '追蹤中', done: '已完成' };
+
+    let profile = null;
+    let customers = [];
+    let filteredCustomers = [];
+    let targetThreadId = new URLSearchParams(location.search).get('thread') || '';
+
+    const els = {
+      previewNote: document.getElementById('preview-note'),
+      loadState: document.getElementById('load-state'),
+      search: document.getElementById('search-input'),
+      status: document.getElementById('status-filter'),
+      risk: document.getElementById('risk-filter'),
+      category: document.getElementById('category-filter'),
+      recordStatus: document.getElementById('record-status-filter'),
+      table: document.getElementById('customer-table'),
+      tableCount: document.getElementById('table-count'),
+      emptyState: document.getElementById('empty-state'),
+      stats: {
+        customers: document.getElementById('stat-customers'),
+        records: document.getElementById('stat-records'),
+        surveys: document.getElementById('stat-surveys'),
+        alerts: document.getElementById('stat-alerts'),
+      },
+      bars: {
+        status: document.getElementById('status-bars'),
+        category: document.getElementById('category-bars'),
+        risk: document.getElementById('risk-bars'),
+        statusTotal: document.getElementById('status-total'),
+        categoryTotal: document.getElementById('category-total'),
+        riskTotal: document.getElementById('risk-total'),
+      },
+    };
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.hidden = false;
+      toast.className = 'fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-2xl px-5 py-3 font-bold text-white shadow-2xl ' + (type === 'error' ? 'bg-red-500' : 'bg-emerald-500');
+      toast.textContent = message;
+      setTimeout(() => { toast.hidden = true; }, 2400);
+    }
+
+    async function fetchJson(url, options) {
+      const res = await fetch(url, options);
+      let data = null;
+      try { data = await res.json(); } catch (_err) {}
+      if (!res.ok || !data?.success) throw new Error(data?.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    function formatTime(value) {
+      if (!value) return '-';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[ch]));
+    }
+
+    function csvCell(value) {
+      const text = String(value || '').replace(/\r?\n/g, ' ');
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function countBy(items, getter) {
+      return items.reduce((acc, item) => {
+        const key = getter(item) || '未分類';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function summarizeCustomer(thread) {
+      const records = Array.isArray(thread.visitorRecords) ? thread.visitorRecords : [];
+      const categories = [...new Set(records.map(record => record.category || '需求'))];
+      const surveyRecords = records.filter(record => record.category === '問卷');
+      const highRecords = records.filter(record => record.priority === 'high' || record.status === 'follow_up');
+      const latestRecord = records[0] || null;
+      return {
+        id: thread.id,
+        name: thread.name || '未命名客戶',
+        pictureUrl: thread.pictureUrl || '',
+        userId: thread.userId || '',
+        status: thread.status || 'open',
+        risk: thread.risk || 'low',
+        summary: thread.summary || '',
+        tags: thread.tags || [],
+        note: thread.note || '',
+        unread: Number(thread.unread || 0),
+        records,
+        categories,
+        surveyRecords,
+        highRecords,
+        latestRecord,
+        lastMessageAt: thread.lastMessageAt || '',
+        searchBlob: [
+          thread.name, thread.userId, thread.summary, thread.note, ...(thread.tags || []),
+          ...records.flatMap(record => [record.category, record.content, record.status, record.priority])
+        ].join(' ').toLowerCase(),
+      };
+    }
+
+    async function loadCrm() {
+      if (!profile?.userId) throw new Error('尚未取得管理員身分');
+      const base = `${WORKER_URL}/api/line-oa`;
+      els.loadState.textContent = '載入聊天室清單...';
+      const list = await fetchJson(`${base}/threads?uid=${encodeURIComponent(profile.userId)}`);
+      const threads = Array.isArray(list.data) ? list.data : [];
+      const details = [];
+      for (let i = 0; i < threads.length; i += 1) {
+        els.loadState.textContent = `載入客戶檔 ${i + 1} / ${threads.length}`;
+        try {
+          const detail = await fetchJson(`${base}/thread?uid=${encodeURIComponent(profile.userId)}&id=${encodeURIComponent(threads[i].id)}`);
+          details.push(detail.data);
+        } catch (_err) {
+          details.push(threads[i]);
+        }
+      }
+      customers = details.map(summarizeCustomer);
+      fillCategoryFilter();
+      applyFilters();
+      els.loadState.textContent = `已載入 ${customers.length} 筆客戶檔`;
+      if (targetThreadId) {
+        const found = customers.find(customer => customer.id === targetThreadId);
+        if (found) {
+          els.search.value = found.name || found.userId || targetThreadId;
+          applyFilters();
+        }
+      }
+    }
+
+    function fillCategoryFilter() {
+      const current = els.category.value;
+      const categories = [...new Set(customers.flatMap(customer => customer.categories))].filter(Boolean).sort();
+      els.category.innerHTML = '<option value="all">不限</option>' + categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
+      if (categories.includes(current)) els.category.value = current;
+    }
+
+    function applyFilters() {
+      const q = els.search.value.trim().toLowerCase();
+      const status = els.status.value;
+      const risk = els.risk.value;
+      const category = els.category.value;
+      const recordStatus = els.recordStatus.value;
+      filteredCustomers = customers.filter(customer => {
+        if (q && !customer.searchBlob.includes(q)) return false;
+        if (status !== 'all' && customer.status !== status) return false;
+        if (risk !== 'all' && customer.risk !== risk) return false;
+        if (category !== 'all' && !customer.records.some(record => record.category === category)) return false;
+        if (recordStatus !== 'all' && !customer.records.some(record => record.status === recordStatus)) return false;
+        return true;
+      });
+      renderStats();
+      renderCharts();
+      renderTable();
+    }
+
+    function renderStats() {
+      const recordCount = filteredCustomers.reduce((sum, customer) => sum + customer.records.length, 0);
+      const surveyCount = filteredCustomers.reduce((sum, customer) => sum + customer.surveyRecords.length, 0);
+      const alertCount = filteredCustomers.filter(customer => customer.risk === 'high' || customer.highRecords.length).length;
+      els.stats.customers.textContent = filteredCustomers.length;
+      els.stats.records.textContent = recordCount;
+      els.stats.surveys.textContent = surveyCount;
+      els.stats.alerts.textContent = alertCount;
+    }
+
+    function renderBarList(container, counts, labels = {}) {
+      const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((sum, [, value]) => sum + value, 0);
+      if (!entries.length) {
+        container.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-400">尚無資料</div>';
+        return total;
+      }
+      container.innerHTML = entries.map(([key, value]) => {
+        const percent = total ? Math.round((value / total) * 100) : 0;
+        return `
+          <div>
+            <div class="mb-1 flex items-center justify-between text-sm">
+              <span class="font-bold text-slate-700">${escapeHtml(labels[key] || key)}</span>
+              <span class="text-slate-400">${value} 人</span>
+            </div>
+            <div class="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div class="h-full rounded-full bg-blue-600" style="width:${percent}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      return total;
+    }
+
+    function renderCharts() {
+      els.bars.statusTotal.textContent = renderBarList(els.bars.status, countBy(filteredCustomers, item => item.status), statusLabels);
+      els.bars.riskTotal.textContent = renderBarList(els.bars.risk, countBy(filteredCustomers, item => item.risk), riskLabels);
+      const categories = {};
+      filteredCustomers.forEach(customer => {
+        if (!customer.categories.length) categories['未建立紀錄'] = (categories['未建立紀錄'] || 0) + 1;
+        customer.categories.forEach(category => { categories[category] = (categories[category] || 0) + 1; });
+      });
+      els.bars.categoryTotal.textContent = renderBarList(els.bars.category, categories);
+    }
+
+    function pillClass(type, value) {
+      if (type === 'status') {
+        if (value === 'open') return 'bg-amber-100 text-amber-700';
+        if (value === 'pending') return 'bg-blue-100 text-blue-700';
+        return 'bg-slate-100 text-slate-600';
+      }
+      if (value === 'high') return 'bg-rose-100 text-rose-700';
+      if (value === 'medium') return 'bg-amber-100 text-amber-700';
+      return 'bg-emerald-100 text-emerald-700';
+    }
+
+    function renderTable() {
+      els.tableCount.textContent = `${filteredCustomers.length} 筆`;
+      els.emptyState.hidden = filteredCustomers.length > 0;
+      els.table.innerHTML = filteredCustomers.map(customer => {
+        const image = customer.pictureUrl
+          ? `<img src="${escapeHtml(customer.pictureUrl)}" alt="${escapeHtml(customer.name)}" class="h-11 w-11 rounded-full object-cover">`
+          : `<div class="h-11 w-11 rounded-full bg-slate-100 grid place-items-center font-black text-slate-600">${escapeHtml(customer.name.slice(0, 1) || '客')}</div>`;
+        const recordText = customer.latestRecord
+          ? `${customer.latestRecord.category}：${customer.latestRecord.content}`
+          : customer.summary || '尚未建立客戶紀錄';
+        const surveyText = customer.surveyRecords[0]?.content || customer.tags.join('、') || '-';
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="px-5 py-4 align-top">
+              <div class="flex items-start gap-3">
+                ${image}
+                <div class="min-w-0">
+                  <p class="font-black text-slate-900">${escapeHtml(customer.name)}</p>
+                  <p class="mt-1 max-w-[220px] truncate font-mono text-xs text-slate-400">${escapeHtml(customer.userId)}</p>
+                </div>
+              </div>
+            </td>
+            <td class="px-5 py-4 align-top"><span class="rounded-full px-3 py-1 text-xs font-bold ${pillClass('status', customer.status)}">${statusLabels[customer.status] || customer.status}</span></td>
+            <td class="px-5 py-4 align-top"><span class="rounded-full px-3 py-1 text-xs font-bold ${pillClass('risk', customer.risk)}">${riskLabels[customer.risk] || customer.risk}</span></td>
+            <td class="max-w-[320px] px-5 py-4 align-top text-slate-600">${escapeHtml(recordText)}</td>
+            <td class="max-w-[260px] px-5 py-4 align-top text-slate-600">${escapeHtml(surveyText)}</td>
+            <td class="px-5 py-4 align-top text-slate-500">${formatTime(customer.lastMessageAt)}</td>
+            <td class="px-5 py-4 align-top">
+              <a class="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800" href="./line-oa-monitor.html?thread=${encodeURIComponent(customer.id)}">開啟聊天室</a>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function downloadCsv() {
+      const header = ['客戶', 'User ID', '狀態', '風險', '紀錄數', '問卷數', '最新紀錄', '問卷或偏好', '最後互動'];
+      const rows = filteredCustomers.map(customer => [
+        customer.name,
+        customer.userId,
+        statusLabels[customer.status] || customer.status,
+        riskLabels[customer.risk] || customer.risk,
+        customer.records.length,
+        customer.surveyRecords.length,
+        customer.latestRecord ? `${customer.latestRecord.category}:${customer.latestRecord.content}` : customer.summary,
+        customer.surveyRecords[0]?.content || customer.tags.join('、'),
+        customer.lastMessageAt,
+      ]);
+      const csv = '\ufeff' + [header, ...rows].map(row => row.map(csvCell).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `travelkeeper-customer-crm-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function init() {
+      if (location.protocol === 'file:' || ['127.0.0.1', 'localhost'].includes(location.hostname)) {
+        els.previewNote.hidden = false;
+        els.loadState.textContent = '本機預覽模式';
+        return;
+      }
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+      profile = await liff.getProfile();
+      await loadCrm();
+    }
+
+    ['input', 'change'].forEach(eventName => {
+      els.search.addEventListener(eventName, applyFilters);
+      els.status.addEventListener(eventName, applyFilters);
+      els.risk.addEventListener(eventName, applyFilters);
+      els.category.addEventListener(eventName, applyFilters);
+      els.recordStatus.addEventListener(eventName, applyFilters);
+    });
+    document.getElementById('load-crm').addEventListener('click', () => loadCrm().catch(err => showToast(err.message, 'error')));
+    document.getElementById('download-csv').addEventListener('click', downloadCsv);
+    document.getElementById('broadcast-button').addEventListener('click', () => showToast('分時推播工作台會接 CRM 分眾名單，入口先保留。'));
+
+    init().catch(err => {
+      els.loadState.textContent = err.message;
+      showToast(err.message, 'error');
+    });
+  </script>
 </body>
 </html>
