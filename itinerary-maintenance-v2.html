@@ -213,6 +213,7 @@
           <div class="flex gap-2">
             <input class="section-image flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
             <label class="section-upload-label shrink-0 px-4 py-3 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer">
+              <span class="section-upload-text"></span>
               <input type="file" accept="image/*" class="section-file hidden">
             </label>
           </div>
@@ -690,7 +691,6 @@
         t(node.querySelector('.section-title-label'), UI.sectionTitle);
         t(node.querySelector('.section-image-label'), UI.sectionImage);
         t(node.querySelector('.section-body-label'), UI.sectionBody);
-        t(node.querySelector('.section-upload-label'), UI.uploadFile);
 
         const titleInput = node.querySelector('.section-title');
         const imageInput = node.querySelector('.section-image');
@@ -698,8 +698,9 @@
         const fileInput = node.querySelector('.section-file');
         const removeBtn = node.querySelector('.remove-section-btn');
         const imageHint = node.querySelector('.section-image-hint');
+        const uploadText = node.querySelector('.section-upload-text');
 
-        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !imageHint) {
+        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !imageHint || !uploadText) {
           console.warn('section template missing nodes', {
             titleInput: !!titleInput,
             imageInput: !!imageInput,
@@ -707,14 +708,19 @@
             fileInput: !!fileInput,
             removeBtn: !!removeBtn,
             imageHint: !!imageHint,
+            uploadText: !!uploadText,
           });
           sectionsListEl.appendChild(node);
           return;
         }
 
+        t(uploadText, UI.uploadFile);
         titleInput.value = section.title || '';
+        titleInput.setAttribute('value', titleInput.value);
         imageInput.value = section.image || '';
+        imageInput.setAttribute('value', imageInput.value);
         bodyInput.value = section.body || '';
+        bodyInput.textContent = bodyInput.value;
         imageHint.textContent = isPlaceholderImage(section.image) ? UI.placeholderImage : '';
 
         titleInput.addEventListener('input', () => {
@@ -737,14 +743,13 @@
         fileInput.addEventListener('change', async () => {
           const file = fileInput.files?.[0];
           if (!file) return;
-          const label = fileInput.parentElement;
-          t(label, '\u4e0a\u50b3\u4e2d...');
-          label.appendChild(fileInput);
+          t(uploadText, '\u4e0a\u50b3\u4e2d...');
           fileInput.classList.add('hidden');
           try {
             const url = await uploadFileToR2(file);
             sections[index].image = url;
             imageInput.value = url;
+            imageInput.setAttribute('value', url);
             imageHint.textContent = isPlaceholderImage(url) ? UI.placeholderImage : '';
             updateSectionPreview(index);
             syncDescriptionField();
@@ -752,8 +757,7 @@
           } catch (err) {
             showToast(err.message || UI.uploadFail, 'error');
           } finally {
-            t(label, UI.uploadFile);
-            label.appendChild(fileInput);
+            t(uploadText, UI.uploadFile);
             fileInput.classList.add('hidden');
             fileInput.value = '';
           }
