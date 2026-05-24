@@ -771,6 +771,9 @@
 
       const sectionSource = originalDescriptionSnapshot || String(data.notes || '');
       sections = buildSectionsWithFallback(sectionSource);
+      if (!hasMeaningfulSections(sections) && sectionSource) {
+        sections = [{ title: '', image: '', body: sectionSource }];
+      }
       renderSections();
       syncCommissionMode();
       setPreview(data);
@@ -783,9 +786,17 @@
           cache: 'no-store',
         }).then(r => r.json());
         const items = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
-        const match = items
-          .map(normalizeItineraryData)
+        const normalizedItems = items.map(normalizeItineraryData);
+        const idMatch = normalizedItems
           .find(item => String(item.id || item.timestamp || '') === String(itineraryId));
+        const titleMatch = normalizedItems
+          .filter(item => item.description || item.notes)
+          .find(item => {
+            const sameTitle = normalized.title && item.title && String(item.title).trim() === String(normalized.title).trim();
+            const sameImage = normalized.image && item.image && String(item.image).trim() === String(normalized.image).trim();
+            return sameTitle || sameImage;
+          });
+        const match = idMatch && (idMatch.description || idMatch.notes) ? idMatch : (titleMatch || idMatch);
         if (!match) return normalized;
         return {
           ...normalized,
