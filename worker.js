@@ -5039,7 +5039,15 @@ export default {
         const body = await request.json().catch(() => ({}));
         const searchPlan = await buildSectionImageSearchPlan(body, env);
         const fixed = await createFixedSectionImage(searchPlan.queries, env);
-        if (!fixed?.url) return json({ success: false, error: '圖片修補失敗' }, 500);
+        if (!fixed?.url) {
+          return json({
+            success: false,
+            error: '找不到足夠相關的免費圖片，請改用選檔上傳或調整段落標題',
+            keyword: searchPlan.keyword,
+            queries: searchPlan.queries,
+            needsManual: true,
+          }, 404);
+        }
         return json({
           success: true,
           url: fixed.url,
@@ -5489,18 +5497,72 @@ async function translateSectionImageKeyword(keyword, body, env) {
   }
 }
 
+function dedupeImageQueries(queries) {
+  const seen = new Set();
+  const result = [];
+  for (const query of queries) {
+    const clean = normalizeSectionImageKeyword(query).slice(0, 100);
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key) || isGenericImageQuery(clean)) continue;
+    seen.add(key);
+    result.push(clean);
+  }
+  return result;
+}
+
+async function extractSectionImageQueries(keyword, body, env) {
+  if (!env.OPENAI_API_KEY) return [];
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        max_tokens: 220,
+        messages: [{
+          role: 'user',
+          content: `從旅遊段落抽出最適合搜尋免費圖庫的真實地點關鍵字。請回 JSON，不要解釋。
+格式：{"primaryPlace":"英文景點名","city":"英文城市","country":"英文國家","queries":["最精準英文查詢1","備用英文查詢2","備用英文查詢3"]}
+規則：
+- 優先抓景點/地標/城市名稱，不要抓泛詞。
+- 若標題有多個地點，第一個 query 放最主要景點。
+- query 必須是 ASCII 英文，避免 photo、image、travel、scenery 這類泛詞。
+- 不確定時用城市或區域，不要編不存在的地點。
+標題：${keyword}
+內文：${String(body?.body || '').slice(0, 300)}`
+        }],
+      }),
+    });
+    const data = await res.json();
+    const raw = data?.choices?.[0]?.message?.content || '{}';
+    const parsed = JSON.parse(raw);
+    const primary = [parsed.primaryPlace, parsed.city, parsed.country].filter(Boolean).join(' ');
+    return dedupeImageQueries([
+      primary,
+      ...(Array.isArray(parsed.queries) ? parsed.queries : []),
+      [parsed.city, parsed.country].filter(Boolean).join(' '),
+    ]);
+  } catch (e) {
+    console.warn('section query extraction failed:', e.message);
+    return [];
+  }
+}
+
 async function buildSectionImageSearchPlan(body = {}, env) {
   const keyword = buildSectionImageKeyword(body);
+  const aiQueries = await extractSectionImageQueries(keyword, body, env);
   const translated = await translateSectionImageKeyword(keyword, body, env);
   const translatedEnglish = extractEnglishSearchKeyword(translated);
   const keywordEnglish = extractEnglishSearchKeyword(keyword);
-  const queries = [translatedEnglish, translated, keywordEnglish, keyword]
+  const queries = aiQueries.concat([translatedEnglish, translated, keywordEnglish, keyword])
     .concat(String(body.body || '').split(/\r?\n/).slice(0, 2).map(normalizeSectionImageKeyword))
     .map(q => String(q || '').trim())
     .filter(Boolean);
   return {
     keyword,
-    queries: [...new Set(queries)].slice(0, 5),
+    queries: dedupeImageQueries(queries).slice(0, 8),
   };
 }
 
@@ -5546,7 +5608,25 @@ function imageQueryTokens(keyword) {
     .replace(/[^a-z0-9\u4e00-\u9fff\s-]/g, ' ')
     .split(/\s+/)
     .map(token => token.trim())
-    .filter(token => token && token.length >= 2 && !['and', 'the', 'with', 'tour', 'trip', 'day'].includes(token));
+    .filter(token => token && token.length >= 2 && ![
+      'and', 'the', 'with', 'tour', 'trip', 'day', 'days', 'travel', 'scenic',
+      'spot', 'attraction', 'photo', 'image', 'picture', 'landscape', 'tourist',
+      'landmark', 'destination', 'itinerary', 'unknown', 'undefined', 'null'
+    ].includes(token));
+}
+
+function isGenericImageQuery(value) {
+  const raw = String(value || '').toLowerCase();
+  if (!raw.trim()) return true;
+  if (/\b(?:unknown|undefined|null|scenic spot|tourist attraction|travel itinerary|landmark|destination)\b/i.test(raw)) {
+    return imageQueryTokens(raw).length === 0;
+  }
+  return imageQueryTokens(raw).length === 0;
+}
+
+function isBadCommonsImageTitle(title) {
+  return /\b(map|diagram|chart|logo|icon|seal|stamp|poster|newspaper|document|book|page|manuscript|calligraphy|text|scan|certificate|ticket|passport|visa)\b/i
+    .test(String(title || '').replace(/[_-]+/g, ' '));
 }
 
 function scoreCommonsImageTitle(title, keyword) {
@@ -5555,13 +5635,25 @@ function scoreCommonsImageTitle(title, keyword) {
     .replace(/[_-]+/g, ' ');
   const tokens = imageQueryTokens(keyword);
   if (!tokens.length) return 0;
-  return tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
+  let score = tokens.reduce((total, token) => total + (haystack.includes(token) ? 1 : 0), 0);
+  const compactQuery = tokens.join(' ');
+  if (compactQuery && haystack.includes(compactQuery)) score += 4;
+  return score;
+}
+
+function passesFreeImageRelevance(title, keyword) {
+  if (isBadCommonsImageTitle(title)) return false;
+  const tokens = imageQueryTokens(keyword);
+  if (!tokens.length) return false;
+  const score = scoreCommonsImageTitle(title, keyword);
+  const required = tokens.length >= 3 ? 2 : 1;
+  return score >= required;
 }
 
 async function fetchCommonsImageUrl(keyword) {
   try {
     const query = String(keyword || 'travel scenic').slice(0, 80);
-    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=8&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url&iiurlwidth=1600&format=json&origin=*`;
+    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=20&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|size&iiurlwidth=1600&format=json&origin=*`;
     const res = await fetch(apiUrl, { headers: { 'User-Agent': 'TravelKeeper/1.0' } });
     if (!res.ok) return '';
     const data = await res.json();
@@ -5571,8 +5663,11 @@ async function fetchCommonsImageUrl(keyword) {
       const info = page?.imageinfo?.[0];
       const url = info?.thumburl || info?.url || '';
       if (/^https?:\/\//i.test(url) && /\.(?:jpg|jpeg|png|webp)(?:[?#].*)?$/i.test(url.split('?')[0])) {
-        const score = scoreCommonsImageTitle(page?.title || '', query);
-        if (score > 0) candidates.push({ url, score, width: Number(info?.thumbwidth || 0), height: Number(info?.thumbheight || 0) });
+        const title = page?.title || '';
+        const score = scoreCommonsImageTitle(title, query);
+        if (passesFreeImageRelevance(title, query)) {
+          candidates.push({ url, score, width: Number(info?.thumbwidth || info?.width || 0), height: Number(info?.thumbheight || info?.height || 0), title });
+        }
       }
     }
     candidates.sort((a, b) => {
@@ -5588,13 +5683,36 @@ async function fetchCommonsImageUrl(keyword) {
   return '';
 }
 
-async function fetchRepairImageSource(keyword, env) {
-  if (env.UNSPLASH_API_KEY) {
-    const unsplashUrl = await fetchUnsplashUrl(keyword, env);
-    if (unsplashUrl && !isGeneratedPlaceholderImageUrl(unsplashUrl)) return unsplashUrl;
+async function fetchUnsplashImageUrl(keyword, env) {
+  if (!env.UNSPLASH_API_KEY) return '';
+  try {
+    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&orientation=landscape&per_page=8`, {
+      headers: { Authorization: `Client-ID ${env.UNSPLASH_API_KEY}` }
+    });
+    const data = await res.json();
+    const candidates = (data.results || [])
+      .map(item => {
+        const text = [item.alt_description, item.description, item?.tags?.map(t => t.title).join(' ')].filter(Boolean).join(' ');
+        return {
+          url: item?.urls?.raw ? `${item.urls.raw}&w=1600&h=900&fit=crop&q=80` : '',
+          score: scoreCommonsImageTitle(text, keyword),
+          title: text,
+        };
+      })
+      .filter(item => item.url && passesFreeImageRelevance(item.title, keyword))
+      .sort((a, b) => b.score - a.score);
+    return candidates[0]?.url || '';
+  } catch (e) {
+    console.warn('Unsplash image lookup failed:', e.message);
+    return '';
   }
+}
+
+async function fetchRepairImageSource(keyword, env) {
   const commonsUrl = await fetchCommonsImageUrl(keyword);
   if (commonsUrl) return commonsUrl;
+  const unsplashUrl = await fetchUnsplashImageUrl(keyword, env);
+  if (unsplashUrl) return unsplashUrl;
   return '';
 }
 
@@ -5633,6 +5751,7 @@ async function createFixedSectionImage(queries, env) {
   const list = Array.isArray(queries) && queries.length ? queries : [queries || 'travel itinerary scenic spot'];
   const filename = `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
   for (const query of list) {
+    if (isGenericImageQuery(query)) continue;
     const sourceUrl = await fetchRepairImageSource(query, env);
     if (!sourceUrl) continue;
     let url = await uploadUrlToR2(sourceUrl, filename, env);
@@ -5644,16 +5763,7 @@ async function createFixedSectionImage(queries, env) {
       return { url: sourceUrl, sourceQuery: query, sourceUrl, stored: false };
     }
   }
-
-  const fallbackKeyword = list[0] || 'travel itinerary scenic spot';
-  const generatedDataUrl = await generateSectionImageWithOpenAI(fallbackKeyword, env);
-  if (generatedDataUrl) {
-    const generatedUrl = await uploadDataUrlToR2(generatedDataUrl, filename.replace(/\.jpg$/i, '.png'), env);
-    if (generatedUrl) return { url: generatedUrl, sourceQuery: fallbackKeyword, sourceUrl: 'openai-image-generation' };
-  }
-
-  const fallbackUrl = await uploadDataUrlToR2(buildFallbackSectionSvg(fallbackKeyword), filename.replace(/\.jpg$/i, '.svg'), env);
-  return { url: fallbackUrl, sourceQuery: fallbackKeyword, sourceUrl: 'generated-fallback-svg' };
+  return { url: '', sourceQuery: list[0] || '', sourceUrl: '', needsManual: true };
 }
 
 async function fetchUnsplashUrl(keyword, env) {
@@ -5734,8 +5844,12 @@ async function replaceImageKeywords(text, env, sourceImageUrls = []) {
       const lookupKeyword = isGeneratedPlaceholderImageUrl(keyword)
         ? (match[1] || 'travel')
         : keyword;
-      const unsplashUrl = await fetchUnsplashUrl(lookupKeyword, env);
-      r2Url = await uploadUrlToR2(unsplashUrl, `scene_${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`, env);
+      const searchPlan = await buildSectionImageSearchPlan({
+        title: lookupKeyword,
+        body: String(text || '').slice(Math.max(0, match.index - 120), match.index + 180),
+      }, env);
+      const fixed = await createFixedSectionImage(searchPlan.queries, env);
+      r2Url = fixed?.url || '';
     }
     if (!r2Url) continue;
     replacements.push({ original: match[0], replacement: `![${match[1]}](${r2Url})` });
