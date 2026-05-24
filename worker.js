@@ -5708,9 +5708,37 @@ async function fetchUnsplashImageUrl(keyword, env) {
   }
 }
 
+async function fetchPexelsImageUrl(keyword, env) {
+  if (!env.PEXELS_API_KEY) return '';
+  try {
+    const res = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(keyword)}&orientation=landscape&per_page=10`, {
+      headers: { Authorization: env.PEXELS_API_KEY }
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const candidates = (data.photos || [])
+      .map(item => {
+        const text = [item.alt, item.photographer, keyword].filter(Boolean).join(' ');
+        return {
+          url: item?.src?.large2x || item?.src?.large || item?.src?.original || '',
+          score: scoreCommonsImageTitle(text, keyword),
+          title: text,
+        };
+      })
+      .filter(item => item.url && passesFreeImageRelevance(item.title, keyword))
+      .sort((a, b) => b.score - a.score);
+    return candidates[0]?.url || '';
+  } catch (e) {
+    console.warn('Pexels image lookup failed:', e.message);
+    return '';
+  }
+}
+
 async function fetchRepairImageSource(keyword, env) {
   const unsplashUrl = await fetchUnsplashImageUrl(keyword, env);
   if (unsplashUrl) return unsplashUrl;
+  const pexelsUrl = await fetchPexelsImageUrl(keyword, env);
+  if (pexelsUrl) return pexelsUrl;
   const commonsUrl = await fetchCommonsImageUrl(keyword);
   if (commonsUrl) return commonsUrl;
   return '';
