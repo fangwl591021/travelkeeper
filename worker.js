@@ -564,7 +564,7 @@ async function d1HideItinerary(env, body = {}) {
   await env.DB.prepare(`
     UPDATE itineraries
        SET deleted_at = datetime('now'),
-           review_status = 'hidden',
+           review_status = 'deleted',
            updated_at = datetime('now')
      WHERE id = ?
   `).bind(itineraryId).run();
