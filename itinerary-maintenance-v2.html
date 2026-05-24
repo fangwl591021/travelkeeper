@@ -493,10 +493,29 @@
 
       const imageRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i;
       const imageLineRegex = /^!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)\s*$/;
-      const headingMatcher = /\u7b2c\s*[\d\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e]+\s*\u5929[^\n]*/g;
-      const matches = [...text.matchAll(headingMatcher)];
+      const dayCharCodes = new Set([0x4e00, 0x4e8c, 0x4e09, 0x56db, 0x4e94, 0x516d, 0x4e03, 0x516b, 0x4e5d, 0x5341, 0x767e]);
+      const isDayHeadingLine = (line) => {
+        const value = String(line || '').trim();
+        if (value.charCodeAt(0) !== 0x7b2c) return false;
+        const dayIndex = value.indexOf(String.fromCharCode(0x5929));
+        if (dayIndex <= 1) return false;
+        const marker = value.slice(1, dayIndex).replace(/\s+/g, '');
+        if (!marker) return false;
+        return /^[0-9]+$/.test(marker) || [...marker].every(char => dayCharCodes.has(char.charCodeAt(0)));
+      };
 
-      if (!matches.length) {
+      const lineGroups = [];
+      let currentGroup = null;
+      for (const line of text.split('\n')) {
+        if (isDayHeadingLine(line)) {
+          if (currentGroup) lineGroups.push(currentGroup);
+          currentGroup = { title: String(line || '').trim(), lines: [] };
+          continue;
+        }
+        if (currentGroup) currentGroup.lines.push(line);
+      }
+
+      if (!lineGroups.length) {
         const firstImage = text.match(imageRegex);
         return [{
           title: '',
@@ -505,19 +524,11 @@
         }];
       }
 
-      const result = [];
-      for (let i = 0; i < matches.length; i += 1) {
-        const start = matches[i].index ?? 0;
-        const end = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : text.length;
-        const chunk = text.slice(start, end).trim();
-        if (!chunk) continue;
-
-        const lines = chunk.split('\n');
-        const title = String(lines.shift() || '').trim();
+      const result = lineGroups.map(group => {
         let image = '';
         const bodyLines = [];
 
-        for (const line of lines) {
+        for (const line of group.lines) {
           const trimmed = String(line || '').trim();
           const imageMatch = trimmed.match(imageLineRegex);
           if (imageMatch && !image) {
@@ -527,12 +538,12 @@
           bodyLines.push(line);
         }
 
-        result.push({
-          title,
+        return {
+          title: group.title,
           image,
           body: bodyLines.join('\n').trim(),
-        });
-      }
+        };
+      });
 
       return result.length ? result : [{ title: '', image: '', body: text }];
     }
