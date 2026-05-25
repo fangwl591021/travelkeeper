@@ -51,6 +51,18 @@
 const { useState, useEffect, useMemo } = React;
 const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
 const LIFF_ID    = '2009367829-BDZCGti8';
+const DEFAULT_SOCIAL_LINKS = {
+  mapLink: 'https://maps.app.goo.gl/gaXSRdXidqjaVxXR9',
+  fbLink: 'https://www.facebook.com/wegotravel9898',
+  lineAtLink: 'https://lin.ee/VEILuSU',
+};
+
+const withDefaultSocialLinks = (data = {}) => ({
+  ...(data || {}),
+  mapLink: data?.mapLink || DEFAULT_SOCIAL_LINKS.mapLink,
+  fbLink: data?.fbLink || DEFAULT_SOCIAL_LINKS.fbLink,
+  lineAtLink: data?.lineAtLink || DEFAULT_SOCIAL_LINKS.lineAtLink,
+});
 
 // ══════════════════════════════════════════════════════════════
 // Util
@@ -725,6 +737,7 @@ function PromoteModal({
   const [ctaText, setCtaText] = useState('\u67e5\u770b\u5b8c\u6574\u884c\u7a0b');
   const [centerText, setCenterText] = useState('\u5fc3\u52d5\u5c31\u8981\u884c\u52d5\uff01\u56de\u994b\u90fd\u5728\u9019');
   const [showSelector, setShowSelector] = useState(false);
+  const socialDistData = withDefaultSocialLinks(distData || {});
 
   // 聯絡套件：依據 distData 有什麼欄位才顯示對應 toggle
   // 預設全部 OFF（使用者明確勾選才會出現在卡片底部）
@@ -737,7 +750,7 @@ function PromoteModal({
     { key: 'web',        label: '🌐 網站',      field: 'webLink'    },
     { key: 'map',        label: '📍 地圖',      field: 'mapLink'    },
   ];
-  const availableSocs = SOC_OPTIONS.filter(o => distData?.[o.field]);
+  const availableSocs = SOC_OPTIONS.filter(o => socialDistData?.[o.field]);
   const [enabledSocs, setEnabledSocs] = useState(new Set());
 
   const toggleId = (id) => {
@@ -772,9 +785,9 @@ function PromoteModal({
     const out = {};
     enabledSocs.forEach(key => {
       const def = SOC_OPTIONS.find(o => o.key === key);
-      if (def && distData?.[def.field]) {
+      if (def && socialDistData?.[def.field]) {
         out[def.key] = true;
-        out[def.field] = distData[def.field];
+        out[def.field] = socialDistData[def.field];
       }
     });
     return out;
@@ -1683,6 +1696,9 @@ function App() {
   const updateSocialField = (key, value) => {
     setDistData(prev => ({ ...(prev || {}), [key]: value }));
   };
+  const getSocialFieldValue = (key) => {
+    return (distData?.[key] || DEFAULT_SOCIAL_LINKS[key] || '');
+  };
 
   const saveSocialProfile = async () => {
     if (!profile?.userId) return;
@@ -1690,15 +1706,15 @@ function App() {
     try {
       const payload = {
         uid: profile.userId,
-        phone: distData?.phone || '',
-        lineLink: distData?.lineLink || '',
-        lineAtLink: distData?.lineAtLink || '',
-        lineAtId: distData?.lineAtId || '',
-        fbLink: distData?.fbLink || '',
-        igLink: distData?.igLink || '',
-        webLink: distData?.webLink || '',
-        mapLink: distData?.mapLink || '',
-        bio: distData?.bio || '',
+        phone: getSocialFieldValue('phone'),
+        lineLink: getSocialFieldValue('lineLink'),
+        lineAtLink: getSocialFieldValue('lineAtLink'),
+        lineAtId: getSocialFieldValue('lineAtId'),
+        fbLink: getSocialFieldValue('fbLink'),
+        igLink: getSocialFieldValue('igLink'),
+        webLink: getSocialFieldValue('webLink'),
+        mapLink: getSocialFieldValue('mapLink'),
+        bio: getSocialFieldValue('bio'),
       };
       const res = await fetch(`${WORKER_URL}/api/dist/profile`, {
         method: 'POST',
@@ -2675,7 +2691,7 @@ function App() {
                     ].map(field => (
                       <label key={field.key} className="block">
                         <span className="block text-sm font-black text-slate-600 mb-2">{field.label}</span>
-                        <input value={distData?.[field.key] || ''}
+                        <input value={getSocialFieldValue(field.key)}
                           onChange={e => updateSocialField(field.key, e.target.value)}
                           placeholder={field.placeholder}
                           className="w-full p-4 border-2 border-slate-100 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
@@ -2703,6 +2719,7 @@ function App() {
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">分享卡預覽</p>
                     <h2 className="text-2xl font-black text-slate-900 mt-2">{distData?.name || profile?.displayName || '我的名片'}</h2>
                     <p className="text-sm text-slate-500 mt-1">推薦碼：{distData?.inviteCode || '尚未取得'}</p>
+                    <p className="text-xs text-amber-600 mt-2">未填寫的 LINE@、Facebook、地圖會先使用系統預設值。</p>
                     <div className="mt-5 grid grid-cols-2 gap-2">
                       {[
                         { key:'phone', label:'電話' },
@@ -2712,7 +2729,7 @@ function App() {
                         { key:'igLink', label:'Instagram' },
                         { key:'webLink', label:'網站' },
                         { key:'mapLink', label:'地圖' },
-                      ].filter(item => String(distData?.[item.key] || '').trim()).map(item => (
+                      ].filter(item => String(getSocialFieldValue(item.key) || '').trim()).map(item => (
                         <span key={item.key}
                           className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-black text-center">
                           {item.label}
@@ -2720,7 +2737,7 @@ function App() {
                       ))}
                       {[
                         'phone','lineLink','lineAtLink','fbLink','igLink','webLink','mapLink'
-                      ].every(key => !String(distData?.[key] || '').trim()) && (
+                      ].every(key => !String(getSocialFieldValue(key) || '').trim()) && (
                         <p className="col-span-2 text-sm text-slate-400 bg-slate-50 rounded-2xl p-4">
                           目前沒有可放進分享卡的聯絡按鈕。
                         </p>
