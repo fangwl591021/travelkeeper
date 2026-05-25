@@ -5547,6 +5547,14 @@ export default {
         const body       = await request.json();
         const agencySlug = url.searchParams.get('a') || 'demo';
 
+        if (!body.distributor_uid && body.invite_code && env.DB) {
+          const inviteCode = String(body.invite_code || '').trim().toUpperCase();
+          const dist = await env.DB.prepare(
+            `SELECT uid FROM distributors WHERE UPPER(invite_code) = ? AND status = 'approved'`
+          ).bind(inviteCode).first().catch(() => null);
+          if (dist?.uid) body.distributor_uid = dist.uid;
+        }
+
         // ?箸撽?
         const required = ['itinerary_id', 'distributor_uid', 'customer_name', 'customer_phone'];
         for (const f of required) {

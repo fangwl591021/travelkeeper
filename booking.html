@@ -99,6 +99,8 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       const [profile, setProfile] = useState(null);
       const [itinerary, setItinerary] = useState(null);
       const [referrer, setReferrer] = useState(null);  // ★ v3：推薦人資訊
+      const [resolvedDistributorUid, setResolvedDistributorUid] = useState('');
+      const [successNote, setSuccessNote] = useState('');
       const [form, setForm] = useState({
         customer_name:'', customer_phone:'', travelers:2, travel_date:'', note:''
       });
@@ -139,6 +141,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
             // ★ v3：推薦碼解析結果（解不到就靜默忽略，仍可走 ref fallback）
             if (inviteData?.success && inviteData.data?.uid) {
               console.log('[booking] 1️⃣ invite resolved:', inviteData.data);
+              setResolvedDistributorUid(inviteData.data.uid);
               setReferrer({ name: inviteData.data.name || '夥伴' });
             }
 
@@ -202,7 +205,8 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
             note: form.note,
           };
           if (inviteCode)      body.invite_code     = inviteCode;
-          if (distributorUid)  body.distributor_uid = distributorUid;
+          const finalDistributorUid = distributorUid || resolvedDistributorUid;
+          if (finalDistributorUid) body.distributor_uid = finalDistributorUid;
 
           const res = await fetch(`${WORKER_URL}/api/orders/create?a=${agencySlug}`, {
             method:'POST',
@@ -235,6 +239,16 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
           });
           const payResult = await payRes.json();
           if (!payResult.success) {
+            const nonBlockingPaymentErrors = new Set([
+              'NEWEBPAY_DISABLED',
+              'NEWEBPAY_SECRET_MISSING',
+              'NEWEBPAY_SECRET_LENGTH_INVALID',
+            ]);
+            if (nonBlockingPaymentErrors.has(payResult.error)) {
+              setSuccessNote('訂單已建立。目前線上金流尚未啟用或參數未完成，客服會再與您確認付款方式。');
+              setStep('success');
+              return;
+            }
             setErr('建立付款連結失敗：' + (payResult.error || ''));
             setStep('form');
             return;
@@ -302,7 +316,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
             </div>
             <h2 style={{fontSize:26,fontWeight:900,color:'#0f172a',marginBottom:10}}>預約已送出！🎉</h2>
             <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8,marginBottom:28}}>
-              感謝您的預約。<br/>
+              {successNote || '感謝您的預約。'}<br/>
               業務專員將盡快與您聯繫確認行程細節。
             </p>
             <button onClick={() => liff.closeWindow()} style={{
