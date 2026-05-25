@@ -5048,6 +5048,7 @@ export default {
           uid = '',
           ctaText = '查看完整行程',
           centerText = '心動就要行動！回饋都在這',
+          centerTextColor = '#ffffff',
           socFields = {},
           agencySlug = 'demo',
           inviteCode = '',
@@ -5109,6 +5110,23 @@ export default {
         const shortText = (value, fallback = '') => {
           const text = String(value || fallback || '').replace(/\s+/g, ' ').trim();
           return text.length > 34 ? `${text.slice(0, 33)}…` : text;
+        };
+
+        const safeFlexColor = (value, fallback = '#ffffff') => {
+          const color = String(value || '').trim();
+          return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+        };
+
+        const normalizeCenterLines = (value, fallback = '心動就要行動！回饋都在這') => {
+          const raw = String(value || fallback || '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .trim();
+          const lines = raw.split('\n').map(line => line.trim()).filter(Boolean);
+          const normalized = (lines.length ? lines : [fallback]).slice(0, 3).map(line => {
+            return line.length > 22 ? `${line.slice(0, 21)}…` : line;
+          });
+          return normalized;
         };
 
         const actionLabel = (value, fallback = '查看完整行程') => {
@@ -5247,7 +5265,10 @@ export default {
 
         let flex;
         if (mode === 'travel6') {
-          const titleText = shortText(centerText, '心動就要行動！回饋都在這');
+          const centerLines = normalizeCenterLines(centerText, '心動就要行動！回饋都在這');
+          const titleText = centerLines.join('\n');
+          const altTitleText = shortText(centerLines.join(' '), '心動就要行動！回饋都在這');
+          const titleColor = safeFlexColor(centerTextColor, '#ffffff');
           const firstId = String(items[0]?.id || items[0]?.timestamp || '');
           const shareText = [
             titleText,
@@ -5293,10 +5314,15 @@ export default {
                   layout: 'vertical',
                   spacing: 'sm',
                   paddingAll: '6px',
-                  contents: [
-                    { type: 'text', text: 'LINE 旅遊', color: '#ffffff', weight: 'bold', size: 'lg', align: 'center' },
-                    { type: 'text', text: titleText, color: '#ffffff', weight: 'bold', size: 'xl', align: 'center', wrap: true }
-                  ]
+                  contents: centerLines.map((line) => ({
+                    type: 'text',
+                    text: line,
+                    color: titleColor,
+                    weight: 'bold',
+                    size: 'xl',
+                    align: 'center',
+                    wrap: true
+                  }))
                 },
                 makeTravelSixRow(items.slice(3, 6))
               ]
@@ -5311,7 +5337,7 @@ export default {
           };
           flex = {
             type: 'flex',
-            altText: `精選 6 款旅遊行程：${titleText}`,
+            altText: `精選 6 款旅遊行程：${altTitleText}`,
             contents: travelBubble
           };
         } else if (mode === 'multi' || mode === 'list') {
