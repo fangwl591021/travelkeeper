@@ -2760,6 +2760,85 @@ async function d1GetLineThread(env, threadId) {
   };
 }
 
+async function d1GetLineCrm(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineVisitorRequirementsTable(env);
+  await ensureLineThreadOpportunityColumns(env);
+  const { results } = await env.DB.prepare(`
+    SELECT
+      id,
+      display_name,
+      picture_url,
+      source_user_id,
+      source_group_id,
+      status,
+      risk_level,
+      assigned_to,
+      summary,
+      unread_count,
+      tags,
+      note,
+      opportunity_stage,
+      opportunity_value,
+      opportunity_note,
+      last_message_at
+    FROM line_threads
+    ORDER BY COALESCE(last_message_at, created_at) DESC
+    LIMIT 500
+  `).all();
+  const rows = results || [];
+  if (!rows.length) return { success: true, data: [] };
+
+  const ids = rows.map(row => String(row.id || '')).filter(Boolean);
+  const placeholders = ids.map(() => '?').join(',');
+  const recordMap = new Map();
+  if (ids.length) {
+    const recordRows = await env.DB.prepare(`
+      SELECT *
+      FROM line_visitor_requirements
+      WHERE archived_at = ''
+        AND thread_id IN (${placeholders})
+      ORDER BY
+        CASE priority WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+        updated_at DESC,
+        created_at DESC
+    `).bind(...ids).all();
+    for (const record of (recordRows.results || [])) {
+      const item = normalizeLineVisitorRequirement(record);
+      const list = recordMap.get(item.threadId) || [];
+      list.push(item);
+      recordMap.set(item.threadId, list);
+    }
+  }
+
+  return {
+    success: true,
+    data: rows.map(row => {
+      const visitorRecords = recordMap.get(row.id) || [];
+      return {
+        id: row.id,
+        name: row.display_name || '????',
+        pictureUrl: row.picture_url || '',
+        userId: row.source_user_id || row.source_group_id || '',
+        summary: row.summary || '',
+        unread: Number(row.unread_count || 0),
+        risk: row.risk_level || 'low',
+        status: row.status || 'open',
+        assignedTo: row.assigned_to || '',
+        tags: String(row.tags || '').split(',').map(v => v.trim()).filter(Boolean),
+        note: row.note || '',
+        opportunityStage: row.opportunity_stage || 'new',
+        opportunityValue: Number(row.opportunity_value || 0),
+        opportunityNote: row.opportunity_note || '',
+        importantCount: visitorRecords.length,
+        latestImportantNote: visitorRecords[0]?.content || '',
+        visitorRecords,
+        lastMessageAt: row.last_message_at || '',
+      };
+    }),
+  };
+}
+
 async function d1DebugLineThreadProfile(env, threadId) {
   if (!env.DB) throw new Error('D1 binding missing');
   const row = await env.DB.prepare(`
@@ -5250,6 +5329,13 @@ export default {
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         return json(await d1GetLineThreads(env));
+      }
+
+      if (path === '/api/line-oa/crm' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        return json(await d1GetLineCrm(env));
       }
 
       if (path === '/api/line-oa/thread' && request.method === 'GET') {

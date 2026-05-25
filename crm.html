@@ -73,9 +73,9 @@
         </label>
       </div>
       <div class="mt-4 flex flex-wrap gap-3">
-        <button id="load-crm" type="button" class="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">載入 CRM</button>
+        <button id="load-crm" type="button" class="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">重新載入 CRM</button>
         <button id="download-csv" type="button" class="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-200">下載 CSV</button>
-        <span id="load-state" class="self-center text-sm text-slate-500">尚未載入</span>
+        <span id="load-state" class="self-center text-sm text-slate-500">進入頁面會自動載入</span>
       </div>
     </section>
 
@@ -162,10 +162,12 @@
     let profile = null;
     let customers = [];
     let filteredCustomers = [];
+    let crmLoading = false;
     let targetThreadId = new URLSearchParams(location.search).get('thread') || '';
 
     const els = {
       previewNote: document.getElementById('preview-note'),
+      loadButton: document.getElementById('load-crm'),
       loadState: document.getElementById('load-state'),
       search: document.getElementById('search-input'),
       status: document.getElementById('status-filter'),
@@ -265,30 +267,30 @@
 
     async function loadCrm() {
       if (!profile?.userId) throw new Error('尚未取得管理員身分');
+      if (crmLoading) return;
+      crmLoading = true;
+      els.loadButton.disabled = true;
+      els.loadButton.classList.add('opacity-60', 'cursor-not-allowed');
       const base = `${WORKER_URL}/api/line-oa`;
-      els.loadState.textContent = '載入聊天室清單...';
-      const list = await fetchJson(`${base}/threads?uid=${encodeURIComponent(profile.userId)}`);
-      const threads = Array.isArray(list.data) ? list.data : [];
-      const details = [];
-      for (let i = 0; i < threads.length; i += 1) {
-        els.loadState.textContent = `載入客戶檔 ${i + 1} / ${threads.length}`;
-        try {
-          const detail = await fetchJson(`${base}/thread?uid=${encodeURIComponent(profile.userId)}&id=${encodeURIComponent(threads[i].id)}`);
-          details.push(detail.data);
-        } catch (_err) {
-          details.push(threads[i]);
+      try {
+        els.loadState.textContent = '載入 CRM 摘要...';
+        const crm = await fetchJson(`${base}/crm?uid=${encodeURIComponent(profile.userId)}`);
+        const details = Array.isArray(crm.data) ? crm.data : [];
+        customers = details.map(summarizeCustomer);
+        fillCategoryFilter();
+        applyFilters();
+        els.loadState.textContent = `已載入 ${customers.length} 筆客戶檔`;
+        if (targetThreadId) {
+          const found = customers.find(customer => customer.id === targetThreadId);
+          if (found) {
+            els.search.value = found.name || found.userId || targetThreadId;
+            applyFilters();
+          }
         }
-      }
-      customers = details.map(summarizeCustomer);
-      fillCategoryFilter();
-      applyFilters();
-      els.loadState.textContent = `已載入 ${customers.length} 筆客戶檔`;
-      if (targetThreadId) {
-        const found = customers.find(customer => customer.id === targetThreadId);
-        if (found) {
-          els.search.value = found.name || found.userId || targetThreadId;
-          applyFilters();
-        }
+      } finally {
+        crmLoading = false;
+        els.loadButton.disabled = false;
+        els.loadButton.classList.remove('opacity-60', 'cursor-not-allowed');
       }
     }
 
