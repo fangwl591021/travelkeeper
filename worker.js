@@ -129,6 +129,30 @@ async function readSystemSettings(env, namespace = 'general') {
   }
 }
 
+function parseUidList(value) {
+  return String(value || '')
+    .split(/[\s,;]+/)
+    .map(uid => uid.trim())
+    .filter(Boolean);
+}
+
+async function getAdminUidSet(env) {
+  const set = new Set(ADMIN_UIDS);
+  const envList = parseUidList(env.ADMIN_UIDS || env.ADMIN_UID_WHITELIST || '');
+  envList.forEach(uid => set.add(uid));
+  const settings = await readSystemSettings(env, 'access').catch(() => ({}));
+  parseUidList(settings.admin_uids || settings.admin_uid_whitelist || '').forEach(uid => set.add(uid));
+  return set;
+}
+
+async function isAdminUid(env, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized) return false;
+  if (ADMIN_UIDS.has(normalized)) return true;
+  const adminUids = await getAdminUidSet(env);
+  return adminUids.has(normalized);
+}
+
 async function writeSystemSettings(env, namespace, entries, updatedBy = '') {
   if (!env.DB) return { success: false, error: 'D1_REQUIRED' };
   await ensureSystemSettingsTable(env);
@@ -170,7 +194,7 @@ async function d1CheckUserStatus(env, uid) {
     `SELECT * FROM distributors WHERE uid = ?`
   ).bind(normalizedUid).first();
 
-  const isAdmin = ADMIN_UIDS.has(normalizedUid);
+  const isAdmin = await isAdminUid(env, normalizedUid);
   const status = String(row?.status || '').toLowerCase();
   const normalizedStatus = status === 'active' ? 'approved' : status;
   const distCanUpload = !!Number(row?.can_upload || 0);
@@ -636,7 +660,7 @@ async function d1HideItinerary(env, body = {}) {
     return { success: false, error: 'Itinerary not found' };
   }
 
-  const isAdmin = operatorUid ? ADMIN_UIDS.has(operatorUid) : false;
+  const isAdmin = operatorUid ? await isAdminUid(env, operatorUid) : false;
   const isOwner = operatorUid && String(existing.owner_uid || '') === operatorUid;
   if (!isAdmin && !isOwner) {
     return { success: false, error: 'No permission to hide itinerary' };
@@ -663,7 +687,7 @@ async function d1SaveItineraryDetail(env, body = {}) {
   const existing = await d1GetItineraryDetail(env, itineraryId);
   if (!existing) return { success: false, error: '?曆??唳迨銵?' };
 
-  const isAdmin = ADMIN_UIDS.has(operatorUid);
+  const isAdmin = await isAdminUid(env, operatorUid);
   const isOwner = String(existing.owner_uid || '') === operatorUid;
   if (!isAdmin && !isOwner) return { success: false, error: '?⊥??楊頛舀迨銵?' };
 
@@ -1249,7 +1273,7 @@ async function d1MarkBalancePaid(env, body = {}) {
   const orderId = String(body.order_id || body.orderId || '').trim();
   const operatorUid = String(body.operatorUid || body.uid || '').trim();
   if (!orderId) return { success: false, error: 'MISSING_ORDER_ID' };
-  if (!ADMIN_UIDS.has(operatorUid)) return { success: false, error: 'FORBIDDEN' };
+  if (!(await isAdminUid(env, operatorUid))) return { success: false, error: 'FORBIDDEN' };
 
   const existing = await env.DB.prepare(
     `SELECT order_id, balance_collect, commission_status
@@ -1347,7 +1371,7 @@ async function getPaymentConfigForAdmin(env) {
 
 async function updatePaymentConfigFromAdmin(env, body = {}) {
   const uid = String(body.uid || body.admin_uid || '').trim();
-  if (!ADMIN_UIDS.has(uid)) return { success: false, error: 'ADMIN_REQUIRED' };
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
 
   const existing = await readSystemSettings(env, 'payment').catch(() => ({}));
   const next = {
@@ -1362,6 +1386,30 @@ async function updatePaymentConfigFromAdmin(env, body = {}) {
   if (next.newebpay_hash_iv && next.newebpay_hash_iv.length !== 16) return { success: false, error: 'HASH_IV_LENGTH_MUST_BE_16' };
   await writeSystemSettings(env, 'payment', next, uid);
   return getPaymentConfigForAdmin(env);
+}
+
+async function getAccessConfigForAdmin(env) {
+  const settings = await readSystemSettings(env, 'access').catch(() => ({}));
+  const customUids = parseUidList(settings.admin_uids || settings.admin_uid_whitelist || '');
+  const envUids = parseUidList(env.ADMIN_UIDS || env.ADMIN_UID_WHITELIST || '');
+  const allUids = Array.from(await getAdminUidSet(env));
+  return {
+    success: true,
+    data: {
+      admin_uids: customUids.join('\n'),
+      static_admin_uids: Array.from(ADMIN_UIDS),
+      env_admin_uids: envUids,
+      effective_admin_uids: allUids,
+    },
+  };
+}
+
+async function updateAccessConfigFromAdmin(env, body = {}) {
+  const uid = String(body.uid || body.admin_uid || '').trim();
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  const cleanUids = Array.from(new Set(parseUidList(body.admin_uids || body.adminUidWhitelist || '')));
+  await writeSystemSettings(env, 'access', { admin_uids: cleanUids.join('\n') }, uid);
+  return getAccessConfigForAdmin(env);
 }
 
 function buildNewebPayMerchantOrderNo(orderId, leg) {
@@ -3181,7 +3229,7 @@ async function d1ApplyWasabiDistributor(env, row, dryItem) {
 }
 
 async function d1ResolveWasabiCustomerOwner(env) {
-  for (const uid of ADMIN_UIDS) {
+  for (const uid of await getAdminUidSet(env)) {
     const owner = await env.DB.prepare('SELECT uid, name FROM distributors WHERE uid = ?').bind(uid).first();
     if (owner?.uid) return { uid: owner.uid, name: owner.name || '' };
   }
@@ -4789,7 +4837,7 @@ export default {
       if (path === '/api/mother/health' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const status = await buildMotherHealthStatus(env);
         return json({ success: true, data: status });
       }
@@ -4798,7 +4846,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await runWasabiTravelKeeperProbe(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4807,7 +4855,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportItineraryToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4816,7 +4864,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportItinerariesToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
@@ -4825,7 +4873,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportDistributorToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4834,7 +4882,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportDistributorsToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
@@ -4843,7 +4891,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportCustomerToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4852,7 +4900,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportCustomersToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
@@ -4861,7 +4909,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportOrderToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4870,7 +4918,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportOrdersToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
@@ -4879,7 +4927,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportPaymentToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4888,7 +4936,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportPaymentsToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
@@ -4897,7 +4945,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportCommissionToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4906,7 +4954,7 @@ export default {
         const body = await request.json();
         const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
         if (!operatorUid) return json({ success: false, error: 'MISSING_OPERATOR_UID' }, 400);
-        if (!ADMIN_UIDS.has(operatorUid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, operatorUid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await exportCommissionsToWasabiStorage(env, body);
         return json(result, result.success ? 200 : 207);
       }
@@ -4914,14 +4962,14 @@ export default {
       if (path === '/api/wasabi/imports/summary' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         return json(await d1GetWasabiImportSummary(env));
       }
 
       if (path === '/api/wasabi/imports' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         return json(await d1GetWasabiImportRecords(env, {
           group: url.searchParams.get('group') || '',
           search: url.searchParams.get('search') || '',
@@ -4934,7 +4982,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1ClassifyWasabiImportRecord(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4942,7 +4990,7 @@ export default {
       if (path === '/api/wasabi/imports/dry-run' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         return json(await d1DryRunWasabiProductionImport(env, {
           target: url.searchParams.get('target') || '',
           limit: url.searchParams.get('limit') || '200',
@@ -4953,7 +5001,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1ApplyWasabiProductionImport(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -4961,7 +5009,7 @@ export default {
       if (path === '/api/line-oa/threads' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         return json(await d1GetLineThreads(env));
       }
 
@@ -4970,7 +5018,7 @@ export default {
         const threadId = url.searchParams.get('id') || '';
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         if (!threadId) return json({ success: false, error: '蝻箏??予摰?id' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         const result = await d1GetLineThread(env, threadId);
         return json(result, result.success ? 200 : 404);
       }
@@ -4980,7 +5028,7 @@ export default {
         const threadId = url.searchParams.get('id') || '';
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         if (!threadId) return json({ success: false, error: '蝻箏? thread id' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         const result = await d1DebugLineThreadProfile(env, threadId);
         return json(result, result.success ? 200 : 404);
       }
@@ -4989,7 +5037,7 @@ export default {
         const uid = url.searchParams.get('uid') || '';
         const limit = url.searchParams.get('limit') || '100';
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         const result = await d1BackfillLineThreadProfiles(env, limit);
         return json(result);
       }
@@ -4998,7 +5046,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: '???' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         const result = await d1UpdateLineThread(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -5007,7 +5055,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1SendLineOaReply(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -5016,7 +5064,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await publishLineRichMenu(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -5025,7 +5073,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await stopDefaultLineRichMenu(env);
         return json(result, result.success ? 200 : 400);
       }
@@ -5034,7 +5082,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1UpsertLineVisitorRequirement(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -5043,7 +5091,7 @@ export default {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1ArchiveLineVisitorRequirement(env, body);
         return json(result, result.success ? 200 : 400);
       }
@@ -5490,7 +5538,7 @@ export default {
 
       if (path === '/api/admin/payment-config' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
-        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
         const result = await getPaymentConfigForAdmin(env);
         return json(result);
       }
@@ -5499,6 +5547,20 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
         const result = await updatePaymentConfigFromAdmin(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/admin/access-config' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
+        const result = await getAccessConfigForAdmin(env);
+        return json(result);
+      }
+
+      if (path === '/api/admin/access-config' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
+        const result = await updateAccessConfigFromAdmin(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
@@ -5812,7 +5874,7 @@ description 中圖片語法只放每日對應頁面或景點關鍵字，不要�
           let row = await d1GetItineraryDetail(env, itineraryId);
           if (!row) return json({ success: false, error: '?曆??唳迨銵?' }, 404);
 
-          const isAdmin = ADMIN_UIDS.has(uid);
+          const isAdmin = (await isAdminUid(env, uid));
           const isOwner = String(row.owner_uid || '') === String(uid);
           if (!isAdmin && !isOwner) {
             return json({ success: false, error: '?⊥???迨銵?' }, 403);
@@ -5825,7 +5887,7 @@ description 中圖片語法只放每日對應頁面或景點關鍵字，不要�
         const items = Array.isArray(allItems) ? allItems : [];
         const item = items.find(i => String(i.id || i.timestamp || '') === String(itineraryId));
         if (!item) return json({ success: false, error: '?曆??唳迨銵?' }, 404);
-        const isAdmin = ADMIN_UIDS.has(uid);
+        const isAdmin = (await isAdminUid(env, uid));
         const isOwner = String(item.owneruid || '') === String(uid);
         if (!isAdmin && !isOwner) return json({ success: false, error: '?⊥???迨銵?' }, 403);
         return json({ success: true, data: item });
@@ -6467,5 +6529,4 @@ async function replaceImageKeywords(text, env, sourceImageUrls = []) {
   for (let i = replacements.length - 1; i >= 0; i--) result = result.replace(replacements[i].original, replacements[i].replacement);
   return result;
 }
-
 
