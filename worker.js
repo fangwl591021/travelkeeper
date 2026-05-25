@@ -2730,6 +2730,20 @@ async function publishLineRichMenu(env, body = {}) {
   return { success: true, data: { richMenuId, setDefault, defaultResult } };
 }
 
+async function stopDefaultLineRichMenu(env) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return { success: false, error: 'LINE_CHANNEL_ACCESS_TOKEN_MISSING' };
+
+  const res = await fetch('https://api.line.me/v2/bot/user/all/richmenu', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` },
+  });
+  const detail = await res.text().catch(() => '');
+  if (!res.ok) {
+    return { success: false, error: 'LINE_STOP_DEFAULT_RICH_MENU_FAILED', status: res.status, detail };
+  }
+  return { success: true, data: { stoppedDefault: true, status: res.status, detail } };
+}
+
 async function d1UpsertLineVisitorRequirement(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
@@ -5004,6 +5018,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await publishLineRichMenu(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/rich-menu/stop' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await stopDefaultLineRichMenu(env);
         return json(result, result.success ? 200 : 400);
       }
 

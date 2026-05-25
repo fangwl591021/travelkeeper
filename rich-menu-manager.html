@@ -187,6 +187,7 @@
       <button class="tool-btn px-4 py-2" onclick="document.getElementById('img-upload').click()">選擇圖片</button>
       <button class="tool-btn px-4 py-2" onclick="saveProject()">儲存專案</button>
       <button class="btn-line px-5 py-2" onclick="doUploadRichMenu()">上傳並生效</button>
+      <button class="danger-btn px-5 py-2" onclick="doStopRichMenuDeployment()">停止部署</button>
       <input type="file" id="img-upload" class="hidden" accept="image/png,image/jpeg,image/jpg">
     </div>
   </header>
@@ -768,6 +769,29 @@
         saveProject();
       } catch (err) {
         alert("發布失敗：" + err.message);
+      } finally {
+        toggleLoader(false);
+      }
+    }
+
+    async function doStopRichMenuDeployment() {
+      if (!currentProfile?.userId) return alert("請先登入 LINE 管理員帳號。");
+      if (!confirm("確定要停止目前 LINE OA 預設圖文選單？這不會刪除已建立的圖文選單，只會取消前台預設顯示。")) return;
+
+      toggleLoader(true);
+      try {
+        const res = await fetch(`${WORKER_URL}/api/line-oa/rich-menu/stop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uid: currentProfile.userId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        showToast("已停止預設圖文選單部署");
+      } catch (err) {
+        alert("停止部署失敗：" + err.message);
       } finally {
         toggleLoader(false);
       }
