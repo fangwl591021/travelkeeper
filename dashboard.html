@@ -1056,6 +1056,7 @@ function buildMenu({ isAdmin, canUpload, badges }) {
       href:'line-oa-monitor.html' },
     { id:'rich-menu-manager', icon:'\u{1F5BC}\uFE0F', label:'\u5716\u6587\u9078\u55AE', show: isAdmin,
       href:'rich-menu-manager.html' },
+    { id:'system-settings', icon:'⚙️', label:'系統參數', show: isAdmin },
     { id:'distributors', icon:'👥', label:'分銷商管理', show: isAdmin,
       badge: badges.pendingDist },
     { id:'review',       icon:'⚠️', label:'待審核行程', show: isAdmin,
@@ -1120,6 +1121,18 @@ function App() {
   const [paymentFilter,    setPaymentFilter]    = useState('all'); // all/credit_card/linepay/vacc/offline
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all'); // all/paid/awaiting_atm/failed
   const [paymentDateRange, setPaymentDateRange] = useState('30d'); // 7d/30d/90d/all
+  const [paymentConfig, setPaymentConfig] = useState({
+    newebpay_enabled: false,
+    newebpay_merchant_id: '',
+    newebpay_hash_key: '',
+    newebpay_hash_iv: '',
+    newebpay_mpg_url: 'https://ccore.newebpay.com/MPG/mpg_gateway',
+    newebpay_version: '2.0',
+    has_newebpay_hash_key: false,
+    has_newebpay_hash_iv: false,
+    ready: false,
+  });
+  const [paymentConfigSaving, setPaymentConfigSaving] = useState(false);
   const [commissionSummary, setCommissionSummary] = useState(null); // 管理員視圖
   const [selectedPayoutOrders, setSelectedPayoutOrders] = useState({}); // { uid: Set(orderIds) }
   const [payingOut, setPayingOut] = useState(false);
@@ -1144,6 +1157,39 @@ function App() {
 
   const fetchJson = (url, fallback) =>
       fetch(url).then(r => r.json()).catch(() => fallback);
+
+  const savePaymentConfig = async () => {
+    if (!isAdmin || !profile?.userId) return;
+    setPaymentConfigSaving(true);
+    try {
+      const res = await fetch(`${WORKER_URL}/api/admin/payment-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          newebpay_enabled: !!paymentConfig.newebpay_enabled,
+          newebpay_merchant_id: paymentConfig.newebpay_merchant_id,
+          newebpay_hash_key: paymentConfig.newebpay_hash_key,
+          newebpay_hash_iv: paymentConfig.newebpay_hash_iv,
+          newebpay_mpg_url: paymentConfig.newebpay_mpg_url,
+          newebpay_version: paymentConfig.newebpay_version,
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || '儲存失敗');
+      setPaymentConfig(prev => ({
+        ...prev,
+        ...result.data,
+        newebpay_hash_key: '',
+        newebpay_hash_iv: '',
+      }));
+      showToast('金流參數已儲存');
+    } catch (err) {
+      showToast(err.message || '金流參數儲存失敗', 'error');
+    } finally {
+      setPaymentConfigSaving(false);
+    }
+  };
 
   const recoverLiffSession = async (reason = '') => {
     const msg = String(reason || '').toLowerCase();
@@ -1221,6 +1267,19 @@ function App() {
       ]);
       setOrders(allOrdersRes?.data || []);
       if (commRes?.success) setCommissionSummary(commRes.data);
+      return;
+    }
+
+    if (targetView === 'system-settings') {
+      const cfgRes = await fetchJson(`${WORKER_URL}/api/admin/payment-config?uid=${encodeURIComponent(userId)}`, null);
+      if (cfgRes?.success) {
+        setPaymentConfig(prev => ({
+          ...prev,
+          ...cfgRes.data,
+          newebpay_hash_key: '',
+          newebpay_hash_iv: '',
+        }));
+      }
       return;
     }
 
@@ -2985,6 +3044,90 @@ function App() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── 系統參數（管理員）── */}
+          {view === 'system-settings' && isAdmin && (
+            <div className="space-y-6 anim max-w-5xl">
+              <div className="bg-white border border-slate-200 rounded-[1.5rem] p-6 space-y-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Payment Gateway</p>
+                    <h2 className="text-2xl font-black text-slate-900 mt-1">藍新金流參數</h2>
+                    <p className="text-sm text-slate-500 mt-2">
+                      廠商資料尚未提供時可先保持停用；取得後在這裡填入，不需要重新改程式。
+                    </p>
+                  </div>
+                  <span className={`px-4 py-2 rounded-full text-sm font-black ${
+                    paymentConfig.ready ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    {paymentConfig.ready ? '已可啟用' : '尚未完整'}
+                  </span>
+                </div>
+
+                <label className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input type="checkbox"
+                    checked={!!paymentConfig.newebpay_enabled}
+                    onChange={e => setPaymentConfig({...paymentConfig, newebpay_enabled: e.target.checked})}
+                    className="w-5 h-5"/>
+                  <span>
+                    <span className="block font-black text-slate-800">啟用藍新線上付款</span>
+                    <span className="block text-xs text-slate-500 mt-1">未啟用或參數不完整時，前台付款會停止建立藍新表單。</span>
+                  </span>
+                </label>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-black text-slate-500">Merchant ID</label>
+                    <input value={paymentConfig.newebpay_merchant_id || ''}
+                      onChange={e => setPaymentConfig({...paymentConfig, newebpay_merchant_id: e.target.value})}
+                      placeholder="例如：MS123456789"
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-slate-500">MPG 網關</label>
+                    <select value={paymentConfig.newebpay_mpg_url || 'https://ccore.newebpay.com/MPG/mpg_gateway'}
+                      onChange={e => setPaymentConfig({...paymentConfig, newebpay_mpg_url: e.target.value})}
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500 bg-white">
+                      <option value="https://ccore.newebpay.com/MPG/mpg_gateway">測試站 ccore</option>
+                      <option value="https://core.newebpay.com/MPG/mpg_gateway">正式站 core</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-slate-500">HashKey（32 碼）</label>
+                    <input type="password" value={paymentConfig.newebpay_hash_key || ''}
+                      onChange={e => setPaymentConfig({...paymentConfig, newebpay_hash_key: e.target.value})}
+                      placeholder={paymentConfig.has_newebpay_hash_key ? '已設定，留空不覆蓋' : '尚未設定'}
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-slate-500">HashIV（16 碼）</label>
+                    <input type="password" value={paymentConfig.newebpay_hash_iv || ''}
+                      onChange={e => setPaymentConfig({...paymentConfig, newebpay_hash_iv: e.target.value})}
+                      placeholder={paymentConfig.has_newebpay_hash_iv ? '已設定，留空不覆蓋' : '尚未設定'}
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-slate-500">版本</label>
+                    <input value={paymentConfig.newebpay_version || '2.0'}
+                      onChange={e => setPaymentConfig({...paymentConfig, newebpay_version: e.target.value})}
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
+                  <p>目前狀態：Merchant ID {paymentConfig.newebpay_merchant_id ? '已填' : '未填'}、
+                    HashKey {paymentConfig.has_newebpay_hash_key ? '已設定' : '未設定'}、
+                    HashIV {paymentConfig.has_newebpay_hash_iv ? '已設定' : '未設定'}。</p>
+                </div>
+
+                <button onClick={savePaymentConfig}
+                  disabled={paymentConfigSaving}
+                  className="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-xl font-black hover:bg-blue-700 disabled:opacity-50">
+                  {paymentConfigSaving ? '儲存中…' : '儲存金流參數'}
+                </button>
+              </div>
             </div>
           )}
 

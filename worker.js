@@ -68,6 +68,54 @@ async function readConfigWithFallback(env, slug = 'demo') {
   return gasGet(env, { action: 'getConfig', a: slug });
 }
 
+async function ensureSystemSettingsTable(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      namespace TEXT NOT NULL DEFAULT 'general',
+      value TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  ).run();
+  await env.DB.prepare(
+    `CREATE INDEX IF NOT EXISTS idx_system_settings_namespace ON system_settings(namespace)`
+  ).run();
+}
+
+async function readSystemSettings(env, namespace = 'general') {
+  if (!env.DB) return {};
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT key, value FROM system_settings WHERE namespace = ?`
+    ).bind(namespace).all();
+    return Object.fromEntries((results || []).map(row => [row.key, row.value]));
+  } catch (err) {
+    if (String(err?.message || '').includes('no such table')) return {};
+    throw err;
+  }
+}
+
+async function writeSystemSettings(env, namespace, entries, updatedBy = '') {
+  if (!env.DB) return { success: false, error: 'D1_REQUIRED' };
+  await ensureSystemSettingsTable(env);
+  const now = formatTaipeiDateTime(new Date());
+  const statements = Object.entries(entries).map(([key, value]) =>
+    env.DB.prepare(
+      `INSERT INTO system_settings (key, namespace, value, updated_by, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         namespace = excluded.namespace,
+         value = excluded.value,
+         updated_by = excluded.updated_by,
+         updated_at = excluded.updated_at`
+    ).bind(key, namespace, String(value ?? ''), updatedBy, now)
+  );
+  if (statements.length) await env.DB.batch(statements);
+  return { success: true, updated_at: now };
+}
+
 async function resolveInviteCodeWithFallback(env, code) {
   if (env.DB) {
     try {
@@ -1217,15 +1265,70 @@ async function d1MarkBalancePaid(env, body = {}) {
   return { success: true, updatedAt: now };
 }
 
-function getNewebPayConfig(env) {
-  const merchantId = String(env.NEWEBPAY_MERCHANT_ID || '').trim();
-  const hashKey = String(env.NEWEBPAY_HASH_KEY || '').trim();
-  const hashIv = String(env.NEWEBPAY_HASH_IV || '').trim();
-  const mpgUrl = String(env.NEWEBPAY_MPG_URL || 'https://ccore.newebpay.com/MPG/mpg_gateway').trim();
-  const version = String(env.NEWEBPAY_VERSION || '2.0').trim();
+async function getNewebPayConfig(env) {
+  const settings = await readSystemSettings(env, 'payment').catch(() => ({}));
+  const merchantId = String(settings.newebpay_merchant_id || env.NEWEBPAY_MERCHANT_ID || '').trim();
+  const hashKey = String(settings.newebpay_hash_key || env.NEWEBPAY_HASH_KEY || '').trim();
+  const hashIv = String(settings.newebpay_hash_iv || env.NEWEBPAY_HASH_IV || '').trim();
+  const mpgUrl = String(settings.newebpay_mpg_url || env.NEWEBPAY_MPG_URL || 'https://ccore.newebpay.com/MPG/mpg_gateway').trim();
+  const version = String(settings.newebpay_version || env.NEWEBPAY_VERSION || '2.0').trim();
+  const enabledRaw = String(settings.newebpay_enabled || '').trim().toLowerCase();
+  if (enabledRaw && !['1', 'true', 'yes', 'on'].includes(enabledRaw)) {
+    return { ok: false, error: 'NEWEBPAY_DISABLED' };
+  }
   if (!merchantId || !hashKey || !hashIv) return { ok: false, error: 'NEWEBPAY_SECRET_MISSING' };
   if (hashKey.length !== 32 || hashIv.length !== 16) return { ok: false, error: 'NEWEBPAY_SECRET_LENGTH_INVALID' };
   return { ok: true, merchantId, hashKey, hashIv, mpgUrl, version };
+}
+
+async function getPaymentConfigForAdmin(env) {
+  const settings = await readSystemSettings(env, 'payment').catch(() => ({}));
+  const merchantId = String(settings.newebpay_merchant_id || env.NEWEBPAY_MERCHANT_ID || '').trim();
+  const hashKey = String(settings.newebpay_hash_key || env.NEWEBPAY_HASH_KEY || '').trim();
+  const hashIv = String(settings.newebpay_hash_iv || env.NEWEBPAY_HASH_IV || '').trim();
+  const mpgUrl = String(settings.newebpay_mpg_url || env.NEWEBPAY_MPG_URL || 'https://ccore.newebpay.com/MPG/mpg_gateway').trim();
+  const version = String(settings.newebpay_version || env.NEWEBPAY_VERSION || '2.0').trim();
+  const enabledRaw = String(settings.newebpay_enabled || '').trim().toLowerCase();
+  const enabled = enabledRaw
+    ? ['1', 'true', 'yes', 'on'].includes(enabledRaw)
+    : !!(merchantId && hashKey && hashIv);
+  return {
+    success: true,
+    data: {
+      newebpay_enabled: enabled,
+      newebpay_merchant_id: merchantId,
+      newebpay_mpg_url: mpgUrl,
+      newebpay_version: version,
+      has_newebpay_hash_key: !!hashKey,
+      has_newebpay_hash_iv: !!hashIv,
+      ready: !!(enabled && merchantId && hashKey && hashIv),
+      source: {
+        merchant_id: settings.newebpay_merchant_id ? 'settings' : (env.NEWEBPAY_MERCHANT_ID ? 'env' : ''),
+        hash_key: settings.newebpay_hash_key ? 'settings' : (env.NEWEBPAY_HASH_KEY ? 'env' : ''),
+        hash_iv: settings.newebpay_hash_iv ? 'settings' : (env.NEWEBPAY_HASH_IV ? 'env' : ''),
+        mpg_url: settings.newebpay_mpg_url ? 'settings' : (env.NEWEBPAY_MPG_URL ? 'env' : 'default'),
+      },
+    },
+  };
+}
+
+async function updatePaymentConfigFromAdmin(env, body = {}) {
+  const uid = String(body.uid || body.admin_uid || '').trim();
+  if (!ADMIN_UIDS.has(uid)) return { success: false, error: 'ADMIN_REQUIRED' };
+
+  const existing = await readSystemSettings(env, 'payment').catch(() => ({}));
+  const next = {
+    newebpay_enabled: body.newebpay_enabled ? '1' : '0',
+    newebpay_merchant_id: String(body.newebpay_merchant_id || '').trim(),
+    newebpay_mpg_url: String(body.newebpay_mpg_url || 'https://ccore.newebpay.com/MPG/mpg_gateway').trim(),
+    newebpay_version: String(body.newebpay_version || '2.0').trim(),
+    newebpay_hash_key: body.newebpay_hash_key ? String(body.newebpay_hash_key).trim() : String(existing.newebpay_hash_key || ''),
+    newebpay_hash_iv: body.newebpay_hash_iv ? String(body.newebpay_hash_iv).trim() : String(existing.newebpay_hash_iv || ''),
+  };
+  if (next.newebpay_hash_key && next.newebpay_hash_key.length !== 32) return { success: false, error: 'HASH_KEY_LENGTH_MUST_BE_32' };
+  if (next.newebpay_hash_iv && next.newebpay_hash_iv.length !== 16) return { success: false, error: 'HASH_IV_LENGTH_MUST_BE_16' };
+  await writeSystemSettings(env, 'payment', next, uid);
+  return getPaymentConfigForAdmin(env);
 }
 
 function buildNewebPayMerchantOrderNo(orderId, leg) {
@@ -1266,7 +1369,7 @@ function parseNewebPayDecryptedPayload(text) {
 }
 
 async function buildNewebPayTrade(env, tradeData) {
-  const cfg = getNewebPayConfig(env);
+  const cfg = await getNewebPayConfig(env);
   if (!cfg.ok) return { success: false, error: cfg.error };
   const tradeQuery = new URLSearchParams(tradeData).toString();
   const tradeInfo = await aes256CbcEncryptHex(tradeQuery, cfg.hashKey, cfg.hashIv);
@@ -1290,7 +1393,7 @@ async function buildNewebPayTrade(env, tradeData) {
 
 async function d1CreateNewebPayForm(env, request, body = {}) {
   if (!env.DB) return { success: false, error: 'D1_REQUIRED' };
-  const cfg = getNewebPayConfig(env);
+  const cfg = await getNewebPayConfig(env);
   if (!cfg.ok) return { success: false, error: cfg.error };
 
   const orderId = String(body.order_id || body.orderId || '').trim();
@@ -1374,7 +1477,7 @@ async function readPaymentRequestData(request) {
 
 async function d1HandleNewebPayNotify(env, body = {}) {
   if (!env.DB) return { success: false, error: 'D1_REQUIRED' };
-  const cfg = getNewebPayConfig(env);
+  const cfg = await getNewebPayConfig(env);
   if (!cfg.ok) return { success: false, error: cfg.error };
   const tradeInfo = String(body.TradeInfo || body.TradeInfo_ || body.tradeInfo || '').trim();
   const tradeSha = String(body.TradeSha || body.TradeSha_ || body.tradeSha || '').trim().toUpperCase();
@@ -5275,6 +5378,20 @@ export default {
           ? await d1GetOrderStatus(env, orderId, customerLineUid)
           : await gasGet(env, { action: 'getOrderStatus', order_id: orderId, customer_line_uid: customerLineUid });
         return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/admin/payment-config' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!ADMIN_UIDS.has(uid)) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
+        const result = await getPaymentConfigForAdmin(env);
+        return json(result);
+      }
+
+      if (path === '/api/admin/payment-config' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
+        const result = await updatePaymentConfigFromAdmin(env, body);
+        return json(result, result.success ? 200 : 400);
       }
 
       if (path === '/api/payment/create' && request.method === 'POST') {
