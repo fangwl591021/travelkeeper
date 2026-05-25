@@ -1656,7 +1656,12 @@ function App() {
     try {
       const res = await fetch(`${WORKER_URL}/api/itineraries`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateDistributorStatus', uid, status:'approved' })
+        body: JSON.stringify({
+          action:'updateDistributorStatus',
+          uid,
+          status:'approved',
+          operatorUid: profile?.userId || '',
+        })
       });
       const result = await res.json();
       if (result.success) {
@@ -1671,7 +1676,12 @@ function App() {
     try {
       const res = await fetch(`${WORKER_URL}/api/itineraries`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateDistributorStatus', uid, status:'pending' })
+        body: JSON.stringify({
+          action:'updateDistributorStatus',
+          uid,
+          status:'pending',
+          operatorUid: profile?.userId || '',
+        })
       });
       const result = await res.json();
       if (result.success) {

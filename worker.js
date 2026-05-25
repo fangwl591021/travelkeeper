@@ -1214,6 +1214,66 @@ async function d1UpsertRegisteredDistributor(env, body = {}, gasResult = {}) {
   return { success: true };
 }
 
+async function d1UpdateDistributorStatus(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const uid = String(body.uid || '').trim();
+  const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+  const status = String(body.status || '').trim().toLowerCase();
+  const allowed = new Set(['pending', 'approved', 'active', 'suspended', 'rejected']);
+  if (!uid) return { success: false, error: 'MISSING_UID' };
+  if (!operatorUid) return { success: false, error: 'MISSING_OPERATOR_UID' };
+  if (!(await isAdminUid(env, operatorUid))) return { success: false, error: 'FORBIDDEN' };
+  if (!allowed.has(status)) return { success: false, error: 'INVALID_STATUS' };
+
+  const now = formatTaipeiDateTime(new Date());
+  const result = await env.DB.prepare(
+    `UPDATE distributors
+        SET status = ?,
+            updated_at = ?
+      WHERE uid = ?`
+  ).bind(status, now, uid).run();
+  if (!result.success) return { success: false, error: 'FAILED_TO_UPDATE_DISTRIBUTOR_STATUS' };
+  if ((result.meta?.changes || 0) === 0) return { success: false, error: 'DISTRIBUTOR_NOT_FOUND' };
+
+  if (env.GAS_WEBAPP_URL) {
+    try {
+      await gasPost(env, { action: 'updateDistributorStatus', uid, status, operatorUid });
+    } catch (err) {
+      console.warn('sync updateDistributorStatus to GAS failed:', err.message);
+    }
+  }
+  return { success: true, uid, status, updatedAt: now };
+}
+
+async function d1GrantUploadPermission(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const uid = String(body.uid || '').trim();
+  const operatorUid = String(body.operatorUid || body.adminUid || '').trim();
+  const canUpload = body.canUpload === true || body.canUpload === 'true' || body.canUpload === 1 || body.canUpload === '1';
+  if (!uid) return { success: false, error: 'MISSING_UID' };
+  if (!operatorUid) return { success: false, error: 'MISSING_OPERATOR_UID' };
+  if (!(await isAdminUid(env, operatorUid))) return { success: false, error: 'FORBIDDEN' };
+
+  const now = formatTaipeiDateTime(new Date());
+  const result = await env.DB.prepare(
+    `UPDATE distributors
+        SET can_upload = ?,
+            updated_at = ?
+      WHERE uid = ?`
+  ).bind(canUpload ? 1 : 0, now, uid).run();
+  if (!result.success) return { success: false, error: 'FAILED_TO_UPDATE_UPLOAD_PERMISSION' };
+  if ((result.meta?.changes || 0) === 0) return { success: false, error: 'DISTRIBUTOR_NOT_FOUND' };
+
+  if (env.GAS_WEBAPP_URL) {
+    try {
+      await gasPost(env, { action: 'grantUploadPermission', uid, canUpload, operatorUid });
+    } catch (err) {
+      console.warn('sync grantUploadPermission to GAS failed:', err.message);
+    }
+  }
+  return { success: true, uid, canUpload, updatedAt: now };
+}
+
 async function readDistributorsWithFallback(env) {
   if (env.DB) {
     try {
@@ -5988,6 +6048,14 @@ description 中圖片語法只放每日對應頁面或景點關鍵字，不要�
         }
         if ((body.action === 'hideItinerary' || body.action === 'deleteItinerary') && env.DB) {
           const result = await d1HideItinerary(env, body);
+          return json(result, result.success ? 200 : 400);
+        }
+        if (body.action === 'updateDistributorStatus' && env.DB) {
+          const result = await d1UpdateDistributorStatus(env, body);
+          return json(result, result.success ? 200 : 400);
+        }
+        if (body.action === 'grantUploadPermission' && env.DB) {
+          const result = await d1GrantUploadPermission(env, body);
           return json(result, result.success ? 200 : 400);
         }
         const result = await gasPost(env, body);
