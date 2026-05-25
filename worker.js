@@ -5049,6 +5049,7 @@ export default {
           ctaText = '查看完整行程',
           centerText = '心動就要行動！回饋都在這',
           centerTextColor = '#ffffff',
+          travel6BgColor = '#15569a',
           socFields = {},
           agencySlug = 'demo',
           inviteCode = '',
@@ -5269,6 +5270,7 @@ export default {
           const titleText = centerLines.join('\n');
           const altTitleText = shortText(centerLines.join(' '), '心動就要行動！回饋都在這');
           const titleColor = safeFlexColor(centerTextColor, '#ffffff');
+          const panelBgColor = safeFlexColor(travel6BgColor, '#15569a');
           const firstId = String(items[0]?.id || items[0]?.timestamp || '');
           const shareText = [
             titleText,
@@ -5304,7 +5306,7 @@ export default {
             body: {
               type: 'box',
               layout: 'vertical',
-              backgroundColor: '#15569a',
+              backgroundColor: panelBgColor,
               paddingAll: '18px',
               spacing: 'lg',
               contents: [
