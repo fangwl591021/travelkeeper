@@ -30,6 +30,38 @@ const json = (data, status = 200) =>
 const gasGet  = (env, params) => fetch(`${env.GAS_WEBAPP_URL}?${new URLSearchParams(params)}`, { redirect: 'follow' }).then(r => r.json());
 const gasPost = (env, body)   => fetch(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), redirect: 'follow' }).then(r => r.json());
 
+function makeFlexShareId() {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+}
+
+async function d1StoreFlexShare(env, id, message) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const shareId = String(id || '').trim() || makeFlexShareId();
+  await env.DB.prepare(`
+    INSERT OR REPLACE INTO flex_shares (id, message_json, created_at, expires_at, hit_count)
+    VALUES (?, ?, CURRENT_TIMESTAMP, datetime('now', '+30 days'), 0)
+  `).bind(shareId, JSON.stringify(message || {})).run();
+  return shareId;
+}
+
+async function d1GetFlexShare(env, id) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const shareId = String(id || '').trim();
+  if (!shareId) return { success: false, error: 'MISSING_SHARE_ID' };
+  const row = await env.DB.prepare(`
+    SELECT id, message_json
+    FROM flex_shares
+    WHERE id = ? AND expires_at > datetime('now')
+  `).bind(shareId).first();
+  if (!row) return { success: false, error: 'SHARE_NOT_FOUND_OR_EXPIRED' };
+  await env.DB.prepare(`
+    UPDATE flex_shares
+    SET hit_count = hit_count + 1
+    WHERE id = ?
+  `).bind(shareId).run().catch(() => {});
+  return { success: true, id: row.id, message: JSON.parse(row.message_json || '{}') };
+}
+
 async function d1GetConfig(env, slug = 'demo') {
   if (!env.DB) throw new Error('D1 binding missing');
   const row = await env.DB.prepare(
@@ -5276,6 +5308,13 @@ export default {
             titleText,
             buildDetailUri(firstId)
           ].join('\n');
+          const shareId = env.DB ? makeFlexShareId() : '';
+          const shareCardUri = shareId
+            ? (liffId
+              ? `https://liff.line.me/${liffId}/flex-share.html?s=${encodeURIComponent(shareId)}`
+              : `${ENDPOINT}flex-share.html?s=${encodeURIComponent(shareId)}`)
+            : `https://line.me/R/share?text=${encodeURIComponent(shareText)}`;
+          const fallbackShareTextUri = `https://line.me/R/share?text=${encodeURIComponent(shareText)}`;
           const footerButtons = [
             {
               type: 'button',
@@ -5284,8 +5323,8 @@ export default {
               height: 'sm',
               action: {
                 type: 'uri',
-                label: '分享行程清單',
-                uri: `https://line.me/R/share?text=${encodeURIComponent(shareText)}`
+                label: '分享行程',
+                uri: shareCardUri
               }
             },
             {
@@ -5342,6 +5381,14 @@ export default {
             altText: `精選 6 款旅遊行程：${altTitleText}`,
             contents: travelBubble
           };
+          if (shareId) {
+            try {
+              await d1StoreFlexShare(env, shareId, flex);
+            } catch (err) {
+              console.warn('store travel6 flex share failed:', err.message);
+              footerButtons[0].action.uri = fallbackShareTextUri;
+            }
+          }
         } else if (mode === 'multi' || mode === 'list') {
           // ???”璅∪?嚗銝 bubble嚗?蝑?蝔?? separator ??
           const itemContents = [];
@@ -5399,6 +5446,14 @@ export default {
         }
 
         return json({ success: true, flex, message: flex, count: items.length });
+      }
+
+      if (path === '/api/flex/share' && request.method === 'GET') {
+        const id = url.searchParams.get('id') || url.searchParams.get('s') || '';
+        const result = env.DB
+          ? await d1GetFlexShare(env, id)
+          : { success: false, error: 'D1 binding missing' };
+        return json(result, result.success ? 200 : 404);
       }
 
       if (path === '/api/orders/status' && request.method === 'GET') {
