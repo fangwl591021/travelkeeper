@@ -64,6 +64,20 @@ const withDefaultSocialLinks = (data = {}) => ({
   lineAtLink: data?.lineAtLink || DEFAULT_SOCIAL_LINKS.lineAtLink,
 });
 
+const SHARE_FUNNEL_TEXT = {
+  title: '\u5206\u4eab\u8f49\u63db\u6f0f\u6597',
+  subtitle: '\u8ffd\u8e64\u63a8\u5ee3\u5361\u5230\u9810\u7d04\u9801\u8207\u5efa\u55ae\u7684\u6548\u679c',
+  month: '\u672c\u6708',
+  total: '\u7d2f\u8a08',
+  cards: '\u88fd\u4f5c\u5206\u4eab\u5361',
+  sent: '\u5206\u4eab\u9001\u51fa',
+  landings: '\u9032\u5165\u9810\u7d04',
+  orders: '\u5efa\u7acb\u8a02\u55ae',
+  conversion: '\u9810\u7d04\u8f49\u55ae\u7387',
+  top: '\u6700\u6709\u8f49\u63db\u7684\u884c\u7a0b',
+  empty: '\u9084\u6c92\u6709\u5206\u4eab\u8ffd\u8e64\u8cc7\u6599',
+};
+
 // ══════════════════════════════════════════════════════════════
 // Util
 // ══════════════════════════════════════════════════════════════
@@ -1141,6 +1155,7 @@ function App() {
   const [pendingItems,  setPendingItems]  = useState([]);      // 管理員
   const [publishedItems, setPublishedItems] = useState([]);    // ★ v8：全平台已上架（推廣用，雙角色都拉）
   const [customers,     setCustomers]     = useState([]);      // 業務
+  const [shareAnalytics,setShareAnalytics]= useState(null);    // share conversion funnel
 
   // 視圖狀態
   const [view, setView] = useState('overview');
@@ -1376,14 +1391,16 @@ function App() {
     }
 
     if (targetView === 'overview') {
-      const [pendingRes, allOrdersRes, distRes] = await Promise.all([
+      const [pendingRes, allOrdersRes, distRes, shareRes] = await Promise.all([
         fetchJson(`${WORKER_URL}/api/itineraries?action=getPendingReviews`, { data: [] }),
         fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] }),
         fetchJson(`${WORKER_URL}/api/itineraries?action=getDistributors`, []),
+        fetchJson(`${WORKER_URL}/api/share/analytics?uid=${encodeURIComponent(userId)}`, null),
       ]);
       setPendingItems(pendingRes?.data || []);
       setOrders(allOrdersRes?.data || []);
       setDistributors(Array.isArray(distRes) ? distRes : []);
+      if (shareRes?.success) setShareAnalytics(shareRes.data);
     }
   };
 
@@ -1415,13 +1432,17 @@ function App() {
     }
 
     if (targetView === 'overview' || targetView === 'orders' || targetView === 'payments' || targetView === 'commission') {
-      const [statsRes, ordersRes] = await Promise.all([
+      const [statsRes, ordersRes, shareRes] = await Promise.all([
         fetchJson(`${WORKER_URL}/api/my/stats?uid=${userId}`, { data: null }),
         fetchJson(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${userId}`, { data: [] }),
+        targetView === 'overview'
+          ? fetchJson(`${WORKER_URL}/api/share/analytics?uid=${encodeURIComponent(userId)}`, null)
+          : Promise.resolve(null),
       ]);
       setStats(statsRes?.data || null);
       const myOrders = (ordersRes?.data || []).filter(o => String(o.distributoruid) === String(userId));
       setOrders(myOrders);
+      if (shareRes?.success) setShareAnalytics(shareRes.data);
       return;
     }
   };
@@ -2118,6 +2139,23 @@ function App() {
     };
   }, [pendingItems, orders, monthOrders, distributors, myItems]);
 
+  const shareFunnel = useMemo(() => {
+    const pick = (scope, key) => Number(shareAnalytics?.[scope]?.[key] || 0);
+    const make = (scope) => {
+      const cards = pick(scope, 'card_created');
+      const sent = pick(scope, 'card_sent');
+      const landings = pick(scope, 'booking_landing');
+      const ordersMade = pick(scope, 'booking_order_created');
+      const conversion = landings > 0 ? Math.round((ordersMade / landings) * 100) : 0;
+      return { cards, sent, landings, orders: ordersMade, conversion };
+    };
+    return {
+      month: make('month'),
+      total: make('total'),
+      top: shareAnalytics?.topItineraries || [],
+    };
+  }, [shareAnalytics]);
+
   const orderStats = useMemo(() => ({
     pendingCount:    orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
     monthRevenue:    monthOrders.reduce((s,o) => s + Number(o.price||0), 0),
@@ -2498,6 +2536,65 @@ function App() {
                   </div>
                 </div>
               )}
+
+              <div>
+                <div className="flex items-end justify-between gap-3 mb-3">
+                  <div>
+                    <h2 className="font-black text-lg text-slate-900">{SHARE_FUNNEL_TEXT.title}</h2>
+                    <p className="text-sm text-slate-500 mt-1">{SHARE_FUNNEL_TEXT.subtitle}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
+                  <StatCard color="bg-sky-600" num={shareFunnel.month.cards}
+                    label={`${SHARE_FUNNEL_TEXT.month}${SHARE_FUNNEL_TEXT.cards}`} loading={loading}/>
+                  <StatCard color="bg-indigo-600" num={shareFunnel.month.sent}
+                    label={`${SHARE_FUNNEL_TEXT.month}${SHARE_FUNNEL_TEXT.sent}`} loading={loading}/>
+                  <StatCard color="bg-emerald-600" num={shareFunnel.month.landings}
+                    label={`${SHARE_FUNNEL_TEXT.month}${SHARE_FUNNEL_TEXT.landings}`} loading={loading}/>
+                  <StatCard color="bg-rose-600" num={`${shareFunnel.month.conversion}%`}
+                    label={SHARE_FUNNEL_TEXT.conversion}
+                    hint={`${SHARE_FUNNEL_TEXT.orders}: ${shareFunnel.month.orders}`}
+                    loading={loading}/>
+                </div>
+                <div className="mt-4 bg-white rounded-[1.5rem] border border-slate-100 overflow-hidden">
+                  <div className="p-5 flex items-center justify-between gap-3 border-b border-slate-100">
+                    <div>
+                      <p className="font-black text-slate-900">{SHARE_FUNNEL_TEXT.total}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {SHARE_FUNNEL_TEXT.cards}: {shareFunnel.total.cards} · {SHARE_FUNNEL_TEXT.landings}: {shareFunnel.total.landings} · {SHARE_FUNNEL_TEXT.orders}: {shareFunnel.total.orders}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-black text-emerald-600">{shareFunnel.total.conversion}%</p>
+                      <p className="text-xs font-bold text-slate-400">{SHARE_FUNNEL_TEXT.conversion}</p>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <p className="font-black text-slate-900 mb-3">{SHARE_FUNNEL_TEXT.top}</p>
+                    {shareFunnel.top.length ? (
+                      <div className="space-y-3">
+                        {shareFunnel.top.slice(0, 5).map((item, idx) => (
+                          <div key={`${item.itinerary_id || idx}`} className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4">
+                            <div className="min-w-0">
+                              <p className="font-black text-slate-800 truncate">{item.title || item.itinerary_id}</p>
+                              <p className="text-xs text-slate-500 mt-1">{item.itinerary_id}</p>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3 text-center shrink-0">
+                              <div><p className="font-black text-sky-600">{Number(item.cards || 0)}</p><p className="text-[10px] text-slate-400">{SHARE_FUNNEL_TEXT.cards}</p></div>
+                              <div><p className="font-black text-emerald-600">{Number(item.landings || 0)}</p><p className="text-[10px] text-slate-400">{SHARE_FUNNEL_TEXT.landings}</p></div>
+                              <div><p className="font-black text-rose-600">{Number(item.orders || 0)}</p><p className="text-[10px] text-slate-400">{SHARE_FUNNEL_TEXT.orders}</p></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-slate-200 rounded-2xl p-5 text-center text-slate-400 font-bold">
+                        {SHARE_FUNNEL_TEXT.empty}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {/* 業務最近客戶 */}
               {!isAdmin && (loading || customers.length > 0) && (

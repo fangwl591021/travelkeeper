@@ -123,6 +123,9 @@ async function d1GetShareAnalytics(env, query = {}) {
   if (shareId) { where.push('share_id = ?'); binds.push(shareId); }
   if (itineraryId) { where.push('itinerary_id = ?'); binds.push(itineraryId); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const monthWhereSql = where.length
+    ? `${whereSql} AND created_at >= datetime('now', 'start of month')`
+    : `WHERE created_at >= datetime('now', 'start of month')`;
 
   const summary = await env.DB.prepare(`
     SELECT event_type, COUNT(*) AS count
@@ -130,6 +133,30 @@ async function d1GetShareAnalytics(env, query = {}) {
       ${whereSql}
      GROUP BY event_type
      ORDER BY event_type
+  `).bind(...binds).all();
+
+  const monthSummary = await env.DB.prepare(`
+    SELECT event_type, COUNT(*) AS count
+      FROM share_events
+      ${monthWhereSql}
+     GROUP BY event_type
+     ORDER BY event_type
+  `).bind(...binds).all();
+
+  const topItineraries = await env.DB.prepare(`
+    SELECT
+      se.itinerary_id,
+      COALESCE(NULLIF(i.title, ''), se.itinerary_id) AS title,
+      SUM(CASE WHEN se.event_type = 'card_created' THEN 1 ELSE 0 END) AS cards,
+      SUM(CASE WHEN se.event_type = 'booking_landing' THEN 1 ELSE 0 END) AS landings,
+      SUM(CASE WHEN se.event_type = 'booking_order_created' THEN 1 ELSE 0 END) AS orders
+    FROM share_events se
+    LEFT JOIN itineraries i ON i.id = se.itinerary_id
+    ${whereSql}
+    GROUP BY se.itinerary_id, title
+    HAVING se.itinerary_id <> ''
+    ORDER BY orders DESC, landings DESC, cards DESC
+    LIMIT 10
   `).bind(...binds).all();
 
   const recent = await env.DB.prepare(`
@@ -140,10 +167,20 @@ async function d1GetShareAnalytics(env, query = {}) {
      LIMIT 50
   `).bind(...binds).all();
 
+  const toMap = (rows = []) => Object.fromEntries(
+    rows.map(row => [row.event_type, Number(row.count || 0)])
+  );
+  const totalMap = toMap(summary.results || []);
+  const monthMap = toMap(monthSummary.results || []);
+
   return {
     success: true,
     data: {
       summary: summary.results || [],
+      monthSummary: monthSummary.results || [],
+      total: totalMap,
+      month: monthMap,
+      topItineraries: topItineraries.results || [],
       recent: recent.results || [],
     },
   };
