@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>分享行程 | TravelKeeper</title>
+  <title>&#20998;&#20139;&#34892;&#31243; | TravelKeeper</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body {
@@ -36,15 +36,16 @@
       color: #fff;
       font-weight: 800;
       font-size: 16px;
+      cursor: pointer;
     }
     .error { color: #dc2626; }
   </style>
 </head>
 <body>
   <main class="box">
-    <h1>分享行程</h1>
-    <p id="status">正在準備 LINE 分享面板...</p>
-    <button id="retry" type="button" hidden>重新開啟分享</button>
+    <h1>&#20998;&#20139;&#34892;&#31243;</h1>
+    <p id="status">&#27491;&#22312;&#28310;&#20633; LINE &#20998;&#20139;&#38754;&#26495;...</p>
+    <button id="retry" type="button" hidden>&#37325;&#26032;&#38283;&#21855;&#20998;&#20139;</button>
   </main>
 
   <script>
@@ -60,19 +61,37 @@
       statusEl.className = isError ? 'error' : '';
     }
 
+    async function trackShareEvent(eventType) {
+      if (!shareId) return;
+      try {
+        await fetch(`${WORKER_URL}/api/share/event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            share_id: shareId,
+            event_type: eventType,
+            source: 'flex-share',
+            target_url: location.href,
+          }),
+        });
+      } catch (err) {
+        console.warn('share event failed:', err);
+      }
+    }
+
     async function loadMessage() {
-      if (!shareId) throw new Error('缺少分享代碼');
+      if (!shareId) throw new Error('\u7f3a\u5c11\u5206\u4eab\u4ee3\u78bc');
       const res = await fetch(`${WORKER_URL}/api/flex/share?id=${encodeURIComponent(shareId)}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success || !data.message) {
-        throw new Error(data.error || '讀取分享卡失敗');
+        throw new Error(data.error || '\u8b80\u53d6\u5206\u4eab\u5361\u5931\u6557');
       }
       return data.message;
     }
 
     async function share() {
       retryBtn.hidden = true;
-      setStatus('正在準備 LINE 分享面板...');
+      setStatus('\u6b63\u5728\u6e96\u5099 LINE \u5206\u4eab\u9762\u677f...');
       try {
         await liff.init({ liffId: LIFF_ID });
         if (!liff.isLoggedIn()) {
@@ -80,21 +99,24 @@
           return;
         }
         if (!liff.isApiAvailable('shareTargetPicker')) {
-          throw new Error('目前 LINE 環境不支援分享面板');
+          throw new Error('\u76ee\u524d LINE \u74b0\u5883\u4e0d\u652f\u63f4\u5206\u4eab\u9762\u677f');
         }
         const message = await loadMessage();
+        await trackShareEvent('share_panel_open');
         const result = await liff.shareTargetPicker([message]);
         if (result) {
-          setStatus('已開啟分享並送出。');
+          await trackShareEvent('card_sent');
+          setStatus('\u5df2\u958b\u555f\u5206\u4eab\u4e26\u9001\u51fa\u3002');
           setTimeout(() => {
             if (liff.isInClient()) liff.closeWindow();
           }, 600);
         } else {
-          setStatus('已取消分享。');
+          await trackShareEvent('card_cancelled');
+          setStatus('\u5df2\u53d6\u6d88\u5206\u4eab\u3002');
           retryBtn.hidden = false;
         }
       } catch (err) {
-        setStatus(err.message || '分享失敗，請稍後再試。', true);
+        setStatus(err.message || '\u5206\u4eab\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002', true);
         retryBtn.hidden = false;
       }
     }

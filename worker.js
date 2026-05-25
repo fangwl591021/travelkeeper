@@ -62,6 +62,93 @@ async function d1GetFlexShare(env, id) {
   return { success: true, id: row.id, message: JSON.parse(row.message_json || '{}') };
 }
 
+const SHARE_EVENT_TYPES = new Set([
+  'card_created',
+  'card_sent',
+  'card_cancelled',
+  'card_open',
+  'share_panel_open',
+  'booking_landing',
+  'booking_order_created',
+]);
+
+function shareEventText(value, max = 500) {
+  return String(value || '').trim().slice(0, max);
+}
+
+async function d1RecordShareEvent(env, request, fields = {}) {
+  if (!env.DB) return { success: false, error: 'D1 binding missing' };
+  const eventType = shareEventText(fields.event_type || fields.eventType, 64);
+  if (!SHARE_EVENT_TYPES.has(eventType)) {
+    return { success: false, error: 'INVALID_EVENT_TYPE' };
+  }
+
+  const cfIp = request?.headers?.get('cf-connecting-ip') || request?.headers?.get('x-forwarded-for') || '';
+  const ipHash = cfIp ? await sha256Hex(`${cfIp}:${env.SHARE_EVENT_SALT || 'travelkeeper-share'}`) : '';
+  const metadata = fields.metadata && typeof fields.metadata === 'object' ? fields.metadata : {};
+  const id = crypto.randomUUID();
+
+  await env.DB.prepare(`
+    INSERT INTO share_events (
+      id, share_id, distributor_uid, invite_code, itinerary_id, order_id,
+      event_type, target_url, source, user_agent, ip_hash, referrer, metadata_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(
+    id,
+    shareEventText(fields.share_id || fields.shareId, 80),
+    shareEventText(fields.distributor_uid || fields.distributorUid || fields.uid, 80),
+    shareEventText(fields.invite_code || fields.inviteCode, 80),
+    shareEventText(fields.itinerary_id || fields.itineraryId, 80),
+    shareEventText(fields.order_id || fields.orderId, 80),
+    eventType,
+    shareEventText(fields.target_url || fields.targetUrl, 1000),
+    shareEventText(fields.source, 120),
+    shareEventText(request?.headers?.get('user-agent'), 500),
+    ipHash,
+    shareEventText(request?.headers?.get('referer'), 1000),
+    JSON.stringify(metadata).slice(0, 2000)
+  ).run();
+
+  return { success: true, id };
+}
+
+async function d1GetShareAnalytics(env, query = {}) {
+  if (!env.DB) return { success: false, error: 'D1 binding missing' };
+  const uid = shareEventText(query.uid || query.distributor_uid || query.distributorUid, 80);
+  const shareId = shareEventText(query.share_id || query.shareId, 80);
+  const itineraryId = shareEventText(query.itinerary_id || query.itineraryId, 80);
+  const where = [];
+  const binds = [];
+  if (uid) { where.push('distributor_uid = ?'); binds.push(uid); }
+  if (shareId) { where.push('share_id = ?'); binds.push(shareId); }
+  if (itineraryId) { where.push('itinerary_id = ?'); binds.push(itineraryId); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const summary = await env.DB.prepare(`
+    SELECT event_type, COUNT(*) AS count
+      FROM share_events
+      ${whereSql}
+     GROUP BY event_type
+     ORDER BY event_type
+  `).bind(...binds).all();
+
+  const recent = await env.DB.prepare(`
+    SELECT share_id, distributor_uid, invite_code, itinerary_id, order_id, event_type, target_url, source, created_at
+      FROM share_events
+      ${whereSql}
+     ORDER BY created_at DESC
+     LIMIT 50
+  `).bind(...binds).all();
+
+  return {
+    success: true,
+    data: {
+      summary: summary.results || [],
+      recent: recent.results || [],
+    },
+  };
+}
+
 async function d1GetConfig(env, slug = 'demo') {
   if (!env.DB) throw new Error('D1 binding missing');
   const row = await env.DB.prepare(
@@ -5312,14 +5399,16 @@ export default {
 
         // ???? URL嚗IFF嚗?
         const inviteParam = inviteCode ? `&invite=${encodeURIComponent(inviteCode)}` : '';
+        const shareId = env.DB ? makeFlexShareId() : '';
+        const shareParam = shareId ? `&sid=${encodeURIComponent(shareId)}` : '';
         const buildBookingUri = (itineraryId) =>
           liffId
-            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}`
-            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}`;
+            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}${shareParam}`
+            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}${shareParam}`;
 
         // ??銵?閰單???URL ??摰Ｘ?汗??tour.html嚗?閰單???銝璆剖?撌亙嚗?
         const buildDetailUri = (itineraryId) =>
-          `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}${inviteParam}`;
+          `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}${inviteParam}${shareParam}`;
 
         const safeImageUrl = (url, fallback = 'https://via.placeholder.com/1040x1040') => {
           const value = String(url || '').trim();
@@ -5494,7 +5583,6 @@ export default {
             titleText,
             buildDetailUri(firstId)
           ].join('\n');
-          const shareId = env.DB ? makeFlexShareId() : '';
           const shareCardUri = shareId
             ? (liffId
               ? `https://liff.line.me/${liffId}/flex-share.html?s=${encodeURIComponent(shareId)}`
@@ -5631,7 +5719,19 @@ export default {
           flex = { type: 'flex', altText: `行程推薦：${items[0].title}`, contents: mode === 'carousel' ? { type: 'carousel', contents: bubbles } : bubbles[0] };
         }
 
-        return json({ success: true, flex, message: flex, count: items.length });
+        if (shareId) {
+          await d1RecordShareEvent(env, request, {
+            share_id: shareId,
+            distributor_uid: uid,
+            invite_code: inviteCode,
+            itinerary_id: finalIds[0] || '',
+            event_type: 'card_created',
+            source: `flex:${mode}`,
+            metadata: { mode, itineraryIds: finalIds, count: items.length },
+          }).catch(err => console.warn('record share card_created failed:', err.message));
+        }
+
+        return json({ success: true, flex, message: flex, count: items.length, shareId: shareId || '' });
       }
 
       if (path === '/api/flex/share' && request.method === 'GET') {
@@ -5639,7 +5739,34 @@ export default {
         const result = env.DB
           ? await d1GetFlexShare(env, id)
           : { success: false, error: 'D1 binding missing' };
+        if (result.success && env.DB) {
+          await d1RecordShareEvent(env, request, {
+            share_id: id,
+            event_type: 'card_open',
+            source: 'flex-share',
+          }).catch(err => console.warn('record share card_open failed:', err.message));
+        }
         return json(result, result.success ? 200 : 404);
+      }
+
+      if (path === '/api/share/event' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const result = await d1RecordShareEvent(env, request, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/share/analytics' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        const isAdmin = await isAdminUid(env, uid);
+        const distributorUid = url.searchParams.get('distributor_uid') || url.searchParams.get('distributorUid') || '';
+        if (!isAdmin && distributorUid && distributorUid !== uid) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1GetShareAnalytics(env, {
+          uid: isAdmin ? distributorUid : uid,
+          share_id: url.searchParams.get('share_id') || url.searchParams.get('shareId') || '',
+          itinerary_id: url.searchParams.get('itinerary_id') || url.searchParams.get('itineraryId') || '',
+        });
+        return json(result);
       }
 
       if (path === '/api/orders/status' && request.method === 'GET') {
@@ -5762,6 +5889,17 @@ export default {
         // 2. ??Telegram ?嚗閰脣??瑕??芸楛??Bot嚗仃?????殷?
         const dist  = result.data.distributor;
         const order = result.data.order;
+        if (body.share_id || body.shareId || body.sid) {
+          await d1RecordShareEvent(env, request, {
+            share_id: body.share_id || body.shareId || body.sid,
+            distributor_uid: body.distributor_uid || '',
+            invite_code: body.invite_code || '',
+            itinerary_id: body.itinerary_id || '',
+            order_id: order.order_id || '',
+            event_type: 'booking_order_created',
+            source: 'booking',
+          }).catch(err => console.warn('record share booking_order_created failed:', err.message));
+        }
         const tgToken  = dist?.tgToken  || dist?.tgtoken  || '';
         const tgChatId = dist?.tgChatId || dist?.tgchatid || '';
         if (tgToken && tgChatId) {

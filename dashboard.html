@@ -1894,6 +1894,22 @@ function App() {
 
       // 2. \u7528 liff.shareTargetPicker \u559a\u8d77 LINE \u539f\u751f\u5206\u4eab\u9762\u677f
       const shareResult = await liff.shareTargetPicker([result.message]);
+      if (result.shareId) {
+        fetch(WORKER_URL + '/api/share/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            share_id: result.shareId,
+            distributor_uid: profile.userId,
+            invite_code: myInviteCode,
+            itinerary_id: ids[0] || '',
+            event_type: shareResult ? 'card_sent' : 'card_cancelled',
+            source: 'dashboard',
+            target_url: window.location.href,
+            metadata: { mode, itineraryIds: ids.map(String) },
+          }),
+        }).catch(err => console.warn('share event failed:', err));
+      }
       if (shareResult) {
         showToast('\u2705 \u5df2\u5206\u4eab\u7d66 ' + (shareResult.status === 'success' ? '\u9078\u5b9a\u5c0d\u8c61' : ''));
         setSelPromote(null);

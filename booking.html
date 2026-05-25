@@ -91,6 +91,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       const agencySlug = p.get('a') || 'demo';
       const itineraryId = p.get('itinerary') || '';
       const distributorUid = p.get('ref') || '';
+      const shareId = p.get('sid') || p.get('share_id') || p.get('shareId') || '';
       // ★ v3：推薦碼（新版優先；統一轉大寫，避開大小寫差異）
       const inviteCode = (p.get('invite') || '').trim().toUpperCase();
 
@@ -105,6 +106,28 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
         customer_name:'', customer_phone:'', travelers:2, travel_date:'', note:''
       });
       const [errMsg, setErr] = useState('');
+
+      const trackShareEvent = async (eventType, extra = {}) => {
+        if (!shareId) return;
+        try {
+          await fetch(`${WORKER_URL}/api/share/event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              share_id: shareId,
+              distributor_uid: distributorUid || resolvedDistributorUid || '',
+              invite_code: inviteCode,
+              itinerary_id: itineraryId,
+              event_type: eventType,
+              source: 'booking',
+              target_url: window.location.href,
+              metadata: extra,
+            }),
+          });
+        } catch (err) {
+          console.warn('[booking] share event failed:', err);
+        }
+      };
 
       useEffect(() => {
         (async () => {
@@ -170,6 +193,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
             if (found) {
               console.log('[booking] ✅ found itinerary:', found.title);
               setItinerary(found);
+              await trackShareEvent('booking_landing', { title: found.title || '' });
             } else {
               console.error('[booking] ❌ itinerary not found in list');
               setErr(`找不到行程 ID: ${itineraryId}`);
@@ -205,6 +229,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
             note: form.note,
           };
           if (inviteCode)      body.invite_code     = inviteCode;
+          if (shareId)         body.share_id        = shareId;
           const finalDistributorUid = distributorUid || resolvedDistributorUid;
           if (finalDistributorUid) body.distributor_uid = finalDistributorUid;
 
