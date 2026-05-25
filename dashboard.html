@@ -423,6 +423,7 @@ function DistModal({ dist, onClose, onApprove, onReject }) {
     ['LINE 個人',  dist.linelink     || dist.lineLink],
     ['LINE@',      dist.lineatlink   || dist.lineAtLink],
     ['Facebook',   dist.fblink       || dist.fbLink],
+    ['Instagram',  dist.iglink       || dist.igLink],
     ['網站',       dist.weblink      || dist.webLink],
     ['地圖連結',   dist.maplink      || dist.mapLink],
     ['佣金比例',   dist.commission   ? `${dist.commission}%` : '—'],
@@ -732,6 +733,7 @@ function PromoteModal({
     { key: 'line',       label: '💬 LINE',      field: 'lineLink'   },
     { key: 'lineAt',     label: '📢 LINE@',     field: 'lineAtLink' },
     { key: 'fb',         label: '📘 Facebook',  field: 'fbLink'     },
+    { key: 'ig',         label: '📸 Instagram', field: 'igLink'     },
     { key: 'web',        label: '🌐 網站',      field: 'webLink'    },
     { key: 'map',        label: '📍 地圖',      field: 'mapLink'    },
   ];
@@ -950,7 +952,7 @@ function PromoteModal({
           </p>
           {availableSocs.length === 0 ? (
             <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg">
-              您尚未填寫任何聯絡方式（電話、LINE、FB 等）。要顯示聯絡按鈕，請先在分銷商管理填寫。
+              您尚未填寫任何聯絡方式（電話、LINE、FB 等）。要顯示聯絡按鈕，請先到「我的社群」填寫。
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -1045,6 +1047,7 @@ function buildMenu({ isAdmin, canUpload, badges }) {
     { id:'commission',   icon:'💰', label: isAdmin ? '佣金結算' : '我的佣金', show:true,
       badge: badges.payableCount },
     { id:'customers',    icon:'👤', label:'我的客戶',   show: !isAdmin },
+    { id:'social-profile', icon:'🔗', label:'我的社群', show: !isAdmin },
     // ★ v8：推廣行程（雙角色都看得到，全平台 published）
     { id:'promote',      icon:'🎯', label:'推廣行程',   show:true },
     // ★ v8：「我的行程」改名「我上稿的」（只看自己投稿的，含審核狀態）
@@ -1115,6 +1118,7 @@ function App() {
   const [selCustomer,setSelCustomer]= useState(null);
   const [customerOrders,setCustomerOrders] = useState([]);
   const [loadingCustOrders,setLoadingCustOrders] = useState(false);
+  const [socialSaving, setSocialSaving] = useState(false);
 
   // ★ v7 金流中心 state
   const [paymentSearch,    setPaymentSearch]    = useState('');
@@ -1313,6 +1317,12 @@ function App() {
     if (targetView === 'customers') {
       const customersRes = await fetchJson(`${WORKER_URL}/api/my/customers?uid=${userId}`, { data: [] });
       setCustomers(customersRes?.data || []);
+      return;
+    }
+
+    if (targetView === 'social-profile') {
+      const profileRes = await fetchJson(`${WORKER_URL}/api/dist/profile?uid=${encodeURIComponent(userId)}`, null);
+      if (profileRes?.success) setDistData(profileRes.data);
       return;
     }
 
@@ -1670,6 +1680,42 @@ function App() {
   };
 
   // ── 推薦碼/連結（業務專屬）──
+  const updateSocialField = (key, value) => {
+    setDistData(prev => ({ ...(prev || {}), [key]: value }));
+  };
+
+  const saveSocialProfile = async () => {
+    if (!profile?.userId) return;
+    setSocialSaving(true);
+    try {
+      const payload = {
+        uid: profile.userId,
+        phone: distData?.phone || '',
+        lineLink: distData?.lineLink || '',
+        lineAtLink: distData?.lineAtLink || '',
+        lineAtId: distData?.lineAtId || '',
+        fbLink: distData?.fbLink || '',
+        igLink: distData?.igLink || '',
+        webLink: distData?.webLink || '',
+        mapLink: distData?.mapLink || '',
+        bio: distData?.bio || '',
+      };
+      const res = await fetch(`${WORKER_URL}/api/dist/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || '儲存失敗');
+      setDistData(result.data);
+      showToast('社群按鈕資料已更新');
+    } catch (err) {
+      showToast(err.message || '社群資料儲存失敗', 'error');
+    } finally {
+      setSocialSaving(false);
+    }
+  };
+
   const copyInviteLink = () => {
     const code = distData?.inviteCode;
     if (!code) { showToast('尚無推薦碼', 'error'); return; }
@@ -2597,6 +2643,99 @@ function App() {
           )}
 
           {/* ── 分銷商管理（管理員）── */}
+          {view === 'social-profile' && !isAdmin && (
+            <div className="space-y-6 anim">
+              <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 flex items-center gap-3">
+                    <span>🔗</span> 我的社群按鈕
+                  </h1>
+                  <p className="text-slate-500 font-medium mt-2">
+                    維護電話、LINE、網站與地圖連結，推廣分享卡就能掛上你的專屬聯絡按鈕。
+                  </p>
+                </div>
+                <button onClick={() => goView('promote')}
+                  className="px-6 py-3 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800">
+                  前往推廣行程
+                </button>
+              </div>
+
+              <div className="grid xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 space-y-5">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {[
+                      { key:'phone', label:'電話', placeholder:'例如：0912-345-678' },
+                      { key:'lineLink', label:'LINE 個人連結', placeholder:'https://line.me/ti/p/...' },
+                      { key:'lineAtLink', label:'LINE@ / 官方帳號連結', placeholder:'https://lin.ee/...' },
+                      { key:'lineAtId', label:'LINE@ ID', placeholder:'例如：@travelkeeper' },
+                      { key:'fbLink', label:'Facebook', placeholder:'https://facebook.com/...' },
+                      { key:'igLink', label:'Instagram', placeholder:'https://instagram.com/...' },
+                      { key:'webLink', label:'網站', placeholder:'https://...' },
+                      { key:'mapLink', label:'Google 地圖', placeholder:'https://maps.app.goo.gl/...' },
+                    ].map(field => (
+                      <label key={field.key} className="block">
+                        <span className="block text-sm font-black text-slate-600 mb-2">{field.label}</span>
+                        <input value={distData?.[field.key] || ''}
+                          onChange={e => updateSocialField(field.key, e.target.value)}
+                          placeholder={field.placeholder}
+                          className="w-full p-4 border-2 border-slate-100 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
+                      </label>
+                    ))}
+                  </div>
+
+                  <label className="block">
+                    <span className="block text-sm font-black text-slate-600 mb-2">簡介 / 服務說明</span>
+                    <textarea value={distData?.bio || ''}
+                      onChange={e => updateSocialField('bio', e.target.value)}
+                      rows="4"
+                      placeholder="例如：專營日本、郵輪與親子旅遊，可協助規劃行程與報價。"
+                      className="w-full p-4 border-2 border-slate-100 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white resize-none" />
+                  </label>
+
+                  <button onClick={saveSocialProfile} disabled={socialSaving}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white p-4 rounded-2xl font-black text-lg transition">
+                    {socialSaving ? '儲存中...' : '儲存社群按鈕'}
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest">分享卡預覽</p>
+                    <h2 className="text-2xl font-black text-slate-900 mt-2">{distData?.name || profile?.displayName || '我的名片'}</h2>
+                    <p className="text-sm text-slate-500 mt-1">推薦碼：{distData?.inviteCode || '尚未取得'}</p>
+                    <div className="mt-5 grid grid-cols-2 gap-2">
+                      {[
+                        { key:'phone', label:'電話' },
+                        { key:'lineLink', label:'LINE' },
+                        { key:'lineAtLink', label:'LINE@' },
+                        { key:'fbLink', label:'Facebook' },
+                        { key:'igLink', label:'Instagram' },
+                        { key:'webLink', label:'網站' },
+                        { key:'mapLink', label:'地圖' },
+                      ].filter(item => String(distData?.[item.key] || '').trim()).map(item => (
+                        <span key={item.key}
+                          className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-black text-center">
+                          {item.label}
+                        </span>
+                      ))}
+                      {[
+                        'phone','lineLink','lineAtLink','fbLink','igLink','webLink','mapLink'
+                      ].every(key => !String(distData?.[key] || '').trim()) && (
+                        <p className="col-span-2 text-sm text-slate-400 bg-slate-50 rounded-2xl p-4">
+                          目前沒有可放進分享卡的聯絡按鈕。
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-100 rounded-[2rem] p-5 text-sm text-amber-800 leading-relaxed">
+                    儲存後，製作推廣卡時勾選的聯絡方式會帶入這裡的網址。沒有填寫的項目不會出現在分享卡。
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {view === 'distributors' && isAdmin && (
             <div className="space-y-6 anim">
               <div className="grid xl:grid-cols-3 gap-5">
