@@ -2789,20 +2789,25 @@ async function d1GetLineCrm(env) {
   const rows = results || [];
   if (!rows.length) return { success: true, data: [] };
 
-  const ids = rows.map(row => String(row.id || '')).filter(Boolean);
-  const placeholders = ids.map(() => '?').join(',');
   const recordMap = new Map();
-  if (ids.length) {
+  if (rows.length) {
     const recordRows = await env.DB.prepare(`
-      SELECT *
+      WITH recent_threads AS (
+        SELECT id
+        FROM line_threads
+        ORDER BY COALESCE(last_message_at, created_at) DESC
+        LIMIT 500
+      )
+      SELECT req.*
       FROM line_visitor_requirements
+      AS req
+      INNER JOIN recent_threads rt ON rt.id = req.thread_id
       WHERE archived_at = ''
-        AND thread_id IN (${placeholders})
       ORDER BY
         CASE priority WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
         updated_at DESC,
         created_at DESC
-    `).bind(...ids).all();
+    `).all();
     for (const record of (recordRows.results || [])) {
       const item = normalizeLineVisitorRequirement(record);
       const list = recordMap.get(item.threadId) || [];
