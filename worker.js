@@ -2410,6 +2410,9 @@ async function d1GetLineThreads(env) {
       unread_count,
       tags,
       note,
+      opportunity_stage,
+      opportunity_value,
+      opportunity_note,
       (
         SELECT COUNT(*)
         FROM line_visitor_requirements req
@@ -2447,6 +2450,9 @@ async function d1GetLineThreads(env) {
       assignedTo: row.assigned_to || '',
       tags: String(row.tags || '').split(',').map(v => v.trim()).filter(Boolean),
       note: row.note || '',
+      opportunityStage: row.opportunity_stage || 'new',
+      opportunityValue: Number(row.opportunity_value || 0),
+      opportunityNote: row.opportunity_note || '',
       importantCount: Number(row.important_count || 0),
       latestImportantNote: row.latest_important_note || '',
       lastMessageAt: row.last_message_at || '',
@@ -2454,8 +2460,29 @@ async function d1GetLineThreads(env) {
   };
 }
 
+async function ensureLineThreadOpportunityColumns(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const statements = [
+    `ALTER TABLE line_threads ADD COLUMN opportunity_stage TEXT NOT NULL DEFAULT 'new' CHECK (opportunity_stage IN ('new', 'qualified', 'quoted', 'payment', 'won', 'lost'))`,
+    `ALTER TABLE line_threads ADD COLUMN opportunity_value INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE line_threads ADD COLUMN opportunity_note TEXT NOT NULL DEFAULT ''`,
+  ];
+  for (const sql of statements) {
+    try {
+      await env.DB.prepare(sql).run();
+    } catch (err) {
+      if (!String(err?.message || err).toLowerCase().includes('duplicate column')) throw err;
+    }
+  }
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_threads_opportunity_stage
+    ON line_threads(opportunity_stage, updated_at)
+  `).run();
+}
+
 async function ensureLineVisitorRequirementsTable(env) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineThreadOpportunityColumns(env);
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS line_visitor_requirements (
       id TEXT PRIMARY KEY,
@@ -2542,6 +2569,9 @@ async function d1GetLineThread(env, threadId) {
       unread_count,
       tags,
       note,
+      opportunity_stage,
+      opportunity_value,
+      opportunity_note,
       (
         SELECT COUNT(*)
         FROM line_visitor_requirements req
@@ -2584,6 +2614,9 @@ async function d1GetLineThread(env, threadId) {
       assignedTo: thread.assigned_to || '',
       tags: String(thread.tags || '').split(',').map(v => v.trim()).filter(Boolean),
       note: thread.note || '',
+      opportunityStage: thread.opportunity_stage || 'new',
+      opportunityValue: Number(thread.opportunity_value || 0),
+      opportunityNote: thread.opportunity_note || '',
       importantCount: Number(thread.important_count || visitorRecords.length || 0),
       latestImportantNote: thread.latest_important_note || visitorRecords[0]?.content || '',
       visitorRecords,
@@ -2678,6 +2711,7 @@ async function d1BackfillLineThreadProfiles(env, limit = 100) {
 
 async function d1UpdateLineThread(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineThreadOpportunityColumns(env);
   const threadId = String(body.id || '').trim();
   if (!threadId) return { success: false, error: '蝻箏??予摰?id' };
   const tags = Array.isArray(body.tags)
@@ -2686,7 +2720,16 @@ async function d1UpdateLineThread(env, body = {}) {
   const status = ['open', 'pending', 'closed'].includes(String(body.status || ''))
     ? String(body.status)
     : null;
+  const opportunityStage = ['new', 'qualified', 'quoted', 'payment', 'won', 'lost'].includes(String(body.opportunityStage || body.opportunity_stage || ''))
+    ? String(body.opportunityStage || body.opportunity_stage)
+    : null;
   const note = body.note === undefined ? null : String(body.note || '');
+  const opportunityNote = body.opportunityNote === undefined && body.opportunity_note === undefined
+    ? null
+    : String(body.opportunityNote ?? body.opportunity_note ?? '');
+  const opportunityValue = body.opportunityValue === undefined && body.opportunity_value === undefined
+    ? null
+    : Math.max(0, Math.round(Number(body.opportunityValue ?? body.opportunity_value ?? 0) || 0));
   const sets = [];
   const values = [];
   if (status !== null) {
@@ -2696,6 +2739,18 @@ async function d1UpdateLineThread(env, body = {}) {
   if (note !== null) {
     sets.push('note = ?');
     values.push(note);
+  }
+  if (opportunityStage !== null) {
+    sets.push('opportunity_stage = ?');
+    values.push(opportunityStage);
+  }
+  if (opportunityValue !== null) {
+    sets.push('opportunity_value = ?');
+    values.push(opportunityValue);
+  }
+  if (opportunityNote !== null) {
+    sets.push('opportunity_note = ?');
+    values.push(opportunityNote);
   }
   if (body.tags !== undefined) {
     sets.push('tags = ?');
