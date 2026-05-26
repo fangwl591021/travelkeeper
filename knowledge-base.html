@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知識庫 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f3f7fb; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900">
+  <main class="max-w-7xl mx-auto px-5 py-8">
+    <header class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between mb-8">
+      <div>
+        <p class="text-xs tracking-[0.28em] text-slate-400 font-bold uppercase">TravelKeeper Knowledge</p>
+        <h1 class="text-4xl md:text-5xl font-black mt-2">知識庫</h1>
+        <p class="text-slate-500 mt-3 max-w-3xl leading-7">
+          用資料夾整理 JSON 知識檔。AI 會先讀 manifest，再依分類載入已發布的知識內容。
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="./dashboard.html" class="rounded-2xl bg-white border border-slate-200 px-5 py-3 font-bold hover:bg-slate-50">回儀表板</a>
+        <a href="./line-oa-monitor.html" class="rounded-2xl bg-slate-900 text-white px-5 py-3 font-bold hover:bg-slate-800">LINE OA 監看</a>
+      </div>
+    </header>
+
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div class="rounded-3xl bg-slate-900 text-white p-6">
+        <p id="stat-files" class="text-4xl font-black">0</p>
+        <p class="mt-2 text-white/80 font-bold">知識檔</p>
+      </div>
+      <div class="rounded-3xl bg-blue-600 text-white p-6">
+        <p id="stat-entries" class="text-4xl font-black">0</p>
+        <p class="mt-2 text-white/80 font-bold">問答段落</p>
+      </div>
+      <div class="rounded-3xl bg-emerald-600 text-white p-6">
+        <p id="stat-folders" class="text-4xl font-black">0</p>
+        <p class="mt-2 text-white/80 font-bold">資料夾</p>
+      </div>
+      <div class="rounded-3xl bg-amber-500 text-white p-6">
+        <p id="stat-version" class="text-2xl font-black truncate">-</p>
+        <p class="mt-2 text-white/80 font-bold">版本</p>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-[330px,1fr] gap-6">
+      <aside class="space-y-5">
+        <div class="rounded-3xl bg-white border border-slate-200 p-5">
+          <h2 class="text-xl font-black">資料夾</h2>
+          <p class="text-sm text-slate-500 mt-1">點選資料夾檢視內容。</p>
+          <div id="folder-list" class="mt-4 space-y-2"></div>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-slate-200 p-5">
+          <h2 class="text-xl font-black">JSON 檢查</h2>
+          <p class="text-sm text-slate-500 mt-1 leading-6">先在 AI 或文字編輯器整理 JSON，這裡可先檢查格式與欄位。</p>
+          <input id="json-file" type="file" accept=".json,application/json" class="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 bg-white">
+          <input id="json-path" type="text" placeholder="knowledge/qa/example.json" class="mt-3 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+          <button id="validate-json" type="button" class="mt-3 w-full rounded-2xl bg-emerald-500 text-white px-4 py-3 font-bold hover:bg-emerald-600">檢查 JSON</button>
+          <button id="upload-json" type="button" class="mt-3 w-full rounded-2xl bg-blue-600 text-white px-4 py-3 font-bold hover:bg-blue-700">上傳到知識庫</button>
+          <button id="copy-template" type="button" class="mt-3 w-full rounded-2xl bg-slate-100 text-slate-700 px-4 py-3 font-bold hover:bg-slate-200">複製範本</button>
+          <div id="validate-result" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 leading-6">
+            尚未選擇檔案。
+          </div>
+        </div>
+      </aside>
+
+      <section class="space-y-5">
+        <div class="rounded-3xl bg-white border border-slate-200 p-5">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 id="folder-title" class="text-2xl font-black">全部知識</h2>
+              <p id="folder-subtitle" class="text-sm text-slate-500 mt-1">讀取中...</p>
+            </div>
+            <input id="search" type="search" placeholder="搜尋標題、關鍵字、標籤..." class="w-full md:w-80 rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+          </div>
+        </div>
+
+        <div id="file-list" class="space-y-4"></div>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-2xl bg-slate-900 text-white px-5 py-3 font-bold shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const MANIFEST_URL = './knowledge/manifest.json';
+    let manifest = null;
+    let documents = [];
+    let activeFolder = 'all';
+    let profile = null;
+    let manifestSource = 'local';
+
+    const folderListEl = document.getElementById('folder-list');
+    const fileListEl = document.getElementById('file-list');
+    const folderTitleEl = document.getElementById('folder-title');
+    const folderSubtitleEl = document.getElementById('folder-subtitle');
+    const searchEl = document.getElementById('search');
+    const toastEl = document.getElementById('toast');
+
+    function showToast(text) {
+      toastEl.textContent = text;
+      toastEl.hidden = false;
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => { toastEl.hidden = true; }, 2200);
+    }
+
+    function normalize(value) {
+      return String(value || '').toLowerCase();
+    }
+
+    async function loadJson(path) {
+      const res = await fetch('./' + String(path || '').replace(/^\.?\//, ''), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`${path} 讀取失敗 (${res.status})`);
+      return res.json();
+    }
+
+    async function loadWorkerJson(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`知識庫 API 讀取失敗 (${res.status})`);
+      const payload = await res.json();
+      if (payload?.success === false) throw new Error(payload.error || 'KNOWLEDGE_API_FAILED');
+      return payload?.data || payload;
+    }
+
+    async function loadManifest() {
+      try {
+        const remote = await loadWorkerJson(`${WORKER_URL}/api/knowledge/manifest`);
+        if (Array.isArray(remote?.files) && remote.files.length) {
+          manifestSource = 'worker';
+          return remote;
+        }
+      } catch (_err) {}
+      manifestSource = 'local';
+      return loadJson(MANIFEST_URL);
+    }
+
+    async function loadDocument(file) {
+      if (manifestSource === 'worker') {
+        return loadWorkerJson(`${WORKER_URL}/api/knowledge/file?path=${encodeURIComponent(file.path || '')}`);
+      }
+      return loadJson(file.path);
+    }
+
+    function groupedFolders() {
+      const map = new Map();
+      documents.forEach(doc => {
+        const folder = doc.manifestItem?.folder || 'uncategorized';
+        if (!map.has(folder)) map.set(folder, []);
+        map.get(folder).push(doc);
+      });
+      return map;
+    }
+
+    function renderStats() {
+      const folders = groupedFolders();
+      const entries = documents.reduce((sum, doc) => sum + (Array.isArray(doc.entries) ? doc.entries.length : 0), 0);
+      document.getElementById('stat-files').textContent = String(documents.length);
+      document.getElementById('stat-entries').textContent = String(entries);
+      document.getElementById('stat-folders').textContent = String(folders.size);
+      document.getElementById('stat-version').textContent = manifest?.version || '-';
+    }
+
+    function renderFolders() {
+      const folders = groupedFolders();
+      folderListEl.innerHTML = '';
+      const rows = [['all', '全部知識', documents.length], ...[...folders.entries()].map(([folder, docs]) => [folder, folder, docs.length])];
+      rows.forEach(([id, label, count]) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `w-full rounded-2xl px-4 py-3 text-left font-bold flex items-center justify-between ${activeFolder === id ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`;
+        button.innerHTML = `<span>📁 ${label}</span><span>${count}</span>`;
+        button.addEventListener('click', () => {
+          activeFolder = id;
+          render();
+        });
+        folderListEl.appendChild(button);
+      });
+    }
+
+    function docMatches(doc, keyword) {
+      if (!keyword) return true;
+      const entries = Array.isArray(doc.entries) ? doc.entries : [];
+      const haystack = [
+        doc.title, doc.source, doc.category, doc.usage,
+        ...entries.flatMap(entry => [entry.title, ...(entry.keywords || []), ...(entry.tags || []), entry.answer, entry.reply_template]),
+      ].join(' ');
+      return normalize(haystack).includes(normalize(keyword));
+    }
+
+    function renderFiles() {
+      const keyword = searchEl.value.trim();
+      const rows = documents.filter(doc => {
+        const folder = doc.manifestItem?.folder || 'uncategorized';
+        return (activeFolder === 'all' || activeFolder === folder) && docMatches(doc, keyword);
+      });
+      folderTitleEl.textContent = activeFolder === 'all' ? '全部知識' : `資料夾：${activeFolder}`;
+      folderSubtitleEl.textContent = `${rows.length} 個知識檔，資料來源由 ${manifestSource === 'worker' ? 'R2 知識庫' : '本機 knowledge 資料夾'} manifest 管理。`;
+      fileListEl.innerHTML = '';
+      if (!rows.length) {
+        fileListEl.innerHTML = '<div class="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400 font-bold">沒有符合條件的知識檔。</div>';
+        return;
+      }
+
+      rows.forEach(doc => {
+        const entries = Array.isArray(doc.entries) ? doc.entries : [];
+        const card = document.createElement('article');
+        card.className = 'rounded-3xl bg-white border border-slate-200 overflow-hidden';
+        card.innerHTML = `
+          <div class="p-5 border-b border-slate-100">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p class="text-xs text-slate-400 font-bold uppercase">${doc.category || doc.manifestItem?.category || ''}</p>
+                <h3 class="text-2xl font-black mt-1">${doc.title || doc.manifestItem?.title || '未命名知識檔'}</h3>
+                <p class="text-sm text-slate-500 mt-2">${doc.source || ''}</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span class="rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-bold">${doc.status || doc.manifestItem?.status || 'published'}</span>
+                <span class="rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs font-bold">${entries.length} 段</span>
+              </div>
+            </div>
+            <p class="text-sm text-slate-500 leading-6 mt-3">${doc.usage || ''}</p>
+            ${doc.source_url ? `<a class="inline-block text-sm text-blue-600 font-bold mt-3" href="${doc.source_url}" target="_blank" rel="noreferrer">查看來源</a>` : ''}
+          </div>
+          <div class="divide-y divide-slate-100">
+            ${entries.map(entry => `
+              <details class="p-5">
+                <summary class="cursor-pointer font-black text-lg">${entry.title || entry.id}</summary>
+                <div class="mt-3 space-y-3 text-sm leading-7 text-slate-600">
+                  <p><span class="font-bold text-slate-900">關鍵字：</span>${(entry.keywords || []).join('、')}</p>
+                  <p><span class="font-bold text-slate-900">標籤：</span>${(entry.tags || []).join('、')}</p>
+                  <p><span class="font-bold text-slate-900">客服建議：</span>${entry.reply_template || entry.answer || ''}</p>
+                </div>
+              </details>
+            `).join('')}
+          </div>
+        `;
+        fileListEl.appendChild(card);
+      });
+    }
+
+    function render() {
+      renderStats();
+      renderFolders();
+      renderFiles();
+    }
+
+    function validateKnowledgeJson(data) {
+      const issues = [];
+      if (!data || typeof data !== 'object') issues.push('JSON 必須是物件');
+      if (!data.id) issues.push('缺少 id');
+      if (!data.title) issues.push('缺少 title');
+      if (!Array.isArray(data.entries)) issues.push('缺少 entries 陣列');
+      (data.entries || []).forEach((entry, index) => {
+        if (!entry.id) issues.push(`第 ${index + 1} 段缺少 id`);
+        if (!entry.title) issues.push(`第 ${index + 1} 段缺少 title`);
+        if (!Array.isArray(entry.keywords)) issues.push(`第 ${index + 1} 段缺少 keywords 陣列`);
+        if (!entry.reply_template && !entry.answer) issues.push(`第 ${index + 1} 段缺少 reply_template 或 answer`);
+      });
+      return issues;
+    }
+
+    document.getElementById('validate-json').addEventListener('click', async () => {
+      const file = document.getElementById('json-file').files?.[0];
+      const resultEl = document.getElementById('validate-result');
+      if (!file) {
+        resultEl.textContent = '請先選擇 JSON 檔。';
+        return;
+      }
+      try {
+        const data = JSON.parse(await file.text());
+        const issues = validateKnowledgeJson(data);
+        resultEl.className = `mt-4 rounded-2xl border border-dashed px-4 py-3 text-sm leading-6 ${issues.length ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`;
+        resultEl.innerHTML = issues.length
+          ? `<strong>需要修正：</strong><br>${issues.join('<br>')}`
+          : `格式通過。檔名建議放到 knowledge/${data.category || 'custom'}/${file.name}，再加入 manifest.json。`;
+      } catch (err) {
+        resultEl.className = 'mt-4 rounded-2xl border border-dashed border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700 leading-6';
+        resultEl.textContent = err.message;
+      }
+    });
+
+    document.getElementById('upload-json').addEventListener('click', async () => {
+      const file = document.getElementById('json-file').files?.[0];
+      const pathInput = document.getElementById('json-path');
+      const resultEl = document.getElementById('validate-result');
+      if (!profile?.userId) {
+        resultEl.textContent = '尚未取得 LINE 管理員身分，請從線上頁面登入後再上傳。';
+        return;
+      }
+      if (!file) {
+        resultEl.textContent = '請先選擇 JSON 檔。';
+        return;
+      }
+      const key = String(pathInput.value || '').trim() || `knowledge/custom/${file.name}`;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const issues = validateKnowledgeJson(data);
+        if (issues.length) {
+          resultEl.className = 'mt-4 rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-700 leading-6';
+          resultEl.innerHTML = `<strong>需要修正後才能上傳：</strong><br>${issues.join('<br>')}`;
+          return;
+        }
+        const res = await fetch(`${WORKER_URL}/api/knowledge/file?uid=${encodeURIComponent(profile.userId)}&path=${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const payload = await res.json();
+        if (!res.ok || payload?.success === false) throw new Error(payload?.error || `UPLOAD_FAILED_${res.status}`);
+        resultEl.className = 'mt-4 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 leading-6';
+        resultEl.textContent = `已上傳：${payload.data.file.path}`;
+        showToast('知識檔已上傳');
+        await initData();
+      } catch (err) {
+        resultEl.className = 'mt-4 rounded-2xl border border-dashed border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700 leading-6';
+        resultEl.textContent = err.message;
+      }
+    });
+
+    document.getElementById('copy-template').addEventListener('click', async () => {
+      const template = {
+        id: 'custom_knowledge_id',
+        title: '知識檔標題',
+        source: '來源名稱',
+        source_url: 'https://example.com',
+        version: new Date().toISOString().slice(0, 10),
+        status: 'published',
+        category: 'service_qa',
+        usage: '客服建議用途與限制',
+        entries: [
+          {
+            id: 'entry_id',
+            title: '問題標題',
+            keywords: ['關鍵字1', '關鍵字2'],
+            answer: '內部摘要',
+            reply_template: '可給客服複製的回覆文字',
+            tags: ['標籤']
+          }
+        ]
+      };
+      await navigator.clipboard.writeText(JSON.stringify(template, null, 2));
+      showToast('已複製 JSON 範本');
+    });
+
+    searchEl.addEventListener('input', renderFiles);
+
+    async function initData() {
+      manifest = await loadManifest();
+      const files = Array.isArray(manifest.files) ? manifest.files : [];
+      documents = await Promise.all(files.filter(file => (file.status || 'published') === 'published').map(async file => {
+        const doc = await loadDocument(file);
+        return { ...doc, manifestItem: file };
+      }));
+      render();
+    }
+
+    async function initAuth() {
+      if (location.protocol === 'file:') return;
+      try {
+        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+        if (!liff.isLoggedIn()) return;
+        profile = await liff.getProfile();
+      } catch (_err) {}
+    }
+
+    async function init() {
+      await initAuth();
+      await initData();
+    }
+
+    init().catch(err => {
+      fileListEl.innerHTML = `<div class="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-rose-700 font-bold">${err.message}</div>`;
+    });
+  </script>
+</body>
+</html>

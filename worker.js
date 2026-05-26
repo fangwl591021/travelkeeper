@@ -3244,6 +3244,106 @@ async function stopDefaultLineRichMenu(env) {
   return { success: true, data: { stoppedDefault: true, status: res.status, detail } };
 }
 
+function defaultKnowledgeManifest() {
+  return {
+    id: 'travelkeeper-knowledge',
+    title: 'TravelKeeper 知識庫',
+    version: new Date().toISOString().slice(0, 10),
+    updated_at: new Date().toISOString(),
+    description: 'R2 folder-based knowledge manifest.',
+    files: [],
+  };
+}
+
+function normalizeKnowledgePath(path = '') {
+  const value = String(path || '').trim().replace(/^\/+/, '');
+  if (!value.startsWith('knowledge/')) throw new Error('KNOWLEDGE_PATH_REQUIRED');
+  if (!value.endsWith('.json')) throw new Error('JSON_ONLY');
+  if (value.includes('..') || value.includes('\\')) throw new Error('INVALID_PATH');
+  if (!/^[a-zA-Z0-9/_\-.]+$/.test(value)) throw new Error('INVALID_PATH_CHARS');
+  return value;
+}
+
+async function readKnowledgeJson(env, path) {
+  if (!env.TRAVEL) throw new Error('R2 binding missing');
+  const key = normalizeKnowledgePath(path);
+  const object = await env.TRAVEL.get(key);
+  if (!object) return null;
+  return object.json();
+}
+
+async function writeKnowledgeJson(env, path, data) {
+  if (!env.TRAVEL) throw new Error('R2 binding missing');
+  const key = normalizeKnowledgePath(path);
+  const text = JSON.stringify(data, null, 2);
+  await env.TRAVEL.put(key, text, {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  return { key, url: `${R2_PUBLIC}/${key}`, size: new TextEncoder().encode(text).length };
+}
+
+function buildKnowledgeManifestItem(path, doc = {}) {
+  const key = normalizeKnowledgePath(path);
+  const parts = key.split('/');
+  const folder = parts.length > 2 ? parts[1] : 'root';
+  return {
+    id: String(doc.id || key.replace(/^knowledge\//, '').replace(/\.json$/i, '').replace(/[^\w-]+/g, '-')).slice(0, 96),
+    folder,
+    title: String(doc.title || parts[parts.length - 1].replace(/\.json$/i, '')),
+    path: key,
+    category: String(doc.category || folder),
+    status: String(doc.status || 'published'),
+    source: String(doc.source || ''),
+    source_url: String(doc.source_url || ''),
+  };
+}
+
+async function getKnowledgeManifest(env) {
+  const manifest = await readKnowledgeJson(env, 'knowledge/manifest.json');
+  return manifest || defaultKnowledgeManifest();
+}
+
+async function putKnowledgeDocument(env, path, doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+    return { success: false, error: 'INVALID_JSON_OBJECT' };
+  }
+  if (!Array.isArray(doc.entries)) {
+    return { success: false, error: 'MISSING_ENTRIES' };
+  }
+  const key = normalizeKnowledgePath(path);
+  if (key === 'knowledge/manifest.json') {
+    return { success: false, error: 'RESERVED_MANIFEST_PATH' };
+  }
+  const saved = await writeKnowledgeJson(env, key, doc);
+  const manifest = await getKnowledgeManifest(env);
+  const item = buildKnowledgeManifestItem(key, doc);
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  const nextFiles = files.filter(file => String(file.path || '') !== key);
+  nextFiles.push(item);
+  const nextManifest = {
+    ...defaultKnowledgeManifest(),
+    ...manifest,
+    updated_at: new Date().toISOString(),
+    files: nextFiles.sort((a, b) => String(a.path || '').localeCompare(String(b.path || ''))),
+  };
+  await writeKnowledgeJson(env, 'knowledge/manifest.json', nextManifest);
+  return { success: true, data: { file: item, saved, manifest: nextManifest } };
+}
+
+async function setKnowledgeFileStatus(env, path, status = 'published') {
+  const key = normalizeKnowledgePath(path);
+  const allowed = new Set(['published', 'draft', 'disabled']);
+  const nextStatus = allowed.has(String(status || '')) ? String(status) : 'published';
+  const manifest = await getKnowledgeManifest(env);
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  const index = files.findIndex(file => String(file.path || '') === key);
+  if (index < 0) return { success: false, error: 'FILE_NOT_IN_MANIFEST' };
+  files[index] = { ...files[index], status: nextStatus };
+  const nextManifest = { ...manifest, updated_at: new Date().toISOString(), files };
+  await writeKnowledgeJson(env, 'knowledge/manifest.json', nextManifest);
+  return { success: true, data: { file: files[index], manifest: nextManifest } };
+}
+
 async function d1UpsertLineVisitorRequirement(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
@@ -5284,6 +5384,44 @@ export default {
       if (path === '/api/hub-test' && request.method === 'GET') {
         const status = await buildHubTestStatus(env);
         return json({ success: true, data: status });
+      }
+
+      if (path === '/api/knowledge/manifest' && request.method === 'GET') {
+        return json({ success: true, data: await getKnowledgeManifest(env) });
+      }
+
+      if (path === '/api/knowledge/file' && request.method === 'GET') {
+        const key = url.searchParams.get('path') || '';
+        if (!key) return json({ success: false, error: 'MISSING_PATH' }, 400);
+        const doc = await readKnowledgeJson(env, key);
+        if (!doc) return json({ success: false, error: 'KNOWLEDGE_FILE_NOT_FOUND' }, 404);
+        return json({ success: true, data: doc });
+      }
+
+      if (path === '/api/knowledge/file' && request.method === 'POST') {
+        const uid = String(url.searchParams.get('uid') || '').trim();
+        const key = url.searchParams.get('path') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!key) return json({ success: false, error: 'MISSING_PATH' }, 400);
+        const bodyText = await request.text();
+        let doc = null;
+        try {
+          doc = JSON.parse(bodyText);
+        } catch (err) {
+          return json({ success: false, error: 'INVALID_JSON', detail: err.message || String(err) }, 400);
+        }
+        const result = await putKnowledgeDocument(env, key, doc);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/knowledge/status' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await setKnowledgeFileStatus(env, body.path || '', body.status || 'published');
+        return json(result, result.success ? 200 : 400);
       }
 
       if (path === '/api/mother/health' && request.method === 'GET') {

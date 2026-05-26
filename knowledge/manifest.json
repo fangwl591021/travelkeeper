@@ -1,0 +1,19 @@
+{
+  "id": "travelkeeper-knowledge",
+  "title": "TravelKeeper 知識庫",
+  "version": "2026-05-26",
+  "updated_at": "2026-05-26",
+  "description": "資料夾式知識庫清單。新增或替換知識時，先上傳 JSON，再把檔案路徑列在 files。",
+  "files": [
+    {
+      "id": "travel-org-tw-qa",
+      "folder": "qa",
+      "title": "品保協會旅遊 Q&A",
+      "path": "knowledge/qa/travel_org_tw.json",
+      "category": "official_qa",
+      "status": "published",
+      "source": "中華民國旅行業品質保障協會",
+      "source_url": "https://www.travel.org.tw/info.aspx?item_id=4&class_db_id=93&article_db_id=67"
+    }
+  ]
+}
