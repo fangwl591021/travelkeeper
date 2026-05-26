@@ -290,7 +290,7 @@
           </div>
           <div class="flex flex-wrap gap-2 items-center">
             <button id="open-visitor-records" class="px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-semibold">重要紀錄</button>
-            <button id="manual-handoff" class="px-4 py-2 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold">啟用人工回應</button>
+            <button id="manual-handoff" class="px-4 py-2 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 text-sm font-semibold">AI回應啟用中</button>
             <button id="mark-open" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">待回覆</button>
             <button id="mark-pending" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">處理中</button>
             <button id="mark-closed" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">已處理</button>
@@ -877,7 +877,7 @@
     function syncAiPauseControls(thread) {
       const paused = !!thread?.aiPaused;
       manualHandoffEl.disabled = !thread;
-      manualHandoffEl.textContent = paused ? '啟用AI回應' : '啟用人工回應';
+      manualHandoffEl.textContent = paused ? '人工回應啟用中' : 'AI回應啟用中';
       manualHandoffEl.className = paused
         ? 'px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600'
         : 'px-4 py-2 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold hover:bg-rose-100';
@@ -886,7 +886,7 @@
         : 'px-6 py-2 bg-slate-50 text-slate-600 border-b border-slate-200 text-xs font-semibold';
       aiModeBannerEl.textContent = paused
         ? '目前為人工回應：此聊天室的新訊息會暫停自動回覆。'
-        : '目前為AI回應：需要人工接手時，按「啟用人工回應」。';
+        : '目前為AI回應：需要人工接手時，按狀態按鈕即可切換。';
     }
 
     function recordPriorityLabel(priority) {
