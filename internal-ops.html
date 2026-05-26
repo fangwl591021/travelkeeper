@@ -272,7 +272,7 @@
       el('setting-form').querySelectorAll('[data-field]').forEach(input => {
         data[input.dataset.field] = input.value;
       });
-      data.uid = state.profile?.userId || '';
+      data.operatorUid = state.profile?.userId || '';
       return data;
     }
 
@@ -372,7 +372,7 @@
     async function saveRow() {
       const cfg = currentConfig();
       const payload = getFormData();
-      if (!payload.uid) {
+      if (!payload.operatorUid) {
         showToast('請先用管理員 LINE 身分開啟');
         return;
       }
@@ -395,7 +395,7 @@
       try {
         await api(`/api/internal/settings/${cfg.endpoint}/archive`, {
           method: 'POST',
-          body: JSON.stringify({ id, uid: state.profile?.userId || '' }),
+          body: JSON.stringify({ id, operatorUid: state.profile?.userId || '' }),
         });
         state.editing = null;
         renderForm();

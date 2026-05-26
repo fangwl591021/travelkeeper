@@ -1696,8 +1696,8 @@ async function listInternalSettings(env, kind, uid) {
 async function upsertInternalSetting(env, kind, body = {}) {
   const config = getInternalSettingConfig(kind);
   if (!config) return { success: false, error: 'INVALID_SETTING_KIND' };
-  const uid = String(body.uid || body.operatorUid || body.adminUid || '').trim();
-  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  const operatorUid = String(body.operatorUid || body.adminUid || body.uid || '').trim();
+  if (!(await isAdminUid(env, operatorUid))) return { success: false, error: 'ADMIN_REQUIRED' };
   await ensureInternalOpsTables(env);
 
   const id = String(body.id || '').trim() || crypto.randomUUID();
@@ -1721,7 +1721,7 @@ async function upsertInternalSetting(env, kind, body = {}) {
 async function archiveInternalSetting(env, kind, body = {}) {
   const config = getInternalSettingConfig(kind);
   if (!config) return { success: false, error: 'INVALID_SETTING_KIND' };
-  const uid = String(body.uid || body.operatorUid || body.adminUid || '').trim();
+  const uid = String(body.operatorUid || body.adminUid || body.uid || '').trim();
   const id = String(body.id || '').trim();
   if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
   if (!id) return { success: false, error: 'MISSING_ID' };
