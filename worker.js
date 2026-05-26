@@ -2656,13 +2656,15 @@ async function handleLineWebhookGateway(request, env, ctx) {
       }
     }
 
-    try {
-      const autoReplyResult = await replyLineWebhookWithKnowledge(env, payload);
-      if (autoReplyResult?.replied) {
-        console.log(`line webhook knowledge replies sent: ${autoReplyResult.replied}`);
+    if (isLineAutoReplyEnabled(env)) {
+      try {
+        const autoReplyResult = await replyLineWebhookWithKnowledge(env, payload);
+        if (autoReplyResult?.replied) {
+          console.log(`line webhook knowledge replies sent: ${autoReplyResult.replied}`);
+        }
+      } catch (err) {
+        console.error('line webhook background processing failed:', err.message);
       }
-    } catch (err) {
-      console.error('line webhook background processing failed:', err.message);
     }
   })());
 
@@ -2672,6 +2674,10 @@ async function handleLineWebhookGateway(request, env, ctx) {
     queued: true,
     forwarded: !!env.FORWARD_WEBHOOK_URL,
   });
+}
+
+function isLineAutoReplyEnabled(env) {
+  return String(env.LINE_AUTO_REPLY_ENABLED || '').trim() === '1';
 }
 
 function normalizeKnowledgeText(value = '') {
