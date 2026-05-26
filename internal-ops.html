@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>內部營運設定 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f3f7fb; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900">
+  <main class="max-w-7xl mx-auto px-5 py-8">
+    <header class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between mb-8">
+      <div>
+        <p class="text-xs tracking-[0.28em] text-slate-400 font-bold uppercase">WEGO INTERNAL OPS</p>
+        <h1 class="text-4xl md:text-5xl font-black mt-2">內部營運設定</h1>
+        <p class="text-slate-500 mt-3 max-w-3xl leading-7">
+          第一階段先維護員工、供應商、訂單來源、成本項目與付款費率。後續內部訂單、查帳、薪資與易主格式都會從這裡取資料。
+        </p>
+        <p id="operator" class="text-sm text-slate-400 mt-2">正在確認管理員身分...</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="./dashboard.html" class="rounded-2xl bg-white border border-slate-200 px-5 py-3 font-bold hover:bg-slate-50">回儀表板</a>
+      </div>
+    </header>
+
+    <section id="tabs" class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6"></section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-[420px,1fr] gap-6">
+      <aside class="rounded-3xl bg-white border border-slate-200 p-5 h-fit">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 id="form-title" class="text-2xl font-black">新增資料</h2>
+            <p id="form-subtitle" class="text-sm text-slate-500 mt-1">請選擇設定類型。</p>
+          </div>
+          <button id="reset-form" type="button" class="rounded-2xl bg-slate-100 text-slate-700 px-4 py-2 text-sm font-bold hover:bg-slate-200">清空</button>
+        </div>
+        <form id="setting-form" class="mt-5 space-y-4"></form>
+        <button id="save-setting" type="button" class="mt-5 w-full rounded-2xl bg-blue-600 text-white px-5 py-4 font-black hover:bg-blue-700">儲存</button>
+        <div id="form-message" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 leading-6">
+          儲存後會寫入 D1，供後續內部訂單與帳務流程使用。
+        </div>
+      </aside>
+
+      <section class="rounded-3xl bg-white border border-slate-200 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 id="list-title" class="text-2xl font-black">資料列表</h2>
+            <p id="list-subtitle" class="text-sm text-slate-500 mt-1">點擊資料列可以編輯。</p>
+          </div>
+          <input id="search" type="search" placeholder="搜尋名稱、電話、備註..." class="w-full md:w-80 rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+        </div>
+        <div id="list" class="divide-y divide-slate-100"></div>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-2xl bg-slate-900 text-white px-5 py-3 font-bold shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const state = {
+      profile: null,
+      active: 'employees',
+      rows: [],
+      editing: null,
+    };
+
+    const CONFIGS = {
+      employees: {
+        label: '內部業務',
+        desc: '維護公司員工與業務分潤比例。',
+        endpoint: 'employees',
+        primary: 'name',
+        fields: [
+          { key: 'name', label: '姓名', type: 'text', placeholder: '例如：Tonyfang', required: true },
+          { key: 'uid', label: 'LINE UID', type: 'text', placeholder: '可填 LINE User ID，作為登入或歸屬依據' },
+          { key: 'role', label: '角色', type: 'select', options: ['sales', 'manager', 'accounting', 'admin'], defaultValue: 'sales' },
+          { key: 'phone', label: '電話', type: 'text' },
+          { key: 'email', label: 'Email', type: 'email' },
+          { key: 'commission_rate', label: '業務分潤成數', type: 'number', placeholder: '例如：0.4', defaultValue: '0.4', step: '0.001' },
+          { key: 'status', label: '狀態', type: 'select', options: ['active', 'inactive'], defaultValue: 'active' },
+          { key: 'note', label: '備註', type: 'textarea' },
+        ],
+      },
+      suppliers: {
+        label: '供應商',
+        desc: '維護飯店、車行、地接、票券等供應商。',
+        endpoint: 'suppliers',
+        primary: 'name',
+        fields: [
+          { key: 'name', label: '供應商名稱', type: 'text', required: true },
+          { key: 'type', label: '類型', type: 'text', placeholder: '例如：hotel、flight、land、ticket' },
+          { key: 'contact_name', label: '聯絡人', type: 'text' },
+          { key: 'phone', label: '電話', type: 'text' },
+          { key: 'email', label: 'Email', type: 'email' },
+          { key: 'line_id', label: 'LINE / 社群', type: 'text' },
+          { key: 'status', label: '狀態', type: 'select', options: ['active', 'inactive'], defaultValue: 'active' },
+          { key: 'note', label: '備註', type: 'textarea' },
+        ],
+      },
+      sources: {
+        label: '訂單來源',
+        desc: '維護 LINE OA、分銷商、官網、電話等來源。',
+        endpoint: 'sources',
+        primary: 'name',
+        fields: [
+          { key: 'name', label: '來源名稱', type: 'text', required: true },
+          { key: 'channel', label: '通路', type: 'text', placeholder: '例如：line、web、phone、walkin' },
+          { key: 'default_fee_rate', label: '預設平台費率', type: 'number', placeholder: '例如：0.02', defaultValue: '0', step: '0.001' },
+          { key: 'status', label: '狀態', type: 'select', options: ['active', 'inactive'], defaultValue: 'active' },
+          { key: 'note', label: '備註', type: 'textarea' },
+        ],
+      },
+      costs: {
+        label: '成本項目',
+        desc: '維護機票、飯店、車資、保險、手續費等成本分類。',
+        endpoint: 'costs',
+        primary: 'name',
+        fields: [
+          { key: 'name', label: '成本名稱', type: 'text', required: true },
+          { key: 'category', label: '分類', type: 'text', placeholder: '例如：flight、hotel、vehicle、fee' },
+          { key: 'default_amount', label: '預設金額', type: 'number', placeholder: '預設 0', defaultValue: '0', step: '1' },
+          { key: 'taxable', label: '是否計稅', type: 'select', options: ['0', '1'], defaultValue: '0' },
+          { key: 'status', label: '狀態', type: 'select', options: ['active', 'inactive'], defaultValue: 'active' },
+          { key: 'note', label: '備註', type: 'textarea' },
+        ],
+      },
+      paymentFees: {
+        label: '付款費率',
+        desc: '維護藍新、LINE Pay、匯款等金流手續費。',
+        endpoint: 'paymentFees',
+        primary: 'name',
+        fields: [
+          { key: 'name', label: '付款名稱', type: 'text', required: true },
+          { key: 'method', label: '付款方式', type: 'text', placeholder: '例如：newebpay、linepay、transfer' },
+          { key: 'fee_rate', label: '費率', type: 'number', placeholder: '例如：0.028', defaultValue: '0', step: '0.001' },
+          { key: 'fixed_fee', label: '固定手續費', type: 'number', placeholder: '預設 0', defaultValue: '0', step: '1' },
+          { key: 'status', label: '狀態', type: 'select', options: ['active', 'inactive'], defaultValue: 'active' },
+          { key: 'note', label: '備註', type: 'textarea' },
+        ],
+      },
+    };
+
+    const el = (id) => document.getElementById(id);
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[ch]));
+    }
+
+    function showToast(text) {
+      const node = el('toast');
+      node.textContent = text;
+      node.hidden = false;
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => { node.hidden = true; }, 2200);
+    }
+
+    function currentConfig() {
+      return CONFIGS[state.active];
+    }
+
+    function renderTabs() {
+      el('tabs').innerHTML = Object.entries(CONFIGS).map(([key, cfg]) => `
+        <button type="button" data-tab="${key}" class="rounded-3xl px-4 py-4 text-left font-black border transition ${state.active === key ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}">
+          <span class="block text-lg">${escapeHtml(cfg.label)}</span>
+          <span class="block text-xs mt-1 opacity-70 leading-5">${escapeHtml(cfg.desc)}</span>
+        </button>
+      `).join('');
+      el('tabs').querySelectorAll('[data-tab]').forEach(button => {
+        button.addEventListener('click', async () => {
+          state.active = button.dataset.tab;
+          state.editing = null;
+          renderTabs();
+          renderForm();
+          await loadRows();
+        });
+      });
+    }
+
+    function renderForm() {
+      const cfg = currentConfig();
+      el('form-title').textContent = state.editing ? `編輯${cfg.label}` : `新增${cfg.label}`;
+      el('form-subtitle').textContent = cfg.desc;
+      const data = state.editing || {};
+      el('setting-form').innerHTML = cfg.fields.map(field => {
+        const value = data[field.key] ?? field.defaultValue ?? '';
+        const requiredMark = field.required ? '<span class="text-rose-500"> *</span>' : '';
+        if (field.type === 'textarea') {
+          return `<label class="block"><span class="text-sm font-bold text-slate-700">${escapeHtml(field.label)}${requiredMark}</span><textarea data-field="${field.key}" rows="3" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">${escapeHtml(value)}</textarea></label>`;
+        }
+        if (field.type === 'select') {
+          return `<label class="block"><span class="text-sm font-bold text-slate-700">${escapeHtml(field.label)}${requiredMark}</span><select data-field="${field.key}" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500 bg-white">${field.options.map(opt => `<option value="${escapeHtml(opt)}" ${String(value) === opt ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('')}</select></label>`;
+        }
+        return `<label class="block"><span class="text-sm font-bold text-slate-700">${escapeHtml(field.label)}${requiredMark}</span><input data-field="${field.key}" type="${field.type}" step="${field.step || 'any'}" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || '')}" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"></label>`;
+      }).join('');
+    }
+
+    function getFormData() {
+      const data = {};
+      if (state.editing?.id) data.id = state.editing.id;
+      el('setting-form').querySelectorAll('[data-field]').forEach(input => {
+        data[input.dataset.field] = input.value;
+      });
+      data.uid = state.profile?.userId || '';
+      return data;
+    }
+
+    function rowText(row) {
+      return Object.values(row || {}).join(' ').toLowerCase();
+    }
+
+    function renderList() {
+      const cfg = currentConfig();
+      const keyword = el('search').value.trim().toLowerCase();
+      const rows = state.rows.filter(row => !keyword || rowText(row).includes(keyword));
+      el('list-title').textContent = `${cfg.label}列表`;
+      el('list-subtitle').textContent = `${rows.length} / ${state.rows.length} 筆，點擊資料列可以編輯。`;
+      if (!rows.length) {
+        el('list').innerHTML = '<div class="p-10 text-center text-slate-400 font-bold">目前沒有資料。</div>';
+        return;
+      }
+      el('list').innerHTML = rows.map(row => {
+        const title = row[cfg.primary] || row.name || row.id;
+        const meta = [row.phone, row.email, row.type, row.role, row.method, row.channel].filter(Boolean).join(' · ');
+        return `
+          <article class="p-5 hover:bg-slate-50 cursor-pointer" data-id="${escapeHtml(row.id)}">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h3 class="text-xl font-black">${escapeHtml(title)}</h3>
+                <p class="text-sm text-slate-500 mt-1">${escapeHtml(meta || '未填聯絡或分類資訊')}</p>
+                ${row.note ? `<p class="text-sm text-slate-600 mt-2 leading-6">${escapeHtml(row.note)}</p>` : ''}
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-bold">${escapeHtml(row.status || 'active')}</span>
+                <button type="button" data-archive="${escapeHtml(row.id)}" class="rounded-xl bg-rose-50 text-rose-600 px-3 py-2 text-xs font-bold hover:bg-rose-100">封存</button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+      el('list').querySelectorAll('[data-id]').forEach(card => {
+        card.addEventListener('click', (event) => {
+          if (event.target.closest('[data-archive]')) return;
+          state.editing = state.rows.find(row => row.id === card.dataset.id) || null;
+          renderForm();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      });
+      el('list').querySelectorAll('[data-archive]').forEach(button => {
+        button.addEventListener('click', async () => {
+          if (!confirm('確定要封存這筆資料？')) return;
+          await archiveRow(button.dataset.archive);
+        });
+      });
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(`${WORKER_URL}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function loadRows() {
+      const cfg = currentConfig();
+      if (!state.profile?.userId) {
+        state.rows = [];
+        renderList();
+        return;
+      }
+      el('list').innerHTML = '<div class="p-10 text-center text-slate-400 font-bold">讀取中...</div>';
+      try {
+        const data = await api(`/api/internal/settings/${cfg.endpoint}?uid=${encodeURIComponent(state.profile.userId)}`);
+        state.rows = Array.isArray(data.data) ? data.data : [];
+        renderList();
+      } catch (error) {
+        state.rows = [];
+        el('list').innerHTML = `<div class="p-10 text-center text-rose-500 font-bold">讀取失敗：${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function saveRow() {
+      const cfg = currentConfig();
+      const payload = getFormData();
+      if (!payload.uid) {
+        showToast('請先用管理員 LINE 身分開啟');
+        return;
+      }
+      try {
+        await api(`/api/internal/settings/${cfg.endpoint}`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        state.editing = null;
+        renderForm();
+        await loadRows();
+        showToast('已儲存');
+      } catch (error) {
+        showToast(`儲存失敗：${error.message}`);
+      }
+    }
+
+    async function archiveRow(id) {
+      const cfg = currentConfig();
+      try {
+        await api(`/api/internal/settings/${cfg.endpoint}/archive`, {
+          method: 'POST',
+          body: JSON.stringify({ id, uid: state.profile?.userId || '' }),
+        });
+        state.editing = null;
+        renderForm();
+        await loadRows();
+        showToast('已封存');
+      } catch (error) {
+        showToast(`封存失敗：${error.message}`);
+      }
+    }
+
+    async function initProfile() {
+      const isFile = location.protocol === 'file:';
+      if (!window.liff || isFile) {
+        el('operator').textContent = isFile ? '目前是本機檔案預覽；線上開啟後會使用 LINE 管理員身分。' : 'LIFF 尚未載入。';
+        return;
+      }
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+        state.profile = await liff.getProfile();
+        el('operator').textContent = `管理員 UID：${state.profile.userId}`;
+      } catch (error) {
+        el('operator').textContent = `管理員身分讀取失敗：${error.message}`;
+      }
+    }
+
+    async function init() {
+      renderTabs();
+      renderForm();
+      await initProfile();
+      await loadRows();
+      el('reset-form').addEventListener('click', () => {
+        state.editing = null;
+        renderForm();
+      });
+      el('save-setting').addEventListener('click', saveRow);
+      el('search').addEventListener('input', renderList);
+    }
+
+    init();
+  </script>
+</body>
+</html>

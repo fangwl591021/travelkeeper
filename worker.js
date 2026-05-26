@@ -1596,6 +1596,145 @@ async function updateAccessConfigFromAdmin(env, body = {}) {
   return getAccessConfigForAdmin(env);
 }
 
+const INTERNAL_SETTING_TABLES = {
+  employees: {
+    table: 'internal_employees',
+    columns: ['uid', 'name', 'role', 'phone', 'email', 'commission_rate', 'status', 'note'],
+    numberColumns: new Set(['commission_rate']),
+    defaults: { role: 'sales', commission_rate: 0.4, status: 'active' },
+  },
+  suppliers: {
+    table: 'suppliers',
+    columns: ['name', 'type', 'contact_name', 'phone', 'email', 'line_id', 'status', 'note'],
+    numberColumns: new Set(),
+    defaults: { status: 'active' },
+  },
+  sources: {
+    table: 'order_sources',
+    columns: ['name', 'channel', 'default_fee_rate', 'status', 'note'],
+    numberColumns: new Set(['default_fee_rate']),
+    defaults: { status: 'active', default_fee_rate: 0 },
+  },
+  costs: {
+    table: 'cost_item_settings',
+    columns: ['name', 'category', 'default_amount', 'taxable', 'status', 'note'],
+    numberColumns: new Set(['default_amount', 'taxable']),
+    defaults: { status: 'active', default_amount: 0, taxable: 0 },
+  },
+  paymentFees: {
+    table: 'payment_fee_settings',
+    columns: ['name', 'method', 'fee_rate', 'fixed_fee', 'status', 'note'],
+    numberColumns: new Set(['fee_rate', 'fixed_fee']),
+    defaults: { status: 'active', fee_rate: 0, fixed_fee: 0 },
+  },
+};
+
+async function ensureInternalOpsTables(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS internal_employees (
+    id TEXT PRIMARY KEY, uid TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT 'sales', phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '',
+    commission_rate REAL NOT NULL DEFAULT 0.4, status TEXT NOT NULL DEFAULT 'active',
+    note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS suppliers (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', type TEXT NOT NULL DEFAULT '',
+    contact_name TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '',
+    line_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS order_sources (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', channel TEXT NOT NULL DEFAULT '',
+    default_fee_rate REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active',
+    note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cost_item_settings (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '',
+    default_amount REAL NOT NULL DEFAULT 0, taxable INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS payment_fee_settings (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', method TEXT NOT NULL DEFAULT '',
+    fee_rate REAL NOT NULL DEFAULT 0, fixed_fee REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+function getInternalSettingConfig(kind) {
+  const key = String(kind || '').trim();
+  return INTERNAL_SETTING_TABLES[key] || null;
+}
+
+function normalizeInternalSettingValue(config, column, value) {
+  if (config.numberColumns.has(column)) {
+    if (column === 'taxable') return value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : Number(config.defaults[column] || 0);
+  }
+  return String(value ?? config.defaults[column] ?? '').trim();
+}
+
+async function listInternalSettings(env, kind, uid) {
+  const config = getInternalSettingConfig(kind);
+  if (!config) return { success: false, error: 'INVALID_SETTING_KIND' };
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  await ensureInternalOpsTables(env);
+  const rows = await env.DB.prepare(`
+    SELECT *
+      FROM ${config.table}
+     WHERE status <> 'archived'
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT 300
+  `).all();
+  return { success: true, data: rows.results || [] };
+}
+
+async function upsertInternalSetting(env, kind, body = {}) {
+  const config = getInternalSettingConfig(kind);
+  if (!config) return { success: false, error: 'INVALID_SETTING_KIND' };
+  const uid = String(body.uid || body.operatorUid || body.adminUid || '').trim();
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  await ensureInternalOpsTables(env);
+
+  const id = String(body.id || '').trim() || crypto.randomUUID();
+  const now = formatTaipeiDateTime(new Date());
+  const values = config.columns.map(column => normalizeInternalSettingValue(config, column, body[column]));
+  if (config.columns.includes('name') && !String(body.name || '').trim()) {
+    return { success: false, error: 'NAME_REQUIRED' };
+  }
+  const insertColumns = ['id', ...config.columns, 'created_at', 'updated_at'];
+  const placeholders = insertColumns.map(() => '?').join(', ');
+  const updates = config.columns.map(column => `${column} = excluded.${column}`).concat(['updated_at = excluded.updated_at']).join(', ');
+  await env.DB.prepare(`
+    INSERT INTO ${config.table} (${insertColumns.join(', ')})
+    VALUES (${placeholders})
+    ON CONFLICT(id) DO UPDATE SET ${updates}
+  `).bind(id, ...values, now, now).run();
+  const row = await env.DB.prepare(`SELECT * FROM ${config.table} WHERE id = ?`).bind(id).first();
+  return { success: true, data: row };
+}
+
+async function archiveInternalSetting(env, kind, body = {}) {
+  const config = getInternalSettingConfig(kind);
+  if (!config) return { success: false, error: 'INVALID_SETTING_KIND' };
+  const uid = String(body.uid || body.operatorUid || body.adminUid || '').trim();
+  const id = String(body.id || '').trim();
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  if (!id) return { success: false, error: 'MISSING_ID' };
+  await ensureInternalOpsTables(env);
+  await env.DB.prepare(`
+    UPDATE ${config.table}
+       SET status = 'archived',
+           updated_at = ?
+     WHERE id = ?
+  `).bind(formatTaipeiDateTime(new Date()), id).run();
+  return { success: true, id };
+}
+
 function buildNewebPayMerchantOrderNo(orderId, leg) {
   const shortOrder = String(orderId || '').replace(/[^A-Za-z0-9]/g, '').slice(-12);
   const legCode = String(leg || 'deposit').toLowerCase() === 'balance' ? 'B' : 'D';
@@ -5421,6 +5560,28 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await setKnowledgeFileStatus(env, body.path || '', body.status || 'published');
+        return json(result, result.success ? 200 : 400);
+      }
+
+      const internalSettingsMatch = path.match(/^\/api\/internal\/settings\/([^/]+)$/);
+      if (internalSettingsMatch && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        const result = await listInternalSettings(env, internalSettingsMatch[1], uid);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (internalSettingsMatch && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
+        const result = await upsertInternalSetting(env, internalSettingsMatch[1], body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      const internalSettingsArchiveMatch = path.match(/^\/api\/internal\/settings\/([^/]+)\/archive$/);
+      if (internalSettingsArchiveMatch && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
+        const result = await archiveInternalSetting(env, internalSettingsArchiveMatch[1], body);
         return json(result, result.success ? 200 : 400);
       }
 
