@@ -68,6 +68,7 @@
       profile: null,
       active: 'employees',
       rows: [],
+      distributors: [],
       editing: null,
     };
 
@@ -194,7 +195,8 @@
       el('form-title').textContent = state.editing ? `編輯${cfg.label}` : `新增${cfg.label}`;
       el('form-subtitle').textContent = cfg.desc;
       const data = state.editing || {};
-      el('setting-form').innerHTML = cfg.fields.map(field => {
+      const distributorPicker = state.active === 'employees' ? renderDistributorPicker(data.uid || '') : '';
+      el('setting-form').innerHTML = distributorPicker + cfg.fields.map(field => {
         const value = data[field.key] ?? field.defaultValue ?? '';
         const requiredMark = field.required ? '<span class="text-rose-500"> *</span>' : '';
         if (field.type === 'textarea') {
@@ -205,6 +207,63 @@
         }
         return `<label class="block"><span class="text-sm font-bold text-slate-700">${escapeHtml(field.label)}${requiredMark}</span><input data-field="${field.key}" type="${field.type}" step="${field.step || 'any'}" value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || '')}" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"></label>`;
       }).join('');
+      const picker = document.getElementById('distributor-picker');
+      if (picker) {
+        picker.addEventListener('change', () => applyDistributorToForm(picker.value));
+      }
+    }
+
+    function renderDistributorPicker(currentUid) {
+      const options = state.distributors
+        .filter(dist => dist && (dist.uid || dist.name || dist.phone))
+        .map(dist => {
+          const label = [
+            dist.name || '未填姓名',
+            dist.phone || '',
+            dist.companyname || dist.company_name || '',
+            dist.status ? `(${dist.status})` : '',
+          ].filter(Boolean).join(' · ');
+          const selected = String(currentUid || '') === String(dist.uid || '') ? 'selected' : '';
+          return `<option value="${escapeHtml(dist.uid || '')}" ${selected}>${escapeHtml(label)}</option>`;
+        }).join('');
+      return `
+        <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <label class="block">
+            <span class="text-sm font-black text-blue-900">從分銷商帶入</span>
+            <select id="distributor-picker" class="mt-2 w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 outline-none focus:border-blue-500">
+              <option value="">手動建立，或選擇分銷商...</option>
+              ${options}
+            </select>
+          </label>
+          <p class="text-xs text-blue-700 mt-2 leading-5">選擇後會自動帶入姓名、LINE UID、電話、Email，後續內部訂單可以用同一個 UID 做業務歸屬。</p>
+        </div>
+      `;
+    }
+
+    function applyDistributorToForm(uid) {
+      const dist = state.distributors.find(item => String(item.uid || '') === String(uid || ''));
+      if (!dist) return;
+      const setField = (key, value, overwrite = true) => {
+        const input = el('setting-form').querySelector(`[data-field="${key}"]`);
+        if (!input) return;
+        if (!overwrite && String(input.value || '').trim()) return;
+        input.value = value ?? '';
+      };
+      setField('uid', dist.uid || '');
+      setField('name', dist.name || '');
+      setField('phone', dist.phone || '');
+      setField('email', dist.email || '');
+      setField('role', 'sales', false);
+      setField('status', 'active', false);
+      const commission = Number(dist.commission || dist.commission_pct || 0);
+      if (commission > 0) setField('commission_rate', commission > 1 ? String(commission / 100) : String(commission), false);
+      const noteParts = [
+        dist.companyname || dist.company_name ? `公司/品牌：${dist.companyname || dist.company_name}` : '',
+        dist.invitecode || dist.invite_code ? `推薦碼：${dist.invitecode || dist.invite_code}` : '',
+        dist.status ? `分銷商狀態：${dist.status}` : '',
+      ].filter(Boolean);
+      if (noteParts.length) setField('note', noteParts.join('\n'), false);
+      showToast('已帶入分銷商資料');
     }
 
     function getFormData() {
@@ -299,6 +358,17 @@
       }
     }
 
+    async function loadDistributors() {
+      try {
+        const res = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`);
+        const data = await res.json();
+        state.distributors = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      } catch (error) {
+        state.distributors = [];
+        console.warn('load distributors failed:', error.message);
+      }
+    }
+
     async function saveRow() {
       const cfg = currentConfig();
       const payload = getFormData();
@@ -359,6 +429,8 @@
       renderTabs();
       renderForm();
       await initProfile();
+      await loadDistributors();
+      renderForm();
       await loadRows();
       el('reset-form').addEventListener('click', () => {
         state.editing = null;
