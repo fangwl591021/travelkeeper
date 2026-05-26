@@ -2431,17 +2431,111 @@ function lineMessageCreatedAt(event = {}) {
   return new Date().toISOString();
 }
 
+function readableLineMessageText(event = {}, messageType = '') {
+  const type = String(messageType || event?.message?.type || event?.type || 'event').toLowerCase();
+  const message = event?.message || {};
+  if (type === 'text') return String(message.text || '').trim();
+  if (type === 'follow') return '加入好友 / 開始關注官方帳號';
+  if (type === 'unfollow') return '封鎖或取消關注官方帳號';
+  if (type === 'join') return '官方帳號加入聊天室';
+  if (type === 'leave') return '官方帳號離開聊天室';
+  if (type === 'memberjoined') return '有成員加入聊天室';
+  if (type === 'memberleft') return '有成員離開聊天室';
+  if (type === 'image') return '客戶傳送圖片';
+  if (type === 'video') return '客戶傳送影片';
+  if (type === 'audio') return '客戶傳送語音';
+  if (type === 'file') return `客戶傳送檔案${message.fileName ? `：${message.fileName}` : ''}`;
+  if (type === 'sticker') return '客戶傳送貼圖';
+  if (type === 'location') {
+    const title = String(message.title || '').trim();
+    const address = String(message.address || '').trim();
+    return ['客戶傳送位置', title, address].filter(Boolean).join('：');
+  }
+  if (type === 'postback') return `客戶點選選單${event?.postback?.data ? `：${event.postback.data}` : ''}`;
+  return `[${type || 'event'}]`;
+}
+
+async function ensureLineMessageMediaColumns(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  const statements = [
+    `ALTER TABLE line_messages ADD COLUMN media_url TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE line_messages ADD COLUMN media_content_type TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE line_messages ADD COLUMN media_size INTEGER NOT NULL DEFAULT 0`,
+  ];
+  for (const sql of statements) {
+    try {
+      await env.DB.prepare(sql).run();
+    } catch (err) {
+      const message = String(err?.message || err).toLowerCase();
+      if (!message.includes('duplicate column')) throw err;
+    }
+  }
+}
+
+function safeLineMessageIdFromRaw(rawJson = '') {
+  try {
+    const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson || '{}') : rawJson;
+    return String(parsed?.message?.id || '').trim();
+  } catch (_err) {
+    return '';
+  }
+}
+
+function extensionFromContentType(contentType = '') {
+  const ct = String(contentType || '').toLowerCase();
+  if (ct.includes('png')) return 'png';
+  if (ct.includes('webp')) return 'webp';
+  if (ct.includes('gif')) return 'gif';
+  if (ct.includes('heic')) return 'heic';
+  return 'jpg';
+}
+
+function safeR2KeyPart(value = '') {
+  return String(value || '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 96) || 'line';
+}
+
+async function storeLineMessageMedia(env, event = {}, threadId = '', createdAt = '') {
+  const messageType = String(event?.message?.type || '').toLowerCase();
+  const messageId = String(event?.message?.id || '').trim();
+  if (!messageId || messageType !== 'image') return null;
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN || !env.TRAVEL) return null;
+
+  try {
+    const res = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(messageId)}/content`, {
+      headers: { Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` },
+    });
+    if (!res.ok) throw new Error(`LINE content ${res.status}`);
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    const buffer = await res.arrayBuffer();
+    const ext = extensionFromContentType(contentType);
+    const stamp = createdAt ? Date.parse(createdAt) || Date.now() : Date.now();
+    const key = `line-oa/${safeR2KeyPart(threadId)}/${stamp}_${safeR2KeyPart(messageId)}.${ext}`;
+    await env.TRAVEL.put(key, buffer, { httpMetadata: { contentType } });
+    return {
+      mediaUrl: `${R2_PUBLIC}/${key}`,
+      mediaContentType: contentType,
+      mediaSize: buffer.byteLength || Number(res.headers.get('content-length') || 0) || 0,
+    };
+  } catch (err) {
+    console.warn('LINE media archive failed:', err?.message || err);
+    return null;
+  }
+}
+
 async function storeLineWebhookEvents(env, payload = {}) {
   if (!env.DB) return;
+  await ensureLineMessageMediaColumns(env);
   const events = Array.isArray(payload?.events) ? payload.events : [];
   for (const event of events) {
     const source = event?.source || {};
     const threadId = getLineThreadId(source);
     const messageType = String(event?.message?.type || event?.type || 'event');
-    const messageText = messageType === 'text'
-      ? String(event?.message?.text || '').trim()
-      : `[${messageType}]`;
+    const messageText = readableLineMessageText(event, messageType);
     const createdAt = lineMessageCreatedAt(event);
+    const media = await storeLineMessageMedia(env, event, threadId, createdAt);
     const { riskLevel, hits } = summarizeLineRisk(messageText);
     const tagsText = hits.join(',');
     const remoteProfile = await fetchLineSourceProfile(env, source);
@@ -2500,8 +2594,8 @@ async function storeLineWebhookEvents(env, payload = {}) {
     await env.DB.prepare(`
       INSERT OR IGNORE INTO line_messages (
         id, thread_id, line_event_id, reply_token, message_type, sender_role,
-        sender_id, sender_name, message_text, raw_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'user', ?, ?, ?, ?, ?)
+        sender_id, sender_name, message_text, raw_json, media_url, media_content_type, media_size, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'user', ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       crypto.randomUUID(),
       threadId,
@@ -2512,6 +2606,9 @@ async function storeLineWebhookEvents(env, payload = {}) {
       displayName,
       summary,
       JSON.stringify(event),
+      media?.mediaUrl || '',
+      media?.mediaContentType || '',
+      media?.mediaSize || 0,
       createdAt
     ).run();
   }
@@ -2679,6 +2776,7 @@ async function d1GetLineVisitorRequirements(env, threadId) {
 async function d1GetLineThread(env, threadId) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
+  await ensureLineMessageMediaColumns(env);
   const threadRow = await env.DB.prepare(`
     SELECT
       id,
@@ -2718,12 +2816,53 @@ async function d1GetLineThread(env, threadId) {
   const thread = await enrichStoredLineThreadProfile(env, threadRow);
   const visitorRecords = await d1GetLineVisitorRequirements(env, threadId);
   const { results } = await env.DB.prepare(`
-    SELECT id, message_type, sender_role, sender_id, sender_name, message_text, created_at
+    SELECT id, message_type, sender_role, sender_id, sender_name, message_text, raw_json,
+           media_url, media_content_type, media_size, created_at
     FROM line_messages
     WHERE thread_id = ?
     ORDER BY created_at ASC, inserted_at ASC
     LIMIT 500
   `).bind(threadId).all();
+  const messages = [];
+  for (const msg of results || []) {
+    let mediaUrl = msg.media_url || '';
+    let mediaContentType = msg.media_content_type || '';
+    let mediaSize = Number(msg.media_size || 0);
+    const lineMessageId = safeLineMessageIdFromRaw(msg.raw_json || '');
+    if (!mediaUrl && String(msg.message_type || '').toLowerCase() === 'image' && lineMessageId) {
+      const media = await storeLineMessageMedia(
+        env,
+        { message: { type: 'image', id: lineMessageId } },
+        threadId,
+        msg.created_at || ''
+      );
+      if (media?.mediaUrl) {
+        mediaUrl = media.mediaUrl;
+        mediaContentType = media.mediaContentType || '';
+        mediaSize = Number(media.mediaSize || 0);
+        await env.DB.prepare(`
+          UPDATE line_messages
+          SET media_url = ?, media_content_type = ?, media_size = ?
+          WHERE id = ?
+        `).bind(mediaUrl, mediaContentType, mediaSize, msg.id).run();
+      }
+    }
+    messages.push({
+      id: msg.id,
+      type: msg.message_type || 'text',
+      senderRole: msg.sender_role || 'user',
+      senderId: msg.sender_id || '',
+      senderName: msg.sender_role === 'user'
+        ? (thread.display_name || msg.sender_name || '????')
+        : (msg.sender_name || '??'),
+      text: msg.message_text || '',
+      mediaUrl,
+      mediaContentType,
+      mediaSize,
+      lineMessageId,
+      createdAt: msg.created_at || '',
+    });
+  }
   return {
     success: true,
     data: {
@@ -2745,17 +2884,7 @@ async function d1GetLineThread(env, threadId) {
       latestImportantNote: thread.latest_important_note || visitorRecords[0]?.content || '',
       visitorRecords,
       lastMessageAt: thread.last_message_at || '',
-      messages: results.map(msg => ({
-        id: msg.id,
-        type: msg.message_type || 'text',
-        senderRole: msg.sender_role || 'user',
-        senderId: msg.sender_id || '',
-        senderName: msg.sender_role === 'user'
-          ? (thread.display_name || msg.sender_name || '????')
-          : (msg.sender_name || '??'),
-        text: msg.message_text || '',
-        createdAt: msg.created_at || '',
-      })),
+      messages,
     },
   };
 }

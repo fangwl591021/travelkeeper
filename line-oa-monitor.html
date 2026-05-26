@@ -536,8 +536,64 @@
       container.textContent = String(item.name || '?').trim().slice(0, 1);
     }
 
+    function readableMessageText(message = {}) {
+      const type = String(message.type || '').toLowerCase();
+      const text = String(message.text || '').trim();
+      const lower = text.toLowerCase();
+      if (type === 'text' && text) return text;
+      if (type === 'follow' || lower === '[follow]') return '加入好友 / 開始關注官方帳號';
+      if (type === 'unfollow' || lower === '[unfollow]') return '封鎖或取消關注官方帳號';
+      if (type === 'join' || lower === '[join]') return '官方帳號加入聊天室';
+      if (type === 'leave' || lower === '[leave]') return '官方帳號離開聊天室';
+      if (type === 'image' || lower === '[image]' || lower === '[photo]') return message.mediaUrl ? '客戶傳送圖片' : '客戶傳送圖片（尚未取得原圖）';
+      if (type === 'video' || lower === '[video]') return '客戶傳送影片';
+      if (type === 'audio' || lower === '[audio]') return '客戶傳送語音';
+      if (type === 'file' || lower === '[file]') return text && !text.startsWith('[') ? text : '客戶傳送檔案';
+      if (type === 'sticker' || lower === '[sticker]') return '客戶傳送貼圖';
+      if (type === 'location' || lower === '[location]') return text && !text.startsWith('[') ? text : '客戶傳送位置';
+      if (type === 'postback' || lower === '[postback]') return text && !text.startsWith('[') ? text : '客戶點選選單';
+      return text || '收到一則 LINE 事件';
+    }
+
+    function renderMessageBubble(message = {}, side = 'left') {
+      const wrapper = document.createElement('div');
+      wrapper.className = `max-w-[72%] bg-white text-slate-900 border ${side === 'right' ? 'border-emerald-200' : 'border-slate-200'} rounded-[22px] px-4 py-3 shadow-sm`;
+
+      const nameEl = document.createElement('p');
+      nameEl.className = 'font-semibold text-xs text-slate-400 mb-2';
+      nameEl.textContent = message.senderName || (side === 'left' ? '用戶' : '客服');
+      wrapper.appendChild(nameEl);
+
+      if (message.mediaUrl && String(message.type || '').toLowerCase() === 'image') {
+        const img = document.createElement('img');
+        img.src = message.mediaUrl;
+        img.alt = '客戶傳送圖片';
+        img.loading = 'lazy';
+        img.className = 'mb-3 max-h-80 w-full rounded-2xl object-contain bg-slate-100';
+        wrapper.appendChild(img);
+      }
+
+      const textEl = document.createElement('p');
+      textEl.className = 'text-sm font-medium leading-6 whitespace-pre-wrap';
+      textEl.textContent = readableMessageText(message);
+      wrapper.appendChild(textEl);
+
+      if (!message.mediaUrl && String(message.type || '').toLowerCase() === 'image' && message.lineMessageId) {
+        const hintEl = document.createElement('p');
+        hintEl.className = 'mt-2 text-xs text-amber-600';
+        hintEl.textContent = '這張圖片尚未保存成功；新圖片會自動歸檔，舊圖片若 LINE 仍允許讀取會自動補回。';
+        wrapper.appendChild(hintEl);
+      }
+
+      const timeEl = document.createElement('p');
+      timeEl.className = 'text-xs text-slate-500 mt-3';
+      timeEl.textContent = formatTime(message.createdAt);
+      wrapper.appendChild(timeEl);
+      return wrapper;
+    }
+
     function threadText(thread) {
-      return (thread?.messages || []).map(m => m.text || '').join('\n');
+      return (thread?.messages || []).map(m => readableMessageText(m)).join('\n');
     }
 
     function hasImageUpload(thread) {
@@ -886,7 +942,7 @@
 
         const summary = document.createElement('p');
         summary.className = 'text-sm text-slate-600 mt-1.5 line-clamp-3';
-        summary.textContent = item.summary || '';
+        summary.textContent = readableMessageText({ text: item.summary || '' });
 
         const pills = document.createElement('div');
         pills.className = 'flex flex-wrap gap-2 mt-2.5';
@@ -1112,13 +1168,7 @@
         const side = msg.senderRole === 'user' ? 'left' : 'right';
         const row = document.createElement('div');
         row.className = `flex ${side === 'right' ? 'justify-end' : 'justify-start'}`;
-        row.innerHTML = `
-          <div class="max-w-[72%] bg-white text-slate-900 border ${side === 'right' ? 'border-emerald-200' : 'border-slate-200'} rounded-[22px] px-4 py-3 shadow-sm">
-            <p class="font-semibold text-xs text-slate-400 mb-2">${msg.senderName || (side === 'left' ? '\u7528\u6236' : '\u5ba2\u670d')}</p>
-            <p class="text-sm font-medium leading-6 whitespace-pre-wrap">${msg.text || ''}</p>
-            <p class="text-xs text-slate-500 mt-3">${formatTime(msg.createdAt)}</p>
-          </div>
-        `;
+        row.appendChild(renderMessageBubble(msg, side));
         chatMessagesEl.appendChild(row);
       });
 
