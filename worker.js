@@ -2518,9 +2518,14 @@ function decodeBase64DataUrl(value = '') {
 }
 
 async function pushLineTextMessage(env, to, text) {
+  return pushLineMessages(env, to, [{ type: 'text', text }]);
+}
+
+async function pushLineMessages(env, to, messages = []) {
   if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
     throw new Error('LINE_CHANNEL_ACCESS_TOKEN missing');
   }
+  const safeMessages = normalizeLineOutboundMessages(messages);
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: {
@@ -2529,14 +2534,82 @@ async function pushLineTextMessage(env, to, text) {
     },
     body: JSON.stringify({
       to,
-      messages: [{ type: 'text', text }],
+      messages: safeMessages,
     }),
   });
   const responseText = await res.text();
   if (!res.ok) {
     throw new Error(`LINE push failed (${res.status}): ${responseText.slice(0, 300)}`);
   }
-  return { status: res.status, body: responseText };
+  return { status: res.status, body: responseText, count: safeMessages.length };
+}
+
+function normalizeLineOutboundMessages(messages = []) {
+  const items = (Array.isArray(messages) ? messages : [])
+    .filter(item => item && typeof item === 'object')
+    .slice(0, 5)
+    .map(item => normalizeLineOutboundMessage(item));
+  const valid = items.filter(Boolean);
+  if (!valid.length) throw new Error('MISSING_MESSAGES');
+  return valid;
+}
+
+function normalizeLineOutboundMessage(item = {}) {
+  const type = String(item.type || '').trim();
+  if (type === 'text') {
+    const text = String(item.text || '').trim();
+    if (!text) return null;
+    if (text.length > 5000) throw new Error('TEXT_TOO_LONG');
+    return { type: 'text', text };
+  }
+  if (type === 'image') {
+    const originalContentUrl = String(item.originalContentUrl || item.url || '').trim();
+    const previewImageUrl = String(item.previewImageUrl || item.previewUrl || originalContentUrl).trim();
+    if (!originalContentUrl || !previewImageUrl) return null;
+    return { type: 'image', originalContentUrl, previewImageUrl };
+  }
+  if (type === 'flex') {
+    const altText = String(item.altText || '客服訊息').trim().slice(0, 400) || '客服訊息';
+    const contents = item.contents;
+    if (!contents || typeof contents !== 'object') return null;
+    return { type: 'flex', altText, contents };
+  }
+  return null;
+}
+
+function summarizeLineOutboundMessage(message = {}) {
+  if (message.type === 'text') return String(message.text || '').trim();
+  if (message.type === 'image') return '客服傳送圖片';
+  if (message.type === 'flex') return message.altText || '客服傳送多頁訊息';
+  return '客服傳送訊息';
+}
+
+function safeOutboundAssetName(value = '') {
+  const cleaned = String(value || 'asset')
+    .replace(/[\\/:*?"<>|#%{}^~[\]`]+/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 120);
+  return cleaned || 'asset';
+}
+
+async function uploadLineOaAsset(env, body = {}) {
+  if (!env.TRAVEL) return { success: false, error: 'R2_BINDING_MISSING' };
+  const decoded = decodeBase64DataUrl(body.base64 || body.dataUrl || body.file || '');
+  if (!decoded?.bytes?.length) return { success: false, error: 'MISSING_FILE' };
+  const filename = safeOutboundAssetName(body.filename || `line-asset-${Date.now()}`);
+  const contentType = String(body.contentType || decoded.contentType || 'application/octet-stream').trim();
+  const key = `line-oa/outbound/${Date.now()}_${filename}`;
+  await env.TRAVEL.put(key, decoded.bytes, { httpMetadata: { contentType } });
+  return {
+    success: true,
+    data: {
+      url: `${R2_PUBLIC}/${key}`,
+      key,
+      filename,
+      contentType,
+      size: decoded.bytes.length,
+    },
+  };
 }
 
 async function forwardWebhookToSecondary(env, rawBody, signature) {
@@ -3532,14 +3605,16 @@ async function d1UpdateLineThread(env, body = {}) {
 
 async function d1SendLineOaReply(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineMessageMediaColumns(env);
   const uid = String(body.uid || '').trim();
   const threadId = String(body.threadId || body.thread_id || body.id || '').trim();
   const text = String(body.text || '').trim();
+  const rawMessages = Array.isArray(body.messages) ? body.messages : [];
   const dryRun = body.dryRun === true;
+  const messages = rawMessages.length ? normalizeLineOutboundMessages(rawMessages) : (text ? [{ type: 'text', text }] : []);
   if (!uid) return { success: false, error: 'MISSING_UID' };
   if (!threadId) return { success: false, error: 'MISSING_THREAD_ID' };
-  if (!text) return { success: false, error: 'MISSING_TEXT' };
-  if (text.length > 5000) return { success: false, error: 'TEXT_TOO_LONG' };
+  if (!messages.length) return { success: false, error: 'MISSING_MESSAGES' };
 
   const thread = await env.DB.prepare(`
     SELECT id, display_name, source_user_id, source_group_id
@@ -3559,6 +3634,7 @@ async function d1SendLineOaReply(env, body = {}) {
         threadId,
         targetType: target.type,
         targetPreview: `${target.to.slice(0, 6)}...${target.to.slice(-6)}`,
+        messageCount: messages.length,
         hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
       },
     };
@@ -3566,26 +3642,33 @@ async function d1SendLineOaReply(env, body = {}) {
 
   let lineResult = null;
   try {
-    lineResult = await pushLineTextMessage(env, target.to, text);
+    lineResult = await pushLineMessages(env, target.to, messages);
   } catch (err) {
     return { success: false, error: 'LINE_PUSH_FAILED', detail: err.message || String(err) };
   }
   const now = new Date().toISOString();
-  await env.DB.prepare(`
-    INSERT INTO line_messages (
-      id, thread_id, line_event_id, reply_token, message_type, sender_role,
-      sender_id, sender_name, message_text, raw_json, created_at
-    ) VALUES (?, ?, '', '', 'text', 'guide', ?, ?, ?, ?, ?)
-  `).bind(
-    crypto.randomUUID(),
-    threadId,
-    uid,
-    '客服',
-    text,
-    JSON.stringify({ kind: 'manual_reply', targetType: target.type, line: lineResult }),
-    now
-  ).run();
+  for (const message of messages) {
+    await env.DB.prepare(`
+      INSERT INTO line_messages (
+        id, thread_id, line_event_id, reply_token, message_type, sender_role,
+        sender_id, sender_name, message_text, raw_json, media_url, media_content_type, media_size, created_at
+      ) VALUES (?, ?, '', '', ?, 'guide', ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      threadId,
+      message.type || 'text',
+      uid,
+      '客服',
+      summarizeLineOutboundMessage(message),
+      JSON.stringify({ kind: 'manual_reply', targetType: target.type, line: lineResult, message }),
+      message.type === 'image' ? message.originalContentUrl : '',
+      message.type === 'image' ? 'image' : '',
+      0,
+      now
+    ).run();
+  }
 
+  const summaryText = messages.map(summarizeLineOutboundMessage).filter(Boolean).join('\n').slice(0, 1000);
   await env.DB.prepare(`
     UPDATE line_threads
     SET status = 'pending',
@@ -3594,7 +3677,7 @@ async function d1SendLineOaReply(env, body = {}) {
         last_message_at = ?,
         updated_at = ?
     WHERE id = ?
-  `).bind(text, now, now, threadId).run();
+  `).bind(summaryText, now, now, threadId).run();
 
   const updated = await d1GetLineThread(env, threadId);
   return {
@@ -6115,6 +6198,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1SendLineOaReply(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/upload-asset' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await uploadLineOaAsset(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
