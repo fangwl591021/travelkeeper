@@ -2680,6 +2680,10 @@ function isLineAutoReplyEnabled(env) {
   return String(env.LINE_AUTO_REPLY_ENABLED || '').trim() === '1';
 }
 
+function isLineReplyEnabled(env) {
+  return String(env.LINE_REPLY_ENABLED || '').trim() === '1';
+}
+
 function normalizeKnowledgeText(value = '') {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -3720,6 +3724,9 @@ async function d1UpdateLineThread(env, body = {}) {
 
 async function d1SendLineOaReply(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
+  if (!isLineReplyEnabled(env)) {
+    return { success: false, error: 'LINE_REPLY_DISABLED', detail: 'LINE reply sending is disabled.' };
+  }
   await ensureLineMessageMediaColumns(env);
   const uid = String(body.uid || '').trim();
   const threadId = String(body.threadId || body.thread_id || body.id || '').trim();

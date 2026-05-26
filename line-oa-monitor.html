@@ -336,7 +336,7 @@
             <button id="reply-quick" type="button" title="快速片語" class="icon-tool border border-slate-300 bg-white text-xl text-slate-500 hover:bg-slate-50">&#65291;</button>
             <textarea id="draft-reply" rows="4" class="flex-1 min-h-[120px] rounded-3xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" placeholder="建議回覆會放在這裡，也可直接人工改寫後送出。"></textarea>
             <div class="flex flex-col gap-2">
-              <button id="send-reply" class="rounded-2xl bg-emerald-500 text-white font-semibold px-5 py-3 hover:bg-emerald-600">送出</button>
+              <button id="send-reply" disabled class="rounded-2xl bg-slate-200 text-slate-500 font-semibold px-5 py-3 cursor-not-allowed">回應已停用</button>
               <button id="copy-reply" class="rounded-2xl bg-slate-100 text-slate-700 font-semibold px-5 py-3 hover:bg-slate-200">&#35079;&#35069;</button>
             </div>
           </div>
@@ -886,7 +886,7 @@
         : 'px-6 py-2 bg-slate-50 text-slate-600 border-b border-slate-200 text-xs font-semibold';
       aiModeBannerEl.textContent = paused
         ? '目前為人工回應：此聊天室的新訊息會暫停自動回覆。'
-        : '目前為AI回應：需要人工接手時，按狀態按鈕即可切換。';
+        : '回應功能已全面停止：目前僅監看、標記與紀錄。';
     }
 
     function recordPriorityLabel(priority) {
@@ -1655,6 +1655,8 @@
     }
 
     async function sendReply() {
+      showToast('回應功能已全面停止，目前不會送出任何訊息。', 'error');
+      return;
       const thread = getActiveThread();
       const text = (panelDraftEl.value || '').trim();
       if (!thread) {
