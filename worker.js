@@ -2610,7 +2610,9 @@ async function handleLineWebhookGateway(request, env, ctx) {
     }
 
     try {
-      const gasResult = await postToGasWebhook(env, payload);
+      const gasPayload = await filterLineWebhookPayloadForAutoReply(env, payload);
+      if (!gasPayload) return;
+      const gasResult = await postToGasWebhook(env, gasPayload);
       const replyPayload = gasResult?.data?.replyPayload || gasResult?.replyPayload || null;
       if (replyPayload?.replyToken && Array.isArray(replyPayload?.messages) && replyPayload.messages.length > 0) {
         await replyLineMessage(env, replyPayload);
@@ -2626,6 +2628,20 @@ async function handleLineWebhookGateway(request, env, ctx) {
     queued: true,
     forwarded: !!env.FORWARD_WEBHOOK_URL,
   });
+}
+
+async function filterLineWebhookPayloadForAutoReply(env, payload = {}) {
+  const events = Array.isArray(payload?.events) ? payload.events : [];
+  if (!events.length || !env.DB) return payload;
+  const activeEvents = [];
+  for (const event of events) {
+    const threadId = getLineThreadId(event?.source || {});
+    const paused = await isLineThreadAiPaused(env, threadId);
+    if (!paused) activeEvents.push(event);
+  }
+  if (!activeEvents.length) return null;
+  if (activeEvents.length === events.length) return payload;
+  return { ...payload, events: activeEvents };
 }
 
 function getLineThreadId(source = {}) {
@@ -2985,6 +3001,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
 async function d1GetLineThreads(env) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
+  await ensureLineThreadAiPauseColumn(env);
   const { results } = await env.DB.prepare(`
     SELECT
       id,
@@ -3002,6 +3019,7 @@ async function d1GetLineThreads(env) {
       opportunity_stage,
       opportunity_value,
       opportunity_note,
+      ai_paused,
       (
         SELECT COUNT(*)
         FROM line_visitor_requirements req
@@ -3042,6 +3060,7 @@ async function d1GetLineThreads(env) {
       opportunityStage: row.opportunity_stage || 'new',
       opportunityValue: Number(row.opportunity_value || 0),
       opportunityNote: row.opportunity_note || '',
+      aiPaused: Number(row.ai_paused || 0) === 1,
       importantCount: Number(row.important_count || 0),
       latestImportantNote: row.latest_important_note || '',
       lastMessageAt: row.last_message_at || '',
@@ -3069,9 +3088,34 @@ async function ensureLineThreadOpportunityColumns(env) {
   `).run();
 }
 
+async function ensureLineThreadAiPauseColumn(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  try {
+    await env.DB.prepare(`ALTER TABLE line_threads ADD COLUMN ai_paused INTEGER NOT NULL DEFAULT 0`).run();
+  } catch (err) {
+    if (!String(err?.message || err).toLowerCase().includes('duplicate column')) throw err;
+  }
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_threads_ai_paused
+    ON line_threads(ai_paused, updated_at)
+  `).run();
+}
+
+async function isLineThreadAiPaused(env, threadId) {
+  if (!env.DB || !threadId) return false;
+  await ensureLineThreadAiPauseColumn(env);
+  const row = await env.DB.prepare(`
+    SELECT ai_paused
+    FROM line_threads
+    WHERE id = ?
+  `).bind(threadId).first();
+  return Number(row?.ai_paused || 0) === 1;
+}
+
 async function ensureLineVisitorRequirementsTable(env) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineThreadOpportunityColumns(env);
+  await ensureLineThreadAiPauseColumn(env);
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS line_visitor_requirements (
       id TEXT PRIMARY KEY,
@@ -3144,6 +3188,7 @@ async function d1GetLineVisitorRequirements(env, threadId) {
 async function d1GetLineThread(env, threadId) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
+  await ensureLineThreadAiPauseColumn(env);
   await ensureLineMessageMediaColumns(env);
   const threadRow = await env.DB.prepare(`
     SELECT
@@ -3162,6 +3207,7 @@ async function d1GetLineThread(env, threadId) {
       opportunity_stage,
       opportunity_value,
       opportunity_note,
+      ai_paused,
       (
         SELECT COUNT(*)
         FROM line_visitor_requirements req
@@ -3248,6 +3294,7 @@ async function d1GetLineThread(env, threadId) {
       opportunityStage: thread.opportunity_stage || 'new',
       opportunityValue: Number(thread.opportunity_value || 0),
       opportunityNote: thread.opportunity_note || '',
+      aiPaused: Number(thread.ai_paused || 0) === 1,
       importantCount: Number(thread.important_count || visitorRecords.length || 0),
       latestImportantNote: thread.latest_important_note || visitorRecords[0]?.content || '',
       visitorRecords,
@@ -3261,6 +3308,7 @@ async function d1GetLineCrm(env) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
   await ensureLineThreadOpportunityColumns(env);
+  await ensureLineThreadAiPauseColumn(env);
   const { results } = await env.DB.prepare(`
     SELECT
       id,
@@ -3278,6 +3326,7 @@ async function d1GetLineCrm(env) {
       opportunity_stage,
       opportunity_value,
       opportunity_note,
+      ai_paused,
       last_message_at
     FROM line_threads
     ORDER BY COALESCE(last_message_at, created_at) DESC
@@ -3332,6 +3381,7 @@ async function d1GetLineCrm(env) {
         opportunityStage: row.opportunity_stage || 'new',
         opportunityValue: Number(row.opportunity_value || 0),
         opportunityNote: row.opportunity_note || '',
+        aiPaused: Number(row.ai_paused || 0) === 1,
         importantCount: visitorRecords.length,
         latestImportantNote: visitorRecords[0]?.content || '',
         visitorRecords,
@@ -3417,6 +3467,7 @@ async function d1BackfillLineThreadProfiles(env, limit = 100) {
 async function d1UpdateLineThread(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineThreadOpportunityColumns(env);
+  await ensureLineThreadAiPauseColumn(env);
   const threadId = String(body.id || '').trim();
   if (!threadId) return { success: false, error: '蝻箏??予摰?id' };
   const tags = Array.isArray(body.tags)
@@ -3435,6 +3486,9 @@ async function d1UpdateLineThread(env, body = {}) {
   const opportunityValue = body.opportunityValue === undefined && body.opportunity_value === undefined
     ? null
     : Math.max(0, Math.round(Number(body.opportunityValue ?? body.opportunity_value ?? 0) || 0));
+  const aiPaused = body.aiPaused === undefined && body.ai_paused === undefined
+    ? null
+    : ((body.aiPaused ?? body.ai_paused) === true || String(body.aiPaused ?? body.ai_paused) === '1' ? 1 : 0);
   const sets = [];
   const values = [];
   if (status !== null) {
@@ -3460,6 +3514,10 @@ async function d1UpdateLineThread(env, body = {}) {
   if (body.tags !== undefined) {
     sets.push('tags = ?');
     values.push(tags.join(','));
+  }
+  if (aiPaused !== null) {
+    sets.push('ai_paused = ?');
+    values.push(aiPaused);
   }
   if (!sets.length) return { success: false, error: '????????' };
   sets.push("updated_at = datetime('now')");

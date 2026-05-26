@@ -105,13 +105,14 @@
           </div>
           <div class="flex flex-wrap gap-2 items-center">
             <button id="open-visitor-records" class="px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-semibold">重要紀錄</button>
+            <button id="manual-handoff" class="px-4 py-2 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold">人工回應</button>
             <button id="mark-open" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">待回覆</button>
             <button id="mark-pending" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">處理中</button>
             <button id="mark-closed" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">已處理</button>
           </div>
         </div>
 
-        <div class="px-6 py-3 bg-slate-600 text-white text-sm font-semibold">
+        <div id="ai-mode-banner" class="px-6 py-3 bg-slate-600 text-white text-sm font-semibold">
           &#36889;&#35041;&#21482;&#20570;&#30435;&#30475;&#12289;&#27161;&#35387;&#33287;&#24314;&#35696;&#22238;&#35206;&#65292;&#19981;&#30452;&#25509;&#24178;&#25854;&#30446;&#21069;&#30495;&#23526;&#23458;&#26381;&#22238;&#35206;&#27969;&#31243;&#12290;
         </div>
 
@@ -367,6 +368,8 @@
     const opportunityValueEl = document.getElementById('opportunity-value');
     const opportunityNoteEl = document.getElementById('opportunity-note');
     const opportunityStagePillEl = document.getElementById('opportunity-stage-pill');
+    const manualHandoffEl = document.getElementById('manual-handoff');
+    const aiModeBannerEl = document.getElementById('ai-mode-banner');
 
     let publishedItineraries = [];
     let replyToolMode = '';
@@ -495,6 +498,21 @@
           ? 'px-4 py-2 rounded-xl border border-slate-900 bg-slate-900 text-white text-sm font-semibold'
           : 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50';
       });
+    }
+
+    function syncAiPauseControls(thread) {
+      const paused = !!thread?.aiPaused;
+      manualHandoffEl.disabled = !thread;
+      manualHandoffEl.textContent = paused ? '恢復 AI 自動回覆' : '人工回應';
+      manualHandoffEl.className = paused
+        ? 'px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600'
+        : 'px-4 py-2 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold hover:bg-rose-100';
+      aiModeBannerEl.className = paused
+        ? 'px-6 py-3 bg-rose-600 text-white text-sm font-semibold'
+        : 'px-6 py-3 bg-slate-600 text-white text-sm font-semibold';
+      aiModeBannerEl.textContent = paused
+        ? '人工接手中：此聊天室的新訊息不會交給 AI 自動回覆；人工處理結束後再按一次即可恢復。'
+        : 'AI 自動回覆中：需要人工介入時，按「人工回應」可暫停此聊天室的 AI 自動回覆。';
     }
 
     function recordPriorityLabel(priority) {
@@ -850,6 +868,7 @@
         status: 'pending',
         assignedTo: '',
         tags: ['\u624b\u52d5\u532f\u5165'],
+        aiPaused: false,
         note: '',
         lastMessageAt: new Date().toISOString(),
         messages: text.split('\n').filter(Boolean).map((line, index) => ({
@@ -956,6 +975,7 @@
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${opportunityClass(item.opportunityStage)}">${opportunityLabel(item.opportunityStage)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
+          ${item.aiPaused ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-600 text-white">人工接手</span>' : ''}
           ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} 則</span>` : ''}
           ${Number(item.importantCount || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">重要 ${item.importantCount}</span>` : ''}
         `;
@@ -1157,6 +1177,7 @@
         replyToolMode = '';
         renderOpportunity(null);
         syncStatusButtons('');
+        syncAiPauseControls(null);
         return;
       }
 
@@ -1184,6 +1205,7 @@
       renderVisitorRecords(thread);
       renderOpportunity(thread);
       syncStatusButtons(thread.status || 'open');
+      syncAiPauseControls(thread);
 
       const merged = (thread.messages || []).map(msg => msg.text || '').join('\n');
       const hits = [
@@ -1204,7 +1226,7 @@
         showToast('請先選擇聊天室', 'error');
         return;
       }
-      const statusButtons = ['mark-open', 'mark-pending', 'mark-closed']
+      const statusButtons = ['mark-open', 'mark-pending', 'mark-closed', 'manual-handoff']
         .map(id => document.getElementById(id))
         .filter(Boolean);
       statusButtons.forEach(button => {
@@ -1394,6 +1416,19 @@
     document.getElementById('mark-open').addEventListener('click', () => updateThreadMeta({ status: 'open', note: internalNoteEl.value, tags: (allThreads.find(item => item.id === activeThreadId)?.tags || []) }).catch(err => showToast(err.message, 'error')));
     document.getElementById('mark-pending').addEventListener('click', () => updateThreadMeta({ status: 'pending', note: internalNoteEl.value, tags: (allThreads.find(item => item.id === activeThreadId)?.tags || []) }).catch(err => showToast(err.message, 'error')));
     document.getElementById('mark-closed').addEventListener('click', () => updateThreadMeta({ status: 'closed', note: internalNoteEl.value, tags: (allThreads.find(item => item.id === activeThreadId)?.tags || []) }).catch(err => showToast(err.message, 'error')));
+    manualHandoffEl.addEventListener('click', () => {
+      const active = allThreads.find(item => item.id === activeThreadId);
+      if (!active) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      updateThreadMeta({
+        aiPaused: !active.aiPaused,
+        status: active.aiPaused ? (active.status || 'open') : 'pending',
+        note: internalNoteEl.value,
+        tags: active.tags || [],
+      }).catch(err => showToast(err.message, 'error'));
+    });
 
     async function init() {
       if (location.protocol === 'file:') {
