@@ -6,6 +6,7 @@
   <title>LINE OA &#31649;&#29702;&#24460;&#21488; | TravelKeeper</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./travel-qa-knowledge.js?v=20260526"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Noto Sans TC', sans-serif; background: #eef3f8; font-size: 15px; }
@@ -634,6 +635,7 @@
       const tags = [];
       if (hasDocumentIntent(haystack)) tags.push('證件辦理');
       if (hasImageUpload(thread) && !hasDocumentUploadRequest(haystack) && !hasDocumentIntent(haystack)) tags.push('圖片待確認');
+      if (window.TravelKeeperTravelQa?.match?.(haystack, 1)?.length) tags.push('品保Q&A');
       return tags;
     }
 
@@ -643,6 +645,10 @@
       const documentSuggestion = buildDocumentServiceSuggestion(thread);
       if (documentSuggestion) {
         suggestions.push(documentSuggestion);
+      }
+      const travelQaSuggestion = window.TravelKeeperTravelQa?.buildSuggestion?.(haystack);
+      if (travelQaSuggestion) {
+        suggestions.push(travelQaSuggestion);
       }
       if (/(\u65e5\u672c|\u6eab\u6cc9|\u8cde\u96ea|\u8cde\u696d|\u4e5d\u5dde|\u5bb6\u65cf|\u89aa\u5b50)/.test(haystack)) {
         suggestions.push('\u60a8\u597d\uff0c\u82e5\u60a8\u60f3\u53c3\u8003\u65e5\u672c\u3001\u6eab\u6cc9\u6216\u89aa\u5b50\u65c5\u904a\u65b9\u5411\uff0c\u6211\u5011\u9019\u908a\u6709\u5e7e\u652f\u9069\u5408\u7684\u884c\u7a0b\u53ef\u4ee5\u63d0\u4f9b\u60a8\u53c3\u8003\uff0c\u6211\u518d\u5e6b\u60a8\u6574\u7406\u6210\u6bd4\u8f03\u61f6\u4eba\u597d\u6311\u9078\u7684\u9078\u9805\u3002');
