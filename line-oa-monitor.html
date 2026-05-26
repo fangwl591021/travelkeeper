@@ -34,6 +34,7 @@
         <div class="mt-4 grid grid-cols-2 gap-3">
           <button id="open-broadcast-workbench" type="button" class="rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800">分時推播工作台</button>
           <button id="open-customer-crm" type="button" class="rounded-2xl bg-emerald-500 text-white px-4 py-3 text-sm font-semibold hover:bg-emerald-600">客戶 CRM</button>
+          <button id="open-script-upload" type="button" class="col-span-2 rounded-2xl bg-amber-500 text-white px-4 py-3 text-sm font-semibold hover:bg-amber-600">上傳腳本 / 匯入對話</button>
           <a href="./rich-menu-manager.html" class="col-span-2 rounded-2xl bg-blue-600 text-center text-white px-4 py-3 text-sm font-semibold hover:bg-blue-700">圖文選單管理</a>
         </div>
       </div>
@@ -61,8 +62,8 @@
       <div class="border-t border-slate-200 bg-white">
         <button id="tools-toggle" type="button" class="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition">
           <div class="text-left">
-            <p class="font-semibold text-sm text-slate-900">&#24037;&#20855;&#33287;&#25163;&#21205;&#21295;&#20837;</p>
-            <p class="text-xs text-slate-500 mt-1">&#24179;&#24120;&#25910;&#22312;&#24213;&#37096;&#65292;&#38656;&#35201;&#26178;&#20877;&#23637;&#38283;</p>
+            <p class="font-semibold text-sm text-slate-900">上傳腳本與手動匯入</p>
+            <p class="text-xs text-slate-500 mt-1">可讀取腳本、歷史對話或 LINE OA 匯出文字。</p>
           </div>
           <span id="tools-toggle-label" class="text-slate-400 text-sm font-semibold">&#23637;&#38283;</span>
         </button>
@@ -1584,6 +1585,13 @@
 
     document.getElementById('open-broadcast-workbench').addEventListener('click', () => {
       showToast('分時推播工作台入口已保留，尚未接正式頁面。');
+    });
+
+    document.getElementById('open-script-upload').addEventListener('click', () => {
+      toolsPanelEl.hidden = false;
+      syncToolsPanel();
+      importFileEl.focus();
+      showToast('已展開上傳腳本與手動匯入');
     });
 
     document.getElementById('open-customer-crm').addEventListener('click', () => {
