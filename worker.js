@@ -2445,10 +2445,6 @@ async function readMyStatsWithFallback(env, uid) {
 }
 
 
-function getGasWebhookUrl(env) {
-  return env.GAS_URL || env.GAS_WEBAPP_URL || '';
-}
-
 function bytesToBase64(bytes) {
   let binary = '';
   const chunkSize = 0x8000;
@@ -2627,28 +2623,6 @@ async function forwardWebhookToSecondary(env, rawBody, signature) {
   return { forwarded: true, status: res.status };
 }
 
-async function postToGasWebhook(env, payload) {
-  const gasUrl = getGasWebhookUrl(env);
-  if (!gasUrl) throw new Error('GAS_URL missing');
-  const res = await fetch(gasUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'LINE_WEBHOOK', payload }),
-    redirect: 'follow',
-  });
-  const text = await res.text();
-  let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch (err) {
-    throw new Error(`GAS non-JSON response (${res.status}): ${text.slice(0, 200)}`);
-  }
-  if (!res.ok) {
-    throw new Error(`GAS response ${res.status}: ${text.slice(0, 200)}`);
-  }
-  return data;
-}
-
 async function handleLineWebhookGateway(request, env, ctx) {
   const rawBody = await request.text();
   const signature = request.headers.get('x-line-signature') || '';
@@ -2683,12 +2657,9 @@ async function handleLineWebhookGateway(request, env, ctx) {
     }
 
     try {
-      const gasPayload = await filterLineWebhookPayloadForAutoReply(env, payload);
-      if (!gasPayload) return;
-      const gasResult = await postToGasWebhook(env, gasPayload);
-      const replyPayload = gasResult?.data?.replyPayload || gasResult?.replyPayload || null;
-      if (replyPayload?.replyToken && Array.isArray(replyPayload?.messages) && replyPayload.messages.length > 0) {
-        await replyLineMessage(env, replyPayload);
+      const autoReplyResult = await replyLineWebhookWithKnowledge(env, payload);
+      if (autoReplyResult?.replied) {
+        console.log(`line webhook knowledge replies sent: ${autoReplyResult.replied}`);
       }
     } catch (err) {
       console.error('line webhook background processing failed:', err.message);
@@ -2701,6 +2672,144 @@ async function handleLineWebhookGateway(request, env, ctx) {
     queued: true,
     forwarded: !!env.FORWARD_WEBHOOK_URL,
   });
+}
+
+function normalizeKnowledgeText(value = '') {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function scoreKnowledgeEntry(entry = {}, text = '') {
+  const haystack = normalizeKnowledgeText(text);
+  if (!haystack) return 0;
+  let score = 0;
+  const keywords = Array.isArray(entry.keywords) ? entry.keywords : [];
+  const tags = Array.isArray(entry.tags) ? entry.tags : [];
+  keywords.forEach(keyword => {
+    const value = normalizeKnowledgeText(keyword);
+    if (value && haystack.includes(value)) score += 3;
+  });
+  tags.forEach(tag => {
+    const value = normalizeKnowledgeText(tag);
+    if (value && haystack.includes(value)) score += 1;
+  });
+  const title = normalizeKnowledgeText(entry.title);
+  if (title && haystack.includes(title)) score += 4;
+  return score;
+}
+
+async function getPublishedKnowledgeEntries(env) {
+  if (!env.TRAVEL) return [];
+  const manifest = await getKnowledgeManifest(env);
+  const files = Array.isArray(manifest?.files) ? manifest.files : [];
+  const published = files.filter(file => (file.status || 'published') === 'published');
+  const entries = [];
+  for (const file of published) {
+    try {
+      const doc = await readKnowledgeJson(env, file.path || '');
+      const docEntries = Array.isArray(doc?.entries) ? doc.entries : [];
+      docEntries.forEach(entry => {
+        entries.push({
+          ...entry,
+          documentTitle: doc?.title || file.title || '',
+          category: entry.category || doc?.category || file.category || '',
+          source: entry.source || doc?.source || file.source || '',
+        });
+      });
+    } catch (err) {
+      console.warn('knowledge document load failed:', file.path || '', err?.message || err);
+    }
+  }
+  return entries;
+}
+
+function matchKnowledgeEntries(entries = [], text = '', limit = 2) {
+  return entries
+    .map(entry => ({ ...entry, score: scoreKnowledgeEntry(entry, text) }))
+    .filter(entry => entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+function buildKnowledgeAutoReplyText(matches = []) {
+  const body = matches
+    .map(entry => String(entry.reply_template || entry.answer || '').trim())
+    .filter(Boolean)
+    .join('\n\n');
+  if (!body) return '';
+  const sources = [...new Set(matches.map(entry => entry.source || entry.documentTitle).filter(Boolean))];
+  const sourceLine = sources.length ? `\n\n參考資料：${sources.join('、')}` : '';
+  return `${body}${sourceLine}`.slice(0, 4900);
+}
+
+function buildDefaultLineAutoReplyText(event = {}) {
+  const text = readableLineMessageText(event, event?.message?.type || event?.type || 'message');
+  if (/(\u5716\u7247|\u6a94\u6848|\u7167\u7247|\u8b49\u4ef6|\u4e0a\u50b3)/.test(text)) {
+    return '您好，已收到您提供的資料。我們會先確認內容是否清楚完整，再依照服務項目協助您後續處理。';
+  }
+  return '您好，感謝您來訊！請問您想了解哪個方向的行程或服務呢？例如目的地、預算、出發日期、人數，或是證件辦理需求，我們可以再幫您整理合適的建議。';
+}
+
+async function replyLineWebhookWithKnowledge(env, payload = {}) {
+  const filteredPayload = await filterLineWebhookPayloadForAutoReply(env, payload);
+  const events = Array.isArray(filteredPayload?.events) ? filteredPayload.events : [];
+  if (!events.length) return { replied: 0, skipped: true };
+  const knowledgeEntries = await getPublishedKnowledgeEntries(env);
+  let replied = 0;
+  for (const event of events) {
+    const replyToken = String(event?.replyToken || '').trim();
+    if (!replyToken) continue;
+    const eventType = String(event?.type || '').toLowerCase();
+    const messageType = String(event?.message?.type || '').toLowerCase();
+    if (eventType !== 'message' || !['text', 'image', 'file'].includes(messageType)) continue;
+    const incomingText = readableLineMessageText(event, messageType);
+    const matches = matchKnowledgeEntries(knowledgeEntries, incomingText, 2);
+    const text = buildKnowledgeAutoReplyText(matches) || buildDefaultLineAutoReplyText(event);
+    if (!text) continue;
+    await replyLineMessage(env, {
+      replyToken,
+      messages: [{ type: 'text', text }],
+    });
+    await storeLineAutoReplyMessage(env, event, text, matches);
+    replied += 1;
+  }
+  return { replied, knowledgeEntries: knowledgeEntries.length };
+}
+
+async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = []) {
+  if (!env.DB) return;
+  await ensureLineMessageMediaColumns(env);
+  const threadId = getLineThreadId(event?.source || {});
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO line_messages (
+      id, thread_id, line_event_id, reply_token, message_type, sender_role,
+      sender_id, sender_name, message_text, raw_json, media_url, media_content_type, media_size, created_at
+    ) VALUES (?, ?, '', ?, 'text', 'guide', 'knowledge-auto-reply', 'AI 知識庫', ?, ?, '', '', 0, ?)
+  `).bind(
+    crypto.randomUUID(),
+    threadId,
+    String(event?.replyToken || ''),
+    String(text || '').slice(0, 5000),
+    JSON.stringify({
+      kind: 'knowledge_auto_reply',
+      matchedEntries: matches.map(entry => ({
+        id: entry.id || '',
+        title: entry.title || '',
+        score: entry.score || 0,
+        source: entry.source || entry.documentTitle || '',
+      })),
+    }),
+    now
+  ).run();
+
+  await env.DB.prepare(`
+    UPDATE line_threads
+    SET summary = ?,
+        unread_count = 0,
+        last_message_at = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).bind(String(text || '').slice(0, 1000), now, now, threadId).run();
 }
 
 async function filterLineWebhookPayloadForAutoReply(env, payload = {}) {
@@ -4464,27 +4573,38 @@ async function checkLineBotInfo(env) {
 }
 
 async function buildHubTestStatus(env) {
-  const gasUrl = getGasWebhookUrl(env);
-  const gas = await checkEndpoint(gasUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'GET_SETTINGS' }),
-  });
+  const knowledge = await checkKnowledgeAutoReplyStatus(env);
   const forward = env.FORWARD_WEBHOOK_URL
     ? await checkEndpoint(env.FORWARD_WEBHOOK_URL, { method: 'GET' })
     : { ok: false, status: 'disabled', detail: 'FORWARD_WEBHOOK_URL not configured' };
   const line = await checkLineBotInfo(env);
   return {
-    gas,
+    knowledge,
     forward,
     line,
     config: {
-      hasGasUrl: !!gasUrl,
+      hasKnowledgeStorage: !!env.TRAVEL,
       hasLineSecret: !!env.LINE_CHANNEL_SECRET,
       hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
       hasForwardWebhook: !!env.FORWARD_WEBHOOK_URL,
     },
   };
+}
+
+async function checkKnowledgeAutoReplyStatus(env) {
+  if (!env.TRAVEL) return { ok: false, status: 'missing', detail: 'TRAVEL R2 binding missing' };
+  try {
+    const entries = await getPublishedKnowledgeEntries(env);
+    return {
+      ok: entries.length > 0,
+      status: entries.length > 0 ? 'ready' : 'empty',
+      detail: entries.length > 0
+        ? `${entries.length} published knowledge entries available`
+        : 'No published knowledge entries',
+    };
+  } catch (err) {
+    return { ok: false, status: 'error', detail: err?.message || String(err) };
+  }
 }
 
 async function hmacSha256Hex(secret, message) {
@@ -5837,19 +5957,19 @@ function renderHubTestHtml(status, origin) {
     <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px;">
       <div>
         <div style="font-size:12px;font-weight:900;color:#94a3b8;letter-spacing:.18em;text-transform:uppercase;">Webhook Diagnostics</div>
-        <h1 style="font-size:40px;line-height:1.1;margin:10px 0 8px;font-weight:900;">Dual Webhook Diagnostics</h1>
-        <p style="margin:0;color:#64748b;font-size:16px;">Check Worker, GAS, secondary system, and LINE reply connectivity.</p>
+        <h1 style="font-size:40px;line-height:1.1;margin:10px 0 8px;font-weight:900;">LINE Webhook Diagnostics</h1>
+        <p style="margin:0;color:#64748b;font-size:16px;">Check Worker knowledge auto-reply, optional secondary forwarding, and LINE reply connectivity.</p>
       </div>
       <a href="${origin}/ai-guide-system.html" style="display:inline-block;padding:12px 16px;border-radius:14px;background:#0f172a;color:#fff;text-decoration:none;font-weight:800;">Open AI Guide System</a>
     </div>
     <div class="card">
-      ${row('GAS backend', status.gas)}
+      ${row('Knowledge auto-reply', status.knowledge)}
       ${row('Secondary system', status.forward)}
       ${row('LINE Bot Token', status.line)}
       <div style="padding-top:18px;">
         <div style="font-weight:900;font-size:18px;margin-bottom:12px;">Environment flags</div>
         <div>
-          <span class="pill">GAS_URL: ${status.config.hasGasUrl ? 'configured' : 'missing'}</span>
+          <span class="pill">TRAVEL R2: ${status.config.hasKnowledgeStorage ? 'configured' : 'missing'}</span>
           <span class="pill">LINE_CHANNEL_SECRET: ${status.config.hasLineSecret ? 'configured' : 'missing'}</span>
           <span class="pill">LINE_CHANNEL_ACCESS_TOKEN: ${status.config.hasLineToken ? 'configured' : 'missing'}</span>
           <span class="pill">FORWARD_WEBHOOK_URL: ${status.config.hasForwardWebhook ? 'configured' : 'missing'}</span>
@@ -5860,7 +5980,7 @@ function renderHubTestHtml(status, origin) {
         <ul style="margin:0;padding-left:18px;color:#475569;line-height:1.8;">
           <li>Set LINE Webhook URL to <code>${origin}/line-webhook</code></li>
           <li>Set <code>FORWARD_WEBHOOK_URL</code> if a second system should receive the same event</li>
-          <li>GAS should return <code>{ replyPayload: { replyToken, messages } }</code> or <code>{ data: { replyPayload } }</code></li>
+          <li>Knowledge auto-reply reads published files from <code>knowledge/manifest.json</code> in R2</li>
         </ul>
       </div>
     </div>
