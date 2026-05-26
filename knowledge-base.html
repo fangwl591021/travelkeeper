@@ -67,6 +67,71 @@
             尚未選擇檔案。
           </div>
         </div>
+
+        <div class="rounded-3xl bg-white border border-slate-200 p-5">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-black">AI 產檔規格</h2>
+              <p class="text-sm text-slate-500 mt-1 leading-6">把這段複製到 AI，請 AI 直接產出可上傳的知識庫 JSON。</p>
+            </div>
+            <button id="copy-ai-spec" type="button" class="shrink-0 rounded-2xl bg-slate-900 text-white px-4 py-2 text-sm font-bold hover:bg-slate-800">複製</button>
+          </div>
+          <pre id="ai-spec-text" class="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">請幫我整理成 TravelKeeper 知識庫 JSON。請只輸出 JSON，不要加任何解釋文字、Markdown code block 或前後說明。
+
+檔案路徑建議：
+- 路徑必須放在 knowledge/ 底下。
+- 副檔名必須是 .json。
+- 建議用英文小寫、數字、底線與斜線，不要使用中文檔名、空白或特殊符號。
+- 範例：knowledge/qa/passport_visa_zh_tw.json
+
+JSON 最外層必填欄位：
+- id：字串，這份知識檔的唯一代號。範例 passport_visa_qa
+- title：字串，知識檔名稱。範例 護照與台胞證辦理 Q&A
+- entries：陣列，知識段落清單。
+
+JSON 最外層建議欄位：
+- source：字串，資料來源。
+- source_url：字串，來源網址，沒有可留空字串。
+- version：字串，版本日期，格式 YYYY-MM-DD。
+- status：字串，使用 published。
+- category：字串，分類代號，例如 document_service、official_qa、booking、payment。
+- usage：字串，這份知識給客服或 AI 使用的用途說明。
+
+entries 每一筆必填欄位：
+- id：字串，單一知識段落代號，英文小寫與底線。
+- title：字串，問題或主題名稱。
+- keywords：陣列，AI 比對用關鍵字。
+- reply_template 或 answer：至少要有一個。建議兩個都放。
+
+entries 每一筆建議欄位：
+- answer：內部知識摘要。
+- reply_template：客服可直接複製給客戶的回覆文字，語氣要完整、自然、可直接送出。
+- tags：陣列，後台篩選標籤。
+
+請依照以下結構輸出：
+{
+  "id": "passport_visa_qa",
+  "title": "護照與台胞證辦理 Q&A",
+  "source": "威果旅行社內部規範",
+  "source_url": "",
+  "version": "2026-05-26",
+  "status": "published",
+  "category": "document_service",
+  "usage": "供 AI 客服判斷護照、台胞證、證件辦理與資料上傳流程使用。",
+  "entries": [
+    {
+      "id": "passport_new_apply",
+      "title": "首次辦理護照需要什麼資料",
+      "keywords": ["護照", "首次辦理", "新辦護照", "證件", "照片"],
+      "answer": "首次辦理護照通常需要身分證、符合規格的大頭照、申請書與本人資料。實際資料仍需依當下主管機關規定確認。",
+      "reply_template": "您好，若您要首次辦理護照，請先準備身分證正本、符合規格的大頭照，以及基本聯絡資料。我們會協助您確認資料是否完整，若照片或證件不符合規格，會再提醒您補件。",
+      "tags": ["證件辦理", "護照"]
+    }
+  ]
+}
+
+請把我接下來提供的資料整理成上述格式。若資料太長，請拆成多個 entries；每個 entries 都要有清楚的 keywords 與可直接給客服使用的 reply_template。</pre>
+        </div>
       </aside>
 
       <section class="space-y-5">
@@ -348,6 +413,12 @@
       };
       await navigator.clipboard.writeText(JSON.stringify(template, null, 2));
       showToast('已複製 JSON 範本');
+    });
+
+    document.getElementById('copy-ai-spec').addEventListener('click', async () => {
+      const text = document.getElementById('ai-spec-text')?.textContent || '';
+      await navigator.clipboard.writeText(text.trim());
+      showToast('已複製 AI 知識庫規格提示詞');
     });
 
     searchEl.addEventListener('input', renderFiles);
