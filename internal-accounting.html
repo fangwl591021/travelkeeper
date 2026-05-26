@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>查帳 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f3f7fb; }
+    [hidden] { display: none !important; }
+    .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900">
+  <main class="max-w-[1500px] mx-auto px-5 py-8">
+    <header class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
+      <div>
+        <p class="text-xs tracking-[0.28em] text-slate-400 font-bold uppercase">WEGO ACCOUNTING</p>
+        <h1 class="text-4xl md:text-5xl font-black mt-2">查帳</h1>
+        <p class="text-slate-500 mt-3 max-w-3xl leading-7">
+          從訂單的訂金與尾款自動產生查帳列，財務只需標記「已查收」或「待處理」。
+        </p>
+        <p id="operator" class="text-sm text-slate-400 mt-2">正在確認管理員身分...</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="./dashboard.html" class="rounded-2xl bg-white border border-slate-200 px-5 py-3 font-bold hover:bg-slate-50">回儀表板</a>
+        <a href="./internal-ops.html" class="rounded-2xl bg-slate-900 text-white px-5 py-3 font-bold hover:bg-slate-800">內部營運設定</a>
+      </div>
+    </header>
+
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <button data-status="pending_check" class="status-card text-left rounded-3xl border border-blue-100 bg-blue-50 p-6 hover:border-blue-300">
+        <p class="text-sm font-bold text-blue-500">待查帳</p>
+        <p id="stat-pending_check" class="mt-3 text-4xl font-black text-blue-700">0</p>
+      </button>
+      <button data-status="received" class="status-card text-left rounded-3xl border border-emerald-100 bg-emerald-50 p-6 hover:border-emerald-300">
+        <p class="text-sm font-bold text-emerald-600">已查收</p>
+        <p id="stat-received" class="mt-3 text-4xl font-black text-emerald-700">0</p>
+      </button>
+      <button data-status="processing" class="status-card text-left rounded-3xl border border-rose-100 bg-rose-50 p-6 hover:border-rose-300">
+        <p class="text-sm font-bold text-rose-500">待處理</p>
+        <p id="stat-processing" class="mt-3 text-4xl font-black text-rose-700">0</p>
+      </button>
+    </section>
+
+    <section class="rounded-3xl bg-white border border-slate-200 p-5 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-[180px,180px,180px,1fr,auto] gap-3 items-end">
+        <label class="block">
+          <span class="text-sm font-bold text-slate-600">起日</span>
+          <input id="from-date" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+        </label>
+        <label class="block">
+          <span class="text-sm font-bold text-slate-600">迄日</span>
+          <input id="to-date" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+        </label>
+        <label class="block">
+          <span class="text-sm font-bold text-slate-600">狀態</span>
+          <select id="status-filter" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+            <option value="all">全部</option>
+            <option value="pending_check">待查帳</option>
+            <option value="received">已查收</option>
+            <option value="processing">待處理</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-sm font-bold text-slate-600">搜尋</span>
+          <input id="search" type="search" placeholder="業務、客戶、訂單、末五碼/授權碼..." class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500">
+        </label>
+        <button id="reload" type="button" class="rounded-2xl bg-blue-600 text-white px-6 py-3 font-black hover:bg-blue-700">重新整理</button>
+      </div>
+    </section>
+
+    <section class="rounded-3xl bg-white border border-slate-200 overflow-hidden">
+      <div class="overflow-auto scrollbar-thin">
+        <table class="min-w-[1180px] w-full text-left">
+          <thead class="bg-slate-50 text-slate-500 text-sm">
+            <tr>
+              <th class="px-6 py-4 font-black">付款日期</th>
+              <th class="px-6 py-4 font-black">業務</th>
+              <th class="px-6 py-4 font-black">客戶</th>
+              <th class="px-6 py-4 font-black">方式</th>
+              <th class="px-6 py-4 font-black text-right">金額</th>
+              <th class="px-6 py-4 font-black">末五碼/授權碼</th>
+              <th class="px-6 py-4 font-black">狀態</th>
+              <th class="px-6 py-4 font-black">操作</th>
+            </tr>
+          </thead>
+          <tbody id="rows" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <div id="empty" hidden class="p-10 text-center text-slate-400 font-bold">目前沒有符合條件的查帳資料。</div>
+    </section>
+  </main>
+
+  <div id="toast" hidden class="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-2xl bg-slate-900 text-white px-5 py-3 font-bold shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    const state = {
+      profile: null,
+      rows: [],
+      status: 'all',
+    };
+
+    const statusMap = {
+      pending_check: { label: '待查帳', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      received: { label: '已查收', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+      processing: { label: '待處理', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+    };
+
+    const paymentStatusMap = {
+      paid: '已付款',
+      paid_online: '線上已付',
+      paid_offline: '線下已收',
+      awaiting_atm: '待 ATM',
+      unpaid: '未付款',
+      failed: '失敗',
+    };
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function money(value) {
+      return `NT$${Number(value || 0).toLocaleString('zh-TW')}`;
+    }
+
+    function shortDate(value) {
+      if (!value) return '-';
+      const text = String(value).replace('T', ' ');
+      return text.slice(0, 16);
+    }
+
+    function showToast(message, tone = 'dark') {
+      const el = $('toast');
+      el.textContent = message;
+      el.className = `fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-2xl px-5 py-3 font-bold shadow-2xl ${tone === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white'}`;
+      el.hidden = false;
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => { el.hidden = true; }, 2400);
+    }
+
+    function setDefaultDates() {
+      const now = new Date();
+      const from = new Date(now);
+      from.setMonth(from.getMonth() - 3);
+      $('from-date').value = from.toISOString().slice(0, 10);
+      $('to-date').value = now.toISOString().slice(0, 10);
+    }
+
+    async function initLiff() {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return false;
+      }
+      state.profile = await liff.getProfile();
+      $('operator').textContent = `管理員：${state.profile.displayName || state.profile.userId}`;
+      return true;
+    }
+
+    async function apiGet(path, params = {}) {
+      const url = new URL(`${WORKER_URL}${path}`);
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
+      });
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    async function apiPost(path, body = {}) {
+      const res = await fetch(`${WORKER_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    async function loadRows() {
+      if (!state.profile?.userId) return;
+      $('rows').innerHTML = `<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 font-bold">讀取中...</td></tr>`;
+      $('empty').hidden = true;
+      try {
+        const payload = await apiGet('/api/internal/accounting/receipts', {
+          uid: state.profile.userId,
+          from: $('from-date').value,
+          to: $('to-date').value,
+          status: $('status-filter').value,
+          q: $('search').value,
+        });
+        state.rows = payload.data || [];
+        const stats = payload.stats || {};
+        $('stat-pending_check').textContent = stats.pending_check || 0;
+        $('stat-received').textContent = stats.received || 0;
+        $('stat-processing').textContent = stats.processing || 0;
+        renderRows();
+      } catch (err) {
+        $('rows').innerHTML = '';
+        $('empty').hidden = false;
+        $('empty').textContent = `讀取失敗：${err.message || err}`;
+        showToast(`讀取失敗：${err.message || err}`, 'error');
+      }
+    }
+
+    function renderRows() {
+      const tbody = $('rows');
+      if (!state.rows.length) {
+        tbody.innerHTML = '';
+        $('empty').hidden = false;
+        $('empty').textContent = '目前沒有符合條件的查帳資料。';
+        return;
+      }
+      $('empty').hidden = true;
+      tbody.innerHTML = state.rows.map((row) => {
+        const status = statusMap[row.accounting_status] || statusMap.pending_check;
+        const paymentStatus = paymentStatusMap[row.payment_status] || row.payment_status || '-';
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="px-6 py-5 align-top">
+              <div class="font-bold text-slate-800">${escapeHtml(shortDate(row.payment_date))}</div>
+              <div class="text-xs text-slate-400 mt-1">${escapeHtml(row.leg_label || row.leg || '')}</div>
+            </td>
+            <td class="px-6 py-5 align-top">
+              <div class="font-bold">${escapeHtml(row.sales_name || '未指定')}</div>
+              <div class="text-xs text-slate-400 mt-1 max-w-[180px] truncate">${escapeHtml(row.sales_uid || '')}</div>
+            </td>
+            <td class="px-6 py-5 align-top">
+              <div class="font-bold">${escapeHtml(row.customer_name || '未填寫')}</div>
+              <div class="text-xs text-slate-400 mt-1">${escapeHtml(row.customer_phone || '')}</div>
+              <div class="text-xs text-slate-400 mt-1 max-w-[260px] truncate">${escapeHtml(row.itinerary_title || row.order_id || '')}</div>
+            </td>
+            <td class="px-6 py-5 align-top">
+              <div class="font-bold">${escapeHtml(row.method || '-')}</div>
+              <div class="text-xs text-slate-400 mt-1">${escapeHtml(paymentStatus)}</div>
+            </td>
+            <td class="px-6 py-5 align-top text-right font-black text-lg">${escapeHtml(money(row.amount))}</td>
+            <td class="px-6 py-5 align-top font-bold">${escapeHtml(row.check_code || '-')}</td>
+            <td class="px-6 py-5 align-top">
+              <span class="inline-flex rounded-full border px-3 py-1 text-sm font-black ${status.className}">${status.label}</span>
+            </td>
+            <td class="px-6 py-5 align-top">
+              <div class="flex flex-wrap gap-2">
+                ${actionButton(row, 'received', '已查收', 'bg-emerald-600 text-white hover:bg-emerald-700')}
+                ${actionButton(row, 'processing', '待處理', 'bg-rose-600 text-white hover:bg-rose-700')}
+                ${actionButton(row, 'pending_check', '待查帳', 'bg-slate-100 text-slate-700 hover:bg-slate-200')}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function actionButton(row, status, label, className) {
+      if (row.accounting_status === status) {
+        return `<button type="button" disabled class="rounded-xl px-4 py-2 text-sm font-black bg-slate-100 text-slate-300">${label}</button>`;
+      }
+      return `<button type="button" data-id="${escapeHtml(row.id)}" data-status="${status}" class="receipt-action rounded-xl px-4 py-2 text-sm font-black ${className}">${label}</button>`;
+    }
+
+    async function updateStatus(id, status) {
+      const row = state.rows.find(item => item.id === id);
+      if (!row) return;
+      try {
+        await apiPost('/api/internal/accounting/receipts/status', {
+          ...row,
+          accounting_status: status,
+          operatorUid: state.profile.userId,
+        });
+        showToast(`已更新為：${statusMap[status]?.label || status}`);
+        await loadRows();
+      } catch (err) {
+        showToast(`更新失敗：${err.message || err}`, 'error');
+      }
+    }
+
+    function bindEvents() {
+      $('reload').addEventListener('click', loadRows);
+      $('status-filter').addEventListener('change', loadRows);
+      $('from-date').addEventListener('change', loadRows);
+      $('to-date').addEventListener('change', loadRows);
+      $('search').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') loadRows();
+      });
+      document.querySelectorAll('.status-card').forEach((button) => {
+        button.addEventListener('click', () => {
+          $('status-filter').value = button.dataset.status || 'all';
+          loadRows();
+        });
+      });
+      document.addEventListener('click', (event) => {
+        const button = event.target.closest('.receipt-action');
+        if (!button) return;
+        updateStatus(button.dataset.id, button.dataset.status);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      setDefaultDates();
+      bindEvents();
+      try {
+        const ready = await initLiff();
+        if (ready) await loadRows();
+      } catch (err) {
+        $('operator').textContent = `登入失敗：${err.message || err}`;
+        showToast(`登入失敗：${err.message || err}`, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

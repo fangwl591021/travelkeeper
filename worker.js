@@ -1735,6 +1735,235 @@ async function archiveInternalSetting(env, kind, body = {}) {
   return { success: true, id };
 }
 
+async function ensureAccountingTables(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS accounting_receipts (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL DEFAULT '',
+    leg TEXT NOT NULL DEFAULT '',
+    payment_date TEXT NOT NULL DEFAULT '',
+    sales_uid TEXT NOT NULL DEFAULT '',
+    sales_name TEXT NOT NULL DEFAULT '',
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_phone TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL DEFAULT '',
+    amount INTEGER NOT NULL DEFAULT 0,
+    check_code TEXT NOT NULL DEFAULT '',
+    accounting_status TEXT NOT NULL DEFAULT 'pending_check'
+      CHECK (accounting_status IN ('pending_check', 'received', 'processing')),
+    payment_status TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+function normalizeAccountingStatus(status) {
+  const value = String(status || '').trim();
+  if (['pending_check', 'received', 'processing'].includes(value)) return value;
+  return 'pending_check';
+}
+
+function accountingStatusFromPayment(paymentStatus) {
+  const status = String(paymentStatus || '').toLowerCase();
+  if (['paid', 'paid_online', 'paid_offline'].includes(status)) return 'pending_check';
+  return 'processing';
+}
+
+function accountingLegLabel(leg) {
+  return String(leg || '').toLowerCase() === 'balance' ? '尾款' : '訂金';
+}
+
+function accountingMethodLabel(method, fallback = '') {
+  const value = String(method || fallback || '').toLowerCase();
+  if (value.includes('line')) return 'LINE Pay';
+  if (value.includes('credit')) return '刷卡';
+  if (value.includes('vacc') || value.includes('atm')) return 'ATM';
+  if (value.includes('offline')) return '線下';
+  if (value.includes('transfer')) return '匯款';
+  return method || fallback || '';
+}
+
+function accountingCheckCode(tradeNo) {
+  const value = String(tradeNo || '').trim();
+  if (!value) return '';
+  return value.length > 6 ? value.slice(-6) : value;
+}
+
+function toAccountingReceiptEvent(row, leg) {
+  const isBalance = String(leg || '').toLowerCase() === 'balance';
+  const amount = Number(isBalance ? row.balance_amount : row.deposit_amount) || 0;
+  const paymentStatus = String(isBalance ? row.balance_status : row.deposit_status || '').toLowerCase();
+  const paidAt = isBalance ? row.balance_paid_at : row.deposit_paid_at;
+  const tradeNo = isBalance ? row.balance_trade_no : row.deposit_trade_no;
+  const method = accountingMethodLabel(
+    isBalance ? row.balance_method : row.deposit_method,
+    isBalance ? row.balance_collect : ''
+  );
+  const paymentDate = paidAt || row.created_at || '';
+  return {
+    id: `${row.order_id}:${leg}`,
+    order_id: row.order_id || '',
+    leg,
+    leg_label: accountingLegLabel(leg),
+    payment_date: paymentDate,
+    sales_uid: row.distributor_uid || '',
+    sales_name: row.distributor_name || row.sales_name || '',
+    customer_name: row.customer_name || '',
+    customer_phone: row.customer_phone || '',
+    itinerary_title: row.itinerary_title || '',
+    method,
+    amount,
+    check_code: accountingCheckCode(tradeNo),
+    payment_status: paymentStatus || 'unpaid',
+    accounting_status: accountingStatusFromPayment(paymentStatus),
+    note: '',
+    source: row.source || '',
+  };
+}
+
+function mergeAccountingReceiptEvent(base, override = {}) {
+  if (!override) return base;
+  return {
+    ...base,
+    accounting_status: override.accounting_status || base.accounting_status,
+    note: override.note ?? base.note,
+    check_code: override.check_code || base.check_code,
+    payment_date: override.payment_date || base.payment_date,
+    method: override.method || base.method,
+  };
+}
+
+function filterAccountingReceipt(event, filters = {}) {
+  const status = String(filters.status || 'all');
+  if (status !== 'all' && String(event.accounting_status || '') !== status) return false;
+
+  const q = String(filters.q || '').trim().toLowerCase();
+  if (q) {
+    const haystack = [
+      event.order_id,
+      event.sales_name,
+      event.customer_name,
+      event.customer_phone,
+      event.method,
+      event.check_code,
+      event.itinerary_title,
+      event.note,
+    ].join(' ').toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+
+  const from = String(filters.from || '').trim();
+  const to = String(filters.to || '').trim();
+  const day = String(event.payment_date || '').slice(0, 10);
+  if (from && day && day < from) return false;
+  if (to && day && day > to) return false;
+  return true;
+}
+
+async function listAccountingReceipts(env, query = {}) {
+  const uid = String(query.uid || query.operatorUid || '').trim();
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  await ensureAccountingTables(env);
+
+  const { results } = await env.DB.prepare(`
+    SELECT
+      o.*,
+      d.name AS distributor_name
+    FROM orders o
+    LEFT JOIN distributors d ON d.uid = o.distributor_uid
+    ORDER BY o.created_at DESC
+    LIMIT 500
+  `).all();
+
+  const events = [];
+  for (const row of results || []) {
+    if (Number(row.deposit_amount || 0) > 0 || String(row.deposit_status || '') !== 'unpaid') {
+      events.push(toAccountingReceiptEvent(row, 'deposit'));
+    }
+    const hasBalance = Number(row.balance_amount || 0) > 0 && String(row.balance_status || '') !== 'not_required';
+    if (hasBalance) events.push(toAccountingReceiptEvent(row, 'balance'));
+  }
+
+  const ids = events.map(ev => ev.id);
+  const overrides = {};
+  if (ids.length) {
+    const placeholders = ids.map(() => '?').join(',');
+    const saved = await env.DB.prepare(`
+      SELECT *
+        FROM accounting_receipts
+       WHERE id IN (${placeholders})
+    `).bind(...ids).all();
+    for (const row of saved.results || []) overrides[row.id] = row;
+  }
+
+  const merged = events
+    .map(ev => mergeAccountingReceiptEvent(ev, overrides[ev.id]))
+    .filter(ev => filterAccountingReceipt(ev, query))
+    .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')));
+
+  const stats = merged.reduce((acc, ev) => {
+    const key = ev.accounting_status || 'pending_check';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, { pending_check: 0, received: 0, processing: 0 });
+
+  return { success: true, data: merged, stats };
+}
+
+async function updateAccountingReceiptStatus(env, body = {}) {
+  const operatorUid = String(body.operatorUid || body.adminUid || body.uid || '').trim();
+  if (!(await isAdminUid(env, operatorUid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  await ensureAccountingTables(env);
+
+  const id = String(body.id || '').trim();
+  if (!id) return { success: false, error: 'MISSING_ID' };
+  const now = formatTaipeiDateTime(new Date());
+  const orderId = String(body.order_id || id.split(':')[0] || '').trim();
+  const leg = String(body.leg || id.split(':')[1] || '').trim();
+  const status = normalizeAccountingStatus(body.accounting_status || body.status);
+
+  await env.DB.prepare(`
+    INSERT INTO accounting_receipts (
+      id, order_id, leg, payment_date, sales_uid, sales_name, customer_name, customer_phone,
+      method, amount, check_code, accounting_status, payment_status, note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      payment_date = excluded.payment_date,
+      sales_uid = excluded.sales_uid,
+      sales_name = excluded.sales_name,
+      customer_name = excluded.customer_name,
+      customer_phone = excluded.customer_phone,
+      method = excluded.method,
+      amount = excluded.amount,
+      check_code = excluded.check_code,
+      accounting_status = excluded.accounting_status,
+      payment_status = excluded.payment_status,
+      note = excluded.note,
+      updated_at = excluded.updated_at
+  `).bind(
+    id,
+    orderId,
+    leg,
+    String(body.payment_date || '').trim(),
+    String(body.sales_uid || '').trim(),
+    String(body.sales_name || '').trim(),
+    String(body.customer_name || '').trim(),
+    String(body.customer_phone || '').trim(),
+    String(body.method || '').trim(),
+    Number(body.amount || 0),
+    String(body.check_code || '').trim(),
+    status,
+    String(body.payment_status || '').trim(),
+    String(body.note || '').trim(),
+    now,
+    now
+  ).run();
+
+  const row = await env.DB.prepare(`SELECT * FROM accounting_receipts WHERE id = ?`).bind(id).first();
+  return { success: true, data: row };
+}
+
 function buildNewebPayMerchantOrderNo(orderId, leg) {
   const shortOrder = String(orderId || '').replace(/[^A-Za-z0-9]/g, '').slice(-12);
   const legCode = String(leg || 'deposit').toLowerCase() === 'balance' ? 'B' : 'D';
@@ -5582,6 +5811,19 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
         const result = await archiveInternalSetting(env, internalSettingsArchiveMatch[1], body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/internal/accounting/receipts' && request.method === 'GET') {
+        const query = Object.fromEntries(url.searchParams.entries());
+        const result = await listAccountingReceipts(env, query);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/internal/accounting/receipts/status' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
+        const result = await updateAccountingReceiptStatus(env, body);
         return json(result, result.success ? 200 : 400);
       }
 

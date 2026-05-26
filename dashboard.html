@@ -1106,6 +1106,8 @@ function buildMenu({ isAdmin, canUpload, badges }) {
       badge: badges.pendingOrders },
     // ★ v7：金流中心
     { id:'payments',     icon:'💳', label:'金流明細',   show:true },
+    { id:'internal-accounting', icon:'🔍', label:'查帳', show: isAdmin,
+      href:'internal-accounting.html' },
     { id:'commission',   icon:'💰', label: isAdmin ? '佣金結算' : '我的佣金', show:true,
       badge: badges.payableCount },
     { id:'customers',    icon:'👤', label:'我的客戶',   show: !isAdmin },
