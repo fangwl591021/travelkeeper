@@ -2617,6 +2617,9 @@ async function uploadLineOaAsset(env, body = {}) {
 }
 
 async function forwardWebhookToSecondary(env, rawBody, signature) {
+  if (!isForwardWebhookEnabled(env)) {
+    return { forwarded: false, skipped: true, reason: 'FORWARD_WEBHOOK_DISABLED' };
+  }
   const forwardUrl = String(env.FORWARD_WEBHOOK_URL || '').trim();
   if (!forwardUrl) return { forwarded: false, skipped: true };
   const res = await fetch(forwardUrl, {
@@ -2629,6 +2632,10 @@ async function forwardWebhookToSecondary(env, rawBody, signature) {
     body: rawBody,
   });
   return { forwarded: true, status: res.status };
+}
+
+function isForwardWebhookEnabled(env) {
+  return String(env.FORWARD_WEBHOOK_ENABLED || '').trim() === '1';
 }
 
 async function handleLineWebhookGateway(request, env, ctx) {
@@ -2656,7 +2663,7 @@ async function handleLineWebhookGateway(request, env, ctx) {
       console.warn('store line webhook events failed:', err.message);
     }
 
-    if (env.FORWARD_WEBHOOK_URL) {
+    if (isForwardWebhookEnabled(env)) {
       try {
         await forwardWebhookToSecondary(env, rawBody, signature);
       } catch (err) {
@@ -2680,7 +2687,7 @@ async function handleLineWebhookGateway(request, env, ctx) {
     success: true,
     events: Array.isArray(payload?.events) ? payload.events.length : 0,
     queued: true,
-    forwarded: !!env.FORWARD_WEBHOOK_URL,
+    forwarded: isForwardWebhookEnabled(env),
   });
 }
 
@@ -4625,9 +4632,9 @@ async function checkLineBotInfo(env) {
 
 async function buildHubTestStatus(env) {
   const knowledge = await checkKnowledgeAutoReplyStatus(env);
-  const forward = env.FORWARD_WEBHOOK_URL
+  const forward = isForwardWebhookEnabled(env) && env.FORWARD_WEBHOOK_URL
     ? await checkEndpoint(env.FORWARD_WEBHOOK_URL, { method: 'GET' })
-    : { ok: false, status: 'disabled', detail: 'FORWARD_WEBHOOK_URL not configured' };
+    : { ok: false, status: 'disabled', detail: isForwardWebhookEnabled(env) ? 'FORWARD_WEBHOOK_URL not configured' : 'FORWARD_WEBHOOK_ENABLED is not 1' };
   const line = await checkLineBotInfo(env);
   return {
     knowledge,
@@ -4639,6 +4646,7 @@ async function buildHubTestStatus(env) {
       hasLineSecret: !!env.LINE_CHANNEL_SECRET,
       hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
       hasForwardWebhook: !!env.FORWARD_WEBHOOK_URL,
+      forwardWebhookEnabled: isForwardWebhookEnabled(env),
     },
   };
 }
@@ -6026,13 +6034,14 @@ function renderHubTestHtml(status, origin) {
           <span class="pill">LINE_CHANNEL_SECRET: ${status.config.hasLineSecret ? 'configured' : 'missing'}</span>
           <span class="pill">LINE_CHANNEL_ACCESS_TOKEN: ${status.config.hasLineToken ? 'configured' : 'missing'}</span>
           <span class="pill">FORWARD_WEBHOOK_URL: ${status.config.hasForwardWebhook ? 'configured' : 'missing'}</span>
+          <span class="pill">FORWARD_WEBHOOK_ENABLED: ${status.config.forwardWebhookEnabled ? 'enabled' : 'disabled'}</span>
         </div>
       </div>
       <div style="padding-top:18px;">
         <div style="font-weight:900;font-size:18px;margin-bottom:12px;">Deployment notes</div>
         <ul style="margin:0;padding-left:18px;color:#475569;line-height:1.8;">
           <li>Set LINE Webhook URL to <code>${origin}/line-webhook</code></li>
-          <li>Set <code>FORWARD_WEBHOOK_URL</code> if a second system should receive the same event</li>
+          <li>Secondary forwarding is disabled unless <code>FORWARD_WEBHOOK_ENABLED=1</code></li>
           <li>Knowledge auto-reply reads published files from <code>knowledge/manifest.json</code> in R2</li>
         </ul>
       </div>
