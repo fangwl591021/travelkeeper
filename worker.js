@@ -10,6 +10,14 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 const ADMIN_UIDS = new Set([
+  'U8f54ad2575d5414d8f8a1c41433e5eb5',
+  'U9e3c3092d3038fd1bbc296ae5eebfd03',
+  'Uf729764dbb5b652a5a90a467320bea29',
+  'U58eb5c1a747450140ce1335af709ae55',
+]);
+const LINE_AI_REPLY_TEST_UIDS = new Set([
+  'U8f54ad2575d5414d8f8a1c41433e5eb5',
+  'U9e3c3092d3038fd1bbc296ae5eebfd03',
   'Uf729764dbb5b652a5a90a467320bea29',
   'U58eb5c1a747450140ce1335af709ae55',
 ]);
@@ -2677,11 +2685,25 @@ async function handleLineWebhookGateway(request, env, ctx) {
 }
 
 function isLineAutoReplyEnabled(env) {
-  return String(env.LINE_AUTO_REPLY_ENABLED || '').trim() === '1';
+  if (String(env.LINE_AUTO_REPLY_ENABLED || '').trim() === '0') return false;
+  return getLineAutoReplyAllowedUids(env).size > 0;
 }
 
 function isLineReplyEnabled(env) {
   return String(env.LINE_REPLY_ENABLED || '').trim() === '1';
+}
+
+function getLineAutoReplyAllowedUids(env) {
+  const configured = String(env.LINE_AI_REPLY_ALLOWED_UIDS || '')
+    .split(/[\s,;]+/)
+    .map(value => value.trim())
+    .filter(Boolean);
+  return new Set(configured.length ? configured : [...LINE_AI_REPLY_TEST_UIDS]);
+}
+
+function isLineAutoReplyAllowedEvent(env, event = {}) {
+  const userId = String(event?.source?.userId || '').trim();
+  return !!userId && getLineAutoReplyAllowedUids(env).has(userId);
 }
 
 function normalizeKnowledgeText(value = '') {
@@ -2766,6 +2788,7 @@ async function replyLineWebhookWithKnowledge(env, payload = {}) {
   const knowledgeEntries = await getPublishedKnowledgeEntries(env);
   let replied = 0;
   for (const event of events) {
+    if (!isLineAutoReplyAllowedEvent(env, event)) continue;
     const replyToken = String(event?.replyToken || '').trim();
     if (!replyToken) continue;
     const eventType = String(event?.type || '').toLowerCase();
@@ -4597,6 +4620,7 @@ async function buildHubTestStatus(env) {
     line,
     config: {
       hasKnowledgeStorage: !!env.TRAVEL,
+      autoReplyAllowlistCount: getLineAutoReplyAllowedUids(env).size,
       hasLineSecret: !!env.LINE_CHANNEL_SECRET,
       hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
       hasForwardWebhook: !!env.FORWARD_WEBHOOK_URL,
@@ -4612,7 +4636,7 @@ async function checkKnowledgeAutoReplyStatus(env) {
       ok: entries.length > 0,
       status: entries.length > 0 ? 'ready' : 'empty',
       detail: entries.length > 0
-        ? `${entries.length} published knowledge entries available`
+        ? `${entries.length} published knowledge entries available; ${getLineAutoReplyAllowedUids(env).size} test UID(s) allowed`
         : 'No published knowledge entries',
     };
   } catch (err) {
@@ -5983,6 +6007,7 @@ function renderHubTestHtml(status, origin) {
         <div style="font-weight:900;font-size:18px;margin-bottom:12px;">Environment flags</div>
         <div>
           <span class="pill">TRAVEL R2: ${status.config.hasKnowledgeStorage ? 'configured' : 'missing'}</span>
+          <span class="pill">AI_REPLY_TEST_UIDS: ${status.config.autoReplyAllowlistCount}</span>
           <span class="pill">LINE_CHANNEL_SECRET: ${status.config.hasLineSecret ? 'configured' : 'missing'}</span>
           <span class="pill">LINE_CHANNEL_ACCESS_TOKEN: ${status.config.hasLineToken ? 'configured' : 'missing'}</span>
           <span class="pill">FORWARD_WEBHOOK_URL: ${status.config.hasForwardWebhook ? 'configured' : 'missing'}</span>
