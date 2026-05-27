@@ -303,7 +303,7 @@
 
         <div id="chat-messages" class="flex-1 overflow-y-auto bg-slate-300/80 grid-bg px-6 py-6 space-y-4"></div>
 
-        <div class="composer-shell border-t border-slate-200 px-4 py-3">
+        <div id="reply-composer" hidden class="composer-shell border-t border-slate-200 px-4 py-3">
           <div id="reply-suggestions" class="flex flex-wrap gap-2 mb-2"></div>
           <div id="reply-content-panel" hidden class="mb-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
             <div class="flex flex-wrap gap-2 mb-4">
@@ -593,6 +593,12 @@
     let publishedItineraries = [];
     let replyToolMode = '';
     let replyContentMode = 'text';
+    const REPLY_TEST_UIDS = new Set([
+      'U8f54ad2575d5414d8f8a1c41433e5eb5',
+      'U9e3c3092d3038fd1bbc296ae5eebfd03',
+      'Uf729764dbb5b652a5a90a467320bea29',
+      'U58eb5c1a747450140ce1335af709ae55',
+    ]);
 
     const QUICK_REPLY_TEXTS = [
       '您好，收到您的訊息了，我先幫您確認行程與名額，稍後回覆您。',
@@ -639,6 +645,16 @@
         });
         replySuggestionsEl.appendChild(button);
       });
+    }
+
+    function canUseReplyComposer() {
+      return !!profile?.userId && REPLY_TEST_UIDS.has(profile.userId);
+    }
+
+    function syncReplyComposerAccess() {
+      const composer = document.getElementById('reply-composer');
+      if (!composer) return;
+      composer.hidden = !canUseReplyComposer();
     }
 
     function setReplyContentMode(mode = 'text') {
@@ -1826,6 +1842,7 @@
         return;
       }
       profile = await liff.getProfile();
+      syncReplyComposerAccess();
       userStatus = await fetchJson(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
       if (!userStatus?.data?.isAdmin) {
         threadListEl.innerHTML = '<div class="rounded-3xl border border-dashed border-rose-300 bg-rose-50 p-8 text-center text-rose-500 font-bold">\u53ea\u6709\u7ba1\u7406\u54e1\u53ef\u4ee5\u4f7f\u7528 LINE OA \u76e3\u770b\u5f8c\u53f0\u3002</div>'; 

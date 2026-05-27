@@ -2693,6 +2693,18 @@ function isLineReplyEnabled(env) {
   return String(env.LINE_REPLY_ENABLED || '').trim() === '1';
 }
 
+function getLineReplyAllowedUids(env) {
+  const configured = String(env.LINE_REPLY_ALLOWED_UIDS || '')
+    .split(/[\s,;]+/)
+    .map(value => value.trim())
+    .filter(Boolean);
+  return new Set(configured.length ? configured : [...LINE_AI_REPLY_TEST_UIDS]);
+}
+
+function isLineReplyAllowedUid(env, uid = '') {
+  return getLineReplyAllowedUids(env).has(String(uid || '').trim());
+}
+
 function getLineAutoReplyAllowedUids(env) {
   const configured = String(env.LINE_AI_REPLY_ALLOWED_UIDS || '')
     .split(/[\s,;]+/)
@@ -3752,6 +3764,9 @@ async function d1SendLineOaReply(env, body = {}) {
   }
   await ensureLineMessageMediaColumns(env);
   const uid = String(body.uid || '').trim();
+  if (!isLineReplyAllowedUid(env, uid)) {
+    return { success: false, error: 'LINE_REPLY_UID_NOT_ALLOWED', detail: 'LINE reply sending is limited to test admin UIDs.' };
+  }
   const threadId = String(body.threadId || body.thread_id || body.id || '').trim();
   const text = String(body.text || '').trim();
   const rawMessages = Array.isArray(body.messages) ? body.messages : [];
