@@ -2697,7 +2697,8 @@ function isLineAutoReplyEnabled(env) {
 }
 
 function isLineReplyEnabled(env) {
-  return String(env.LINE_REPLY_ENABLED || '').trim() === '1';
+  if (String(env.LINE_REPLY_ENABLED || '').trim() === '0') return false;
+  return getLineReplyAllowedUids(env).size > 0;
 }
 
 function getLineReplyAllowedUids(env) {
