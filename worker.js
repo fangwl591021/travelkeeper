@@ -3236,6 +3236,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
 async function d1GetLineThreads(env) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
+  await ensureLineLearningExamplesTable(env);
   await ensureLineThreadAiPauseColumn(env);
   const { results } = await env.DB.prepare(`
     SELECT
@@ -3269,6 +3270,20 @@ async function d1GetLineThreads(env) {
         ORDER BY req.updated_at DESC, req.created_at DESC
         LIMIT 1
       ) AS latest_important_note,
+      (
+        SELECT COUNT(*)
+        FROM line_learning_examples learn
+        WHERE learn.thread_id = line_threads.id
+          AND learn.archived_at = ''
+      ) AS learning_count,
+      (
+        SELECT learn.status
+        FROM line_learning_examples learn
+        WHERE learn.thread_id = line_threads.id
+          AND learn.archived_at = ''
+        ORDER BY learn.updated_at DESC, learn.created_at DESC
+        LIMIT 1
+      ) AS learning_status,
       last_message_at
     FROM line_threads
     ORDER BY COALESCE(last_message_at, created_at) DESC
@@ -3298,6 +3313,8 @@ async function d1GetLineThreads(env) {
       aiPaused: Number(row.ai_paused || 0) === 1,
       importantCount: Number(row.important_count || 0),
       latestImportantNote: row.latest_important_note || '',
+      learningCount: Number(row.learning_count || 0),
+      learningStatus: row.learning_status || '',
       lastMessageAt: row.last_message_at || '',
     })),
   };
@@ -3386,6 +3403,193 @@ async function ensureLineVisitorRequirementsTable(env) {
   `).run();
 }
 
+async function ensureLineLearningExamplesTable(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS line_learning_examples (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL,
+      source_user_id TEXT NOT NULL DEFAULT '',
+      customer_name TEXT NOT NULL DEFAULT '',
+      picture_url TEXT NOT NULL DEFAULT '',
+      customer_context TEXT NOT NULL DEFAULT '',
+      customer_messages TEXT NOT NULL DEFAULT '',
+      guide_responses TEXT NOT NULL DEFAULT '',
+      learned_reply_style TEXT NOT NULL DEFAULT '',
+      intent_tags TEXT NOT NULL DEFAULT '',
+      outcome TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'pending_response', 'archived')),
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      archived_at TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (thread_id) REFERENCES line_threads(id)
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_learning_examples_thread_id
+    ON line_learning_examples(thread_id, status, updated_at)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_learning_examples_source_user_id
+    ON line_learning_examples(source_user_id, status, updated_at)
+  `).run();
+}
+
+function normalizeLineLearningExample(row = {}) {
+  return {
+    id: row.id || '',
+    threadId: row.thread_id || '',
+    userId: row.source_user_id || '',
+    customerName: row.customer_name || '',
+    pictureUrl: row.picture_url || '',
+    customerContext: row.customer_context || '',
+    customerMessages: row.customer_messages || '',
+    guideResponses: row.guide_responses || '',
+    learnedReplyStyle: row.learned_reply_style || '',
+    intentTags: String(row.intent_tags || '').split(',').map(v => v.trim()).filter(Boolean),
+    outcome: row.outcome || '',
+    status: row.status || 'active',
+    createdBy: row.created_by || '',
+    createdAt: row.created_at || '',
+    updatedAt: row.updated_at || '',
+  };
+}
+
+function compactLineLearningText(value = '', limit = 1600) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+function inferLineLearningTags(messages = []) {
+  const text = messages.map(msg => msg.message_text || '').join('\n');
+  const checks = [
+    ['行程詢問', /行程|旅遊|想看|想了解|有.*嗎|北海道|日本|泰國|金廈|小三通|大城|動物園/],
+    ['價格預算', /預算|價格|費用|多少|29900|萬|元|NT\$?/i],
+    ['出發地', /高雄|台北|台中|新左營|出發/],
+    ['日期月份', /\d+\s*月|今天|明天|暑假|寒假|出發日|日期|月底|月初/],
+    ['人數', /\d+\s*(人|位)|兩人|三人|四人|家庭|親子/],
+    ['飯店住宿', /飯店|酒店|住宿|住哪|早餐|中山|步行街/],
+    ['交通接送', /派車|接送|碼頭|集合|上車|機場|車/],
+    ['付款合約', /付款|訂金|尾款|LINE ?Pay|合約|契約|收據/i],
+    ['證件辦理', /台胞證|護照|簽證|證件|身分證|身份證|補件|OCR/i],
+    ['圖片截圖', /圖片|照片|截圖|上傳|客戶傳送圖片/],
+    ['風險情緒', /退款|退費|取消|生氣|抱怨|投訴|客訴|失望|負評|不能|為什麼/],
+  ];
+  return checks.filter(([, re]) => re.test(text)).map(([tag]) => tag);
+}
+
+function buildLineLearningStyle(messages = []) {
+  const guideMessages = messages.filter(msg => msg.sender_role !== 'user' && String(msg.message_text || '').trim());
+  if (!guideMessages.length) {
+    return '尚未有客服回覆樣本；先記錄客戶需求與缺口，等人工客服回覆後再形成可學習案例。';
+  }
+  const text = guideMessages.map(msg => msg.message_text || '').join('\n');
+  const traits = [];
+  if (/您好|你好/.test(text)) traits.push('以禮貌開場');
+  if (/確認|查詢|稍後|幫您/.test(text)) traits.push('先承接並告知會協助確認');
+  if (/請問|方便|提供/.test(text)) traits.push('只追問必要資訊');
+  if (/行程|預算|日期|人數|出發/.test(text)) traits.push('圍繞目的地、日期、人數、預算整理需求');
+  if (/抱歉|不好意思|謝謝/.test(text)) traits.push('遇到疑慮時先安撫情緒');
+  return traits.length
+    ? `可學習回覆風格：${traits.join('、')}。`
+    : '可學習回覆風格：用簡短文字承接客戶問題，補齊必要條件後再給行程或處理建議。';
+}
+
+function buildLineLearningOutcome(messages = [], tags = []) {
+  const hasGuide = messages.some(msg => msg.sender_role !== 'user' && String(msg.message_text || '').trim());
+  if (!hasGuide) return '等待人工客服回覆樣本';
+  if (tags.includes('付款合約')) return '付款或合約處理案例';
+  if (tags.includes('交通接送')) return '出發前服務確認案例';
+  if (tags.includes('飯店住宿')) return '行程細節確認案例';
+  if (tags.includes('行程詢問')) return '旅遊需求詢問與推薦案例';
+  return '一般客服問答案例';
+}
+
+async function d1GetLineLearningExample(env, threadId) {
+  if (!env.DB || !threadId) return null;
+  await ensureLineLearningExamplesTable(env);
+  const row = await env.DB.prepare(`
+    SELECT *
+    FROM line_learning_examples
+    WHERE thread_id = ?
+      AND archived_at = ''
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 1
+  `).bind(threadId).first();
+  return row ? normalizeLineLearningExample(row) : null;
+}
+
+async function d1RefreshLineLearningExample(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineLearningExamplesTable(env);
+  await ensureLineMessageMediaColumns(env);
+  const threadId = String(body.threadId || body.thread_id || body.id || '').trim();
+  if (!threadId) return { success: false, error: 'MISSING_THREAD_ID' };
+  const thread = await env.DB.prepare(`
+    SELECT id, source_user_id, display_name, picture_url
+    FROM line_threads
+    WHERE id = ?
+  `).bind(threadId).first();
+  if (!thread) return { success: false, error: 'THREAD_NOT_FOUND' };
+  const { results } = await env.DB.prepare(`
+    SELECT sender_role, sender_name, message_type, message_text, created_at
+    FROM line_messages
+    WHERE thread_id = ?
+    ORDER BY created_at ASC, inserted_at ASC
+    LIMIT 120
+  `).bind(threadId).all();
+  const messages = results || [];
+  if (!messages.length) return { success: false, error: 'NO_MESSAGES' };
+  const customerMessages = messages.filter(msg => msg.sender_role === 'user');
+  const guideMessages = messages.filter(msg => msg.sender_role !== 'user');
+  const tags = inferLineLearningTags(messages);
+  const now = new Date().toISOString();
+  const id = `learning:${threadId}`;
+  const customerLines = customerMessages.slice(-20).map(msg => `${msg.sender_name || '客戶'}：${msg.message_text || `[${msg.message_type || 'message'}]`}`);
+  const guideLines = guideMessages.slice(-20).map(msg => `${msg.sender_name || '客服'}：${msg.message_text || `[${msg.message_type || 'message'}]`}`);
+  const status = guideMessages.length ? 'active' : 'pending_response';
+  await env.DB.prepare(`
+    INSERT INTO line_learning_examples (
+      id, thread_id, source_user_id, customer_name, picture_url,
+      customer_context, customer_messages, guide_responses, learned_reply_style,
+      intent_tags, outcome, status, created_by, created_at, updated_at, archived_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+    ON CONFLICT(id) DO UPDATE SET
+      source_user_id = excluded.source_user_id,
+      customer_name = excluded.customer_name,
+      picture_url = excluded.picture_url,
+      customer_context = excluded.customer_context,
+      customer_messages = excluded.customer_messages,
+      guide_responses = excluded.guide_responses,
+      learned_reply_style = excluded.learned_reply_style,
+      intent_tags = excluded.intent_tags,
+      outcome = excluded.outcome,
+      status = excluded.status,
+      created_by = CASE WHEN line_learning_examples.created_by = '' THEN excluded.created_by ELSE line_learning_examples.created_by END,
+      updated_at = excluded.updated_at,
+      archived_at = ''
+  `).bind(
+    id,
+    threadId,
+    String(thread.source_user_id || ''),
+    String(thread.display_name || ''),
+    String(thread.picture_url || ''),
+    compactLineLearningText(customerLines.slice(-8).join('\n'), 1200),
+    compactLineLearningText(customerLines.join('\n'), 3000),
+    compactLineLearningText(guideLines.join('\n'), 3000),
+    buildLineLearningStyle(messages),
+    tags.join(','),
+    buildLineLearningOutcome(messages, tags),
+    status,
+    String(body.uid || body.createdBy || ''),
+    now,
+    now
+  ).run();
+  const learning = await d1GetLineLearningExample(env, threadId);
+  return { success: true, data: learning };
+}
+
 function normalizeLineVisitorRequirement(row = {}) {
   return {
     id: row.id || '',
@@ -3423,6 +3627,7 @@ async function d1GetLineVisitorRequirements(env, threadId) {
 async function d1GetLineThread(env, threadId) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
+  await ensureLineLearningExamplesTable(env);
   await ensureLineThreadAiPauseColumn(env);
   await ensureLineMessageMediaColumns(env);
   const threadRow = await env.DB.prepare(`
@@ -3457,6 +3662,20 @@ async function d1GetLineThread(env, threadId) {
         ORDER BY req.updated_at DESC, req.created_at DESC
         LIMIT 1
       ) AS latest_important_note,
+      (
+        SELECT COUNT(*)
+        FROM line_learning_examples learn
+        WHERE learn.thread_id = line_threads.id
+          AND learn.archived_at = ''
+      ) AS learning_count,
+      (
+        SELECT learn.status
+        FROM line_learning_examples learn
+        WHERE learn.thread_id = line_threads.id
+          AND learn.archived_at = ''
+        ORDER BY learn.updated_at DESC, learn.created_at DESC
+        LIMIT 1
+      ) AS learning_status,
       last_message_at
     FROM line_threads
     WHERE id = ?
@@ -3464,6 +3683,7 @@ async function d1GetLineThread(env, threadId) {
   if (!threadRow) return { success: false, error: 'THREAD_NOT_FOUND' };
   const thread = await enrichStoredLineThreadProfile(env, threadRow);
   const visitorRecords = await d1GetLineVisitorRequirements(env, threadId);
+  const learningPlan = await d1GetLineLearningExample(env, threadId);
   const { results } = await env.DB.prepare(`
     SELECT id, message_type, sender_role, sender_id, sender_name, message_text, raw_json,
            media_url, media_content_type, media_size, created_at
@@ -3533,6 +3753,9 @@ async function d1GetLineThread(env, threadId) {
       importantCount: Number(thread.important_count || visitorRecords.length || 0),
       latestImportantNote: thread.latest_important_note || visitorRecords[0]?.content || '',
       visitorRecords,
+      learningCount: Number(thread.learning_count || (learningPlan ? 1 : 0) || 0),
+      learningStatus: thread.learning_status || learningPlan?.status || '',
+      learningPlan,
       lastMessageAt: thread.last_message_at || '',
       messages,
     },
@@ -3846,6 +4069,11 @@ async function d1SendLineOaReply(env, body = {}) {
         updated_at = ?
     WHERE id = ?
   `).bind(summaryText, now, now, threadId).run();
+
+  await d1RefreshLineLearningExample(env, {
+    threadId,
+    uid,
+  }).catch(err => console.warn('refresh line learning example failed:', err?.message || err));
 
   const updated = await d1GetLineThread(env, threadId);
   return {
@@ -6381,6 +6609,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1SendLineOaReply(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/learning/refresh' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1RefreshLineLearningExample(env, body);
         return json(result, result.success ? 200 : 400);
       }
 

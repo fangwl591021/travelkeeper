@@ -355,6 +355,17 @@
         </div>
       </div>
       <div class="insight-scroll flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        <section class="module-card rounded-3xl border border-violet-200 bg-violet-50/60 p-3">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <p class="section-title font-bold">AI 學習計畫</p>
+              <p id="learning-status" class="text-xs text-slate-500 mt-0.5">等待對話資料</p>
+            </div>
+            <button id="refresh-learning" type="button" class="rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-semibold hover:bg-violet-700">更新</button>
+          </div>
+          <div id="learning-plan" class="space-y-2"></div>
+        </section>
+
         <section class="module-card rounded-3xl border border-slate-200 bg-white p-3">
           <div class="flex items-center justify-between gap-3 mb-2">
             <p class="section-title font-bold">回覆建議</p>
@@ -543,6 +554,8 @@
     const chatMessagesEl = document.getElementById('chat-messages');
     const suggestionListEl = document.getElementById('suggestion-list');
     const suggestionCountEl = document.getElementById('suggestion-count');
+    const learningPlanEl = document.getElementById('learning-plan');
+    const learningStatusEl = document.getElementById('learning-status');
     const replySuggestionsEl = document.getElementById('reply-suggestions');
     const threadTagsEl = document.getElementById('thread-tags');
     const threadStatusBadgeEl = document.getElementById('thread-status-badge');
@@ -1368,6 +1381,7 @@
           ${item.aiPaused ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-600 text-white">人工接手</span>' : ''}
           ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} 則</span>` : ''}
           ${Number(item.importantCount || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">重要 ${item.importantCount}</span>` : ''}
+          ${Number(item.learningCount || 0) > 0 ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-violet-600 text-white">學習中</span>' : ''}
         `;
 
         body.appendChild(top);
@@ -1410,6 +1424,100 @@
         });
       });
       panelDraftEl.value = suggestions[0] || '';
+    }
+
+    function shortLearningText(value, fallback = '尚無資料') {
+      const text = String(value || '').trim();
+      if (!text) return fallback;
+      return text.length > 180 ? text.slice(0, 180) + '…' : text;
+    }
+
+    function renderLearningPlan(thread) {
+      learningPlanEl.innerHTML = '';
+      if (!thread) {
+        learningStatusEl.textContent = '等待對話資料';
+        learningPlanEl.innerHTML = '<div class="rounded-2xl border border-dashed border-violet-200 bg-white/70 px-4 py-4 text-sm text-slate-400">尚未選擇聊天室。</div>';
+        return;
+      }
+      const learning = thread.learningPlan || null;
+      if (!learning) {
+        learningStatusEl.textContent = '尚未建立案例';
+        const empty = document.createElement('div');
+        empty.className = 'rounded-2xl border border-dashed border-violet-200 bg-white/70 px-4 py-4 text-sm text-slate-500 leading-6';
+        empty.textContent = '按「更新」後，系統會把客戶留言與客服回應整理成 AI 後續接手可參考的學習案例。';
+        learningPlanEl.appendChild(empty);
+        return;
+      }
+      learningStatusEl.textContent = learning.status === 'pending_response'
+        ? '已記錄客戶需求，等待客服回覆'
+        : '已形成可學習案例';
+
+      const tags = Array.isArray(learning.intentTags) ? learning.intentTags : [];
+      const rows = [
+        ['客戶需求', shortLearningText(learning.customerContext || learning.customerMessages)],
+        ['客服回應', shortLearningText(learning.guideResponses, learning.status === 'pending_response' ? '等待人工客服回覆樣本' : '尚無客服回覆')],
+        ['學習重點', shortLearningText(learning.learnedReplyStyle)],
+        ['案例結論', shortLearningText(learning.outcome)],
+      ];
+      rows.forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'rounded-2xl border border-violet-100 bg-white px-3 py-2.5';
+        const title = document.createElement('p');
+        title.className = 'text-xs font-bold text-violet-700 mb-1';
+        title.textContent = label;
+        const body = document.createElement('p');
+        body.className = 'text-xs leading-5 text-slate-700 whitespace-pre-line';
+        body.textContent = value;
+        card.appendChild(title);
+        card.appendChild(body);
+        learningPlanEl.appendChild(card);
+      });
+      if (tags.length) {
+        const tagWrap = document.createElement('div');
+        tagWrap.className = 'flex flex-wrap gap-1.5';
+        tags.forEach(tag => {
+          const pill = document.createElement('span');
+          pill.className = 'rounded-full bg-violet-100 text-violet-700 px-2.5 py-1 text-xs font-semibold';
+          pill.textContent = tag;
+          tagWrap.appendChild(pill);
+        });
+        learningPlanEl.appendChild(tagWrap);
+      }
+    }
+
+    async function refreshLearningPlan() {
+      const thread = getActiveThread();
+      if (!thread) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      const button = document.getElementById('refresh-learning');
+      button.disabled = true;
+      button.classList.add('opacity-60');
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/learning/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            threadId: thread.id,
+          }),
+        });
+        const idx = allThreads.findIndex(item => item.id === thread.id);
+        const updated = {
+          ...thread,
+          learningPlan: result.data,
+          learningCount: 1,
+          learningStatus: result.data?.status || '',
+        };
+        if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
+        renderThreadList();
+        renderActiveThread(updated);
+        showToast('AI 學習案例已更新');
+      } finally {
+        button.disabled = false;
+        button.classList.remove('opacity-60');
+      }
     }
 
     function renderTags(thread) {
@@ -1559,6 +1667,7 @@
         replySuggestionsEl.innerHTML = '';
         threadTagsEl.innerHTML = '';
         suggestionCountEl.textContent = '0';
+        renderLearningPlan(null);
         renderVisitorRecords(null);
         riskSummaryEl.textContent = '\u5c1a\u672a\u9078\u64c7\u804a\u5929\u5ba4\u3002';
         riskCountEl.textContent = '0';
@@ -1590,6 +1699,7 @@
       });
 
       renderSuggestions(thread);
+      renderLearningPlan(thread);
       renderItinerarySuggestions(thread);
       renderTags(thread);
       renderVisitorRecords(thread);
@@ -1742,6 +1852,9 @@
 
     document.getElementById('send-reply').addEventListener('click', () => {
       sendReply().catch(err => showToast(err.message || '送出失敗', 'error'));
+    });
+    document.getElementById('refresh-learning').addEventListener('click', () => {
+      refreshLearningPlan().catch(err => showToast(err.message || '更新學習案例失敗', 'error'));
     });
 
     document.getElementById('copy-reply').addEventListener('click', async () => {
