@@ -7332,7 +7332,6 @@ export default {
           ...(image ? [image] : []),
         ].filter(Boolean).slice(0, 8);
         if (!imageInputs.length) return json({ success: false, error: '蝻箏? DM ????PDF ?鞈?' }, 400);
-        const sourceSceneUrls = await uploadSourceImagesToR2(imageInputs, env);
         const gptResp = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
@@ -7341,7 +7340,7 @@ export default {
             messages: [{ role: 'user', content: [
               { type: 'text', text: `你是頂級旅行社行程總監。解析此 DM 或 PDF 頁面並深度擴寫。回傳標準 JSON：
 {"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
-description 中圖片語法只放每日對應頁面或景點關鍵字，不要輸出 placehold.co、loremflickr、via.placeholder 這類暫示圖網址；若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
+description 中圖片語法只能放每日對應景點、城市或地標的英文搜尋關鍵字；不要輸出 DM 截圖、PDF 頁面、來源圖片網址、placehold.co、loremflickr、via.placeholder 這類暫示圖網址。若收到多頁 PDF，請綜合所有頁面整理成同一筆行程。` },
               ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } }))
             ]}]
           })
@@ -7354,17 +7353,20 @@ description 中圖片語法只放每日對應頁面或景點關鍵字，不要�
         if (!match) throw new Error('?⊥?閫?? GPT ??');
         const parsed = JSON.parse(match[0]);
 
-        // 封面圖優先使用原始 DM 圖 / PDF 第一頁，避免外部示意圖失效
-        if (sourceSceneUrls[0]) {
-          parsed.image = sourceSceneUrls[0];
-        } else {
-          const coverUrl = await fetchUnsplashUrl(parsed.imageKeyword || 'travel', env);
-          parsed.image   = await uploadUrlToR2(coverUrl, `cover_${Date.now()}.jpg`, env);
-        }
+        const coverSearchPlan = await buildSectionImageSearchPlan({
+          title: parsed.imageKeyword || parsed.title || 'travel destination',
+          body: [parsed.title || '', parsed.region || '', parsed.notes || '', parsed.description || ''].join('\n').slice(0, 500),
+        }, env);
+        const coverImage = await createFixedSectionImage(coverSearchPlan.queries, env);
+        parsed.image = coverImage?.url || await uploadDataUrlToR2(
+          buildFallbackSectionSvg(coverSearchPlan.keyword || parsed.title || 'TravelKeeper'),
+          `cover_${Date.now()}.jpg`,
+          env
+        );
 
-        // ?扳????摮? R2 URL
+        // 每日圖片一律從圖庫/地點關鍵字查找，不沿用 DM 或 PDF 截圖。
         if (parsed.description) {
-          parsed.description = await replaceImageKeywords(parsed.description, env, sourceSceneUrls);
+          parsed.description = await replaceImageKeywords(parsed.description, env);
         }
 
         return json({ success: true, data: parsed });
@@ -8112,33 +8114,14 @@ function isGeneratedPlaceholderImageUrl(url) {
   return /(?:placehold\.co|placeholder\.com|via\.placeholder|loremflickr\.com)/i.test(String(url || ''));
 }
 
-async function uploadSourceImagesToR2(imageInputs, env) {
-  const urls = [];
-  for (let i = 0; i < imageInputs.length; i++) {
-    const input = imageInputs[i];
-    let url = '';
-    if (typeof input === 'string' && input.startsWith('data:image/')) {
-      url = await uploadDataUrlToR2(input, `scene_${Date.now()}_${i + 1}.jpg`, env);
-    } else if (typeof input === 'string' && /^https?:\/\//i.test(input)) {
-      url = await uploadUrlToR2(input, `scene_${Date.now()}_${i + 1}.jpg`, env);
-    }
-    if (url) urls.push(url);
-  }
-  return urls;
-}
-
-async function replaceImageKeywords(text, env, sourceImageUrls = []) {
+async function replaceImageKeywords(text, env) {
   const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
   const replacements = [];
   let match;
-  let sourceIndex = 0;
   while ((match = regex.exec(text)) !== null) {
     const keyword = String(match[2] || '').trim();
     let r2Url = '';
-    if (sourceImageUrls.length) {
-      r2Url = sourceImageUrls[Math.min(sourceIndex, sourceImageUrls.length - 1)];
-      sourceIndex++;
-    } else if (/^https?:\/\//i.test(keyword) && !isGeneratedPlaceholderImageUrl(keyword)) {
+    if (/^https?:\/\//i.test(keyword) && !isGeneratedPlaceholderImageUrl(keyword)) {
       continue;
     } else {
       const lookupKeyword = isGeneratedPlaceholderImageUrl(keyword)
@@ -8149,7 +8132,11 @@ async function replaceImageKeywords(text, env, sourceImageUrls = []) {
         body: String(text || '').slice(Math.max(0, match.index - 120), match.index + 180),
       }, env);
       const fixed = await createFixedSectionImage(searchPlan.queries, env);
-      r2Url = fixed?.url || '';
+      r2Url = fixed?.url || await uploadDataUrlToR2(
+        buildFallbackSectionSvg(searchPlan.keyword || lookupKeyword),
+        `fix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`,
+        env
+      );
     }
     if (!r2Url) continue;
     replacements.push({ original: match[0], replacement: `![${match[1]}](${r2Url})` });
