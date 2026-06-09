@@ -404,9 +404,12 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
               const total     = (Number(itinerary.price)||0) * travelers;
               const paymentMode    = String(itinerary.paymentmode || 'deposit').toLowerCase();
               const depositRatio   = Number(itinerary.depositratio || 20);
+              const depositAmountPerTraveler = Number(itinerary.depositamount || itinerary.depositAmount || 0);
               const balanceCollect = String(itinerary.balancecollect || 'online').toLowerCase();
               const isFullPay = paymentMode === 'full';
-              const deposit = isFullPay ? total : Math.round(total * depositRatio / 100);
+              const deposit = isFullPay ? total : Math.min(total, depositAmountPerTraveler > 0
+                ? Math.round(depositAmountPerTraveler * travelers)
+                : Math.round(total * depositRatio / 100));
               const balance = isFullPay ? 0 : total - deposit;
               const balanceLabel = isFullPay ? '' :
                 balanceCollect === 'offline' ? '出發前由業務收取（也可線上提前繳）' : '可隨時線上補繳';
@@ -421,7 +424,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
                     <span style={{color:'#dc2626',fontSize:13,fontWeight:900}}>
-                      {isFullPay ? '本次付款（全額）' : `訂金（${depositRatio}%）`}
+                      {isFullPay ? '本次付款（全額）' : (depositAmountPerTraveler > 0 ? `訂金（每人 NT$ ${depositAmountPerTraveler.toLocaleString()}）` : `訂金（${depositRatio}%）`)}
                     </span>
                     <span style={{fontSize:18,fontWeight:900,color:'#dc2626'}}>NT$ {deposit.toLocaleString()}</span>
                   </div>

@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS itineraries (
   payment_mode TEXT NOT NULL DEFAULT 'deposit'
     CHECK (payment_mode IN ('deposit', 'full')),
   deposit_ratio INTEGER NOT NULL DEFAULT 20,
+  deposit_amount INTEGER NOT NULL DEFAULT 0,
   balance_collect TEXT NOT NULL DEFAULT 'online'
     CHECK (balance_collect IN ('online', 'offline', 'not_required')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

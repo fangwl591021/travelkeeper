@@ -1,0 +1,2 @@
+ALTER TABLE itineraries
+ADD COLUMN deposit_amount INTEGER NOT NULL DEFAULT 0;

@@ -153,8 +153,8 @@
             </select>
           </label>
           <label class="block">
-            <span id="label-deposit-ratio" class="block text-sm font-semibold mb-2"></span>
-            <input type="number" min="0" max="100" step="1" name="depositRatio" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+            <span id="label-deposit-amount" class="block text-sm font-semibold mb-2"></span>
+            <input type="number" min="0" step="100" name="depositAmount" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
           </label>
           <label class="block">
             <span id="label-balance-collect" class="block text-sm font-semibold mb-2"></span>
@@ -268,7 +268,7 @@
       seatLimit: '\u540d\u984d\u4e0a\u9650',
       minGroupSize: '\u6700\u4f4e\u6210\u5718\u4eba\u6578',
       paymentMode: '\u6536\u8cbb\u6a21\u5f0f',
-      depositRatio: '\u8a02\u91d1\u6bd4\u4f8b (%)',
+      depositAmount: '\u6bcf\u4eba\u8a02\u91d1\u91d1\u984d (NT$)',
       balanceCollect: '\u5c3e\u6b3e\u6536\u53d6\u65b9\u5f0f',
       allowedPayments: '\u5141\u8a31\u4ed8\u6b3e\u65b9\u5f0f',
       shareEnabled: '\u5141\u8a31\u5206\u4eab',
@@ -357,6 +357,7 @@
       commissionPercent: 10,
       paymentMode: 'deposit',
       depositRatio: 20,
+      depositAmount: 0,
       balanceCollect: 'online',
       seatLimit: 30,
       minGroupSize: 10,
@@ -466,7 +467,7 @@
       t(document.getElementById('label-seat-limit'), UI.seatLimit);
       t(document.getElementById('label-min-group'), UI.minGroupSize);
       t(document.getElementById('label-payment-mode'), UI.paymentMode);
-      t(document.getElementById('label-deposit-ratio'), UI.depositRatio);
+      t(document.getElementById('label-deposit-amount'), UI.depositAmount);
       t(document.getElementById('label-balance-collect'), UI.balanceCollect);
       t(document.getElementById('label-allowed-payments'), UI.allowedPayments);
       t(document.getElementById('label-share-enabled'), UI.shareEnabled);
@@ -916,7 +917,7 @@
       formEl.elements.commissionAmount.value = data.commissionAmount ?? 0;
       formEl.elements.commissionPercent.value = data.commissionPercent ?? 0;
       formEl.elements.paymentMode.value = data.paymentMode || 'deposit';
-      formEl.elements.depositRatio.value = data.depositRatio ?? 20;
+      formEl.elements.depositAmount.value = data.depositAmount ?? data.depositamount ?? 0;
       formEl.elements.balanceCollect.value = data.balanceCollect || 'online';
       formEl.elements.seatLimit.value = data.seatLimit ?? 0;
       formEl.elements.minGroupSize.value = data.minGroupSize ?? 0;
@@ -1131,7 +1132,7 @@
           description: descriptionField.value.trim(),
           notes: formEl.elements.notes.value.trim(),
           paymentMode: formEl.elements.paymentMode.value,
-          depositRatio: Number(formEl.elements.depositRatio.value || 0),
+          depositAmount: Number(formEl.elements.depositAmount.value || 0),
           balanceCollect: formEl.elements.balanceCollect.value,
           allowedPaymentMethods,
         };

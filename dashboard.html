@@ -184,6 +184,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
       ...it,
       paymentMode:    it.paymentMode    || it.paymentmode    || 'deposit',
       depositRatio:   it.depositRatio   || it.depositratio   || 20,
+      depositAmount:  it.depositAmount  || it.depositamount  || 0,
       balanceCollect: it.balanceCollect || it.balancecollect || 'online',
     };
   };
@@ -193,6 +194,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
     // ── v6 金流預設 ──
     paymentMode: 'deposit',
     depositRatio: 20,
+    depositAmount: '',
     balanceCollect: 'online',
   });
   const [aiProgress, setAiProgress] = useState(null);
@@ -381,12 +383,12 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
         {(data.paymentMode || 'deposit') === 'deposit' && (
           <>
             <div>
-              <label className="text-xs font-bold text-slate-500">訂金比例（%）</label>
-              <input type="number" min="1" max="100" value={data.depositRatio || 20}
-                onChange={e=>setData({...data, depositRatio: Math.max(1, Math.min(100, Number(e.target.value)||20))})}
+              <label className="text-xs font-bold text-slate-500">每人訂金金額（NT$）</label>
+              <input type="number" min="0" step="100" value={data.depositAmount || ''}
+                onChange={e=>setData({...data, depositAmount: Math.max(0, Number(e.target.value)||0)})}
                 className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl font-bold outline-none focus:border-blue-500"/>
               <p className="text-[10px] text-slate-400 mt-1">
-                例：總價 NT${Number(data.price||0).toLocaleString()}，訂金 = NT${Math.round((Number(data.price)||0) * (Number(data.depositRatio||20)) / 100).toLocaleString()}
+                例：每人團費 NT${Number(data.price||0).toLocaleString()}，每人訂金 = NT${Number(data.depositAmount||0).toLocaleString()}
               </p>
             </div>
             <div>

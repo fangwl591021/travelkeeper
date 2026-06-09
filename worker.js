@@ -448,6 +448,7 @@ function toSheetItinerary(row) {
     commissionpercent: row.commission_percent,
     paymentmode: row.payment_mode,
     depositratio: row.deposit_ratio,
+    depositamount: row.deposit_amount,
     balancecollect: row.balance_collect,
     created: row.created_at,
     updatedat: row.updated_at,
@@ -511,6 +512,7 @@ function toItineraryManageModel(row) {
     commissionPercent: Number(row.commission_percent || 0),
     paymentMode: row.payment_mode || 'deposit',
     depositRatio: Number(row.deposit_ratio || 20),
+    depositAmount: Number(row.deposit_amount || 0),
     balanceCollect: row.balance_collect || 'online',
     seatLimit: Number(row.seat_limit || 0),
     minGroupSize: Number(row.min_group_size || 0),
@@ -572,6 +574,7 @@ function normalizeGasItinerary(item = {}) {
     review_note: String(item.reviewnote || item.reviewNote || '').trim(),
     payment_mode: String(item.paymentmode || item.paymentMode || 'deposit').trim() || 'deposit',
     deposit_ratio: Number(item.depositratio || item.depositRatio || 20),
+    deposit_amount: Number(item.depositamount || item.depositAmount || 0),
     balance_collect: String(item.balancecollect || item.balanceCollect || 'online').trim() || 'online',
     commission_amount: Number(item.commissionamount || item.commissionAmount || 0),
     commission_mode: String(item.commissionmode || item.commissionMode || 'amount').trim() || 'amount',
@@ -688,14 +691,14 @@ async function d1UpsertGasItinerary(env, itinerary) {
     INSERT INTO itineraries (
       id, title, region, price, days, image, description, notes,
       owner_uid, owner_name, review_status, review_note,
-      payment_mode, deposit_ratio, balance_collect,
+      payment_mode, deposit_ratio, deposit_amount, balance_collect,
       commission_amount, commission_mode, commission_percent,
       seat_limit, min_group_size, allowed_payment_methods, share_enabled,
       created_at, updated_at
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
-      ?, ?, ?,
+      ?, ?, ?, ?,
       ?, ?, ?,
       ?, ?, ?, ?,
       COALESCE((SELECT created_at FROM itineraries WHERE id = ?), datetime('now')),
@@ -715,6 +718,7 @@ async function d1UpsertGasItinerary(env, itinerary) {
       review_note = excluded.review_note,
       payment_mode = excluded.payment_mode,
       deposit_ratio = excluded.deposit_ratio,
+      deposit_amount = excluded.deposit_amount,
       balance_collect = excluded.balance_collect,
       commission_amount = excluded.commission_amount,
       commission_mode = excluded.commission_mode,
@@ -739,6 +743,7 @@ async function d1UpsertGasItinerary(env, itinerary) {
     itinerary.review_note,
     itinerary.payment_mode,
     itinerary.deposit_ratio,
+    itinerary.deposit_amount,
     itinerary.balance_collect,
     itinerary.commission_amount,
     itinerary.commission_mode,
@@ -756,7 +761,10 @@ async function d1SyncItineraryFromGas(env, body = {}, gasResult = {}) {
   const allItems = await gasGet(env, { action: 'getItineraries', all: '1' });
   const picked = pickGasItinerary(Array.isArray(allItems) ? allItems : [], body, gasResult);
   if (!picked) throw new Error('Unable to find itinerary from GAS after submit');
-  await d1UpsertGasItinerary(env, picked);
+  await d1UpsertGasItinerary(env, {
+    ...picked,
+    deposit_amount: Number(body.depositAmount ?? body.depositamount ?? picked.deposit_amount ?? 0),
+  });
 }
 
 async function d1SyncItineraryReviewStatus(env, body = {}) {
@@ -833,6 +841,7 @@ async function d1SaveItineraryDetail(env, body = {}) {
     notes: body.notes ?? existing.notes ?? '',
     payment_mode: body.paymentMode ?? body.paymentmode ?? existing.payment_mode ?? 'deposit',
     deposit_ratio: Number(body.depositRatio ?? body.depositratio ?? existing.deposit_ratio ?? 20),
+    deposit_amount: Number(body.depositAmount ?? body.depositamount ?? existing.deposit_amount ?? 0),
     balance_collect: body.balanceCollect ?? body.balancecollect ?? existing.balance_collect ?? 'online',
   };
 
@@ -878,6 +887,7 @@ async function d1SaveItineraryDetail(env, body = {}) {
       notes: basicUpdates.notes,
       paymentMode: basicUpdates.payment_mode,
       depositRatio: basicUpdates.deposit_ratio,
+      depositAmount: basicUpdates.deposit_amount,
       balanceCollect: basicUpdates.balance_collect,
     };
     if (isAdmin && adminUpdates.commission_amount !== undefined) {
@@ -946,13 +956,16 @@ async function d1CreateOrder(env, body = {}, agencySlug = 'demo') {
   const totalAmount = price * travelers;
   const paymentMode = String(itinerary.payment_mode || 'deposit').toLowerCase();
   const depositRatio = Number(itinerary.deposit_ratio || 20);
+  const depositPerTraveler = Math.max(0, Number(itinerary.deposit_amount || 0));
   const balanceCollect = paymentMode === 'full'
     ? 'not_required'
     : String(itinerary.balance_collect || 'online').toLowerCase();
 
   const depositAmount = paymentMode === 'full'
     ? totalAmount
-    : Math.round(totalAmount * depositRatio / 100);
+    : Math.min(totalAmount, depositPerTraveler > 0
+        ? Math.round(depositPerTraveler * travelers)
+        : Math.round(totalAmount * depositRatio / 100));
   const balanceAmount = paymentMode === 'full'
     ? 0
     : Math.max(0, totalAmount - depositAmount);
@@ -5203,6 +5216,7 @@ function buildMotherItineraryPayload(row) {
     review_note: row.review_note || '',
     payment_mode: row.payment_mode || 'deposit',
     deposit_ratio: Number(row.deposit_ratio || 20),
+    deposit_amount: Number(row.deposit_amount || 0),
     balance_collect: row.balance_collect || 'online',
     commission_mode: row.commission_mode || 'amount',
     commission_amount: Number(row.commission_amount || 0),
@@ -7533,6 +7547,7 @@ description 中圖片語法只能放每日對應景點、城市或地標的英�
               notes: body.notes,
               paymentMode: body.paymentMode,
               depositRatio: body.depositRatio,
+              depositAmount: body.depositAmount,
               balanceCollect: body.balanceCollect,
             });
 

@@ -184,9 +184,9 @@ function buildSql(dataset, { truncate = true } = {}) {
   for (const it of dataset.itineraries) {
     lines.push(
       `INSERT OR REPLACE INTO itineraries (` +
-      `id, title, region, price, days, image, description, notes, owner_uid, owner_name, review_status, review_note, commission_amount, commission_mode, commission_percent, payment_mode, deposit_ratio, balance_collect, created_at, updated_at, deleted_at` +
+      `id, title, region, price, days, image, description, notes, owner_uid, owner_name, review_status, review_note, commission_amount, commission_mode, commission_percent, payment_mode, deposit_ratio, deposit_amount, balance_collect, created_at, updated_at, deleted_at` +
       `) VALUES (` +
-      `${sqlText(it.id)}, ${sqlText(it.title)}, ${sqlText(it.region)}, ${sqlInt(it.price)}, ${sqlInt(it.days)}, ${sqlText(it.image)}, ${sqlText(it.description)}, ${sqlText(it.notes)}, ${sqlText(it.owner_uid)}, ${sqlText(it.owner_name)}, ${sqlText(it.review_status)}, ${sqlText(it.review_note)}, ${sqlInt(it.commission_amount)}, ${sqlText(it.commission_mode)}, ${sqlReal(it.commission_percent)}, ${sqlText(it.payment_mode)}, ${sqlInt(it.deposit_ratio, 20)}, ${sqlText(it.balance_collect)}, ${sqlText(it.created_at)}, ${sqlText(it.updated_at)}, ${sqlText(it.deleted_at)}` +
+      `${sqlText(it.id)}, ${sqlText(it.title)}, ${sqlText(it.region)}, ${sqlInt(it.price)}, ${sqlInt(it.days)}, ${sqlText(it.image)}, ${sqlText(it.description)}, ${sqlText(it.notes)}, ${sqlText(it.owner_uid)}, ${sqlText(it.owner_name)}, ${sqlText(it.review_status)}, ${sqlText(it.review_note)}, ${sqlInt(it.commission_amount)}, ${sqlText(it.commission_mode)}, ${sqlReal(it.commission_percent)}, ${sqlText(it.payment_mode)}, ${sqlInt(it.deposit_ratio, 20)}, ${sqlInt(it.deposit_amount)}, ${sqlText(it.balance_collect)}, ${sqlText(it.created_at)}, ${sqlText(it.updated_at)}, ${sqlText(it.deleted_at)}` +
       `);`
     );
   }
@@ -361,6 +361,7 @@ Environment:
     commission_percent: Number(it.commissionpercent || it.commissionPercent || 0),
     payment_mode: String(it.paymentmode || 'deposit'),
     deposit_ratio: Number(it.depositratio || 20),
+    deposit_amount: Number(it.depositamount || it.depositAmount || 0),
     balance_collect: String(it.balancecollect || 'online'),
     created_at: String(it.created || it.createdat || ''),
     updated_at: String(it.updatedat || it.created || ''),

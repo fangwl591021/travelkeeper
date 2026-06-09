@@ -132,8 +132,8 @@
             </select>
           </label>
           <label class="block">
-            <span class="block text-sm font-black mb-2">訂金比例 (%)</span>
-            <input type="number" min="0" max="100" step="1" name="depositRatio" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+            <span class="block text-sm font-black mb-2">每人訂金金額 (NT$)</span>
+            <input type="number" min="0" step="100" name="depositAmount" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
           </label>
           <label class="block">
             <span class="block text-sm font-black mb-2">尾款收取方式</span>
@@ -218,6 +218,7 @@
       commissionPercent: 10,
       paymentMode: 'deposit',
       depositRatio: 20,
+      depositAmount: 0,
       balanceCollect: 'online',
       seatLimit: 30,
       minGroupSize: 10,
@@ -283,7 +284,7 @@
       setField('commissionAmount', data.commissionAmount || 0);
       setField('commissionPercent', data.commissionPercent || 0);
       setField('paymentMode', data.paymentMode || 'deposit');
-      setField('depositRatio', data.depositRatio || 20);
+      setField('depositAmount', data.depositAmount || data.depositamount || 0);
       setField('balanceCollect', data.balanceCollect || 'online');
       setField('seatLimit', data.seatLimit || 0);
       setField('minGroupSize', data.minGroupSize || 0);
@@ -311,7 +312,7 @@
         commissionAmount: Number(formEl.elements.commissionAmount.value || 0),
         commissionPercent: Number(formEl.elements.commissionPercent.value || 0),
         paymentMode: formEl.elements.paymentMode.value,
-        depositRatio: Number(formEl.elements.depositRatio.value || 0),
+        depositAmount: Number(formEl.elements.depositAmount.value || 0),
         balanceCollect: formEl.elements.balanceCollect.value,
         seatLimit: Number(formEl.elements.seatLimit.value || 0),
         minGroupSize: Number(formEl.elements.minGroupSize.value || 0),
