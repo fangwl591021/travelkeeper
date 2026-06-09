@@ -1982,7 +1982,657 @@ async function updateAccountingReceiptStatus(env, body = {}) {
   ).run();
 
   const row = await env.DB.prepare(`SELECT * FROM accounting_receipts WHERE id = ?`).bind(id).first();
+  if (id.startsWith('INT-') && orderId) {
+    await updateInternalOrderPaymentStatus(env, orderId, leg, status);
+  }
   return { success: true, data: row };
+}
+
+function safeJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function safeStringList(value) {
+  if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean);
+  return String(value || '')
+    .split(/[,，\n]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeInternalOrderStatus(value) {
+  const status = String(value || 'checking').trim().toLowerCase();
+  return ['pending', 'checking', 'departed', 'cancelled'].includes(status) ? status : 'checking';
+}
+
+function monthKey(value) {
+  const raw = String(value || '').trim();
+  return raw.slice(0, 7);
+}
+
+async function ensureWegoInternalTables(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureInternalOpsTables(env);
+  await ensureAccountingTables(env);
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS internal_orders (
+    id TEXT PRIMARY KEY,
+    order_date TEXT NOT NULL DEFAULT '',
+    departure_date TEXT NOT NULL DEFAULT '',
+    customer TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    address TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    supplier TEXT NOT NULL DEFAULT '',
+    sales_uid TEXT NOT NULL DEFAULT '',
+    sales_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'checking',
+    items_json TEXT NOT NULL DEFAULT '[]',
+    costs_json TEXT NOT NULL DEFAULT '[]',
+    payments_json TEXT NOT NULL DEFAULT '[]',
+    travelers_json TEXT NOT NULL DEFAULT '[]',
+    net_total INTEGER NOT NULL DEFAULT 0,
+    report_total INTEGER NOT NULL DEFAULT 0,
+    company_cost INTEGER NOT NULL DEFAULT 0,
+    fee_total INTEGER NOT NULL DEFAULT 0,
+    profit INTEGER NOT NULL DEFAULT 0,
+    commission INTEGER NOT NULL DEFAULT 0,
+    paid_amount INTEGER NOT NULL DEFAULT 0,
+    unpaid_amount INTEGER NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT '',
+    deleted_at TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS internal_expenses (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    item TEXT NOT NULL DEFAULT '',
+    amount INTEGER NOT NULL DEFAULT 0,
+    method TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    booked INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS internal_salary_records (
+    id TEXT PRIMARY KEY,
+    month TEXT NOT NULL DEFAULT '',
+    sales_uid TEXT NOT NULL DEFAULT '',
+    sales_name TEXT NOT NULL DEFAULT '',
+    order_count INTEGER NOT NULL DEFAULT 0,
+    commission_total INTEGER NOT NULL DEFAULT 0,
+    base_salary INTEGER NOT NULL DEFAULT 0,
+    adjustment INTEGER NOT NULL DEFAULT 0,
+    deductions INTEGER NOT NULL DEFAULT 0,
+    total_pay INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'draft',
+    paid_at TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(month, sales_uid)
+  )`).run();
+}
+
+async function requireWegoInternalAdmin(env, uid) {
+  const operatorUid = String(uid || '').trim();
+  if (!(await isAdminUid(env, operatorUid))) return { ok: false, error: 'ADMIN_REQUIRED' };
+  return { ok: true, uid: operatorUid };
+}
+
+async function readPaymentFeeMap(env) {
+  await ensureInternalOpsTables(env);
+  const rows = await env.DB.prepare(`
+    SELECT method, fee_rate, fixed_fee
+      FROM payment_fee_settings
+     WHERE status = 'active'
+  `).all();
+  const map = {};
+  for (const row of rows.results || []) {
+    const key = String(row.method || '').trim().toLowerCase();
+    if (key) map[key] = { rate: Number(row.fee_rate || 0), fixed: Number(row.fixed_fee || 0) };
+  }
+  return map;
+}
+
+function calculateInternalOrderSnapshot(body = {}, feeMap = {}) {
+  const items = safeJsonArray(body.items || body.items_json).map((item, index) => {
+    const qty = Math.max(0, Number(item.qty || 0));
+    const net = Math.max(0, Number(item.net || 0));
+    const price = Math.max(0, Number(item.price || 0));
+    const discount = Math.max(0, Number(item.discount || 0));
+    const reportUnit = Math.max(0, price - discount);
+    return {
+      id: String(item.id || `item-${index + 1}`),
+      label: String(item.label || '其他'),
+      qty,
+      net,
+      price,
+      discount,
+      netSub: Math.round(qty * net),
+      priceSub: Math.round(qty * reportUnit),
+    };
+  });
+  const costs = safeJsonArray(body.costs || body.costs_json).map((cost, index) => {
+    const qty = Math.max(0, Number(cost.qty || 0));
+    const unitPrice = Math.max(0, Number(cost.unitPrice ?? cost.unit_price ?? cost.default_amount ?? 0));
+    return {
+      id: String(cost.id || `cost-${index + 1}`),
+      type: String(cost.type || 'other'),
+      name: String(cost.name || '其他成本'),
+      qty,
+      unitPrice,
+      sub: Math.round(qty * unitPrice),
+    };
+  });
+  const payments = safeJsonArray(body.payments || body.payments_json).map((payment, index) => {
+    const method = String(payment.method || '').trim().toLowerCase();
+    const amount = Math.max(0, Number(payment.amount || 0));
+    const feeCfg = feeMap[method] || { rate: 0, fixed: 0 };
+    const status = normalizeAccountingStatus(payment.status || payment.accounting_status || 'pending_check');
+    return {
+      id: String(payment.id || `pay-${Date.now()}-${index + 1}`),
+      type: String(payment.type || '訂金'),
+      date: String(payment.date || '').trim(),
+      method,
+      amount: Math.round(amount),
+      lastFive: String(payment.lastFive || payment.last_five || '').trim(),
+      authCode: String(payment.authCode || payment.auth_code || '').trim(),
+      fee: Math.round(amount * Number(feeCfg.rate || 0) + Number(feeCfg.fixed || 0)),
+      note: String(payment.note || '').trim(),
+      status,
+      imageUrl: String(payment.imageUrl || payment.image_url || '').trim(),
+    };
+  });
+  const travelers = safeJsonArray(body.travelers || body.travelers_json).map((traveler, index) => ({
+    id: String(traveler.id || `traveler-${index + 1}`),
+    name: String(traveler.name || '').trim(),
+    meals: safeStringList(traveler.meals),
+    customMeals: safeStringList(traveler.customMeals || traveler.custom_meals),
+    roomNote: String(traveler.roomNote || traveler.room_note || '').trim(),
+    docs: safeStringList(traveler.docs),
+  }));
+
+  const netTotal = items.reduce((sum, item) => sum + Number(item.netSub || 0), 0);
+  const reportTotal = items.reduce((sum, item) => sum + Number(item.priceSub || 0), 0);
+  const companyCost = costs.reduce((sum, cost) => sum + Number(cost.sub || 0), 0);
+  const feeTotal = payments.reduce((sum, payment) => sum + Number(payment.fee || 0), 0);
+  const paidAmount = payments
+    .filter(payment => payment.status === 'received')
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const profit = Math.round(reportTotal - netTotal - companyCost - feeTotal);
+  const commission = Math.round(profit * 0.4);
+  return {
+    items,
+    costs,
+    payments,
+    travelers,
+    netTotal,
+    reportTotal,
+    companyCost,
+    feeTotal,
+    profit,
+    commission,
+    paidAmount,
+    unpaidAmount: Math.max(0, reportTotal - paidAmount),
+  };
+}
+
+function toWegoInternalOrder(row) {
+  return {
+    id: row.id,
+    orderDate: row.order_date,
+    departureDate: row.departure_date,
+    customer: row.customer,
+    phone: row.phone,
+    address: row.address,
+    source: row.source,
+    supplier: row.supplier,
+    salesUid: row.sales_uid,
+    salesName: row.sales_name,
+    status: row.status,
+    items: safeJsonArray(row.items_json),
+    costs: safeJsonArray(row.costs_json),
+    payments: safeJsonArray(row.payments_json),
+    travelers: safeJsonArray(row.travelers_json),
+    netTotal: Number(row.net_total || 0),
+    reportTotal: Number(row.report_total || 0),
+    companyCost: Number(row.company_cost || 0),
+    feeTotal: Number(row.fee_total || 0),
+    profit: Number(row.profit || 0),
+    commission: Number(row.commission || 0),
+    paidAmount: Number(row.paid_amount || 0),
+    unpaidAmount: Number(row.unpaid_amount || 0),
+    note: row.note || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function listWegoInternalOrders(env, query = {}) {
+  const auth = await requireWegoInternalAdmin(env, query.uid || query.operatorUid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const rows = await env.DB.prepare(`
+    SELECT *
+      FROM internal_orders
+     WHERE deleted_at = ''
+     ORDER BY departure_date DESC, updated_at DESC
+     LIMIT 500
+  `).all();
+  return { success: true, data: (rows.results || []).map(toWegoInternalOrder) };
+}
+
+async function getWegoInternalOrder(env, id, uid) {
+  const auth = await requireWegoInternalAdmin(env, uid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const row = await env.DB.prepare(`SELECT * FROM internal_orders WHERE id = ? AND deleted_at = ''`).bind(id).first();
+  if (!row) return { success: false, error: 'ORDER_NOT_FOUND' };
+  return { success: true, data: toWegoInternalOrder(row) };
+}
+
+async function saveWegoInternalOrder(env, body = {}) {
+  const auth = await requireWegoInternalAdmin(env, body.operatorUid || body.uid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const id = String(body.id || '').trim() || `INT-${Date.now()}`;
+  const now = formatTaipeiDateTime(new Date());
+  const feeMap = await readPaymentFeeMap(env);
+  const snap = calculateInternalOrderSnapshot(body, feeMap);
+  const orderDate = String(body.orderDate || body.order_date || now.slice(0, 10)).trim();
+  const departureDate = String(body.departureDate || body.departure_date || '').trim();
+  const customer = String(body.customer || '').trim();
+  if (!customer) return { success: false, error: 'CUSTOMER_REQUIRED' };
+
+  await env.DB.prepare(`
+    INSERT INTO internal_orders (
+      id, order_date, departure_date, customer, phone, address, source, supplier,
+      sales_uid, sales_name, status, items_json, costs_json, payments_json, travelers_json,
+      net_total, report_total, company_cost, fee_total, profit, commission, paid_amount, unpaid_amount,
+      note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      order_date = excluded.order_date,
+      departure_date = excluded.departure_date,
+      customer = excluded.customer,
+      phone = excluded.phone,
+      address = excluded.address,
+      source = excluded.source,
+      supplier = excluded.supplier,
+      sales_uid = excluded.sales_uid,
+      sales_name = excluded.sales_name,
+      status = excluded.status,
+      items_json = excluded.items_json,
+      costs_json = excluded.costs_json,
+      payments_json = excluded.payments_json,
+      travelers_json = excluded.travelers_json,
+      net_total = excluded.net_total,
+      report_total = excluded.report_total,
+      company_cost = excluded.company_cost,
+      fee_total = excluded.fee_total,
+      profit = excluded.profit,
+      commission = excluded.commission,
+      paid_amount = excluded.paid_amount,
+      unpaid_amount = excluded.unpaid_amount,
+      note = excluded.note,
+      updated_at = excluded.updated_at
+  `).bind(
+    id,
+    orderDate,
+    departureDate,
+    customer,
+    String(body.phone || '').trim(),
+    String(body.address || '').trim(),
+    String(body.source || '').trim(),
+    String(body.supplier || '').trim(),
+    String(body.salesUid || body.sales_uid || '').trim(),
+    String(body.salesName || body.sales_name || '').trim(),
+    normalizeInternalOrderStatus(body.status),
+    JSON.stringify(snap.items),
+    JSON.stringify(snap.costs),
+    JSON.stringify(snap.payments),
+    JSON.stringify(snap.travelers),
+    snap.netTotal,
+    snap.reportTotal,
+    snap.companyCost,
+    snap.feeTotal,
+    snap.profit,
+    snap.commission,
+    snap.paidAmount,
+    snap.unpaidAmount,
+    String(body.note || '').trim(),
+    now,
+    now
+  ).run();
+  return getWegoInternalOrder(env, id, auth.uid);
+}
+
+async function archiveWegoInternalOrder(env, body = {}) {
+  const auth = await requireWegoInternalAdmin(env, body.operatorUid || body.uid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  const id = String(body.id || '').trim();
+  if (!id) return { success: false, error: 'MISSING_ID' };
+  await ensureWegoInternalTables(env);
+  await env.DB.prepare(`UPDATE internal_orders SET deleted_at = ?, updated_at = ? WHERE id = ?`)
+    .bind(formatTaipeiDateTime(new Date()), formatTaipeiDateTime(new Date()), id).run();
+  return { success: true, id };
+}
+
+async function updateInternalOrderPaymentStatus(env, orderId, paymentId, status) {
+  await ensureWegoInternalTables(env);
+  const row = await env.DB.prepare(`SELECT * FROM internal_orders WHERE id = ?`).bind(orderId).first();
+  if (!row) return;
+  const payments = safeJsonArray(row.payments_json).map(payment => (
+    String(payment.id || '') === String(paymentId || '') ? { ...payment, status } : payment
+  ));
+  const snap = calculateInternalOrderSnapshot({
+    items: safeJsonArray(row.items_json),
+    costs: safeJsonArray(row.costs_json),
+    payments,
+    travelers: safeJsonArray(row.travelers_json),
+  }, {});
+  const now = formatTaipeiDateTime(new Date());
+  await env.DB.prepare(`
+    UPDATE internal_orders
+       SET payments_json = ?,
+           paid_amount = ?,
+           unpaid_amount = ?,
+           updated_at = ?
+     WHERE id = ?
+  `).bind(JSON.stringify(payments), snap.paidAmount, snap.unpaidAmount, now, orderId).run();
+}
+
+function internalOrderPaymentEvent(row, payment) {
+  return {
+    id: `${row.id}:${payment.id}`,
+    order_id: row.id,
+    leg: payment.id,
+    leg_label: payment.type || '付款',
+    payment_date: payment.date || row.order_date || row.created_at || '',
+    sales_uid: row.sales_uid || '',
+    sales_name: row.sales_name || '',
+    customer_name: row.customer || '',
+    customer_phone: row.phone || '',
+    itinerary_title: `內部訂單 ${row.id}`,
+    method: accountingMethodLabel(payment.method || ''),
+    amount: Number(payment.amount || 0),
+    check_code: payment.lastFive || payment.authCode || '',
+    payment_status: payment.status || 'pending_check',
+    accounting_status: normalizeAccountingStatus(payment.status || 'pending_check'),
+    note: payment.note || '',
+    source: 'wego_internal',
+  };
+}
+
+async function listWegoAccountingReceipts(env, query = {}) {
+  const base = await listAccountingReceipts(env, query);
+  if (!base.success) return base;
+  await ensureWegoInternalTables(env);
+  const rows = await env.DB.prepare(`
+    SELECT *
+      FROM internal_orders
+     WHERE deleted_at = ''
+     ORDER BY updated_at DESC
+     LIMIT 500
+  `).all();
+  const internalEvents = [];
+  for (const row of rows.results || []) {
+    for (const payment of safeJsonArray(row.payments_json)) {
+      if (Number(payment.amount || 0) > 0) internalEvents.push(internalOrderPaymentEvent(row, payment));
+    }
+  }
+  const all = [...base.data, ...internalEvents]
+    .filter(ev => filterAccountingReceipt(ev, query))
+    .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')));
+  const stats = all.reduce((acc, ev) => {
+    const key = ev.accounting_status || 'pending_check';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, { pending_check: 0, received: 0, processing: 0 });
+  return { success: true, data: all, stats };
+}
+
+function toWegoExpense(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    category: row.category,
+    item: row.item,
+    amount: Number(row.amount || 0),
+    method: row.method,
+    note: row.note,
+    booked: !!row.booked,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function listWegoExpenses(env, query = {}) {
+  const auth = await requireWegoInternalAdmin(env, query.uid || query.operatorUid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const rows = await env.DB.prepare(`
+    SELECT *
+      FROM internal_expenses
+     WHERE status <> 'archived'
+     ORDER BY date DESC, updated_at DESC
+     LIMIT 500
+  `).all();
+  return { success: true, data: (rows.results || []).map(toWegoExpense) };
+}
+
+async function saveWegoExpense(env, body = {}) {
+  const auth = await requireWegoInternalAdmin(env, body.operatorUid || body.uid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const id = String(body.id || '').trim() || `EXP-${Date.now()}`;
+  const now = formatTaipeiDateTime(new Date());
+  await env.DB.prepare(`
+    INSERT INTO internal_expenses (id, date, category, item, amount, method, note, booked, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      date = excluded.date,
+      category = excluded.category,
+      item = excluded.item,
+      amount = excluded.amount,
+      method = excluded.method,
+      note = excluded.note,
+      booked = excluded.booked,
+      updated_at = excluded.updated_at
+  `).bind(
+    id,
+    String(body.date || now.slice(0, 10)).trim(),
+    String(body.category || '其他').trim(),
+    String(body.item || '').trim(),
+    Math.round(Number(body.amount || 0)),
+    String(body.method || '').trim(),
+    String(body.note || '').trim(),
+    body.booked === false || body.booked === 0 || body.booked === '0' ? 0 : 1,
+    now,
+    now
+  ).run();
+  const row = await env.DB.prepare(`SELECT * FROM internal_expenses WHERE id = ?`).bind(id).first();
+  return { success: true, data: toWegoExpense(row) };
+}
+
+async function archiveWegoExpense(env, body = {}) {
+  const auth = await requireWegoInternalAdmin(env, body.operatorUid || body.uid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  const id = String(body.id || '').trim();
+  if (!id) return { success: false, error: 'MISSING_ID' };
+  await ensureWegoInternalTables(env);
+  await env.DB.prepare(`UPDATE internal_expenses SET status = 'archived', updated_at = ? WHERE id = ?`)
+    .bind(formatTaipeiDateTime(new Date()), id).run();
+  return { success: true, id };
+}
+
+async function listWegoSalary(env, query = {}) {
+  const auth = await requireWegoInternalAdmin(env, query.uid || query.operatorUid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const month = String(query.month || formatTaipeiDateTime(new Date()).slice(0, 7)).trim();
+  const employees = await env.DB.prepare(`
+    SELECT *
+      FROM internal_employees
+     WHERE status = 'active'
+     ORDER BY name
+  `).all();
+  const orders = await env.DB.prepare(`
+    SELECT sales_uid, sales_name, COUNT(*) AS order_count, SUM(commission) AS commission_total
+      FROM internal_orders
+     WHERE deleted_at = ''
+       AND substr(departure_date, 1, 7) = ?
+     GROUP BY sales_uid, sales_name
+  `).bind(month).all();
+  const paid = await env.DB.prepare(`SELECT * FROM internal_salary_records WHERE month = ?`).bind(month).all();
+  const orderMap = new Map((orders.results || []).map(row => [String(row.sales_uid || row.sales_name || ''), row]));
+  const paidMap = new Map((paid.results || []).map(row => [String(row.sales_uid || row.sales_name || ''), row]));
+  const rows = [];
+  for (const emp of employees.results || []) {
+    if (!['sales', 'manager', 'accounting', 'admin'].includes(String(emp.role || ''))) continue;
+    const key = String(emp.uid || emp.id || emp.name || '');
+    const stat = orderMap.get(key) || orderMap.get(String(emp.name || '')) || {};
+    const saved = paidMap.get(key) || paidMap.get(String(emp.name || '')) || {};
+    const commissionTotal = Number(stat.commission_total || saved.commission_total || 0);
+    const baseSalary = Number(saved.base_salary || 0);
+    const adjustment = Number(saved.adjustment || 0);
+    const deductions = Number(saved.deductions || 0);
+    rows.push({
+      id: saved.id || `SAL-${month}-${key || emp.id}`,
+      month,
+      salesUid: emp.uid || emp.id || '',
+      salesName: emp.name || '',
+      role: emp.role || '',
+      orderCount: Number(stat.order_count || saved.order_count || 0),
+      commissionTotal,
+      baseSalary,
+      adjustment,
+      deductions,
+      totalPay: Number(saved.total_pay || (commissionTotal + baseSalary + adjustment - deductions)),
+      status: saved.status || 'draft',
+      paidAt: saved.paid_at || '',
+      note: saved.note || '',
+    });
+  }
+  return { success: true, month, data: rows };
+}
+
+async function payWegoSalary(env, body = {}) {
+  const auth = await requireWegoInternalAdmin(env, body.operatorUid || body.uid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const month = String(body.month || '').trim();
+  const salesUid = String(body.salesUid || body.sales_uid || body.id || '').trim();
+  const salesName = String(body.salesName || body.sales_name || '').trim();
+  if (!month || (!salesUid && !salesName)) return { success: false, error: 'MISSING_SALARY_TARGET' };
+  const id = String(body.id || `SAL-${month}-${salesUid || salesName}`).trim();
+  const now = formatTaipeiDateTime(new Date());
+  const totalPay = Math.round(Number(body.totalPay || body.total_pay || 0));
+  await env.DB.prepare(`
+    INSERT INTO internal_salary_records (
+      id, month, sales_uid, sales_name, order_count, commission_total, base_salary, adjustment,
+      deductions, total_pay, status, paid_at, note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?)
+    ON CONFLICT(month, sales_uid) DO UPDATE SET
+      sales_name = excluded.sales_name,
+      order_count = excluded.order_count,
+      commission_total = excluded.commission_total,
+      base_salary = excluded.base_salary,
+      adjustment = excluded.adjustment,
+      deductions = excluded.deductions,
+      total_pay = excluded.total_pay,
+      status = 'paid',
+      paid_at = excluded.paid_at,
+      note = excluded.note,
+      updated_at = excluded.updated_at
+  `).bind(
+    id,
+    month,
+    salesUid,
+    salesName,
+    Number(body.orderCount || body.order_count || 0),
+    Math.round(Number(body.commissionTotal || body.commission_total || 0)),
+    Math.round(Number(body.baseSalary || body.base_salary || 0)),
+    Math.round(Number(body.adjustment || 0)),
+    Math.round(Number(body.deductions || 0)),
+    totalPay,
+    now,
+    String(body.note || '').trim(),
+    now,
+    now
+  ).run();
+  await saveWegoExpense(env, {
+    operatorUid: auth.uid,
+    id: `SAL-EXP-${month}-${salesUid || salesName}`,
+    date: now.slice(0, 10),
+    category: '薪水',
+    item: `${month} ${salesName || salesUid} 薪資`,
+    amount: totalPay,
+    method: '轉帳',
+    note: '薪資頁已發放自動入帳',
+    booked: 1,
+  });
+  return { success: true, id, paidAt: now };
+}
+
+async function getWegoReports(env, query = {}) {
+  const auth = await requireWegoInternalAdmin(env, query.uid || query.operatorUid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+  const from = String(query.from || '').trim();
+  const to = String(query.to || '').trim();
+  const accounting = await listWegoAccountingReceipts(env, { ...query, uid: auth.uid, status: 'received' });
+  const expenses = await listWegoExpenses(env, { uid: auth.uid });
+  const incomeEntries = (accounting.data || []).map(row => ({
+    date: String(row.payment_date || '').slice(0, 10),
+    type: '收入',
+    category: row.leg_label || '付款',
+    item: `${row.customer_name || ''} ${row.itinerary_title || row.order_id || ''}`.trim(),
+    amount: Number(row.amount || 0),
+  }));
+  const expenseEntries = (expenses.data || []).filter(row => row.booked).map(row => ({
+    date: row.date,
+    type: '支出',
+    category: row.category || '其他',
+    item: row.item || '',
+    amount: Number(row.amount || 0),
+  }));
+  const ledger = [...incomeEntries, ...expenseEntries].filter(row => {
+    if (from && row.date && row.date < from) return false;
+    if (to && row.date && row.date > to) return false;
+    return true;
+  }).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const totalIncome = ledger.filter(row => row.type === '收入').reduce((sum, row) => sum + row.amount, 0);
+  const totalExpense = ledger.filter(row => row.type === '支出').reduce((sum, row) => sum + row.amount, 0);
+  const byCategory = ledger.reduce((acc, row) => {
+    const key = `${row.type}:${row.category}`;
+    acc[key] = (acc[key] || 0) + row.amount;
+    return acc;
+  }, {});
+  return {
+    success: true,
+    data: {
+      ledger,
+      summary: {
+        totalIncome,
+        totalExpense,
+        netProfit: totalIncome - totalExpense,
+        count: ledger.length,
+        byCategory,
+      },
+    },
+  };
 }
 
 function buildNewebPayMerchantOrderNo(orderId, leg) {
@@ -6382,7 +7032,7 @@ export default {
 
       if (path === '/api/internal/accounting/receipts' && request.method === 'GET') {
         const query = Object.fromEntries(url.searchParams.entries());
-        const result = await listAccountingReceipts(env, query);
+        const result = await listWegoAccountingReceipts(env, query);
         return json(result, result.success ? 200 : 400);
       }
 
@@ -6390,6 +7040,67 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
         const result = await updateAccountingReceiptStatus(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/orders' && request.method === 'GET') {
+        const result = await listWegoInternalOrders(env, Object.fromEntries(url.searchParams.entries()));
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/orders' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
+        const result = await saveWegoInternalOrder(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/orders/archive' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
+        const result = await archiveWegoInternalOrder(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      const internalOrderDetailMatch = path.match(/^\/api\/wego\/internal\/orders\/([^/]+)$/);
+      if (internalOrderDetailMatch && request.method === 'GET') {
+        const result = await getWegoInternalOrder(env, decodeURIComponent(internalOrderDetailMatch[1]), url.searchParams.get('uid') || '');
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/expenses' && request.method === 'GET') {
+        const result = await listWegoExpenses(env, Object.fromEntries(url.searchParams.entries()));
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/expenses' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
+        const result = await saveWegoExpense(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/expenses/archive' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
+        const result = await archiveWegoExpense(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/salary' && request.method === 'GET') {
+        const result = await listWegoSalary(env, Object.fromEntries(url.searchParams.entries()));
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/salary/pay' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.operatorUid && url.searchParams.get('uid')) body.operatorUid = url.searchParams.get('uid');
+        const result = await payWegoSalary(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/reports' && request.method === 'GET') {
+        const result = await getWegoReports(env, Object.fromEntries(url.searchParams.entries()));
         return json(result, result.success ? 200 : 400);
       }
 
