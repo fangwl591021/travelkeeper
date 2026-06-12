@@ -1554,6 +1554,16 @@ async function getPaymentConfigForAdmin(env) {
   const enabled = enabledRaw
     ? ['1', 'true', 'yes', 'on'].includes(enabledRaw)
     : !!(merchantId && hashKey && hashIv);
+  const linePayEnv = String(settings.linepay_env || env.LINEPAY_ENV || env.LINE_PAY_ENV || 'sandbox').trim().toLowerCase() === 'production'
+    ? 'production'
+    : 'sandbox';
+  const linePayChannelId = String(settings.linepay_channel_id || env.LINEPAY_CHANNEL_ID || env.LINE_PAY_CHANNEL_ID || '').trim();
+  const linePayChannelSecret = String(settings.linepay_channel_secret || env.LINEPAY_CHANNEL_SECRET || env.LINE_PAY_CHANNEL_SECRET || '').trim();
+  const linePayCurrency = String(settings.linepay_currency || env.LINEPAY_CURRENCY || env.LINE_PAY_CURRENCY || 'TWD').trim() || 'TWD';
+  const linePayEnabledRaw = String(settings.linepay_enabled || '').trim().toLowerCase();
+  const linePayEnabled = linePayEnabledRaw
+    ? ['1', 'true', 'yes', 'on'].includes(linePayEnabledRaw)
+    : !!(linePayChannelId && linePayChannelSecret);
   return {
     success: true,
     data: {
@@ -1564,11 +1574,20 @@ async function getPaymentConfigForAdmin(env) {
       has_newebpay_hash_key: !!hashKey,
       has_newebpay_hash_iv: !!hashIv,
       ready: !!(enabled && merchantId && hashKey && hashIv),
+      linepay_enabled: linePayEnabled,
+      linepay_env: linePayEnv,
+      linepay_channel_id: linePayChannelId,
+      linepay_currency: linePayCurrency,
+      has_linepay_channel_secret: !!linePayChannelSecret,
+      linepay_ready: !!(linePayEnabled && linePayChannelId && linePayChannelSecret),
       source: {
         merchant_id: settings.newebpay_merchant_id ? 'settings' : (env.NEWEBPAY_MERCHANT_ID ? 'env' : ''),
         hash_key: settings.newebpay_hash_key ? 'settings' : (env.NEWEBPAY_HASH_KEY ? 'env' : ''),
         hash_iv: settings.newebpay_hash_iv ? 'settings' : (env.NEWEBPAY_HASH_IV ? 'env' : ''),
         mpg_url: settings.newebpay_mpg_url ? 'settings' : (env.NEWEBPAY_MPG_URL ? 'env' : 'default'),
+        linepay_channel_id: settings.linepay_channel_id ? 'settings' : (env.LINEPAY_CHANNEL_ID || env.LINE_PAY_CHANNEL_ID ? 'env' : ''),
+        linepay_channel_secret: settings.linepay_channel_secret ? 'settings' : (env.LINEPAY_CHANNEL_SECRET || env.LINE_PAY_CHANNEL_SECRET ? 'env' : ''),
+        linepay_env: settings.linepay_env ? 'settings' : (env.LINEPAY_ENV || env.LINE_PAY_ENV ? 'env' : 'default'),
       },
     },
   };
@@ -1586,6 +1605,11 @@ async function updatePaymentConfigFromAdmin(env, body = {}) {
     newebpay_version: String(body.newebpay_version || '2.0').trim(),
     newebpay_hash_key: body.newebpay_hash_key ? String(body.newebpay_hash_key).trim() : String(existing.newebpay_hash_key || ''),
     newebpay_hash_iv: body.newebpay_hash_iv ? String(body.newebpay_hash_iv).trim() : String(existing.newebpay_hash_iv || ''),
+    linepay_enabled: body.linepay_enabled ? '1' : '0',
+    linepay_env: String(body.linepay_env || existing.linepay_env || 'sandbox').trim().toLowerCase() === 'production' ? 'production' : 'sandbox',
+    linepay_channel_id: String(body.linepay_channel_id || '').trim(),
+    linepay_currency: String(body.linepay_currency || existing.linepay_currency || 'TWD').trim() || 'TWD',
+    linepay_channel_secret: body.linepay_channel_secret ? String(body.linepay_channel_secret).trim() : String(existing.linepay_channel_secret || ''),
   };
   if (next.newebpay_hash_key && next.newebpay_hash_key.length !== 32) return { success: false, error: 'HASH_KEY_LENGTH_MUST_BE_32' };
   if (next.newebpay_hash_iv && next.newebpay_hash_iv.length !== 16) return { success: false, error: 'HASH_IV_LENGTH_MUST_BE_16' };

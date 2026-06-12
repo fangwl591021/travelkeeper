@@ -1208,6 +1208,13 @@ function App() {
     has_newebpay_hash_key: false,
     has_newebpay_hash_iv: false,
     ready: false,
+    linepay_enabled: false,
+    linepay_env: 'sandbox',
+    linepay_channel_id: '',
+    linepay_channel_secret: '',
+    linepay_currency: 'TWD',
+    has_linepay_channel_secret: false,
+    linepay_ready: false,
   });
   const [paymentConfigSaving, setPaymentConfigSaving] = useState(false);
   const [accessConfig, setAccessConfig] = useState({
@@ -1257,6 +1264,11 @@ function App() {
           newebpay_hash_iv: paymentConfig.newebpay_hash_iv,
           newebpay_mpg_url: paymentConfig.newebpay_mpg_url,
           newebpay_version: paymentConfig.newebpay_version,
+          linepay_enabled: !!paymentConfig.linepay_enabled,
+          linepay_env: paymentConfig.linepay_env,
+          linepay_channel_id: paymentConfig.linepay_channel_id,
+          linepay_channel_secret: paymentConfig.linepay_channel_secret,
+          linepay_currency: paymentConfig.linepay_currency,
         }),
       });
       const result = await res.json();
@@ -1266,6 +1278,7 @@ function App() {
         ...result.data,
         newebpay_hash_key: '',
         newebpay_hash_iv: '',
+        linepay_channel_secret: '',
       }));
       showToast('金流參數已儲存');
     } catch (err) {
@@ -1388,6 +1401,7 @@ function App() {
           ...cfgRes.data,
           newebpay_hash_key: '',
           newebpay_hash_iv: '',
+          linepay_channel_secret: '',
         }));
       }
       if (accessRes?.success) setAccessConfig(prev => ({ ...prev, ...accessRes.data }));
@@ -3414,7 +3428,7 @@ function App() {
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Payment Gateway</p>
-                    <h2 className="text-2xl font-black text-slate-900 mt-1">藍新金流參數</h2>
+                    <h2 className="text-2xl font-black text-slate-900 mt-1">金流參數</h2>
                     <p className="text-sm text-slate-500 mt-2">
                       廠商資料尚未提供時可先保持停用；取得後在這裡填入，不需要重新改程式。
                     </p>
@@ -3480,6 +3494,73 @@ function App() {
                   <p>目前狀態：Merchant ID {paymentConfig.newebpay_merchant_id ? '已填' : '未填'}、
                     HashKey {paymentConfig.has_newebpay_hash_key ? '已設定' : '未設定'}、
                     HashIV {paymentConfig.has_newebpay_hash_iv ? '已設定' : '未設定'}。</p>
+                </div>
+
+                <div className="border-t border-slate-200 pt-5 space-y-4">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">LINE Pay API</p>
+                      <h3 className="text-xl font-black text-slate-900 mt-1">LINE Pay 金流 API 設定</h3>
+                      <p className="text-sm text-slate-500 mt-2">
+                        參照 HookTea 的設定方式：Channel ID 與 Secret 可由後台儲存，Secret 留空不覆蓋既有值。
+                      </p>
+                    </div>
+                    <span className={`px-4 py-2 rounded-full text-sm font-black ${
+                      paymentConfig.linepay_ready ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      {paymentConfig.linepay_ready ? 'LINE Pay 已完整' : 'LINE Pay 尚未完整'}
+                    </span>
+                  </div>
+
+                  <label className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+                    <input type="checkbox"
+                      checked={!!paymentConfig.linepay_enabled}
+                      onChange={e => setPaymentConfig({...paymentConfig, linepay_enabled: e.target.checked})}
+                      className="w-5 h-5"/>
+                    <span>
+                      <span className="block font-black text-slate-800">啟用 LINE Pay API 付款</span>
+                      <span className="block text-xs text-slate-500 mt-1">未啟用或參數不完整時，不會使用 LINE Pay API 建立付款。</span>
+                    </span>
+                  </label>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-black text-slate-500">環境</label>
+                      <select value={paymentConfig.linepay_env || 'sandbox'}
+                        onChange={e => setPaymentConfig({...paymentConfig, linepay_env: e.target.value})}
+                        className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500 bg-white">
+                        <option value="sandbox">Sandbox 測試</option>
+                        <option value="production">Production 正式</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-slate-500">Currency</label>
+                      <input value={paymentConfig.linepay_currency || 'TWD'}
+                        onChange={e => setPaymentConfig({...paymentConfig, linepay_currency: e.target.value})}
+                        placeholder="TWD"
+                        className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-slate-500">Channel ID</label>
+                      <input value={paymentConfig.linepay_channel_id || ''}
+                        onChange={e => setPaymentConfig({...paymentConfig, linepay_channel_id: e.target.value})}
+                        placeholder="例如：2000000000"
+                        className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-slate-500">Channel Secret</label>
+                      <input type="password" value={paymentConfig.linepay_channel_secret || ''}
+                        onChange={e => setPaymentConfig({...paymentConfig, linepay_channel_secret: e.target.value})}
+                        placeholder={paymentConfig.has_linepay_channel_secret ? '已設定，留空不覆蓋' : '尚未設定'}
+                        className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
+                    <p>目前狀態：Channel ID {paymentConfig.linepay_channel_id ? '已填' : '未填'}、
+                      Channel Secret {paymentConfig.has_linepay_channel_secret ? '已設定' : '未設定'}、
+                      環境 {paymentConfig.linepay_env === 'production' ? '正式' : '測試'}。</p>
+                  </div>
                 </div>
 
                 <button onClick={savePaymentConfig}
