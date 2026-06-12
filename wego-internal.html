@@ -44,6 +44,7 @@
       ['accounting', '查帳'],
       ['expenses', '支出'],
       ['salary', '薪資'],
+      ['performance', '總業績'],
       ['reports', '報表'],
       ['settings', '設定'],
     ];
@@ -54,6 +55,7 @@
       accounting: [],
       expenses: [],
       salary: [],
+      performance: null,
       reports: null,
       editingOrder: null,
       editingExpense: null,
@@ -353,6 +355,72 @@
       if (state.active === 'salary') renderSalary();
     }
 
+    function performanceSection(title, data){
+      const pub = data?.public || {};
+      const internal = data?.internal || {};
+      const combined = data?.combined || {};
+      return `<div class="rounded-3xl border border-slate-200 bg-white overflow-hidden">
+        <div class="p-5 border-b border-slate-100">
+          <h3 class="text-xl font-black">${title}</h3>
+          <p class="text-sm text-slate-500 mt-1">原行程預約與 WeGo 內部訂單分開列示，再合併成公司總業績。</p>
+        </div>
+        <div class="p-5 grid md:grid-cols-4 gap-3">
+          ${stat('合併訂單數', combined.count || 0)}
+          ${stat('合併營收', money(combined.revenue || 0), 'text-emerald-600')}
+          ${stat('合併業績', money(combined.performance || 0), 'text-blue-600')}
+          ${stat('已知內部利潤', money(combined.knownProfit || 0), Number(combined.knownProfit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600')}
+        </div>
+        <div class="px-5 pb-5 grid xl:grid-cols-2 gap-4">
+          <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+            <p class="text-xs font-black text-slate-400 tracking-widest">TRAVELKEEPER</p>
+            <h4 class="font-black text-lg mt-1">行程預約 / 分銷業績</h4>
+            <div class="grid grid-cols-3 gap-2 mt-3">
+              ${stat('訂單', pub.count || 0)}
+              ${stat('營收', money(pub.revenue || 0), 'text-emerald-600')}
+              ${stat('佣金業績', money(pub.commission || 0), 'text-blue-600')}
+            </div>
+            <p class="text-xs text-slate-400 mt-3">此區沿用原本公開預約訂單 orders.commission_amount，不改動原佣金結算口徑。</p>
+          </div>
+          <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+            <p class="text-xs font-black text-slate-400 tracking-widest">WEGO INTERNAL</p>
+            <h4 class="font-black text-lg mt-1">內部訂單業績</h4>
+            <div class="grid grid-cols-4 gap-2 mt-3">
+              ${stat('訂單', internal.count || 0)}
+              ${stat('實報', money(internal.revenue || 0), 'text-emerald-600')}
+              ${stat('利潤', money(internal.profit || 0), Number(internal.profit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600')}
+              ${stat('業績 40%', money(internal.commission || 0), 'text-blue-600')}
+            </div>
+            <p class="text-xs text-slate-400 mt-3">此區使用內部訂單公式：利潤 = 實報 - NET - 公司成本 - 手續費；業績 = 利潤 x 40%。</p>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function renderPerformance(){
+      const data = state.performance || {};
+      $('view').innerHTML = card('總業績儀表板', `<div class="p-5">
+        <div class="flex flex-wrap items-end gap-2 mb-5">
+          <label class="block">
+            <span class="text-xs font-bold text-slate-500">月份</span>
+            <input id="performance-month" type="month" value="${esc(state.month)}" class="block mt-1 rounded-xl border border-slate-200 px-3 py-2">
+          </label>
+          <button id="load-performance" class="rounded-xl bg-slate-900 text-white px-4 py-2 font-bold">查詢</button>
+          <span class="text-xs text-slate-400">更新時間：${esc(data.generatedAt || '-')}</span>
+        </div>
+        <div class="space-y-5">
+          ${performanceSection(`本月業績 ${esc(data.month?.label || state.month)}`, data.month || {})}
+          ${performanceSection('累計業績', data.total || {})}
+        </div>
+      </div>`);
+      $('load-performance').onclick = async () => { state.month = $('performance-month').value; await loadPerformance(); };
+    }
+
+    async function loadPerformance(){
+      const data = await api(`/api/wego/internal/performance?uid=${uidParam()}&month=${encodeURIComponent(state.month)}`);
+      state.performance = data.data || {};
+      if (state.active === 'performance') renderPerformance();
+    }
+
     function renderReports(){
       const s = state.reports?.summary || {};
       const ledger = state.reports?.ledger || [];
@@ -387,6 +455,7 @@
         if (state.active === 'accounting') await loadAccounting();
         if (state.active === 'expenses') await loadExpenses();
         if (state.active === 'salary') await loadSalary();
+        if (state.active === 'performance') await loadPerformance();
         if (state.active === 'reports') await loadReports();
         if (state.active === 'settings') renderSettings();
       } catch(e) {

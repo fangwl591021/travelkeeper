@@ -2635,6 +2635,102 @@ async function getWegoReports(env, query = {}) {
   };
 }
 
+async function getWegoPerformanceDashboard(env, query = {}) {
+  const auth = await requireWegoInternalAdmin(env, query.uid || query.operatorUid);
+  if (!auth.ok) return { success: false, error: auth.error };
+  await ensureWegoInternalTables(env);
+
+  const month = String(query.month || formatTaipeiDateTime(new Date()).slice(0, 7)).trim();
+  const publicMonth = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS count,
+      COALESCE(SUM(total_amount), 0) AS revenue,
+      COALESCE(SUM(commission_amount), 0) AS commission
+    FROM orders
+    WHERE status <> 'cancelled'
+      AND substr(created_at, 1, 7) = ?
+  `).bind(month).first();
+  const publicTotal = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS count,
+      COALESCE(SUM(total_amount), 0) AS revenue,
+      COALESCE(SUM(commission_amount), 0) AS commission,
+      COALESCE(SUM(CASE WHEN commission_status = 'payable' THEN commission_amount ELSE 0 END), 0) AS payable,
+      COALESCE(SUM(CASE WHEN commission_status = 'paid_out' THEN commission_amount ELSE 0 END), 0) AS paid_out
+    FROM orders
+    WHERE status <> 'cancelled'
+  `).first();
+  const internalMonth = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS count,
+      COALESCE(SUM(report_total), 0) AS revenue,
+      COALESCE(SUM(profit), 0) AS profit,
+      COALESCE(SUM(commission), 0) AS commission,
+      COALESCE(SUM(paid_amount), 0) AS paid
+    FROM internal_orders
+    WHERE deleted_at = ''
+      AND status <> 'cancelled'
+      AND substr(COALESCE(NULLIF(departure_date, ''), order_date), 1, 7) = ?
+  `).bind(month).first();
+  const internalTotal = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS count,
+      COALESCE(SUM(report_total), 0) AS revenue,
+      COALESCE(SUM(profit), 0) AS profit,
+      COALESCE(SUM(commission), 0) AS commission,
+      COALESCE(SUM(paid_amount), 0) AS paid
+    FROM internal_orders
+    WHERE deleted_at = ''
+      AND status <> 'cancelled'
+  `).first();
+
+  const normalizePublic = row => ({
+    count: Number(row?.count || 0),
+    revenue: Number(row?.revenue || 0),
+    profit: 0,
+    commission: Number(row?.commission || 0),
+    payable: Number(row?.payable || 0),
+    paidOut: Number(row?.paid_out || 0),
+  });
+  const normalizeInternal = row => ({
+    count: Number(row?.count || 0),
+    revenue: Number(row?.revenue || 0),
+    profit: Number(row?.profit || 0),
+    commission: Number(row?.commission || 0),
+    paid: Number(row?.paid || 0),
+  });
+  const combine = (publicData, internalData) => ({
+    count: publicData.count + internalData.count,
+    revenue: publicData.revenue + internalData.revenue,
+    knownProfit: internalData.profit,
+    performance: publicData.commission + internalData.commission,
+  });
+
+  const monthPublic = normalizePublic(publicMonth);
+  const totalPublic = normalizePublic(publicTotal);
+  const monthInternal = normalizeInternal(internalMonth);
+  const totalInternal = normalizeInternal(internalTotal);
+
+  return {
+    success: true,
+    data: {
+      selectedMonth: month,
+      month: {
+        label: month,
+        public: monthPublic,
+        internal: monthInternal,
+        combined: combine(monthPublic, monthInternal),
+      },
+      total: {
+        public: totalPublic,
+        internal: totalInternal,
+        combined: combine(totalPublic, totalInternal),
+      },
+      generatedAt: formatTaipeiDateTime(new Date()),
+    },
+  };
+}
+
 function buildNewebPayMerchantOrderNo(orderId, leg) {
   const shortOrder = String(orderId || '').replace(/[^A-Za-z0-9]/g, '').slice(-12);
   const legCode = String(leg || 'deposit').toLowerCase() === 'balance' ? 'B' : 'D';
@@ -7101,6 +7197,11 @@ export default {
 
       if (path === '/api/wego/internal/reports' && request.method === 'GET') {
         const result = await getWegoReports(env, Object.fromEntries(url.searchParams.entries()));
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/wego/internal/performance' && request.method === 'GET') {
+        const result = await getWegoPerformanceDashboard(env, Object.fromEntries(url.searchParams.entries()));
         return json(result, result.success ? 200 : 400);
       }
 
