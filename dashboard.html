@@ -198,6 +198,8 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
     balanceCollect: 'online',
   });
   const [aiProgress, setAiProgress] = useState(null);
+  const [aiMarkdownOpen, setAiMarkdownOpen] = useState(false);
+  const [aiMarkdown, setAiMarkdown] = useState('');
 
   const loadPdfJs = async () => {
     if (window.__pdfjsLibPromise) return window.__pdfjsLibPromise;
@@ -277,6 +279,37 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
     e.target.value = '';
   };
 
+  const handleAIMarkdownParse = async () => {
+    const markdown = String(aiMarkdown || '').trim();
+    if (!markdown) {
+      alert('請先貼上 MarkItDown 轉出的 Markdown 內容');
+      return;
+    }
+    const setStage = (percent, label) => {
+      setAiProgress({ percent: Math.max(0, Math.min(100, percent)), label });
+    };
+    setStage(12, '讀取 Markdown 內容...');
+    try {
+      setStage(55, 'AI 解析 Markdown，正在整理行程草稿...');
+      const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ markdown, filename: 'markitdown-itinerary.md' })
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || 'AI 解析失敗');
+      setStage(90, '整理解析結果並填入表單...');
+      setData(prev => ({ ...prev, ...result.data }));
+      setStage(100, '解析完成，已帶入表單');
+      setAiMarkdown('');
+      setAiMarkdownOpen(false);
+      setTimeout(() => setAiProgress(null), 900);
+    } catch(err) {
+      alert('AI 解析失敗：' + err.message);
+      setAiProgress(null);
+    }
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
@@ -318,6 +351,36 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
         </div>
       )}
       <p className="text-xs text-center text-slate-400 font-medium -mt-3">支援 JPG、PNG、PDF，PDF 會自動轉成頁面圖片交給 AI 解析</p>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+        <button type="button"
+          onClick={() => setAiMarkdownOpen(v => !v)}
+          className="w-full flex items-center justify-between gap-3 text-left">
+          <span>
+            <span className="block text-sm font-black text-slate-800">MarkItDown 文件草稿</span>
+            <span className="block text-xs text-slate-500 mt-1">先把 Word、Excel、PPT 或 PDF 轉成 Markdown，再貼到這裡解析。</span>
+          </span>
+          <span className="text-xs font-black text-blue-600">{aiMarkdownOpen ? '收合' : '展開'}</span>
+        </button>
+        {aiMarkdownOpen && (
+          <div className="space-y-3">
+            <textarea value={aiMarkdown}
+              onChange={e => setAiMarkdown(e.target.value)}
+              rows={7}
+              placeholder="貼上 MarkItDown 轉出的 Markdown 行程內容..."
+              className="w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500 bg-white text-sm leading-6"/>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-slate-500">此功能只建立可編輯草稿，不會自動發布。</p>
+              <button type="button"
+                onClick={handleAIMarkdownParse}
+                disabled={!!aiProgress || !String(aiMarkdown || '').trim()}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-slate-800 disabled:opacity-50">
+                解析 Markdown
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest">封面圖</label>
