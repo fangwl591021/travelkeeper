@@ -1662,6 +1662,39 @@ async function updateMarkItDownConfigFromAdmin(env, body = {}) {
   return getMarkItDownConfigForAdmin(env);
 }
 
+async function testMarkItDownServiceForAdmin(env, uid = '') {
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  const cfg = await getMarkItDownConfig(env);
+  if (!cfg.ready) return { success: false, error: 'MARKITDOWN_SERVICE_NOT_CONFIGURED' };
+  let healthUrl;
+  try {
+    healthUrl = new URL('/health', cfg.serviceUrl).toString();
+  } catch (_) {
+    return { success: false, error: 'SERVICE_URL_INVALID' };
+  }
+  const headers = {};
+  if (cfg.serviceToken) headers.Authorization = `Bearer ${cfg.serviceToken}`;
+  try {
+    const res = await fetch(healthUrl, { method: 'GET', headers });
+    const text = await res.text().catch(() => '');
+    let payload = null;
+    try { payload = JSON.parse(text); } catch (_) {}
+    if (!res.ok || payload?.success === false) {
+      return { success: false, error: `MARKITDOWN_HEALTH_FAILED_${res.status}` };
+    }
+    return {
+      success: true,
+      data: {
+        health_url: healthUrl,
+        status: res.status,
+        service: payload?.service || 'markitdown',
+      },
+    };
+  } catch (err) {
+    return { success: false, error: 'MARKITDOWN_HEALTH_REQUEST_FAILED', detail: err?.message || String(err) };
+  }
+}
+
 async function getAccessConfigForAdmin(env) {
   const settings = await readSystemSettings(env, 'access').catch(() => ({}));
   const customUids = parseUidList(settings.admin_uids || settings.admin_uid_whitelist || '');
@@ -8066,6 +8099,13 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
         const result = await updateMarkItDownConfigFromAdmin(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/admin/markitdown-config/test' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const uid = String(body.uid || url.searchParams.get('uid') || '').trim();
+        const result = await testMarkItDownServiceForAdmin(env, uid);
         return json(result, result.success ? 200 : 400);
       }
 

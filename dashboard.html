@@ -1377,6 +1377,7 @@ function App() {
     ready: false,
   });
   const [markitdownConfigSaving, setMarkitdownConfigSaving] = useState(false);
+  const [markitdownTesting, setMarkitdownTesting] = useState(false);
   const [commissionSummary, setCommissionSummary] = useState(null); // 管理員視圖
   const [selectedPayoutOrders, setSelectedPayoutOrders] = useState({}); // { uid: Set(orderIds) }
   const [payingOut, setPayingOut] = useState(false);
@@ -1490,6 +1491,31 @@ function App() {
       showToast(err.message || '文件轉檔服務設定儲存失敗', 'error');
     } finally {
       setMarkitdownConfigSaving(false);
+    }
+  };
+
+  const testMarkitdownConfig = async () => {
+    if (!isAdmin || !profile?.userId) return;
+    setMarkitdownTesting(true);
+    try {
+      const res = await fetch(`${WORKER_URL}/api/admin/markitdown-config/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: profile.userId }),
+      });
+      const result = await res.json();
+      const errorMap = {
+        ADMIN_REQUIRED: '需要管理員權限',
+        MARKITDOWN_SERVICE_NOT_CONFIGURED: '服務尚未設定或未啟用',
+        SERVICE_URL_INVALID: '服務 URL 格式錯誤',
+        MARKITDOWN_HEALTH_REQUEST_FAILED: '無法連線到轉檔服務',
+      };
+      if (!result.success) throw new Error(errorMap[result.error] || result.error || '測試失敗');
+      showToast(`轉檔服務連線正常：${result.data?.service || 'markitdown'}`);
+    } catch (err) {
+      showToast(err.message || '轉檔服務測試失敗', 'error');
+    } finally {
+      setMarkitdownTesting(false);
     }
   };
 
@@ -3809,11 +3835,18 @@ function App() {
                     Token {markitdownConfig.has_service_token ? '已設定' : '未設定'}。</p>
                 </div>
 
-                <button onClick={saveMarkitdownConfig}
-                  disabled={markitdownConfigSaving}
-                  className="w-full md:w-auto bg-slate-900 text-white px-6 py-3 rounded-xl font-black hover:bg-slate-800 disabled:opacity-50">
-                  {markitdownConfigSaving ? '儲存中…' : '儲存轉檔服務設定'}
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={saveMarkitdownConfig}
+                    disabled={markitdownConfigSaving}
+                    className="w-full md:w-auto bg-slate-900 text-white px-6 py-3 rounded-xl font-black hover:bg-slate-800 disabled:opacity-50">
+                    {markitdownConfigSaving ? '儲存中…' : '儲存轉檔服務設定'}
+                  </button>
+                  <button onClick={testMarkitdownConfig}
+                    disabled={markitdownTesting || !markitdownConfig.ready}
+                    className="w-full md:w-auto bg-white border border-slate-200 text-slate-800 px-6 py-3 rounded-xl font-black hover:bg-slate-50 disabled:opacity-50">
+                    {markitdownTesting ? '測試中…' : '測試連線'}
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white border border-slate-200 rounded-[1.5rem] p-6 space-y-5">
