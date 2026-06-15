@@ -63,6 +63,61 @@ Recommended hosting:
 - Render
 - VPS or internal Windows service
 
+### Docker
+
+Build locally:
+
+```powershell
+docker build -t travelkeeper-markitdown .
+```
+
+Run locally:
+
+```powershell
+docker run --rm -p 8789:8080 `
+  -e MARKITDOWN_SERVICE_TOKEN="change-me" `
+  travelkeeper-markitdown
+```
+
+Test:
+
+```powershell
+curl.exe -s http://127.0.0.1:8789/health
+```
+
+### Render
+
+This folder includes `render.yaml`.
+
+1. Create a new Render Blueprint or Web Service from this repo.
+2. Set the root directory to `services/markitdown-service` if Render asks for it.
+3. Set `MARKITDOWN_SERVICE_TOKEN` as a secret environment variable.
+4. After deploy, copy the `/convert` URL.
+
+Example Worker variable:
+
+```text
+https://travelkeeper-markitdown.onrender.com/convert
+```
+
+### Google Cloud Run
+
+From this folder:
+
+```powershell
+gcloud run deploy travelkeeper-markitdown `
+  --source . `
+  --region asia-east1 `
+  --allow-unauthenticated `
+  --set-env-vars MAX_UPLOAD_BYTES=8388608
+```
+
+Set `MARKITDOWN_SERVICE_TOKEN` in Cloud Run environment variables.
+
+Use the Cloud Run URL plus `/convert` as `MARKITDOWN_SERVICE_URL`.
+
+## Worker Wiring
+
 After deployment, set Cloudflare Worker secrets/vars:
 
 ```powershell
@@ -82,4 +137,3 @@ MARKITDOWN_SERVICE_URL = "https://your-service.example.com/convert"
 - Delete temporary files immediately after conversion.
 - Treat document contents as untrusted input.
 - Keep converted Markdown as draft material until operator review.
-

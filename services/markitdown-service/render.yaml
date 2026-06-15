@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: travelkeeper-markitdown
+    env: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: MAX_UPLOAD_BYTES
+        value: "8388608"
+      - key: MARKITDOWN_SERVICE_TOKEN
+        sync: false
+

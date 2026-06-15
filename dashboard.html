@@ -356,7 +356,14 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         })
       });
       const result = await res.json();
-      if (!result.success) throw new Error(result.error || '文件轉 Markdown 失敗');
+      const convertErrorMap = {
+        ADMIN_REQUIRED: '需要管理員權限才能使用文件轉 Markdown',
+        MARKITDOWN_SERVICE_NOT_CONFIGURED: '文件轉 Markdown 服務尚未設定，請先完成 MarkItDown 服務部署',
+        MISSING_FILE_BASE64: '文件讀取失敗，請重新選擇檔案',
+        FILE_TOO_LARGE: '文件過大，請先壓縮或拆分',
+        EMPTY_MARKDOWN_RESULT: '轉檔完成但沒有取得 Markdown 內容',
+      };
+      if (!result.success) throw new Error(convertErrorMap[result.error] || result.error || '文件轉 Markdown 失敗');
       setAiMarkdown(result.data?.markdown || '');
       setAiMarkdownFilename(result.data?.filename || file.name || 'document.md');
       setAiMarkdownOpen(true);
