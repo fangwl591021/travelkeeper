@@ -3833,6 +3833,11 @@ function App() {
                 <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
                   <p>目前狀態：URL {markitdownConfig.service_url ? '已填' : '未填'}、
                     Token {markitdownConfig.has_service_token ? '已設定' : '未設定'}。</p>
+                  {!markitdownConfig.ready && (
+                    <p className="mt-2 text-xs text-amber-700">
+                      使用方式：先部署 repo 內的 services/markitdown-service，取得結尾為 /convert 的網址後填入服務 URL，再儲存並測試連線。
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
