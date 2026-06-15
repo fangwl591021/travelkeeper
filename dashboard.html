@@ -200,6 +200,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
   const [aiProgress, setAiProgress] = useState(null);
   const [aiMarkdownOpen, setAiMarkdownOpen] = useState(false);
   const [aiMarkdown, setAiMarkdown] = useState('');
+  const [aiMarkdownFilename, setAiMarkdownFilename] = useState('');
 
   const loadPdfJs = async () => {
     if (window.__pdfjsLibPromise) return window.__pdfjsLibPromise;
@@ -294,7 +295,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
       const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ markdown, filename: 'markitdown-itinerary.md' })
+        body: JSON.stringify({ markdown, filename: aiMarkdownFilename || 'markitdown-itinerary.md' })
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'AI 解析失敗');
@@ -302,12 +303,27 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
       setData(prev => ({ ...prev, ...result.data }));
       setStage(100, '解析完成，已帶入表單');
       setAiMarkdown('');
+      setAiMarkdownFilename('');
       setAiMarkdownOpen(false);
       setTimeout(() => setAiProgress(null), 900);
     } catch(err) {
       alert('AI 解析失敗：' + err.message);
       setAiProgress(null);
     }
+  };
+
+  const handleAIMarkdownFile = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      if (file.size > 1024 * 1024 * 2) throw new Error('Markdown 檔案超過 2MB，請先縮小內容');
+      const text = await file.text();
+      setAiMarkdown(text);
+      setAiMarkdownFilename(file.name || 'markitdown-itinerary.md');
+      setAiMarkdownOpen(true);
+    } catch (err) {
+      alert(err.message || 'Markdown 檔案讀取失敗');
+    }
+    e.target.value = '';
   };
 
   const handleImageUpload = async (e) => {
@@ -364,6 +380,13 @@ function ItineraryForm({ initial, onSave, onCancel, saving }) {
         </button>
         {aiMarkdownOpen && (
           <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
+                載入 .md/.txt
+                <input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onChange={handleAIMarkdownFile} className="hidden" />
+              </label>
+              {aiMarkdownFilename && <span className="text-xs text-slate-500 font-bold truncate max-w-[240px]">{aiMarkdownFilename}</span>}
+            </div>
             <textarea value={aiMarkdown}
               onChange={e => setAiMarkdown(e.target.value)}
               rows={7}
