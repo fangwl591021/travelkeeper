@@ -63,6 +63,12 @@ Recommended hosting:
 - Render
 - VPS or internal Windows service
 
+For the full deployment checklist, see:
+
+```text
+docs/markitdown-service-deployment.md
+```
+
 ### Docker
 
 Build locally:
@@ -83,6 +89,12 @@ Test:
 
 ```powershell
 curl.exe -s http://127.0.0.1:8789/health
+```
+
+End-to-end service test:
+
+```powershell
+.\test-service.ps1 -ServiceUrl "http://127.0.0.1:8789/convert" -Token "change-me"
 ```
 
 ### Render
