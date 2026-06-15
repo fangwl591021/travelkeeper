@@ -8172,6 +8172,41 @@ export default {
         });
       }
 
+      if (path === '/api/convert-document-markdown' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const uid = String(body.uid || body.admin_uid || url.searchParams.get('uid') || '').trim();
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
+
+        const serviceUrl = String(env.MARKITDOWN_SERVICE_URL || '').trim();
+        if (!serviceUrl) return json({ success: false, error: 'MARKITDOWN_SERVICE_NOT_CONFIGURED' }, 503);
+
+        const filename = String(body.filename || 'document').slice(0, 180);
+        const contentType = String(body.contentType || 'application/octet-stream').slice(0, 120);
+        const base64 = String(body.base64 || '').replace(/^data:[^;]+;base64,/, '').trim();
+        if (!base64) return json({ success: false, error: 'MISSING_FILE_BASE64' }, 400);
+        if (base64.length > 12 * 1024 * 1024) return json({ success: false, error: 'FILE_TOO_LARGE' }, 413);
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (env.MARKITDOWN_SERVICE_TOKEN) headers.Authorization = `Bearer ${env.MARKITDOWN_SERVICE_TOKEN}`;
+        const convertRes = await fetch(serviceUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ filename, contentType, base64 }),
+        });
+        const raw = await convertRes.text();
+        let payload = null;
+        try { payload = JSON.parse(raw); } catch (_) {}
+        if (!convertRes.ok || payload?.success === false) {
+          return json({
+            success: false,
+            error: payload?.error || `MARKITDOWN_CONVERT_FAILED_${convertRes.status}`,
+          }, convertRes.ok ? 502 : convertRes.status);
+        }
+        const markdown = String(payload?.markdown || raw || '').trim();
+        if (!markdown) return json({ success: false, error: 'EMPTY_MARKDOWN_RESULT' }, 502);
+        return json({ success: true, data: { markdown, filename } });
+      }
+
       // ??????????????????????????????????????????????????????????
       // POST /api/upload-dm  嚗I DM 閫??嚗?
       // ??????????????????????????????????????????????????????????
