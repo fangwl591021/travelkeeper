@@ -1617,6 +1617,51 @@ async function updatePaymentConfigFromAdmin(env, body = {}) {
   return getPaymentConfigForAdmin(env);
 }
 
+async function getMarkItDownConfig(env) {
+  const settings = await readSystemSettings(env, 'markitdown').catch(() => ({}));
+  const serviceUrl = String(settings.service_url || env.MARKITDOWN_SERVICE_URL || '').trim();
+  const serviceToken = String(settings.service_token || env.MARKITDOWN_SERVICE_TOKEN || '').trim();
+  const enabledRaw = String(settings.enabled || '').trim().toLowerCase();
+  const enabled = enabledRaw
+    ? ['1', 'true', 'yes', 'on'].includes(enabledRaw)
+    : !!serviceUrl;
+  return { enabled, serviceUrl, serviceToken, ready: !!(enabled && serviceUrl) };
+}
+
+async function getMarkItDownConfigForAdmin(env) {
+  const settings = await readSystemSettings(env, 'markitdown').catch(() => ({}));
+  const cfg = await getMarkItDownConfig(env);
+  return {
+    success: true,
+    data: {
+      enabled: cfg.enabled,
+      service_url: cfg.serviceUrl,
+      has_service_token: !!cfg.serviceToken,
+      ready: cfg.ready,
+      source: {
+        service_url: settings.service_url ? 'settings' : (env.MARKITDOWN_SERVICE_URL ? 'env' : ''),
+        service_token: settings.service_token ? 'settings' : (env.MARKITDOWN_SERVICE_TOKEN ? 'env' : ''),
+      },
+    },
+  };
+}
+
+async function updateMarkItDownConfigFromAdmin(env, body = {}) {
+  const uid = String(body.uid || body.admin_uid || '').trim();
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+
+  const existing = await readSystemSettings(env, 'markitdown').catch(() => ({}));
+  const serviceUrl = String(body.service_url || '').trim();
+  if (serviceUrl && !/^https?:\/\//i.test(serviceUrl)) return { success: false, error: 'SERVICE_URL_MUST_BE_HTTP' };
+  const next = {
+    enabled: body.enabled ? '1' : '0',
+    service_url: serviceUrl,
+    service_token: body.service_token ? String(body.service_token).trim() : String(existing.service_token || ''),
+  };
+  await writeSystemSettings(env, 'markitdown', next, uid);
+  return getMarkItDownConfigForAdmin(env);
+}
+
 async function getAccessConfigForAdmin(env) {
   const settings = await readSystemSettings(env, 'access').catch(() => ({}));
   const customUids = parseUidList(settings.admin_uids || settings.admin_uid_whitelist || '');
@@ -8010,6 +8055,20 @@ export default {
         return json(result, result.success ? 200 : 400);
       }
 
+      if (path === '/api/admin/markitdown-config' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
+        const result = await getMarkItDownConfigForAdmin(env);
+        return json(result);
+      }
+
+      if (path === '/api/admin/markitdown-config' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        if (!body.uid && url.searchParams.get('uid')) body.uid = url.searchParams.get('uid');
+        const result = await updateMarkItDownConfigFromAdmin(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
       if (path === '/api/admin/access-config' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
@@ -8177,8 +8236,8 @@ export default {
         const uid = String(body.uid || body.admin_uid || url.searchParams.get('uid') || '').trim();
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'ADMIN_REQUIRED' }, 403);
 
-        const serviceUrl = String(env.MARKITDOWN_SERVICE_URL || '').trim();
-        if (!serviceUrl) return json({ success: false, error: 'MARKITDOWN_SERVICE_NOT_CONFIGURED' }, 503);
+        const cfg = await getMarkItDownConfig(env);
+        if (!cfg.ready) return json({ success: false, error: 'MARKITDOWN_SERVICE_NOT_CONFIGURED' }, 503);
 
         const filename = String(body.filename || 'document').slice(0, 180);
         const contentType = String(body.contentType || 'application/octet-stream').slice(0, 120);
@@ -8187,8 +8246,8 @@ export default {
         if (base64.length > 12 * 1024 * 1024) return json({ success: false, error: 'FILE_TOO_LARGE' }, 413);
 
         const headers = { 'Content-Type': 'application/json' };
-        if (env.MARKITDOWN_SERVICE_TOKEN) headers.Authorization = `Bearer ${env.MARKITDOWN_SERVICE_TOKEN}`;
-        const convertRes = await fetch(serviceUrl, {
+        if (cfg.serviceToken) headers.Authorization = `Bearer ${cfg.serviceToken}`;
+        const convertRes = await fetch(cfg.serviceUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify({ filename, contentType, base64 }),

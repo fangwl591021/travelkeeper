@@ -1369,6 +1369,14 @@ function App() {
     effective_admin_uids: [],
   });
   const [accessConfigSaving, setAccessConfigSaving] = useState(false);
+  const [markitdownConfig, setMarkitdownConfig] = useState({
+    enabled: false,
+    service_url: '',
+    service_token: '',
+    has_service_token: false,
+    ready: false,
+  });
+  const [markitdownConfigSaving, setMarkitdownConfigSaving] = useState(false);
   const [commissionSummary, setCommissionSummary] = useState(null); // 管理員視圖
   const [selectedPayoutOrders, setSelectedPayoutOrders] = useState({}); // { uid: Set(orderIds) }
   const [payingOut, setPayingOut] = useState(false);
@@ -1456,6 +1464,35 @@ function App() {
     }
   };
 
+  const saveMarkitdownConfig = async () => {
+    if (!isAdmin || !profile?.userId) return;
+    setMarkitdownConfigSaving(true);
+    try {
+      const res = await fetch(`${WORKER_URL}/api/admin/markitdown-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          enabled: !!markitdownConfig.enabled,
+          service_url: markitdownConfig.service_url,
+          service_token: markitdownConfig.service_token,
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || '儲存失敗');
+      setMarkitdownConfig(prev => ({
+        ...prev,
+        ...result.data,
+        service_token: '',
+      }));
+      showToast('文件轉檔服務設定已儲存');
+    } catch (err) {
+      showToast(err.message || '文件轉檔服務設定儲存失敗', 'error');
+    } finally {
+      setMarkitdownConfigSaving(false);
+    }
+  };
+
   const recoverLiffSession = async (reason = '') => {
     const msg = String(reason || '').toLowerCase();
     const shouldRelogin =
@@ -1536,9 +1573,10 @@ function App() {
     }
 
     if (targetView === 'system-settings') {
-      const [cfgRes, accessRes] = await Promise.all([
+      const [cfgRes, accessRes, markitdownRes] = await Promise.all([
         fetchJson(`${WORKER_URL}/api/admin/payment-config?uid=${encodeURIComponent(userId)}`, null),
         fetchJson(`${WORKER_URL}/api/admin/access-config?uid=${encodeURIComponent(userId)}`, null),
+        fetchJson(`${WORKER_URL}/api/admin/markitdown-config?uid=${encodeURIComponent(userId)}`, null),
       ]);
       if (cfgRes?.success) {
         setPaymentConfig(prev => ({
@@ -1550,6 +1588,13 @@ function App() {
         }));
       }
       if (accessRes?.success) setAccessConfig(prev => ({ ...prev, ...accessRes.data }));
+      if (markitdownRes?.success) {
+        setMarkitdownConfig(prev => ({
+          ...prev,
+          ...markitdownRes.data,
+          service_token: '',
+        }));
+      }
       return;
     }
 
@@ -3712,6 +3757,62 @@ function App() {
                   disabled={paymentConfigSaving}
                   className="w-full md:w-auto bg-blue-600 text-white px-6 py-3 rounded-xl font-black hover:bg-blue-700 disabled:opacity-50">
                   {paymentConfigSaving ? '儲存中…' : '儲存金流參數'}
+                </button>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-[1.5rem] p-6 space-y-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Document Conversion</p>
+                    <h2 className="text-2xl font-black text-slate-900 mt-1">MarkItDown 轉檔服務</h2>
+                    <p className="text-sm text-slate-500 mt-2">
+                      用於後台直接上傳 Word、Excel、PPT 或 PDF 並轉成 Markdown，再交給 AI 上稿解析。
+                    </p>
+                  </div>
+                  <span className={`px-4 py-2 rounded-full text-sm font-black ${
+                    markitdownConfig.ready ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    {markitdownConfig.ready ? '服務已設定' : '尚未設定'}
+                  </span>
+                </div>
+
+                <label className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input type="checkbox"
+                    checked={!!markitdownConfig.enabled}
+                    onChange={e => setMarkitdownConfig({...markitdownConfig, enabled: e.target.checked})}
+                    className="w-5 h-5"/>
+                  <span>
+                    <span className="block font-black text-slate-800">啟用後台文件轉 Markdown</span>
+                    <span className="block text-xs text-slate-500 mt-1">未啟用或 URL 未設定時，後台會提示先完成轉檔服務部署。</span>
+                  </span>
+                </label>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-black text-slate-500">服務 URL</label>
+                    <input value={markitdownConfig.service_url || ''}
+                      onChange={e => setMarkitdownConfig({...markitdownConfig, service_url: e.target.value})}
+                      placeholder="https://your-service.example.com/convert"
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-black text-slate-500">服務 Token</label>
+                    <input type="password" value={markitdownConfig.service_token || ''}
+                      onChange={e => setMarkitdownConfig({...markitdownConfig, service_token: e.target.value})}
+                      placeholder={markitdownConfig.has_service_token ? '已設定，留空不覆蓋' : '選填；建議設定'}
+                      className="mt-2 w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500"/>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
+                  <p>目前狀態：URL {markitdownConfig.service_url ? '已填' : '未填'}、
+                    Token {markitdownConfig.has_service_token ? '已設定' : '未設定'}。</p>
+                </div>
+
+                <button onClick={saveMarkitdownConfig}
+                  disabled={markitdownConfigSaving}
+                  className="w-full md:w-auto bg-slate-900 text-white px-6 py-3 rounded-xl font-black hover:bg-slate-800 disabled:opacity-50">
+                  {markitdownConfigSaving ? '儲存中…' : '儲存轉檔服務設定'}
                 </button>
               </div>
 
