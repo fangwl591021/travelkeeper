@@ -450,13 +450,45 @@ function toSheetItinerary(row) {
     depositratio: row.deposit_ratio,
     depositamount: row.deposit_amount,
     balancecollect: row.balance_collect,
+    expireat: row.expire_at || '',
+    expireAt: row.expire_at || '',
     created: row.created_at,
     updatedat: row.updated_at,
   };
 }
 
+function getTaipeiDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function normalizeDateOnly(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return '';
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+async function ensureItineraryExpireAtColumn(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  try {
+    await env.DB.prepare(`ALTER TABLE itineraries ADD COLUMN expire_at TEXT NOT NULL DEFAULT ''`).run();
+  } catch (err) {
+    if (!String(err?.message || err).toLowerCase().includes('duplicate column')) throw err;
+  }
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_itineraries_expire_at ON itineraries(expire_at)`).run();
+}
+
 async function d1GetItineraries(env, params = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureItineraryExpireAtColumn(env);
   const owner = String(params.owner || '').trim();
   const all = String(params.all || '') === '1';
 
@@ -472,6 +504,8 @@ async function d1GetItineraries(env, params = {}) {
     bind.push(owner);
   } else if (!all) {
     query += ` AND review_status = 'published'`;
+    query += ` AND (expire_at IS NULL OR expire_at = '' OR expire_at >= ?)`;
+    bind.push(getTaipeiDateString());
   }
 
   query += ' ORDER BY created_at DESC';
@@ -490,7 +524,13 @@ async function readItinerariesWithFallback(env, params = {}) {
       console.warn('[D1->GAS fallback] getItineraries error:', err.message);
     }
   }
-  return gasGet(env, { action: 'getItineraries', ...normalized });
+  const result = await gasGet(env, { action: 'getItineraries', ...normalized });
+  if (normalized.owner || String(normalized.all || '') === '1' || !Array.isArray(result)) return result;
+  const today = getTaipeiDateString();
+  return result.filter(item => {
+    const expireAt = normalizeDateOnly(item.expireAt || item.expireat || item.expire_at || '');
+    return !expireAt || expireAt >= today;
+  });
 }
 
 function toItineraryManageModel(row) {
@@ -514,6 +554,7 @@ function toItineraryManageModel(row) {
     depositRatio: Number(row.deposit_ratio || 20),
     depositAmount: Number(row.deposit_amount || 0),
     balanceCollect: row.balance_collect || 'online',
+    expireAt: row.expire_at || '',
     seatLimit: Number(row.seat_limit || 0),
     minGroupSize: Number(row.min_group_size || 0),
     allowedPaymentMethods: String(row.allowed_payment_methods || 'credit_card,linepay,atm')
@@ -576,6 +617,7 @@ function normalizeGasItinerary(item = {}) {
     deposit_ratio: Number(item.depositratio || item.depositRatio || 20),
     deposit_amount: Number(item.depositamount || item.depositAmount || 0),
     balance_collect: String(item.balancecollect || item.balanceCollect || 'online').trim() || 'online',
+    expire_at: normalizeDateOnly(item.expireat || item.expireAt || item.expire_at || ''),
     commission_amount: Number(item.commissionamount || item.commissionAmount || 0),
     commission_mode: String(item.commissionmode || item.commissionMode || 'amount').trim() || 'amount',
     commission_percent: Number(item.commissionpercent || item.commissionPercent || 0),
@@ -687,18 +729,19 @@ async function d1BackfillMissingItineraryTextFromGas(env, row) {
 
 async function d1UpsertGasItinerary(env, itinerary) {
   if (!env.DB || !itinerary?.id) return;
+  await ensureItineraryExpireAtColumn(env);
   await env.DB.prepare(`
     INSERT INTO itineraries (
       id, title, region, price, days, image, description, notes,
       owner_uid, owner_name, review_status, review_note,
-      payment_mode, deposit_ratio, deposit_amount, balance_collect,
+      payment_mode, deposit_ratio, deposit_amount, balance_collect, expire_at,
       commission_amount, commission_mode, commission_percent,
       seat_limit, min_group_size, allowed_payment_methods, share_enabled,
       created_at, updated_at
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
-      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?,
       ?, ?, ?,
       ?, ?, ?, ?,
       COALESCE((SELECT created_at FROM itineraries WHERE id = ?), datetime('now')),
@@ -720,6 +763,7 @@ async function d1UpsertGasItinerary(env, itinerary) {
       deposit_ratio = excluded.deposit_ratio,
       deposit_amount = excluded.deposit_amount,
       balance_collect = excluded.balance_collect,
+      expire_at = excluded.expire_at,
       commission_amount = excluded.commission_amount,
       commission_mode = excluded.commission_mode,
       commission_percent = excluded.commission_percent,
@@ -745,6 +789,7 @@ async function d1UpsertGasItinerary(env, itinerary) {
     itinerary.deposit_ratio,
     itinerary.deposit_amount,
     itinerary.balance_collect,
+    itinerary.expire_at || '',
     itinerary.commission_amount,
     itinerary.commission_mode,
     itinerary.commission_percent,
@@ -761,8 +806,10 @@ async function d1SyncItineraryFromGas(env, body = {}, gasResult = {}) {
   const allItems = await gasGet(env, { action: 'getItineraries', all: '1' });
   const picked = pickGasItinerary(Array.isArray(allItems) ? allItems : [], body, gasResult);
   if (!picked) throw new Error('Unable to find itinerary from GAS after submit');
+  const expireAt = normalizeDateOnly(body.expireAt || body.expireat || body.expire_at || picked.expire_at || '');
   await d1UpsertGasItinerary(env, {
     ...picked,
+    expire_at: expireAt,
     deposit_amount: Number(body.depositAmount ?? body.depositamount ?? picked.deposit_amount ?? 0),
   });
 }
@@ -819,6 +866,7 @@ async function d1HideItinerary(env, body = {}) {
 
 async function d1SaveItineraryDetail(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
+  await ensureItineraryExpireAtColumn(env);
   const itineraryId = String(body.id || '').trim();
   const operatorUid = String(body.uid || body.operatorUid || '').trim();
   if (!itineraryId) return { success: false, error: '蝻箏? id' };
@@ -843,6 +891,7 @@ async function d1SaveItineraryDetail(env, body = {}) {
     deposit_ratio: Number(body.depositRatio ?? body.depositratio ?? existing.deposit_ratio ?? 20),
     deposit_amount: Number(body.depositAmount ?? body.depositamount ?? existing.deposit_amount ?? 0),
     balance_collect: body.balanceCollect ?? body.balancecollect ?? existing.balance_collect ?? 'online',
+    expire_at: normalizeDateOnly(body.expireAt ?? body.expireat ?? body.expire_at ?? existing.expire_at ?? ''),
   };
 
   const adminUpdates = isAdmin
@@ -889,6 +938,7 @@ async function d1SaveItineraryDetail(env, body = {}) {
       depositRatio: basicUpdates.deposit_ratio,
       depositAmount: basicUpdates.deposit_amount,
       balanceCollect: basicUpdates.balance_collect,
+      expireAt: basicUpdates.expire_at,
     };
     if (isAdmin && adminUpdates.commission_amount !== undefined) {
       gasBody.commissionAmount = adminUpdates.commission_amount;

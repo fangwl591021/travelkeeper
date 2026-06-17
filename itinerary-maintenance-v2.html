@@ -164,6 +164,11 @@
               <option value="not_required">無尾款</option>
             </select>
           </label>
+          <label class="block md:col-span-2">
+            <span id="label-expire-at" class="block text-sm font-semibold mb-2"></span>
+            <input type="date" name="expireAt" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+            <span class="block text-xs text-slate-500 mt-2">留空代表不自動下架；日期過後前台與推廣會自動隱藏，管理後台仍可編輯。</span>
+          </label>
           <fieldset class="md:col-span-2">
             <legend id="label-allowed-payments" class="block text-sm font-semibold mb-2"></legend>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -270,6 +275,7 @@
       paymentMode: '\u6536\u8cbb\u6a21\u5f0f',
       depositAmount: '\u6bcf\u4eba\u8a02\u91d1\u91d1\u984d (NT$)',
       balanceCollect: '\u5c3e\u6b3e\u6536\u53d6\u65b9\u5f0f',
+      expireAt: '\u81ea\u52d5\u4e0b\u67b6\u65e5\u671f',
       allowedPayments: '\u5141\u8a31\u4ed8\u6b3e\u65b9\u5f0f',
       shareEnabled: '\u5141\u8a31\u5206\u4eab',
       shareEnabledHint: '\u95dc\u9589\u5f8c\uff0c\u9019\u652f\u884c\u7a0b\u4e0d\u6703\u51fa\u73fe\u5728\u63a8\u5ee3\u8207\u5206\u4eab\u5efa\u8b70\u4e2d\u3002',
@@ -424,6 +430,7 @@
           'daily_description'
         ]),
         notes: firstText(data, ['notes', 'note', 'notice', 'remarks']) || '',
+        expireAt: firstText(data, ['expireAt', 'expireat', 'expire_at']) || '',
       };
     }
 
@@ -469,6 +476,7 @@
       t(document.getElementById('label-payment-mode'), UI.paymentMode);
       t(document.getElementById('label-deposit-amount'), UI.depositAmount);
       t(document.getElementById('label-balance-collect'), UI.balanceCollect);
+      t(document.getElementById('label-expire-at'), UI.expireAt);
       t(document.getElementById('label-allowed-payments'), UI.allowedPayments);
       t(document.getElementById('label-share-enabled'), UI.shareEnabled);
       t(document.getElementById('label-share-enabled-hint'), UI.shareEnabledHint);
@@ -919,6 +927,7 @@
       formEl.elements.paymentMode.value = data.paymentMode || 'deposit';
       formEl.elements.depositAmount.value = data.depositAmount ?? data.depositamount ?? 0;
       formEl.elements.balanceCollect.value = data.balanceCollect || 'online';
+      formEl.elements.expireAt.value = String(data.expireAt || data.expireat || '').slice(0, 10);
       formEl.elements.seatLimit.value = data.seatLimit ?? 0;
       formEl.elements.minGroupSize.value = data.minGroupSize ?? 0;
       formEl.elements.shareEnabled.checked = !!data.shareEnabled;
@@ -1134,6 +1143,7 @@
           paymentMode: formEl.elements.paymentMode.value,
           depositAmount: Number(formEl.elements.depositAmount.value || 0),
           balanceCollect: formEl.elements.balanceCollect.value,
+          expireAt: formEl.elements.expireAt.value,
           allowedPaymentMethods,
         };
 
