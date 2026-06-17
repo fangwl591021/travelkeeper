@@ -542,6 +542,7 @@
     let currentFilter = 'all';
     let allThreads = [];
     let activeThreadId = new URLSearchParams(location.search).get('thread') || '';
+    let threadsBackfillStarted = false;
 
     const threadListEl = document.getElementById('thread-list');
     const threadSearchEl = document.getElementById('thread-search');
@@ -1304,13 +1305,47 @@
       return data;
     }
 
+    function mergeThreadPage(items = []) {
+      const byId = new Map(allThreads.map(item => [item.id, item]));
+      items.forEach(item => {
+        const existing = byId.get(item.id);
+        byId.set(item.id, existing ? { ...existing, ...item, messages: existing.messages || item.messages } : item);
+      });
+      allThreads = Array.from(byId.values()).sort((a, b) => {
+        const aTime = Date.parse(a.lastMessageAt || '') || 0;
+        const bTime = Date.parse(b.lastMessageAt || '') || 0;
+        return bTime - aTime;
+      });
+    }
+
+    async function loadThreadPage(limit = 20, offset = 0) {
+      const data = await fetchJson(`${WORKER_URL}/api/line-oa/threads?uid=${encodeURIComponent(profile.userId)}&limit=${limit}&offset=${offset}`);
+      return Array.isArray(data.data) ? data.data : [];
+    }
+
+    async function loadRemainingThreads() {
+      if (threadsBackfillStarted) return;
+      threadsBackfillStarted = true;
+      try {
+        const rest = await loadThreadPage(180, 20);
+        if (rest.length) {
+          mergeThreadPage(rest);
+          renderThreadList();
+        }
+      } catch (err) {
+        console.warn('background LINE OA thread load failed:', err);
+      }
+    }
+
     async function loadThreads() {
-      const data = await fetchJson(`${WORKER_URL}/api/line-oa/threads?uid=${encodeURIComponent(profile.userId)}`);
-      allThreads = Array.isArray(data.data) ? data.data : [];
+      allThreads = [];
+      const firstPage = await loadThreadPage(20, 0);
+      mergeThreadPage(firstPage);
       if (!activeThreadId && allThreads.length) activeThreadId = allThreads[0].id;
       renderThreadList();
       if (activeThreadId) await loadThreadDetail(activeThreadId);
       else renderActiveThread(null);
+      setTimeout(loadRemainingThreads, 100);
     }
 
     async function loadThreadDetail(threadId) {
@@ -1963,9 +1998,9 @@
         threadListEl.innerHTML = '<div class="rounded-3xl border border-dashed border-rose-300 bg-rose-50 p-8 text-center text-rose-500 font-bold">\u53ea\u6709\u7ba1\u7406\u54e1\u53ef\u4ee5\u4f7f\u7528 LINE OA \u76e3\u770b\u5f8c\u53f0\u3002</div>'; 
         return;
       }
-      await window.TravelKeeperTravelQa?.ready;
-      await loadPublishedItineraries();
       await loadThreads();
+      window.TravelKeeperTravelQa?.ready?.catch?.(err => console.warn('travel QA init failed:', err));
+      loadPublishedItineraries().catch(err => console.warn('published itineraries background load failed:', err));
     }
 
     init().catch(err => {

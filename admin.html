@@ -1005,7 +1005,7 @@ function buildMenu({ isAdmin, canUpload, badges }) {
 // ══════════════════════════════════════════════════════════════
 function App() {
   // 身份
-  const [authState, setAuthState] = useState('checking'); // checking | denied | ready
+  const [authState, setAuthState] = useState('checking'); // checking | login | denied | ready
   const [profile,   setProfile]   = useState(null);
   const [isAdmin,   setIsAdmin]   = useState(false);
   const [canUpload, setCanUpload] = useState(false);
@@ -1081,7 +1081,12 @@ function App() {
     (async () => {
       try {
         await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-        if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+        if (!liff.isLoggedIn()) {
+          setAuthState('login');
+          setLoading(false);
+          setTimeout(() => liff.login({ redirectUri: location.href }), 120);
+          return;
+        }
         const p = await liff.getProfile();
         setProfile(p);
 
@@ -1751,7 +1756,7 @@ function App() {
   }, [orders, isAdmin, profile]);
 
   // ════════════════════════════════════════════════════════════
-  // 早期 return：checking / denied
+  // 早期 return：checking / login / denied
   // ════════════════════════════════════════════════════════════
   if (authState === 'checking') {
     return (
@@ -1771,6 +1776,16 @@ function App() {
             {[1,2,3,4].map(i => <div key={i} className="bg-slate-200 animate-pulse h-28 rounded-[1.5rem]"/>)}
           </div>
         </main>
+      </div>
+    );
+  }
+
+  if (authState === 'login') {
+    return (
+      <div className="flex items-center justify-center h-screen flex-col gap-3 p-8 text-center bg-slate-50">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black animate-pulse">LINE</div>
+        <h2 className="text-2xl font-black text-slate-700">正在前往 LINE 登入</h2>
+        <p className="text-slate-400 max-w-md">系統正在確認您的 LINE 身分，登入完成後才會檢查管理員或分銷商權限。</p>
       </div>
     );
   }

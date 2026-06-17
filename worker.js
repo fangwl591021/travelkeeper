@@ -4094,11 +4094,13 @@ async function storeLineWebhookEvents(env, payload = {}) {
   }
 }
 
-async function d1GetLineThreads(env) {
+async function d1GetLineThreads(env, options = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
   await ensureLineLearningExamplesTable(env);
   await ensureLineThreadAiPauseColumn(env);
+  const limit = Math.max(1, Math.min(Number(options.limit || 200), 200));
+  const offset = Math.max(0, Number(options.offset || 0));
   const { results } = await env.DB.prepare(`
     SELECT
       id,
@@ -4148,14 +4150,20 @@ async function d1GetLineThreads(env) {
       last_message_at
     FROM line_threads
     ORDER BY COALESCE(last_message_at, created_at) DESC
-    LIMIT 200
-  `).all();
+    LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
   const enrichedResults = [];
   for (const row of results) {
     enrichedResults.push(await enrichStoredLineThreadProfile(env, row));
   }
   return {
     success: true,
+    meta: {
+      limit,
+      offset,
+      returned: enrichedResults.length,
+      hasMore: enrichedResults.length === limit && offset + limit < 200,
+    },
     data: enrichedResults.map(row => ({
       id: row.id,
       name: row.display_name || '????',
@@ -7483,7 +7491,10 @@ export default {
         const uid = url.searchParams.get('uid') || '';
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
-        return json(await d1GetLineThreads(env));
+        return json(await d1GetLineThreads(env, {
+          limit: url.searchParams.get('limit') || '200',
+          offset: url.searchParams.get('offset') || '0',
+        }));
       }
 
       if (path === '/api/line-oa/crm' && request.method === 'GET') {
