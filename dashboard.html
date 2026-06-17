@@ -2210,6 +2210,17 @@ function App() {
     );
   };
 
+  const buildTourUrlFromItem = (item) => {
+    const base = window.location.origin + window.location.pathname.replace(/dashboard\.html|admin\.html|crm\.html$/, '');
+    const id = item?.id || item?.timestamp || '';
+    const params = new URLSearchParams();
+    params.set('t', String(id));
+    if (distData?.inviteCode) params.set('invite', distData.inviteCode);
+    if (profile?.userId) params.set('r', profile.userId);
+    params.set('a', 'demo');
+    return `${base}tour.html?${params.toString()}`;
+  };
+
   // ★ v8：推廣 — 下載圖片（client-side canvas 合成）
   const handleDownloadPromoteImage = async (item) => {
     if (genImageBusy) return;
@@ -3778,6 +3789,14 @@ function App() {
                           className="text-slate-700 hover:bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold"
                         >
                           進入維護
+                        </a>
+                        <a
+                          href={buildTourUrlFromItem(item)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-slate-700 hover:bg-slate-100 px-3 py-1 rounded-lg text-xs font-bold"
+                        >
+                          👁️ 瀏覽
                         </a>
                         <a
                           href={`itinerary-maintenance-v2.html?id=${encodeURIComponent(String(item.id||item.timestamp||''))}`}
