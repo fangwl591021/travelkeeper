@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000">
+  <defs>
+    <style>
+      .bg{fill:#f6f8fb}.panel{fill:#fff;stroke:#dbe3ee;stroke-width:1}.ink{fill:#111827;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.muted{fill:#64748b;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.white{fill:#fff;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.h1{font-size:31px;font-weight:900}.h2{font-size:21px;font-weight:900}.num{font-size:38px;font-weight:900}.small{font-size:15px}.tiny{font-size:13px}.green{fill:#059669}.blue{fill:#2563eb}.amber{fill:#d97706}.rose{fill:#dc2626}.nav{fill:#0f172a}
+    </style>
+  </defs>
+  <rect class="bg" width="1440" height="1000"/>
+  <rect x="0" y="0" width="248" height="1000" fill="#ffffff"/>
+  <line x1="248" y1="0" x2="248" y2="1000" stroke="#dbe3ee"/>
+  <text x="30" y="56" class="ink" font-size="25" font-weight="900">威果營運台</text>
+  <text x="30" y="84" class="muted small">Command Center</text>
+  <rect x="24" y="130" width="200" height="42" rx="8" class="nav"/>
+  <text x="54" y="157" class="white small" font-weight="800">今日總覽</text>
+  <text x="54" y="214" class="muted small" font-weight="700">LINE 商機</text>
+  <text x="54" y="264" class="muted small" font-weight="700">訂單處理</text>
+  <text x="54" y="314" class="muted small" font-weight="700">行程維護</text>
+  <text x="54" y="364" class="muted small" font-weight="700">財務佣金</text>
+
+  <text x="300" y="62" class="h1 ink">今日營運指揮中心</text>
+  <text x="300" y="92" class="muted small">這版以「今天要處理什麼」為核心，適合客服與主管早上開頁後直接工作。</text>
+  <rect x="1186" y="38" width="190" height="42" rx="8" fill="#111827"/>
+  <text x="1281" y="66" class="white small" font-weight="900" text-anchor="middle">開啟 LINE 監控</text>
+
+  <rect x="300" y="128" width="500" height="210" rx="8" class="panel"/>
+  <text x="328" y="168" class="h2 ink">優先處理佇列</text>
+  <text x="328" y="196" class="muted small">依風險與時效排序，不再散在不同頁面。</text>
+  <rect x="328" y="220" width="444" height="42" rx="8" fill="#fef2f2"/>
+  <text x="350" y="247" class="ink small" font-weight="900">高風險 LINE 對話</text><text x="750" y="247" class="rose small" font-weight="900" text-anchor="end">2</text>
+  <rect x="328" y="274" width="444" height="42" rx="8" fill="#fffbeb"/>
+  <text x="350" y="301" class="ink small" font-weight="900">付款待確認訂單</text><text x="750" y="301" class="amber small" font-weight="900" text-anchor="end">7</text>
+
+  <rect x="824" y="128" width="552" height="210" rx="8" class="panel"/>
+  <text x="852" y="168" class="h2 ink">今日關鍵數字</text>
+  <g>
+    <text x="852" y="226" class="num ink">NT$ 186,000</text><text x="852" y="254" class="muted small">今日實收</text>
+    <text x="1110" y="226" class="num ink">14</text><text x="1110" y="254" class="muted small">今日詢問</text>
+    <text x="1248" y="226" class="num ink">5</text><text x="1248" y="254" class="muted small">新商機</text>
+  </g>
+
+  <rect x="300" y="366" width="350" height="250" rx="8" class="panel"/>
+  <text x="328" y="406" class="h2 ink">LINE 商機漏斗</text>
+  <text x="328" y="460" class="num ink">42</text><text x="412" y="459" class="muted small">本月新增</text>
+  <rect x="328" y="500" width="270" height="12" rx="6" fill="#e2e8f0"/><rect x="328" y="500" width="210" height="12" rx="6" class="blue"/>
+  <text x="328" y="548" class="muted small">待回覆 6 · 已報價 13 · 付款中 4 · 成交 6</text>
+  <rect x="328" y="570" width="130" height="36" rx="8" fill="#2563eb"/><text x="393" y="594" class="white tiny" font-weight="900" text-anchor="middle">查看商機</text>
+
+  <rect x="674" y="366" width="350" height="250" rx="8" class="panel"/>
+  <text x="702" y="406" class="h2 ink">行程上架狀態</text>
+  <text x="702" y="460" class="num ink">128</text><text x="786" y="459" class="muted small">已上架</text>
+  <text x="702" y="505" class="muted small">缺圖 9</text><rect x="784" y="493" width="190" height="10" rx="5" fill="#e2e8f0"/><rect x="784" y="493" width="72" height="10" rx="5" class="amber"/>
+  <text x="702" y="540" class="muted small">價格待補 4</text><rect x="784" y="528" width="190" height="10" rx="5" fill="#e2e8f0"/><rect x="784" y="528" width="36" height="10" rx="5" class="rose"/>
+  <text x="702" y="575" class="muted small">即將過期 12</text><rect x="784" y="563" width="190" height="10" rx="5" fill="#e2e8f0"/><rect x="784" y="563" width="96" height="10" rx="5" class="blue"/>
+
+  <rect x="1048" y="366" width="328" height="250" rx="8" class="panel"/>
+  <text x="1076" y="406" class="h2 ink">待辦時間線</text>
+  <circle cx="1090" cy="455" r="7" class="rose"/><text x="1112" y="461" class="ink small" font-weight="800">09:30 回覆高風險客訴</text>
+  <circle cx="1090" cy="505" r="7" class="amber"/><text x="1112" y="511" class="ink small" font-weight="800">11:00 確認付款截圖</text>
+  <circle cx="1090" cy="555" r="7" class="blue"/><text x="1112" y="561" class="ink small" font-weight="800">15:00 補東京團圖片</text>
+
+  <rect x="300" y="644" width="1076" height="250" rx="8" class="panel"/>
+  <text x="328" y="686" class="h2 ink">近期業績走勢</text>
+  <line x1="344" y1="826" x2="1326" y2="826" stroke="#e2e8f0"/>
+  <polyline points="360,792 520,750 680,770 840,700 1000,720 1160,660 1300,682" fill="none" stroke="#059669" stroke-width="5"/>
+  <polyline points="360,820 520,804 680,812 840,786 1000,790 1160,760 1300,772" fill="none" stroke="#d97706" stroke-width="4"/>
+  <text x="328" y="872" class="muted tiny">綠線：實收；橘線：應付佣金。指揮中心版只放趨勢，不塞太多表格。</text>
+</svg>

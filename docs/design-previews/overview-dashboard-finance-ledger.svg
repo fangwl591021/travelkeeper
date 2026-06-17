@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000">
+  <defs>
+    <style>
+      .bg{fill:#f5f7fa}.panel{fill:#fff;stroke:#d8e1ee;stroke-width:1}.ink{fill:#0f172a;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.muted{fill:#64748b;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.white{fill:#fff;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.h1{font-size:31px;font-weight:900}.h2{font-size:21px;font-weight:900}.num{font-size:34px;font-weight:900}.small{font-size:15px}.tiny{font-size:13px}.green{fill:#16a34a}.blue{fill:#1d4ed8}.amber{fill:#ca8a04}.slate{fill:#334155}.soft{fill:#f8fafc}
+    </style>
+  </defs>
+  <rect class="bg" width="1440" height="1000"/>
+  <rect x="36" y="32" width="1368" height="82" rx="8" class="panel"/>
+  <text x="68" y="72" class="h1 ink">財務型總覽</text>
+  <text x="68" y="98" class="muted small">這版以「實收、應收、佣金、現金流」為中心，適合主管與會計檢查營收。</text>
+  <rect x="1198" y="54" width="160" height="38" rx="8" fill="#0f172a"/>
+  <text x="1278" y="79" class="white small" font-weight="900" text-anchor="middle">匯出報表</text>
+
+  <rect x="36" y="144" width="318" height="166" rx="8" class="panel"/>
+  <text x="64" y="184" class="muted small" font-weight="800">本月實收</text>
+  <text x="64" y="238" class="num ink">NT$ 1,245,000</text>
+  <text x="64" y="272" class="green small" font-weight="800">較上月 +18%</text>
+  <rect x="386" y="144" width="318" height="166" rx="8" class="panel"/>
+  <text x="414" y="184" class="muted small" font-weight="800">未收款訂單</text>
+  <text x="414" y="238" class="num ink">NT$ 435,000</text>
+  <text x="414" y="272" class="amber small" font-weight="800">需追蹤 9 筆</text>
+  <rect x="736" y="144" width="318" height="166" rx="8" class="panel"/>
+  <text x="764" y="184" class="muted small" font-weight="800">應付佣金</text>
+  <text x="764" y="238" class="num ink">NT$ 126,000</text>
+  <text x="764" y="272" class="muted small">可請款 NT$ 88,600</text>
+  <rect x="1086" y="144" width="318" height="166" rx="8" class="panel"/>
+  <text x="1114" y="184" class="muted small" font-weight="800">毛利估算</text>
+  <text x="1114" y="238" class="num ink">NT$ 982,000</text>
+  <text x="1114" y="272" class="blue small" font-weight="800">實收 − 已結佣金</text>
+
+  <rect x="36" y="340" width="882" height="370" rx="8" class="panel"/>
+  <text x="64" y="382" class="h2 ink">月份財務明細</text>
+  <rect x="64" y="418" width="826" height="42" rx="8" fill="#f1f5f9"/>
+  <text x="86" y="444" class="muted tiny" font-weight="900">月份</text><text x="248" y="444" class="muted tiny" font-weight="900">實收</text><text x="430" y="444" class="muted tiny" font-weight="900">成交</text><text x="612" y="444" class="muted tiny" font-weight="900">佣金</text><text x="794" y="444" class="muted tiny" font-weight="900">毛利</text>
+  <g class="small">
+    <text x="86" y="500" class="ink" font-weight="800">2026/06</text><text x="248" y="500" class="ink">1,245,000</text><text x="430" y="500" class="ink">1,680,000</text><text x="612" y="500" class="ink">126,000</text><text x="794" y="500" class="green" font-weight="900">982,000</text>
+    <line x1="64" y1="524" x2="890" y2="524" stroke="#e2e8f0"/>
+    <text x="86" y="566" class="ink" font-weight="800">2026/05</text><text x="248" y="566" class="ink">1,052,000</text><text x="430" y="566" class="ink">1,310,000</text><text x="612" y="566" class="ink">110,000</text><text x="794" y="566" class="green" font-weight="900">860,000</text>
+    <line x1="64" y1="590" x2="890" y2="590" stroke="#e2e8f0"/>
+    <text x="86" y="632" class="ink" font-weight="800">2026/04</text><text x="248" y="632" class="ink">920,000</text><text x="430" y="632" class="ink">1,040,000</text><text x="612" y="632" class="ink">98,000</text><text x="794" y="632" class="green" font-weight="900">752,000</text>
+    <line x1="64" y1="656" x2="890" y2="656" stroke="#e2e8f0"/>
+  </g>
+
+  <rect x="950" y="340" width="454" height="370" rx="8" class="panel"/>
+  <text x="978" y="382" class="h2 ink">收款狀態</text>
+  <circle cx="1176" cy="518" r="118" fill="#e2e8f0"/>
+  <path d="M1176 400 A118 118 0 1 1 1068 565 L1176 518 Z" fill="#16a34a"/>
+  <path d="M1068 565 A118 118 0 0 1 1176 400 L1176 518 Z" fill="#ca8a04"/>
+  <circle cx="1176" cy="518" r="72" fill="#fff"/>
+  <text x="1176" y="512" class="num ink" text-anchor="middle">74%</text>
+  <text x="1176" y="540" class="muted tiny" text-anchor="middle">已收款</text>
+  <rect x="1000" y="652" width="14" height="14" rx="3" class="green"/><text x="1024" y="664" class="muted tiny">已收款</text>
+  <rect x="1100" y="652" width="14" height="14" rx="3" class="amber"/><text x="1124" y="664" class="muted tiny">待收款</text>
+
+  <rect x="36" y="740" width="438" height="204" rx="8" class="panel"/>
+  <text x="64" y="780" class="h2 ink">佣金待辦</text>
+  <text x="64" y="834" class="num ink">NT$ 88,600</text>
+  <text x="64" y="866" class="muted small">可請款佣金，涉及 12 筆訂單</text>
+  <rect x="64" y="894" width="132" height="36" rx="8" class="slate"/><text x="130" y="918" class="white tiny" font-weight="900" text-anchor="middle">處理請款</text>
+
+  <rect x="502" y="740" width="438" height="204" rx="8" class="panel"/>
+  <text x="530" y="780" class="h2 ink">風險提醒</text>
+  <text x="530" y="824" class="muted small">未收款超過 7 天：3 筆</text>
+  <text x="530" y="862" class="muted small">訂金不足或尾款未設定：5 筆</text>
+  <text x="530" y="900" class="muted small">高金額訂單待人工確認：2 筆</text>
+
+  <rect x="968" y="740" width="436" height="204" rx="8" class="panel"/>
+  <text x="996" y="780" class="h2 ink">快速入口</text>
+  <rect x="996" y="814" width="170" height="42" rx="8" fill="#eff6ff"/><text x="1081" y="842" class="blue tiny" font-weight="900" text-anchor="middle">付款中心</text>
+  <rect x="1186" y="814" width="170" height="42" rx="8" fill="#f0fdf4"/><text x="1271" y="842" class="green tiny" font-weight="900" text-anchor="middle">業績報表</text>
+  <rect x="996" y="876" width="170" height="42" rx="8" fill="#fffbeb"/><text x="1081" y="904" class="amber tiny" font-weight="900" text-anchor="middle">佣金結算</text>
+  <rect x="1186" y="876" width="170" height="42" rx="8" fill="#f8fafc"/><text x="1271" y="904" class="muted tiny" font-weight="900" text-anchor="middle">訂單列表</text>
+</svg>

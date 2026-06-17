@@ -1314,6 +1314,7 @@ function App() {
 
   // 視圖狀態
   const [view, setView] = useState('overview');
+  const [overviewMode, setOverviewMode] = useState('balanced');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // 上稿/編輯/審核
@@ -2463,6 +2464,106 @@ function App() {
     ).length;
   }, [orders, isAdmin, profile]);
 
+  const overviewModes = [
+    { id: 'balanced', label: '平衡總覽', desc: '業績、待辦、商機一起看' },
+    { id: 'command', label: '營運指揮', desc: '今天要處理什麼' },
+    { id: 'finance', label: '財務業績', desc: '實收、未收與佣金' },
+  ];
+
+  const overviewPendingTotal = adminStats.pendingReview + adminStats.pendingOrders + adminStats.pendingDist;
+  const overviewUnpaidAmount = Math.max(0, adminStats.monthGrossSales - adminStats.monthRevenue);
+  const overviewPaidRate = adminStats.monthGrossSales > 0
+    ? Math.round((adminStats.monthRevenue / adminStats.monthGrossSales) * 100)
+    : 0;
+
+  const MiniMetric = ({ title, value, hint, accent = 'bg-slate-900', soft = 'bg-slate-50' }) => (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className={`w-10 h-10 rounded-lg ${soft} flex items-center justify-center mb-4`}>
+        <span className={`w-3 h-3 rounded-full ${accent}`}></span>
+      </div>
+      <p className="text-2xl xl:text-3xl font-black text-slate-900 leading-tight">{loading ? '—' : value}</p>
+      <p className="text-sm font-bold text-slate-600 mt-2">{title}</p>
+      {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+    </div>
+  );
+
+  const WorkQueueItem = ({ title, count, hint, tone = 'slate', onClick }) => {
+    const toneMap = {
+      rose: 'bg-rose-50 border-rose-200 text-rose-700',
+      amber: 'bg-amber-50 border-amber-200 text-amber-700',
+      blue: 'bg-blue-50 border-blue-200 text-blue-700',
+      emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+      slate: 'bg-slate-50 border-slate-200 text-slate-700',
+    };
+    return (
+      <button type="button" onClick={onClick} className={`w-full rounded-lg border p-4 text-left hover:shadow-sm transition ${toneMap[tone] || toneMap.slate}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-black text-slate-900">{title}</p>
+            <p className="text-xs text-slate-500 mt-1">{hint}</p>
+          </div>
+          <p className="text-2xl font-black">{loading ? '—' : count}</p>
+        </div>
+      </button>
+    );
+  };
+
+  const OverviewTrendPanel = ({ compact = false, title = '近 6 個月趨勢' }) => {
+    const trend = adminStats.trend || [];
+    if (loading || trend.length === 0) {
+      return (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="h-5 w-36 bg-slate-200 rounded animate-pulse mb-5"></div>
+          <div className="h-44 bg-slate-100 rounded-lg animate-pulse"></div>
+        </div>
+      );
+    }
+    const maxVal = Math.max(1, ...trend.map(t => Math.max(t.revenue, t.commission)));
+    const W = 600, H = compact ? 150 : 190, pad = { top: 18, right: 18, bottom: 30, left: 48 };
+    const innerW = W - pad.left - pad.right;
+    const innerH = H - pad.top - pad.bottom;
+    const groupW = innerW / trend.length;
+    const barW = groupW * 0.28;
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-black text-slate-900">{title}</h3>
+            {!compact && <p className="text-xs text-slate-500 mt-1">綠色為實收，黃色為佣金。</p>}
+          </div>
+          <div className="flex gap-3 text-xs shrink-0">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500"></span>實收</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500"></span>佣金</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 360, height: compact ? 150 : 190 }}>
+            {[0, 0.5, 1].map((r, i) => {
+              const y = pad.top + innerH * (1 - r);
+              return <line key={i} x1={pad.left} y1={y} x2={W - pad.right} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 5"/>;
+            })}
+            {trend.map((t, i) => {
+              const cx = pad.left + groupW * i + groupW / 2;
+              const revH = (t.revenue / maxVal) * innerH;
+              const commH = (t.commission / maxVal) * innerH;
+              return (
+                <g key={t.month}>
+                  <rect x={cx - barW - 2} y={pad.top + innerH - revH} width={barW} height={revH} fill="#10b981" rx="2">
+                    <title>{t.label} 實收 {fmt(t.revenue)}</title>
+                  </rect>
+                  <rect x={cx + 2} y={pad.top + innerH - commH} width={barW} height={commH} fill="#f59e0b" rx="2">
+                    <title>{t.label} 佣金 {fmt(t.commission)}</title>
+                  </rect>
+                  <text x={cx} y={H - 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#475569">{t.label}</text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      </div>
+    );
+  };
+
   // ════════════════════════════════════════════════════════════
   // 早期 return：checking / login / denied
   // ════════════════════════════════════════════════════════════
@@ -2659,120 +2760,199 @@ function App() {
               {/* 數字儀表板 */}
               {isAdmin ? (
                 <>
-                  {/* ★ v7：本月財務（4 個關鍵數字） */}
-                  <div>
-                    <h2 className="font-black text-lg text-slate-900 mb-3">本月財務</h2>
-                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
-                      <StatCard color="bg-emerald-600" num={fmt(adminStats.monthRevenue)}
-                        label="本月實收" hint={`${monthOrders.length} 張訂單`} loading={loading}/>
-                      <StatCard color="bg-blue-600"    num={fmt(adminStats.monthGrossSales)}
-                        label="本月成交金額" hint="含未付款" loading={loading}/>
-                      <StatCard color="bg-amber-500"   num={fmt(adminStats.monthCommission)}
-                        label="本月應付佣金" loading={loading}/>
-                      <StatCard color="bg-purple-600"  num={fmt(adminStats.monthGross)}
-                        label="本月毛利估算" hint="實收 − 已結佣金" loading={loading}/>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                    <div className="grid grid-cols-3 gap-2">
+                      {overviewModes.map(mode => (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => setOverviewMode(mode.id)}
+                          className={`rounded-lg px-4 py-3 text-left transition ${
+                            overviewMode === mode.id
+                              ? 'bg-slate-900 text-white shadow'
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <p className="font-black text-sm">{mode.label}</p>
+                          <p className={`text-xs mt-1 ${overviewMode === mode.id ? 'text-slate-300' : 'text-slate-400'}`}>{mode.desc}</p>
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* ★ v7：近 6 個月趨勢圖（純 SVG，不依賴 chart 套件） */}
-                  {!loading && (() => {
-                    const trend = adminStats.trend || [];
-                    if (trend.length === 0) return null;
-                    const maxVal = Math.max(1, ...trend.map(t => Math.max(t.revenue, t.commission)));
-                    const W = 600, H = 180, pad = { top:20, right:20, bottom:30, left:50 };
-                    const innerW = W - pad.left - pad.right;
-                    const innerH = H - pad.top - pad.bottom;
-                    const barW = innerW / trend.length * 0.35;
-                    const groupW = innerW / trend.length;
-                    return (
-                      <div className="bg-white rounded-2xl border border-slate-100 p-5">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="font-black text-base text-slate-900">近 6 個月趨勢</h3>
-                          <div className="flex gap-3 text-xs">
-                            <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded bg-emerald-500"/>實收
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <span className="w-3 h-3 rounded bg-amber-500"/>佣金
-                            </span>
-                          </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{minWidth: 360, height: 180}}>
-                            {/* 水平格線 */}
-                            {[0, 0.25, 0.5, 0.75, 1].map((r, i) => {
-                              const y = pad.top + innerH * (1 - r);
-                              return (
-                                <g key={i}>
-                                  <line x1={pad.left} y1={y} x2={W - pad.right} y2={y}
-                                    stroke="#e2e8f0" strokeWidth="1" strokeDasharray="2 4"/>
-                                  <text x={pad.left - 8} y={y + 3} textAnchor="end"
-                                    fontSize="10" fill="#94a3b8">
-                                    {Math.round(maxVal * r / 1000)}k
-                                  </text>
-                                </g>
-                              );
-                            })}
+                  {overviewMode === 'balanced' && (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                        <MiniMetric title="本月實收" value={fmt(adminStats.monthRevenue)} hint={`${monthOrders.length} 張訂單`} accent="bg-emerald-500" soft="bg-emerald-50"/>
+                        <MiniMetric title="本月成交金額" value={fmt(adminStats.monthGrossSales)} hint="含未付款" accent="bg-blue-500" soft="bg-blue-50"/>
+                        <MiniMetric title="本月應付佣金" value={fmt(adminStats.monthCommission)} hint="含未結算" accent="bg-amber-500" soft="bg-amber-50"/>
+                        <MiniMetric title="待處理事項" value={overviewPendingTotal} hint="行程、訂單、分銷商" accent="bg-rose-500" soft="bg-rose-50"/>
+                      </div>
 
-                            {trend.map((t, i) => {
-                              const cx = pad.left + groupW * i + groupW / 2;
-                              const revH = (t.revenue / maxVal) * innerH;
-                              const commH = (t.commission / maxVal) * innerH;
-                              return (
-                                <g key={t.month}>
-                                  {/* 實收 bar */}
-                                  <rect x={cx - barW - 2} y={pad.top + innerH - revH}
-                                    width={barW} height={revH}
-                                    fill="#10b981" rx="2">
-                                    <title>{t.label} 實收 {fmt(t.revenue)}</title>
-                                  </rect>
-                                  {/* 佣金 bar */}
-                                  <rect x={cx + 2} y={pad.top + innerH - commH}
-                                    width={barW} height={commH}
-                                    fill="#f59e0b" rx="2">
-                                    <title>{t.label} 佣金 {fmt(t.commission)}</title>
-                                  </rect>
-                                  {/* x 軸標籤 */}
-                                  <text x={cx} y={H - 10} textAnchor="middle"
-                                    fontSize="11" fontWeight="700" fill="#475569">
-                                    {t.label}
-                                  </text>
-                                </g>
-                              );
-                            })}
-                          </svg>
+                      <div className="grid xl:grid-cols-[1fr_340px] gap-5">
+                        <OverviewTrendPanel title="近 6 個月業績趨勢"/>
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                          <h3 className="font-black text-slate-900">今日待處理</h3>
+                          <WorkQueueItem title="待審核行程" count={adminStats.pendingReview} hint="新上稿需確認內容" tone="amber" onClick={() => goView('review')}/>
+                          <WorkQueueItem title="待處理訂單" count={adminStats.pendingOrders} hint="付款或名額狀態需確認" tone="rose" onClick={() => goView('orders')}/>
+                          <WorkQueueItem title="可請款佣金" count={fmt(adminStats.payableCommissionTotal)} hint="待月結匯款" tone="blue" onClick={() => goView('commission')}/>
                         </div>
                       </div>
-                    );
-                  })()}
 
-                  {/* 待處理 */}
-                  <div>
-                    <h2 className="font-black text-lg text-slate-900 mb-3">待處理</h2>
-                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-5">
-                      <StatCard color="bg-amber-500" num={adminStats.pendingReview}
-                        label="待審核行程" loading={loading}/>
-                      <StatCard color="bg-red-500"   num={adminStats.pendingOrders}
-                        label="待處理訂單" loading={loading}/>
-                      <StatCard color="bg-blue-600"  num={fmt(adminStats.payableCommissionTotal)}
-                        label="可請款佣金" hint="待月結匯款" loading={loading}/>
-                      <StatCard color="bg-emerald-700" num={fmt(adminStats.paidCommissionTotal)}
-                        label="累計已匯佣金" loading={loading}/>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="font-black text-slate-900">LINE 商機</p>
+                          <p className="text-3xl font-black text-slate-900 mt-4">{shareFunnel.month.landings}</p>
+                          <p className="text-sm text-slate-500 mt-1">本月進入預約頁</p>
+                          <p className="text-xs text-slate-400 mt-3">訂單 {shareFunnel.month.orders} · 轉換 {shareFunnel.month.conversion}%</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="font-black text-slate-900">行程健康度</p>
+                          <p className="text-3xl font-black text-slate-900 mt-4">{adminStats.totalItems}</p>
+                          <p className="text-sm text-slate-500 mt-1">目前行程總數</p>
+                          <p className="text-xs text-slate-400 mt-3">待審 {adminStats.pendingReview} · 可從行程維護補資料</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <p className="font-black text-slate-900">分銷 / 佣金</p>
+                          <p className="text-3xl font-black text-slate-900 mt-4">{fmt(adminStats.payableCommissionTotal)}</p>
+                          <p className="text-sm text-slate-500 mt-1">目前可請款佣金</p>
+                          <p className="text-xs text-slate-400 mt-3">分銷商 {adminStats.totalDist} · 待審 {adminStats.pendingDist}</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* 統計 */}
-                  <div>
-                    <h2 className="font-black text-lg text-slate-900 mb-3">總體統計</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <StatCard color="bg-slate-800" num={adminStats.totalDist}
-                        label="分銷商總數"
-                        hint={adminStats.pendingDist > 0 ? `${adminStats.pendingDist} 待審核` : '全部已核准'}
-                        loading={loading}/>
-                      <StatCard color="bg-slate-700" num={adminStats.totalItems} label="行程總數" loading={loading}/>
-                      <StatCard color="bg-slate-600" num={adminStats.totalOrders} label="累計訂單" loading={loading}/>
+                  {overviewMode === 'command' && (
+                    <div className="space-y-5">
+                      <div className="grid xl:grid-cols-[480px_1fr] gap-5">
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div>
+                              <h2 className="font-black text-xl text-slate-900">優先處理佇列</h2>
+                              <p className="text-sm text-slate-500 mt-1">依時效與營運風險集中處理。</p>
+                            </div>
+                            <span className="rounded-full bg-rose-50 px-3 py-1 text-sm font-black text-rose-600">{overviewPendingTotal}</span>
+                          </div>
+                          <div className="space-y-3">
+                            <WorkQueueItem title="高優先訂單" count={adminStats.pendingOrders} hint="付款、名額或訂單狀態待確認" tone="rose" onClick={() => goView('orders')}/>
+                            <WorkQueueItem title="新上稿待審" count={adminStats.pendingReview} hint="圖片、價格與內容需確認" tone="amber" onClick={() => goView('review')}/>
+                            <WorkQueueItem title="分銷商申請" count={adminStats.pendingDist} hint="新合作夥伴待審核" tone="blue" onClick={() => goView('distributors')}/>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <h2 className="font-black text-xl text-slate-900 mb-4">今日關鍵數字</h2>
+                          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                            <MiniMetric title="本月實收" value={fmt(adminStats.monthRevenue)} hint="現金流視角" accent="bg-emerald-500" soft="bg-emerald-50"/>
+                            <MiniMetric title="本月訂單" value={monthOrders.length} hint="含所有狀態" accent="bg-blue-500" soft="bg-blue-50"/>
+                            <MiniMetric title="LINE 轉換" value={`${shareFunnel.month.conversion}%`} hint={`${shareFunnel.month.orders} 筆訂單`} accent="bg-rose-500" soft="bg-rose-50"/>
+                            <MiniMetric title="可請款" value={fmt(adminStats.payableCommissionTotal)} hint="佣金待處理" accent="bg-amber-500" soft="bg-amber-50"/>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid lg:grid-cols-3 gap-5">
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <h3 className="font-black text-slate-900">LINE 商機漏斗</h3>
+                          <p className="text-4xl font-black text-slate-900 mt-5">{shareFunnel.month.cards}</p>
+                          <p className="text-sm text-slate-500 mt-1">本月產生推廣卡</p>
+                          <div className="mt-5 h-3 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full bg-blue-600" style={{ width: `${Math.min(100, shareFunnel.month.conversion || 0)}%` }}></div>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-3">送出 {shareFunnel.month.sent} · 進站 {shareFunnel.month.landings} · 訂單 {shareFunnel.month.orders}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <h3 className="font-black text-slate-900">行程上架狀態</h3>
+                          <p className="text-4xl font-black text-slate-900 mt-5">{adminStats.totalItems}</p>
+                          <p className="text-sm text-slate-500 mt-1">目前行程總數</p>
+                          <div className="mt-5 space-y-3 text-sm">
+                            <div className="flex justify-between"><span className="text-slate-500">待審核</span><b>{adminStats.pendingReview}</b></div>
+                            <div className="flex justify-between"><span className="text-slate-500">累計訂單</span><b>{adminStats.totalOrders}</b></div>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <h3 className="font-black text-slate-900">處理建議</h3>
+                          <div className="mt-5 space-y-3 text-sm text-slate-600">
+                            <p className="rounded-lg bg-rose-50 px-4 py-3">先處理待付款與待確認訂單。</p>
+                            <p className="rounded-lg bg-amber-50 px-4 py-3">再審核新行程，避免前台缺商品。</p>
+                            <p className="rounded-lg bg-blue-50 px-4 py-3">最後檢查可請款佣金與分銷申請。</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <OverviewTrendPanel compact title="近期業績走勢"/>
                     </div>
-                  </div>
+                  )}
+
+                  {overviewMode === 'finance' && (
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                        <MiniMetric title="本月實收" value={fmt(adminStats.monthRevenue)} hint="已收訂金 + 已收尾款" accent="bg-emerald-500" soft="bg-emerald-50"/>
+                        <MiniMetric title="未收款估算" value={fmt(overviewUnpaidAmount)} hint="成交金額 − 實收" accent="bg-amber-500" soft="bg-amber-50"/>
+                        <MiniMetric title="應付佣金" value={fmt(adminStats.monthCommission)} hint="本月訂單佣金" accent="bg-blue-500" soft="bg-blue-50"/>
+                        <MiniMetric title="毛利估算" value={fmt(adminStats.monthGross)} hint="實收 − 已結佣金" accent="bg-slate-800" soft="bg-slate-100"/>
+                      </div>
+
+                      <div className="grid xl:grid-cols-[1fr_360px] gap-5">
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm overflow-hidden">
+                          <div className="flex items-center justify-between gap-3 mb-4">
+                            <div>
+                              <h2 className="font-black text-xl text-slate-900">月份財務明細</h2>
+                              <p className="text-sm text-slate-500 mt-1">用同一張表看實收、成交、佣金與訂單數。</p>
+                            </div>
+                            <span className="text-sm font-black text-emerald-600">收款率 {overviewPaidRate}%</span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[680px] text-sm">
+                              <thead className="bg-slate-50 text-slate-500">
+                                <tr>
+                                  <th className="text-left p-3 rounded-l-lg">月份</th>
+                                  <th className="text-right p-3">實收</th>
+                                  <th className="text-right p-3">成交</th>
+                                  <th className="text-right p-3">佣金</th>
+                                  <th className="text-right p-3 rounded-r-lg">訂單</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(adminStats.trend || []).slice().reverse().map(row => (
+                                  <tr key={row.month} className="border-b border-slate-100 last:border-b-0">
+                                    <td className="p-3 font-black text-slate-800">{row.month}</td>
+                                    <td className="p-3 text-right font-bold text-emerald-600">{fmt(row.revenue)}</td>
+                                    <td className="p-3 text-right text-slate-700">{fmt(orders.filter(o => String(o.createdat || '').startsWith(row.month)).reduce((s,o)=>s+Number(o.totalamount || o.price || 0),0))}</td>
+                                    <td className="p-3 text-right text-slate-700">{fmt(row.commission)}</td>
+                                    <td className="p-3 text-right text-slate-500">{row.orderCount}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <h2 className="font-black text-xl text-slate-900">收款狀態</h2>
+                          <div className="mt-6 mx-auto w-40 h-40 rounded-full bg-slate-100 grid place-items-center relative overflow-hidden">
+                            <div className="absolute bottom-0 left-0 right-0 bg-emerald-500" style={{ height: `${Math.min(100, overviewPaidRate)}%` }}></div>
+                            <div className="relative w-28 h-28 rounded-full bg-white grid place-items-center shadow-inner">
+                              <div className="text-center">
+                                <p className="text-3xl font-black text-slate-900">{overviewPaidRate}%</p>
+                                <p className="text-xs text-slate-400">已收款</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-6 space-y-3 text-sm">
+                            <div className="flex justify-between"><span className="text-slate-500">本月成交</span><b>{fmt(adminStats.monthGrossSales)}</b></div>
+                            <div className="flex justify-between"><span className="text-slate-500">本月實收</span><b className="text-emerald-600">{fmt(adminStats.monthRevenue)}</b></div>
+                            <div className="flex justify-between"><span className="text-slate-500">未收估算</span><b className="text-amber-600">{fmt(overviewUnpaidAmount)}</b></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <WorkQueueItem title="佣金待辦" count={fmt(adminStats.payableCommissionTotal)} hint={`${payableOrdersCount} 筆可請款訂單`} tone="blue" onClick={() => goView('commission')}/>
+                        <WorkQueueItem title="財務風險" count={adminStats.pendingOrders} hint="未付款或待確認訂單" tone="amber" onClick={() => goView('payments')}/>
+                        <WorkQueueItem title="快速入口" count="報表" hint="查看付款中心與業績資料" tone="slate" onClick={() => goView('payments')}/>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div>
