@@ -8387,8 +8387,15 @@ export default {
           body: JSON.stringify({
             model: 'gpt-4o', response_format: { type: 'json_object' }, max_tokens: 4000, temperature: 0.7,
             messages: [{ role: 'user', content: [
-              { type: 'text', text: `你是頂級旅行社行程總監。解析輸入資料並深度擴寫。回傳標準 JSON：
+              { type: 'text', text: `你是頂級旅行社行程總監。解析輸入資料並依來源內容整理成可編輯行程草稿。回傳標準 JSON：
 {"title":"...","region":"國旅/亞洲/歐洲/美洲/大洋洲/非洲","price":0,"days":0,"imageKeyword":"景點英文關鍵字","description":"每天200字以上，格式：第N天 標題\\n![圖片](景點英文關鍵字)\\n內文...","notes":""}
+AI 擴寫原則：
+1. 先判斷 days；description 必須拆成剛好 days 個「第N天」段落，天數是多少就有多少個文字區。
+2. 每個非移動日段落最多放 1 行圖片語法，圖片語法放在標題下一行。
+3. 出發日、回程日、純機場/搭機/返程段落不要放圖片語法，只保留文字。
+4. 圖片正確性優先於漂亮；圖片關鍵字必須是該日主要景點、城市或地標的精準英文搜尋詞，不可用籠統字，例如 travel、scenic、destination。
+5. 若同一天有多個景點，選最具代表性的實際景點作為圖片關鍵字。
+6. 不確定的價格、天數、日期不要自行發明，保留來源可判斷的資訊。
 description 中圖片語法只能放每日對應景點、城市或地標的英文搜尋關鍵字；不要輸出 DM 截圖、PDF 頁面、來源圖片網址、placehold.co、loremflickr、via.placeholder 這類暫示圖網址。若收到多頁 PDF 或 Markdown 文件，請綜合所有內容整理成同一筆行程。
 
 ${sourceIntro}` },
@@ -8417,6 +8424,7 @@ ${sourceIntro}` },
 
         // 每日圖片一律從圖庫/地點關鍵字查找，不沿用 DM 或 PDF 截圖。
         if (parsed.description) {
+          parsed.description = stripTransferDayImages(parsed.description);
           parsed.description = await replaceImageKeywords(parsed.description, env);
         }
 
@@ -9196,5 +9204,40 @@ async function replaceImageKeywords(text, env) {
   let result = text;
   for (let i = replacements.length - 1; i >= 0; i--) result = result.replace(replacements[i].original, replacements[i].replacement);
   return result;
+}
+
+function isTransferOnlyDayTitle(title = '') {
+  const text = String(title || '').replace(/\s+/g, '');
+  if (!text) return false;
+  const hasTransferSignal = /(出發|啟程|集合|機場|搭機|飛往|抵達|返回|返程|回程|返國|回台|回臺|賦歸)/.test(text);
+  if (!hasTransferSignal) return false;
+  return !/(樂園|古城|城堡|博物館|美術館|神社|寺|湖|山|海灘|市場|公園|小鎮|市區觀光|巡航|纜車|溫泉|花田|運河|峽谷|瀑布|國家公園)/.test(text);
+}
+
+function stripTransferDayImages(text = '') {
+  const source = String(text || '');
+  const headingRegex = /(^|\n)(第\s*[0-9一二三四五六七八九十百]+\s*天[^\n]*)/g;
+  const matches = [...source.matchAll(headingRegex)];
+  if (!matches.length) return source;
+
+  let output = source.slice(0, matches[0].index);
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const next = matches[i + 1];
+    const prefix = match[1] || '';
+    const title = match[2] || '';
+    const bodyStart = match.index + prefix.length + title.length;
+    const bodyEnd = next ? next.index : source.length;
+    let body = source.slice(bodyStart, bodyEnd);
+
+    if (isTransferOnlyDayTitle(title)) {
+      body = body
+        .replace(/(^|\n)!\[[^\]]*\]\([^)]+\)\s*(?=\n|$)/g, '$1')
+        .replace(/\n{3,}/g, '\n\n');
+    }
+
+    output += `${prefix}${title}${body}`;
+  }
+  return output;
 }
 
