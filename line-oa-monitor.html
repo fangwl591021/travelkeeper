@@ -345,26 +345,42 @@
     </main>
 
     <aside class="insight-rail shrink-0 flex flex-col min-h-0">
-      <div class="workspace-header px-4 py-3 border-b border-slate-200 shrink-0">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <h2 class="text-base font-bold">處理側欄</h2>
-            <p class="text-xs text-slate-500 mt-1">回覆、紀錄與商機</p>
+        <div class="workspace-header px-4 py-3 border-b border-slate-200 shrink-0">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-bold">處理側欄</h2>
+              <p class="text-xs text-slate-500 mt-1">回覆、紀錄與商機</p>
           </div>
           <span id="status-chip" class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">&#30435;&#30475;&#20013;</span>
-        </div>
-      </div>
-      <div class="insight-scroll flex-1 overflow-y-auto px-3 py-3 space-y-2">
-        <section class="module-card rounded-3xl border border-violet-200 bg-violet-50/60 p-3">
-          <div class="flex items-center justify-between gap-3 mb-2">
-            <div>
-              <p class="section-title font-bold">AI 學習計畫</p>
-              <p id="learning-status" class="text-xs text-slate-500 mt-0.5">等待對話資料</p>
-            </div>
-            <button id="refresh-learning" type="button" class="rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-semibold hover:bg-violet-700">更新</button>
           </div>
-          <div id="learning-plan" class="space-y-2"></div>
-        </section>
+        </div>
+        <div class="insight-scroll flex-1 overflow-y-auto px-3 py-3 space-y-2">
+          <section class="module-card rounded-3xl border border-slate-200 bg-white p-3">
+            <p class="section-title font-bold mb-2">正式處理流程</p>
+            <div class="grid grid-cols-5 gap-1.5 text-[11px] font-semibold text-center">
+              <span class="rounded-xl bg-slate-900 text-white px-2 py-2">待回覆</span>
+              <span class="rounded-xl bg-slate-100 text-slate-700 px-2 py-2">人工判斷</span>
+              <span class="rounded-xl bg-slate-100 text-slate-700 px-2 py-2">回覆送出</span>
+              <span class="rounded-xl bg-slate-100 text-slate-700 px-2 py-2">商機紀錄</span>
+              <span class="rounded-xl bg-slate-100 text-slate-700 px-2 py-2">學習審核</span>
+            </div>
+            <p class="mt-2 text-xs leading-5 text-slate-500">AI 只提供建議；正式回覆、附件、多頁訊息、商機與學習樣本都由管理員確認。</p>
+          </section>
+
+          <section class="module-card rounded-3xl border border-violet-200 bg-violet-50/60 p-3">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <p class="section-title font-bold">AI 學習計畫</p>
+                <p id="learning-status" class="text-xs text-slate-500 mt-0.5">等待對話資料</p>
+              </div>
+              <button id="refresh-learning" type="button" class="rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-semibold hover:bg-violet-700">更新</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <button id="mark-learning-useful" type="button" class="rounded-xl bg-white border border-violet-200 text-violet-700 px-3 py-2 text-xs font-semibold hover:bg-violet-100 disabled:opacity-40">可學習</button>
+              <button id="mark-learning-skip" type="button" class="rounded-xl bg-white border border-slate-200 text-slate-600 px-3 py-2 text-xs font-semibold hover:bg-slate-100 disabled:opacity-40">不可學習</button>
+            </div>
+            <div id="learning-plan" class="space-y-2"></div>
+          </section>
 
         <section class="module-card rounded-3xl border border-slate-200 bg-white p-3">
           <div class="flex items-center justify-between gap-3 mb-2">
@@ -553,11 +569,13 @@
     const chatMetaEl = document.getElementById('chat-meta');
     const chatRiskPillEl = document.getElementById('chat-risk-pill');
     const chatMessagesEl = document.getElementById('chat-messages');
-    const suggestionListEl = document.getElementById('suggestion-list');
-    const suggestionCountEl = document.getElementById('suggestion-count');
-    const learningPlanEl = document.getElementById('learning-plan');
-    const learningStatusEl = document.getElementById('learning-status');
-    const replySuggestionsEl = document.getElementById('reply-suggestions');
+      const suggestionListEl = document.getElementById('suggestion-list');
+      const suggestionCountEl = document.getElementById('suggestion-count');
+      const learningPlanEl = document.getElementById('learning-plan');
+      const learningStatusEl = document.getElementById('learning-status');
+      const markLearningUsefulEl = document.getElementById('mark-learning-useful');
+      const markLearningSkipEl = document.getElementById('mark-learning-skip');
+      const replySuggestionsEl = document.getElementById('reply-suggestions');
     const threadTagsEl = document.getElementById('thread-tags');
     const threadStatusBadgeEl = document.getElementById('thread-status-badge');
     const riskSummaryEl = document.getElementById('risk-summary');
@@ -1467,11 +1485,34 @@
       return text.length > 180 ? text.slice(0, 180) + '…' : text;
     }
 
+    function syncLearningReviewControls(thread) {
+      const disabled = !thread || !profile?.userId;
+      [markLearningUsefulEl, markLearningSkipEl].forEach(button => {
+        if (!button) return;
+        button.disabled = disabled;
+        button.classList.toggle('cursor-not-allowed', disabled);
+      });
+      if (!markLearningUsefulEl || !markLearningSkipEl || !thread) return;
+      const archived = thread.learningStatus === 'archived';
+      markLearningUsefulEl.className = archived
+        ? 'rounded-xl bg-white border border-violet-200 text-violet-700 px-3 py-2 text-xs font-semibold hover:bg-violet-100 disabled:opacity-40'
+        : 'rounded-xl bg-violet-600 border border-violet-600 text-white px-3 py-2 text-xs font-semibold hover:bg-violet-700 disabled:opacity-40';
+      markLearningSkipEl.className = archived
+        ? 'rounded-xl bg-slate-900 border border-slate-900 text-white px-3 py-2 text-xs font-semibold hover:bg-slate-800 disabled:opacity-40'
+        : 'rounded-xl bg-white border border-slate-200 text-slate-600 px-3 py-2 text-xs font-semibold hover:bg-slate-100 disabled:opacity-40';
+    }
+
     function renderLearningPlan(thread) {
       learningPlanEl.innerHTML = '';
+      syncLearningReviewControls(thread);
       if (!thread) {
         learningStatusEl.textContent = '等待對話資料';
         learningPlanEl.innerHTML = '<div class="rounded-2xl border border-dashed border-violet-200 bg-white/70 px-4 py-4 text-sm text-slate-400">尚未選擇聊天室。</div>';
+        return;
+      }
+      if (thread.learningStatus === 'archived') {
+        learningStatusEl.textContent = '已標記不可學習';
+        learningPlanEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-4 text-sm text-slate-500 leading-6">此聊天室已標記為不可學習，AI 後續接手時不會引用此案例。</div>';
         return;
       }
       const learning = thread.learningPlan || null;
@@ -1517,6 +1558,54 @@
           tagWrap.appendChild(pill);
         });
         learningPlanEl.appendChild(tagWrap);
+      }
+    }
+
+    async function reviewLearningPlan(learnable) {
+      const thread = getActiveThread();
+      if (!thread) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      const buttons = [markLearningUsefulEl, markLearningSkipEl].filter(Boolean);
+      buttons.forEach(button => {
+        button.disabled = true;
+        button.classList.add('opacity-60');
+      });
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/learning/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            threadId: thread.id,
+            learnable,
+          }),
+        });
+        const idx = allThreads.findIndex(item => item.id === thread.id);
+        const updated = learnable
+          ? {
+              ...thread,
+              learningPlan: result.data,
+              learningCount: result.data ? 1 : 0,
+              learningStatus: result.data?.status || '',
+            }
+          : {
+              ...thread,
+              learningPlan: null,
+              learningCount: 0,
+              learningStatus: 'archived',
+            };
+        if (idx >= 0) allThreads[idx] = { ...allThreads[idx], ...updated };
+        renderThreadList();
+        renderActiveThread(updated);
+        showToast(learnable ? '已標記為可學習案例' : '已標記為不可學習');
+      } finally {
+        buttons.forEach(button => {
+          button.disabled = false;
+          button.classList.remove('opacity-60');
+        });
+        syncLearningReviewControls(getActiveThread());
       }
     }
 
@@ -1890,6 +1979,12 @@
     });
     document.getElementById('refresh-learning').addEventListener('click', () => {
       refreshLearningPlan().catch(err => showToast(err.message || '更新學習案例失敗', 'error'));
+    });
+    document.getElementById('mark-learning-useful').addEventListener('click', () => {
+      reviewLearningPlan(true).catch(err => showToast(err.message || '標記可學習失敗', 'error'));
+    });
+    document.getElementById('mark-learning-skip').addEventListener('click', () => {
+      reviewLearningPlan(false).catch(err => showToast(err.message || '標記不可學習失敗', 'error'));
     });
 
     document.getElementById('copy-reply').addEventListener('click', async () => {

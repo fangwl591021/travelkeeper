@@ -203,6 +203,30 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
   const [aiMarkdownOpen, setAiMarkdownOpen] = useState(false);
   const [aiMarkdown, setAiMarkdown] = useState('');
   const [aiMarkdownFilename, setAiMarkdownFilename] = useState('');
+  const [aiDraft, setAiDraft] = useState(null);
+  const [aiReview, setAiReview] = useState({ fields: false, images: false, payment: false, expire: false });
+  const resetAiReview = () => setAiReview({ fields: false, images: false, payment: false, expire: false });
+    const markAiDraft = (source, resultData = {}) => {
+      setAiDraft({ source, createdAt: new Date().toISOString(), imageKeyword: resultData.imageKeyword || '' });
+      resetAiReview();
+    };
+    const aiUploadErrorText = (error) => ({
+      AI_UPLOAD_AUTH_REQUIRED: '尚未取得操作者身份，請重新登入後再使用 AI 上稿',
+      AI_UPLOAD_PERMISSION_DENIED: '此帳號未授權使用 AI 上稿，請先確認管理員或上稿權限',
+      OPENAI_KEY_MISSING: '尚未設定 AI 金鑰',
+      AI_PARSE_FAILED: 'AI 解析失敗，請改用手動填寫或縮短內容後重試',
+    }[error] || error || 'AI 解析失敗');
+    const descriptionText = String(data.description || '');
+  const daySectionCount = (descriptionText.match(/(^|\n)\s*第\s*[0-9一二三四五六七八九十百]+\s*天/g) || []).length;
+  const descriptionImageCount = (descriptionText.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
+  const expectedDays = Number(data.days || 0);
+  const aiReviewComplete = !aiDraft || Object.values(aiReview).every(Boolean);
+  const aiReviewItems = [
+    { key: 'fields', label: '標題、天數、價格、出發日期與行程文字已核對' },
+    { key: 'images', label: `每日圖片已核對正確性（目前 ${daySectionCount || 0} 個日程段落、${descriptionImageCount || 0} 張內文圖）` },
+    { key: 'payment', label: '訂金金額、收費模式與尾款方式已核對' },
+    { key: 'expire', label: '自動下架日期已確認，留空代表不自動下架' },
+  ];
 
   const loadPdfJs = async () => {
     if (window.__pdfjsLibPromise) return window.__pdfjsLibPromise;
@@ -251,7 +275,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
           setStage(pct, done ? `PDF 轉圖片 ${done}/${total} 頁...` : '準備轉換 PDF 頁面...');
         });
         setStage(58, 'PDF 頁面已轉換，準備送交 AI...');
-        payload = { images, filename: file.name };
+        payload = { images, filename: file.name, uid: currentUser?.userId || '' };
       } else {
         setStage(18, '讀取圖片中...');
         const image = await new Promise((resolve, reject) => {
@@ -261,19 +285,20 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
           reader.readAsDataURL(file);
         });
         setStage(48, '圖片已讀取，準備送交 AI...');
-        payload = { image, filename: file.name };
+        payload = { image, filename: file.name, uid: currentUser?.userId || '' };
       }
       setStage(68, 'AI 解析中，正在辨識標題、天數、價格與內文...');
       const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(payload)
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error || 'AI 解析失敗');
-      setStage(90, '整理解析結果並填入表單...');
-      setData(prev => ({ ...prev, ...result.data }));
-      setStage(100, '解析完成，已帶入表單');
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(aiUploadErrorText(result.error));
+        setStage(90, '整理解析結果並填入表單...');
+        setData(prev => ({ ...prev, ...result.data }));
+        markAiDraft(file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '') ? 'PDF / 圖片 AI 解析' : '圖片 AI 解析', result.data || {});
+        setStage(100, '解析完成，已帶入表單');
       setTimeout(() => setAiProgress(null), 900);
     } catch(err) {
       alert('AI 解析失敗：' + err.message);
@@ -297,12 +322,13 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
       const res = await fetch(`${WORKER_URL}/api/upload-dm`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ markdown, filename: aiMarkdownFilename || 'markitdown-itinerary.md' })
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error || 'AI 解析失敗');
+        body: JSON.stringify({ markdown, filename: aiMarkdownFilename || 'markitdown-itinerary.md', uid: currentUser?.userId || '' })
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(aiUploadErrorText(result.error));
       setStage(90, '整理解析結果並填入表單...');
       setData(prev => ({ ...prev, ...result.data }));
+      markAiDraft('Markdown AI 解析', result.data || {});
       setStage(100, '解析完成，已帶入表單');
       setAiMarkdown('');
       setAiMarkdownFilename('');
@@ -419,6 +445,31 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         </div>
       )}
       <p className="text-xs text-center text-slate-400 font-medium -mt-3">支援 JPG、PNG、PDF，PDF 會自動轉成頁面圖片交給 AI 解析</p>
+
+      {aiDraft && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-amber-800">AI 草稿未審核</p>
+              <p className="text-xs text-amber-700 mt-1">來源：{aiDraft.source}。送出前必須人工核對；圖片正確性優先。</p>
+              {expectedDays > 0 && daySectionCount > 0 && daySectionCount !== expectedDays && (
+                <p className="text-xs text-red-600 font-bold mt-1">天數與段落數不一致：表單天數 {expectedDays}，內文段落 {daySectionCount}。</p>
+              )}
+            </div>
+            <button type="button" onClick={() => { setAiDraft(null); resetAiReview(); }}
+              className="text-xs font-black text-slate-500 hover:text-slate-900">解除草稿標記</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {aiReviewItems.map(item => (
+              <label key={item.key} className="flex items-start gap-2 rounded-xl bg-white border border-amber-100 p-3 text-xs font-bold text-slate-700">
+                <input type="checkbox" className="mt-0.5" checked={!!aiReview[item.key]}
+                  onChange={e=>setAiReview(prev => ({ ...prev, [item.key]: e.target.checked }))} />
+                <span>{item.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
         <button type="button"
@@ -582,7 +633,13 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
       <div className="flex gap-3 pt-2">
         <button onClick={onCancel}
           className="flex-1 bg-slate-100 py-4 rounded-2xl font-black text-slate-600 hover:bg-slate-200">取消</button>
-        <button onClick={() => onSave(data)} disabled={saving || !data.title}
+        <button onClick={() => {
+            if (!aiReviewComplete) {
+              alert('AI 草稿尚未完成審核清單，請先核對欄位與圖片。');
+              return;
+            }
+            onSave(data);
+          }} disabled={saving || !data.title || !aiReviewComplete}
           className="flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
           {saving ? '儲存中…' : '提交'}
         </button>

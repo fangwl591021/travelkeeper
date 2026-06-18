@@ -39,11 +39,13 @@ Use this checklist before deploying or pushing customer-visible changes for Trav
 
 - [ ] Admin UID check is enforced for admin-only APIs.
 - [ ] Non-admin users cannot access restricted actions.
+- [ ] AI upload APIs require an identified operator UID and reject unauthorized users.
 - [ ] Existing operator workflows still load: monitor, CRM, itinerary, payment, reports.
 - [ ] Form save and reload behavior is tested.
 - [ ] Secret fields are masked and leave-empty-does-not-overwrite behavior works.
 - [ ] Pagination, filters, and search still work for touched views.
 - [ ] UI labels match the real data model.
+- [ ] LINE monitor formal workflow is visible: pending reply, manual judgment, reply send, opportunity record, learning review.
 - [ ] GitHub Pages cache behavior is accounted for when HTML changes are pushed.
 
 ## 5. AI Customer Service
@@ -56,13 +58,19 @@ Use this checklist before deploying or pushing customer-visible changes for Trav
 - [ ] Prompt changes were tested with real examples.
 - [ ] AI reply does not invent payment, visa, travel, or refund policy.
 - [ ] AI does not reuse customer-uploaded private content as general knowledge.
+- [ ] Learning examples can be explicitly marked learnable or not learnable by an admin.
+- [ ] Archived/not-learnable examples are excluded from future AI reference data.
 
 ## 6. AI Itinerary Publishing
 
 - [ ] Image DM upload still works.
 - [ ] PDF upload still works or the limitation is stated.
+- [ ] Markdown upload/parse still works if MarkItDown is enabled.
 - [ ] AI itinerary JSON contains title, region, price, days, description, notes, and cover image.
 - [ ] Section images use destination/place lookup or generation, not raw DM screenshots.
+- [ ] AI-generated drafts cannot be submitted until the manual review checklist is complete.
+- [ ] Day count, day text blocks, and embedded image count are reviewed before publish.
+- [ ] Departure and return sections do not require images unless intentionally added.
 - [ ] Draft remains editable before publishing.
 - [ ] Human review is still required before customer-facing use.
 - [ ] Uploaded files are stored in the intended R2 path.
@@ -108,4 +116,3 @@ Use this checklist before deploying or pushing customer-visible changes for Trav
 - [ ] State what was verified.
 - [ ] State any verification gap or cache delay.
 - [ ] State next operator action if required.
-

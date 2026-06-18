@@ -4509,6 +4509,32 @@ async function d1RefreshLineLearningExample(env, body = {}) {
   return { success: true, data: learning };
 }
 
+async function d1UpdateLineLearningReview(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineLearningExamplesTable(env);
+  const threadId = String(body.threadId || body.thread_id || body.id || '').trim();
+  const uid = String(body.uid || body.operatorUid || '').trim();
+  const learnable = body.learnable === true || String(body.status || '').toLowerCase() === 'active';
+  if (!threadId) return { success: false, error: 'MISSING_THREAD_ID' };
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+
+  if (learnable) {
+    return d1RefreshLineLearningExample(env, { ...body, threadId, uid });
+  }
+
+  const existing = await d1GetLineLearningExample(env, threadId);
+  if (!existing) return { success: true, data: null, archived: true };
+  await env.DB.prepare(`
+    UPDATE line_learning_examples
+       SET status = 'archived',
+           archived_at = datetime('now'),
+           updated_at = datetime('now')
+     WHERE thread_id = ?
+       AND archived_at = ''
+  `).bind(threadId).run();
+  return { success: true, data: null, archived: true };
+}
+
 function normalizeLineVisitorRequirement(row = {}) {
   return {
     id: row.id || '',
@@ -7610,6 +7636,15 @@ export default {
         return json(result, result.success ? 200 : 400);
       }
 
+      if (path === '/api/line-oa/learning/review' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1UpdateLineLearningReview(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
       if (path === '/api/line-oa/upload-asset' && request.method === 'POST') {
         const body = await request.json();
         const uid = String(body.uid || '').trim();
@@ -8371,7 +8406,15 @@ export default {
       // POST /api/upload-dm  嚗I DM 閫??嚗?
       // ??????????????????????????????????????????????????????????
       if (path === '/api/upload-dm' && request.method === 'POST') {
-        const { image, images, markdown, filename } = await request.json();
+        const { image, images, markdown, filename, uid } = await request.json();
+        const operatorUid = String(uid || url.searchParams.get('uid') || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'AI_UPLOAD_AUTH_REQUIRED' }, 403);
+        const userStatus = env.DB
+          ? await d1CheckUserStatus(env, operatorUid).catch(() => null)
+          : { data: { isAdmin: await isAdminUid(env, operatorUid), canUpload: await isAdminUid(env, operatorUid) } };
+        if (!userStatus?.data?.canUpload) {
+          return json({ success: false, error: 'AI_UPLOAD_PERMISSION_DENIED' }, 403);
+        }
         const markdownText = String(markdown || '').trim().slice(0, 60000);
         const imageInputs = [
           ...(Array.isArray(images) ? images : []),
