@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>宣傳 DM 知識庫 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background: #f4f7fb; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-900">
+  <main class="mx-auto max-w-6xl px-5 py-8">
+    <header class="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div>
+        <p class="text-xs font-black uppercase tracking-[0.28em] text-slate-400">Promotion DM</p>
+        <h1 class="mt-2 text-3xl font-black md:text-5xl">宣傳 DM 專區</h1>
+        <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
+          此區只處理店家推播用 DM。系統會抽取文字、摘要、關鍵字與客服回覆模板，存進 AI 知識庫，讓客戶看到 DM 後詢問時，LINE 監控台與 AI 客服能查得到。
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="./dashboard.html" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-bold hover:bg-slate-50">回主頁</a>
+        <a href="./knowledge-base.html" class="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white hover:bg-slate-800">知識庫</a>
+      </div>
+    </header>
+
+    <section class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div class="space-y-5">
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-black">新增宣傳 DM</h2>
+              <p class="mt-2 text-sm leading-6 text-slate-500">上傳 DM 圖片，或直接貼上已轉出的文字。這裡不會建立正式行程。</p>
+            </div>
+            <span id="auth-badge" class="rounded-full bg-amber-50 px-4 py-2 text-sm font-black text-amber-700">檢查權限中</span>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="text-xs font-black text-slate-500">DM 標題</label>
+              <input id="dm-title" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500" placeholder="例如：日月潭藍色公路一日遊">
+            </div>
+            <div>
+              <label class="text-xs font-black text-slate-500">來源備註</label>
+              <input id="dm-source" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500" placeholder="例如：6/19 LINE OA 推播">
+            </div>
+          </div>
+
+          <div class="mt-5 grid gap-5 md:grid-cols-2">
+            <label class="block rounded-3xl border border-dashed border-emerald-300 bg-emerald-50 p-6 text-center">
+              <span class="block text-lg font-black text-emerald-800">上傳 DM 圖片</span>
+              <span class="mt-2 block text-sm text-emerald-700">支援 JPG / PNG。可多次選取，最多取 6 張。</span>
+              <input id="dm-images" type="file" accept="image/*" multiple class="mt-4 w-full rounded-xl bg-white px-3 py-2 text-sm">
+            </label>
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+              <label class="block text-lg font-black text-slate-800">貼上 DM 文字</label>
+              <p class="mt-2 text-sm text-slate-500">若已有 OCR 或文案，可直接貼上，AI 會整理成知識庫格式。</p>
+              <textarea id="dm-text" rows="8" class="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" placeholder="貼上宣傳 DM 文案、價格、天數、出發地、注意事項..."></textarea>
+            </div>
+          </div>
+
+          <div id="preview-list" class="mt-5 grid gap-3 md:grid-cols-3"></div>
+
+          <div id="progress-box" hidden class="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+            <div class="mb-2 flex items-center justify-between text-xs font-black text-blue-700">
+              <span id="progress-label">準備中</span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="h-2.5 overflow-hidden rounded-full border border-blue-100 bg-white">
+              <div id="progress-bar" class="h-full rounded-full bg-blue-600 transition-all" style="width:0%"></div>
+            </div>
+          </div>
+
+          <div class="mt-5 flex flex-wrap gap-3">
+            <button id="submit-dm" class="rounded-2xl bg-emerald-600 px-6 py-3 font-black text-white hover:bg-emerald-700 disabled:opacity-50">抽取並存入知識庫</button>
+            <button id="clear-dm" class="rounded-2xl border border-slate-200 bg-white px-6 py-3 font-black text-slate-700 hover:bg-slate-50">清空</button>
+          </div>
+        </div>
+
+        <div id="result-box" hidden class="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.24em] text-emerald-600">Saved</p>
+              <h2 id="result-title" class="mt-1 text-2xl font-black">已存檔</h2>
+              <p id="result-path" class="mt-2 break-all font-mono text-xs text-slate-400"></p>
+            </div>
+            <a href="./line-oa-monitor.html" class="rounded-2xl bg-slate-900 px-5 py-3 text-center font-bold text-white hover:bg-slate-800">前往監控台</a>
+          </div>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl bg-slate-50 p-4">
+              <p class="text-xs font-black text-slate-400">摘要</p>
+              <p id="result-summary" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700"></p>
+            </div>
+            <div class="rounded-2xl bg-slate-50 p-4">
+              <p class="text-xs font-black text-slate-400">回覆模板</p>
+              <p id="result-reply" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700"></p>
+            </div>
+          </div>
+          <div class="mt-4">
+            <p class="text-xs font-black text-slate-400">關鍵字</p>
+            <div id="result-keywords" class="mt-2 flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="space-y-5">
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 class="text-xl font-black">兩種資料不要混用</h2>
+          <div class="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+            <p><b>AI 上稿：</b>用於建立正式行程草稿，會拆天數、補段落、核對每日圖片，最後進入上架/審核流程。</p>
+            <p><b>宣傳 DM：</b>用於推播後客服查詢，不會建立行程，只把文字、價格、天數、活動資訊存成知識庫。</p>
+          </div>
+        </div>
+        <div class="rounded-3xl border border-amber-200 bg-amber-50 p-5">
+          <h2 class="text-xl font-black text-amber-900">使用原則</h2>
+          <ul class="mt-4 list-disc space-y-2 pl-5 text-sm leading-7 text-amber-800">
+            <li>DM 圖片文字不清楚時，存檔後仍需人工核對。</li>
+            <li>AI 只會記錄 DM 內容，不會自動承諾價格或名額。</li>
+            <li>客戶詢問時，建議先確認日期、人數、出發地與名額。</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toast" hidden class="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white shadow-2xl"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    let profile = null;
+    let canUse = false;
+    let imageDataUrls = [];
+
+    const els = {
+      authBadge: document.getElementById('auth-badge'),
+      title: document.getElementById('dm-title'),
+      source: document.getElementById('dm-source'),
+      images: document.getElementById('dm-images'),
+      text: document.getElementById('dm-text'),
+      preview: document.getElementById('preview-list'),
+      progressBox: document.getElementById('progress-box'),
+      progressLabel: document.getElementById('progress-label'),
+      progressPercent: document.getElementById('progress-percent'),
+      progressBar: document.getElementById('progress-bar'),
+      submit: document.getElementById('submit-dm'),
+      clear: document.getElementById('clear-dm'),
+      resultBox: document.getElementById('result-box'),
+      resultTitle: document.getElementById('result-title'),
+      resultPath: document.getElementById('result-path'),
+      resultSummary: document.getElementById('result-summary'),
+      resultReply: document.getElementById('result-reply'),
+      resultKeywords: document.getElementById('result-keywords'),
+      toast: document.getElementById('toast'),
+    };
+
+    function showToast(text, type = 'info') {
+      els.toast.textContent = text;
+      els.toast.className = `fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-2xl px-5 py-3 font-bold text-white shadow-2xl ${type === 'error' ? 'bg-rose-600' : 'bg-slate-900'}`;
+      els.toast.hidden = false;
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => { els.toast.hidden = true; }, 2400);
+    }
+
+    function setProgress(percent, label) {
+      els.progressBox.hidden = false;
+      els.progressLabel.textContent = label;
+      els.progressPercent.textContent = `${Math.round(percent)}%`;
+      els.progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve(String(event.target.result || ''));
+        reader.onerror = () => reject(new Error('圖片讀取失敗'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderPreview() {
+      els.preview.innerHTML = '';
+      imageDataUrls.forEach((url, index) => {
+        const box = document.createElement('div');
+        box.className = 'relative overflow-hidden rounded-2xl border border-slate-200 bg-white';
+        box.innerHTML = `<img src="${url}" alt="DM ${index + 1}" class="h-36 w-full object-contain bg-slate-50"><button type="button" class="remove-image absolute right-2 top-2 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-rose-600 shadow" data-index="${index}">移除</button>`;
+        els.preview.appendChild(box);
+      });
+      els.preview.querySelectorAll('.remove-image').forEach(button => {
+        button.addEventListener('click', () => {
+          imageDataUrls.splice(Number(button.dataset.index), 1);
+          renderPreview();
+        });
+      });
+    }
+
+    async function fetchJson(url, options) {
+      const res = await fetch(url, options);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) throw new Error(data?.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    async function initAuth() {
+      if (location.protocol === 'file:') {
+        els.authBadge.textContent = '本機預覽';
+        els.authBadge.className = 'rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-600';
+        els.submit.disabled = true;
+        showToast('請用線上頁面登入後使用', 'error');
+        return;
+      }
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+      profile = await liff.getProfile();
+      const status = await fetchJson(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
+      canUse = !!(status.data?.isAdmin || status.data?.canUpload);
+      els.authBadge.textContent = canUse ? '可使用' : '無權限';
+      els.authBadge.className = `rounded-full px-4 py-2 text-sm font-black ${canUse ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`;
+      els.submit.disabled = !canUse;
+    }
+
+    els.images.addEventListener('change', async () => {
+      const files = Array.from(els.images.files || []).slice(0, 6 - imageDataUrls.length);
+      for (const file of files) {
+        if (!/^image\//i.test(file.type)) continue;
+        imageDataUrls.push(await fileToDataUrl(file));
+      }
+      renderPreview();
+      els.images.value = '';
+    });
+
+    els.clear.addEventListener('click', () => {
+      imageDataUrls = [];
+      els.title.value = '';
+      els.source.value = '';
+      els.text.value = '';
+      els.resultBox.hidden = true;
+      els.progressBox.hidden = true;
+      renderPreview();
+    });
+
+    els.submit.addEventListener('click', async () => {
+      if (!canUse || !profile?.userId) {
+        showToast('目前帳號無法使用宣傳 DM 專區', 'error');
+        return;
+      }
+      const markdown = String(els.text.value || '').trim();
+      if (!markdown && !imageDataUrls.length) {
+        showToast('請先上傳 DM 圖片或貼上文字', 'error');
+        return;
+      }
+      els.submit.disabled = true;
+      setProgress(12, '準備送出');
+      try {
+        setProgress(42, 'AI OCR 與文字抽取中');
+        const result = await fetchJson(`${WORKER_URL}/api/promo-dm/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            title: els.title.value,
+            source: els.source.value,
+            markdown,
+            images: imageDataUrls,
+            filename: els.source.value || els.title.value || 'promotion-dm',
+          }),
+        });
+        setProgress(100, '已存入知識庫');
+        const doc = result.data?.document || {};
+        const entry = Array.isArray(doc.entries) ? doc.entries[0] || {} : {};
+        els.resultTitle.textContent = doc.title || '已存入宣傳 DM 知識庫';
+        els.resultPath.textContent = result.data?.path || '';
+        els.resultSummary.textContent = entry.answer || doc.usage || '';
+        els.resultReply.textContent = entry.reply_template || '';
+        els.resultKeywords.innerHTML = '';
+        (entry.keywords || []).forEach(keyword => {
+          const pill = document.createElement('span');
+          pill.className = 'rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700';
+          pill.textContent = keyword;
+          els.resultKeywords.appendChild(pill);
+        });
+        els.resultBox.hidden = false;
+        showToast('宣傳 DM 已存入知識庫');
+      } catch (err) {
+        showToast(err.message || '宣傳 DM 存檔失敗', 'error');
+      } finally {
+        els.submit.disabled = !canUse;
+      }
+    });
+
+    initAuth().catch(err => {
+      els.authBadge.textContent = '登入失敗';
+      els.authBadge.className = 'rounded-full bg-rose-50 px-4 py-2 text-sm font-black text-rose-700';
+      els.submit.disabled = true;
+      showToast(err.message || '初始化失敗', 'error');
+    });
+  </script>
+</body>
+</html>

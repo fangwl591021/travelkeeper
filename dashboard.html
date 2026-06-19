@@ -496,7 +496,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-2xl text-center font-black cursor-pointer hover:opacity-90 transition flex items-center justify-center gap-2">
           {aiProgress
             ? <><span className="spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span>AI 解析中...</>
-            : '🤖 AI 解析 DM'}
+            : '🤖 AI 上稿：詳細拆分擴增行程'}
         </div>
         <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleAIUpload} className="hidden" />
       </label>
@@ -514,7 +514,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
           </div>
         </div>
       )}
-      <p className="text-xs text-center text-slate-400 font-medium -mt-3">支援 JPG、PNG、PDF，PDF 會自動轉成頁面圖片交給 AI 解析</p>
+      <p className="text-xs text-center text-slate-400 font-medium -mt-3">正式行程上稿用：AI 會拆天數、擴寫每日段落並補正行程圖片。宣傳推播 DM 請改用「宣傳DM」專區。</p>
 
       {aiDraft && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
@@ -1450,6 +1450,8 @@ function buildMenu({ isAdmin, canUpload, badges }) {
       href:'rich-menu-manager.html' },
     { id:'knowledge-base', icon:'\u{1F4DA}', label:'\u77E5\u8B58\u5EAB', show: isAdmin,
       href:'knowledge-base.html' },
+    { id:'promo-dm', icon:'\u{1F4E3}', label:'\u5BA3\u50B3DM', show: isAdmin || canUpload,
+      href:'promo-dm.html' },
     { id:'internal-ops', icon:'\u{1F3E2}', label:'\u5167\u90E8\u71DF\u904B', show: isAdmin,
       href:'internal-ops.html' },
     { id:'system-settings', icon:'⚙️', label:'系統參數', show: isAdmin },

@@ -5518,6 +5518,146 @@ async function setKnowledgeFileStatus(env, path, status = 'published') {
   return { success: true, data: { file: files[index], manifest: nextManifest } };
 }
 
+function safeKnowledgeSlug(value = '') {
+  const ascii = String(value || '')
+    .normalize('NFKD')
+    .replace(/[^\w\s-]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+  return ascii.slice(0, 64) || `dm-${Date.now()}`;
+}
+
+function normalizePromoDmKeywords(values = []) {
+  const seen = new Set();
+  return values
+    .flatMap(value => String(value || '').split(/[,\n、，;；\s]+/))
+    .map(value => value.trim())
+    .filter(value => value.length >= 2)
+    .filter(value => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 30);
+}
+
+async function buildPromoDmKnowledgeDocument(env, body = {}) {
+  if (!env.OPENAI_API_KEY) return { success: false, error: 'OPENAI_KEY_MISSING' };
+  const markdownText = String(body.markdown || body.text || '').trim().slice(0, 40000);
+  const imageInputs = [
+    ...(Array.isArray(body.images) ? body.images : []),
+    ...(body.image ? [body.image] : []),
+  ].filter(Boolean).slice(0, 6);
+  if (!markdownText && !imageInputs.length) return { success: false, error: 'MISSING_PROMO_DM_CONTENT' };
+
+  const sourceIntro = markdownText
+    ? `以下是宣傳 DM 或推播素材轉出的文字/Markdown，請抽取可供 LINE 客服查詢的資訊。\n\n${markdownText}`
+    : '請 OCR 並分析這張宣傳 DM 圖片，抽取可供 LINE 客服查詢的資訊。';
+
+  const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      response_format: { type: 'json_object' },
+      temperature: 0.2,
+      max_tokens: 2500,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: `你是旅行社 LINE OA 客服知識庫整理員。這不是正式行程上稿，而是店家推播用的宣傳 DM。請把 DM 文字 OCR/抽取並整理成 JSON，供 AI 客服之後回答客戶詢問。
+
+只回傳 JSON：
+{
+  "title": "DM 主標題或行程名稱",
+  "destination": "主要目的地或地區",
+  "days": 0,
+  "price": 0,
+  "departure": "出發地或出發資訊",
+  "validity": "活動期間或出發日期",
+  "ocr_text": "完整抽取文字，保留重要價格、天數、電話、限制與備註",
+  "summary": "100-180 字客服可讀摘要",
+  "keywords": ["客戶可能會問的關鍵字"],
+  "reply_template": "客戶詢問這張 DM 或相關行程時，客服可直接使用的回覆。不能說已報名成功，只能說可協助確認日期、名額、價格與報名方式。"
+}
+
+規則：
+1. 不要建立正式行程，不要自行補不存在的日期、價格或名額。
+2. keywords 必須包含 DM 上明確可見的目的地、行程名、俗稱、價格、天數、出發地。
+3. reply_template 要能讓 LINE 監控台直接建議給客服使用。
+4. 如果圖片文字不清楚，ocr_text 仍要保留可辨識內容，summary 要註明需人工核對。
+
+${sourceIntro}` },
+          ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } })),
+        ],
+      }],
+    }),
+  });
+  const aiData = await aiRes.json();
+  if (!aiRes.ok || aiData.error) {
+    return { success: false, error: aiData?.error?.message || `OPENAI_${aiRes.status}` };
+  }
+  const raw = String(aiData?.choices?.[0]?.message?.content || '').replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { success: false, error: 'PROMO_DM_PARSE_FAILED' };
+  let parsed;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch (err) {
+    return { success: false, error: 'PROMO_DM_JSON_INVALID', detail: err.message };
+  }
+
+  const now = new Date().toISOString();
+  const title = String(parsed.title || body.title || '宣傳 DM').trim().slice(0, 120);
+  const keywords = normalizePromoDmKeywords([
+    ...(Array.isArray(parsed.keywords) ? parsed.keywords : []),
+    parsed.title,
+    parsed.destination,
+    parsed.departure,
+    parsed.validity,
+    parsed.price ? String(parsed.price) : '',
+    parsed.days ? `${parsed.days}天` : '',
+  ]);
+  const answer = [
+    String(parsed.summary || '').trim(),
+    String(parsed.ocr_text || '').trim() ? `DM 文字重點：${String(parsed.ocr_text).trim()}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 4000);
+  const doc = {
+    id: `promo_dm_${Date.now()}`,
+    title,
+    source: String(body.source || body.filename || 'LINE OA 宣傳 DM').slice(0, 160),
+    source_url: '',
+    version: now.slice(0, 10),
+    status: 'published',
+    category: 'promotion_dm',
+    usage: '店家推播宣傳 DM。供 LINE OA 監控台、AI 客服與知識庫比對客戶詢問使用；不是正式上架行程。',
+    created_at: now,
+    entries: [{
+      id: `promo_dm_${Date.now()}_main`,
+      title,
+      keywords,
+      tags: ['宣傳DM', '推播', '行程詢問', String(parsed.destination || '').trim()].filter(Boolean),
+      answer,
+      reply_template: String(parsed.reply_template || '').trim() || `您好，您詢問的「${title}」可以協助確認。請問您預計幾位、希望哪一天出發，以及是否需要我們幫您確認目前名額與報名方式？`,
+      metadata: {
+        destination: parsed.destination || '',
+        days: parsed.days || 0,
+        price: parsed.price || 0,
+        departure: parsed.departure || '',
+        validity: parsed.validity || '',
+        ocr_text: parsed.ocr_text || '',
+      },
+    }],
+  };
+  const path = `knowledge/promo-dm/${now.slice(0, 10)}-${safeKnowledgeSlug(title)}.json`;
+  const saved = await putKnowledgeDocument(env, path, doc);
+  if (!saved.success) return saved;
+  return { success: true, data: { path, document: doc, file: saved.data?.file } };
+}
+
 async function d1UpsertLineVisitorRequirement(env, body = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
@@ -8835,6 +8975,20 @@ ${sourceIntro}` },
         }
 
         return json({ success: true, data: parsed });
+      }
+
+      if (path === '/api/promo-dm/upload' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.uid || url.searchParams.get('uid') || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'AI_UPLOAD_AUTH_REQUIRED' }, 403);
+        const userStatus = env.DB
+          ? await d1CheckUserStatus(env, operatorUid).catch(() => null)
+          : { data: { isAdmin: await isAdminUid(env, operatorUid), canUpload: await isAdminUid(env, operatorUid) } };
+        if (!userStatus?.data?.isAdmin && !userStatus?.data?.canUpload) {
+          return json({ success: false, error: 'AI_UPLOAD_PERMISSION_DENIED' }, 403);
+        }
+        const result = await buildPromoDmKnowledgeDocument(env, { ...body, uid: operatorUid });
+        return json(result, result.success ? 200 : 400);
       }
 
       // ??????????????????????????????????????????????????????????

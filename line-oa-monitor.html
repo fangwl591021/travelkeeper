@@ -644,6 +644,7 @@
     const replyFlexAltEl = document.getElementById('reply-flex-alt');
 
     let publishedItineraries = [];
+    let promoKnowledgeEntries = [];
     let replyToolMode = '';
     let replyContentMode = 'text';
     let aiReplyGlobalEnabled = false;
@@ -1207,6 +1208,32 @@
       return tags;
     }
 
+    function scorePromoKnowledgeEntry(entry = {}, text = '') {
+      const haystack = normalizeText(text);
+      if (!haystack) return 0;
+      let score = 0;
+      const title = normalizeText(entry.title || '');
+      if (title && haystack.includes(title)) score += 8;
+      [...(entry.keywords || []), ...(entry.tags || [])].forEach(term => {
+        const value = normalizeText(term);
+        if (value && haystack.includes(value)) score += 3;
+      });
+      const meta = entry.metadata || {};
+      [meta.destination, meta.departure, meta.validity].forEach(term => {
+        const value = normalizeText(term);
+        if (value && haystack.includes(value)) score += 2;
+      });
+      return score;
+    }
+
+    function findPromotionDmMatches(text = '', limit = 2) {
+      return promoKnowledgeEntries
+        .map(entry => ({ ...entry, score: scorePromoKnowledgeEntry(entry, text) }))
+        .filter(entry => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    }
+
     function buildSuggestions(thread) {
       const haystack = threadText(thread);
       const customerText = customerThreadText(thread) || haystack;
@@ -1215,6 +1242,10 @@
       const suggestions = [];
       const travelIntent = hasTravelIntent(contextText);
       const documentIntent = hasDocumentIntent(contextText) || hasImageUpload(thread);
+      findPromotionDmMatches(contextText, 2).forEach(match => {
+        const text = String(match.reply_template || match.answer || '').trim();
+        if (text) suggestions.push(text);
+      });
       if (travelIntent) {
         const destination = detectItineraryDestination(contextText);
         const destinationTerm = detectItineraryDestinationTerm(contextText, destination);
@@ -1589,6 +1620,33 @@
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       return data;
+    }
+
+    async function loadPromotionKnowledgeEntries() {
+      try {
+        const manifest = await fetchJson(`${WORKER_URL}/api/knowledge/manifest`);
+        const files = (manifest.data?.files || [])
+          .filter(file => (file.status || 'published') === 'published')
+          .filter(file => file.category === 'promotion_dm' || String(file.path || '').includes('/promo-dm/'));
+        const docs = await Promise.all(files.slice(0, 40).map(file =>
+          fetchJson(`${WORKER_URL}/api/knowledge/file?path=${encodeURIComponent(file.path || '')}`)
+            .then(payload => ({ file, doc: payload.data }))
+            .catch(() => null)
+        ));
+        promoKnowledgeEntries = docs
+          .filter(Boolean)
+          .flatMap(({ file, doc }) => (doc.entries || []).map(entry => ({
+            ...entry,
+            documentTitle: doc.title || file.title || '',
+            category: entry.category || doc.category || file.category || '',
+            source: entry.source || doc.source || file.source || '',
+          })));
+        const active = getActiveThread();
+        if (active) renderSuggestions(active);
+      } catch (err) {
+        promoKnowledgeEntries = [];
+        console.warn('promotion DM knowledge load failed:', err?.message || err);
+      }
     }
 
     async function loadAiReplyStatus() {
@@ -2596,6 +2654,7 @@
       await loadThreads();
       window.TravelKeeperTravelQa?.ready?.catch?.(err => console.warn('travel QA init failed:', err));
       loadPublishedItineraries().catch(err => console.warn('published itineraries background load failed:', err));
+      loadPromotionKnowledgeEntries().catch(err => console.warn('promotion DM knowledge background load failed:', err));
     }
 
     init().catch(err => {
