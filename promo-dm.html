@@ -196,7 +196,7 @@
     function renderPreview() {
       els.preview.innerHTML = '';
       imageDataUrls.forEach((item, index) => {
-        const url = typeof item === 'string' ? item : item.dataUrl;
+        const url = typeof item === 'string' ? item : (item.dataUrl || item.url);
         const box = document.createElement('div');
         box.className = 'relative overflow-hidden rounded-2xl border border-slate-200 bg-white';
         box.innerHTML = `<img src="${url}" alt="DM ${index + 1}" class="h-36 w-full object-contain bg-slate-50"><button type="button" class="remove-image absolute right-2 top-2 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-rose-600 shadow" data-index="${index}">移除</button>`;
@@ -272,13 +272,38 @@
       els.submit.disabled = true;
       setProgress(8, '準備批次處理');
       try {
-        const imageItems = imageDataUrls.map((item, index) => ({
-          name: typeof item === 'string' ? `dm-${index + 1}.jpg` : item.name,
-          dataUrl: typeof item === 'string' ? item : item.dataUrl,
-        }));
-        const jobs = imageItems.length
-          ? imageItems
+        const imageItems = imageDataUrls.map((item, index) => {
+          if (typeof item === 'string') return { name: `dm-${index + 1}.jpg`, dataUrl: item };
+          return item;
+        });
+        let jobs = imageItems.length
+          ? imageItems.filter(item => item.key)
           : [{ name: els.source.value || els.title.value || 'promotion-dm', dataUrl: '' }];
+        const pendingUploads = imageItems.filter(item => !item.key && item.dataUrl);
+        if (pendingUploads.length) {
+          setProgress(5, `建立圖片檔 ${pendingUploads.length} 張`);
+          const uploaded = await fetchJson(`${WORKER_URL}/api/promo-dm/images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              uid: profile.userId,
+              images: pendingUploads.map(item => ({ name: item.name, dataUrl: item.dataUrl })),
+            }),
+          });
+          const files = uploaded.data?.files || [];
+          files.forEach((file, index) => {
+            pendingUploads[index].key = file.key;
+            pendingUploads[index].url = file.url;
+            pendingUploads[index].dataUrl = '';
+          });
+          const uploadErrors = uploaded.data?.errors || [];
+          if (uploadErrors.length) {
+            showToast(`圖片建檔失敗 ${uploadErrors.length} 張，已略過`, 'error');
+          }
+          jobs = imageItems.filter(item => item.key);
+          if (!jobs.length) throw new Error('圖片建檔失敗，請重試或減少批次數量');
+          renderPreview();
+        }
         const savedResults = [];
         const failedResults = [];
         for (let index = 0; index < jobs.length; index += 1) {
@@ -296,6 +321,7 @@
                 expiresAt: els.expiresAt.value,
                 markdown: imageItems.length ? '' : markdown,
                 images: job.dataUrl ? [job.dataUrl] : [],
+                imageKeys: job.key ? [job.key] : [],
                 filename: job.name || els.source.value || els.title.value || 'promotion-dm',
               }),
             });

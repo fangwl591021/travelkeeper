@@ -5852,29 +5852,40 @@ function isKnowledgeDocExpired(doc = {}, now = new Date()) {
 async function buildPromoDmKnowledgeDocument(env, body = {}) {
   if (!env.OPENAI_API_KEY) return { success: false, error: 'OPENAI_KEY_MISSING' };
   const markdownText = String(body.markdown || body.text || '').trim().slice(0, 40000);
-  const imageInputs = [
+  const rawImageInputs = [
     ...(Array.isArray(body.images) ? body.images : []),
     ...(body.image ? [body.image] : []),
   ].filter(Boolean).slice(0, 6);
-  if (!markdownText && !imageInputs.length) return { success: false, error: 'MISSING_PROMO_DM_CONTENT' };
+  const imageKeys = [
+    ...(Array.isArray(body.imageKeys) ? body.imageKeys : []),
+    ...(body.imageKey ? [body.imageKey] : []),
+  ].filter(Boolean).slice(0, 6);
+  if (!markdownText && !rawImageInputs.length && !imageKeys.length) return { success: false, error: 'MISSING_PROMO_DM_CONTENT' };
 
   const now = new Date().toISOString();
   const uploadedImageUrls = [];
-  for (let index = 0; index < imageInputs.length; index += 1) {
-    const source = String(imageInputs[index] || '');
-    if (/^data:image\//i.test(source)) {
-      const extMatch = source.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,/);
-      const ext = String(extMatch?.[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'jpg';
-      const titlePart = safeKnowledgeSlug(body.title || body.filename || 'promotion-dm');
-      const url = await uploadDataUrlToR2(source, `promo-dm/images/${now.slice(0, 10)}/${Date.now()}-${index + 1}-${titlePart}.${ext}`, env);
-      if (url) uploadedImageUrls.push(url);
-    } else if (/^https?:\/\//i.test(source)) {
-      uploadedImageUrls.push(source);
+  const aiImageInputs = [];
+
+  for (const key of imageKeys) {
+    const cleanKey = String(key || '').trim().replace(/^\/+/, '');
+    const dataUrl = await readPromoDmImageDataUrl(env, cleanKey);
+    if (dataUrl) {
+      aiImageInputs.push(dataUrl);
+      uploadedImageUrls.push(`${R2_PUBLIC}/${cleanKey}`);
     }
   }
-  // Keep OCR on the original upload payload. R2 URLs are persisted for audit/display only; OpenAI can reject fetching some public storage URLs by region.
-  const aiImageInputs = imageInputs;
 
+  for (let index = 0; index < rawImageInputs.length; index += 1) {
+    const source = String(rawImageInputs[index] || '');
+    if (/^data:image\//i.test(source)) {
+      const savedImage = await uploadPromoDmImageToR2(env, source, body.filename || body.title || 'promotion-dm', now, index + 1);
+      if (savedImage.success) uploadedImageUrls.push(savedImage.data.url);
+      aiImageInputs.push(source);
+    } else if (/^https?:\/\//i.test(source)) {
+      uploadedImageUrls.push(source);
+      aiImageInputs.push(source);
+    }
+  }
   const sourceIntro = markdownText
     ? `以下是宣傳 DM 或推播素材轉出的文字/Markdown，請抽取可供 LINE 客服查詢的資訊。\n\n${markdownText}`
     : '請 OCR 並分析這張宣傳 DM 圖片，抽取可供 LINE 客服查詢的資訊。';
@@ -9502,6 +9513,34 @@ ${sourceIntro}` },
         return json({ success: true, data: parsed });
       }
 
+      if (path === '/api/promo-dm/images' && request.method === 'POST') {
+        const body = await request.json();
+        const operatorUid = String(body.uid || url.searchParams.get('uid') || '').trim();
+        if (!operatorUid) return json({ success: false, error: 'AI_UPLOAD_AUTH_REQUIRED' }, 403);
+        const userStatus = env.DB
+          ? await d1CheckUserStatus(env, operatorUid).catch(() => null)
+          : { data: { isAdmin: await isAdminUid(env, operatorUid), canUpload: await isAdminUid(env, operatorUid) } };
+        if (!userStatus?.data?.isAdmin && !userStatus?.data?.canUpload) {
+          return json({ success: false, error: 'AI_UPLOAD_PERMISSION_DENIED' }, 403);
+        }
+        const images = Array.isArray(body.images) ? body.images.slice(0, 50) : [];
+        const now = new Date().toISOString();
+        const files = [];
+        const errors = [];
+        for (let index = 0; index < images.length; index += 1) {
+          const item = images[index] || {};
+          const dataUrl = typeof item === 'string' ? item : item.dataUrl;
+          const filename = typeof item === 'string' ? `promotion-dm-${index + 1}.jpg` : (item.name || `promotion-dm-${index + 1}.jpg`);
+          try {
+            const saved = await uploadPromoDmImageToR2(env, dataUrl, filename, now, index + 1);
+            if (saved.success) files.push(saved.data);
+            else errors.push({ filename, error: saved.error || 'UPLOAD_FAILED' });
+          } catch (err) {
+            errors.push({ filename, error: err.message || 'UPLOAD_FAILED' });
+          }
+        }
+        return json({ success: errors.length === 0 || files.length > 0, data: { files, errors } }, files.length ? 200 : 400);
+      }
       if (path === '/api/promo-dm/upload' && request.method === 'POST') {
         const body = await request.json();
         const operatorUid = String(body.uid || url.searchParams.get('uid') || '').trim();
@@ -10254,7 +10293,38 @@ async function uploadDataUrlToR2(dataUrl, filename, env) {
     return '';
   }
 }
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
+async function uploadPromoDmImageToR2(env, dataUrl, filename = 'promotion-dm.jpg', now = new Date().toISOString(), index = 1) {
+  if (!env.TRAVEL) return { success: false, error: 'R2_BINDING_MISSING' };
+  const match = String(dataUrl || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) return { success: false, error: 'INVALID_IMAGE_DATA' };
+  const contentType = match[1] || 'image/jpeg';
+  const ext = String(contentType.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'jpg';
+  const namePart = safeKnowledgeSlug(filename || 'promotion-dm');
+  const key = `promo-dm/images/${now.slice(0, 10)}/${Date.now()}-${index}-${namePart}.${ext}`;
+  const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+  await env.TRAVEL.put(key, bytes, { httpMetadata: { contentType } });
+  return { success: true, data: { key, url: `${R2_PUBLIC}/${key}`, filename, contentType, size: bytes.byteLength } };
+}
+
+async function readPromoDmImageDataUrl(env, key) {
+  if (!env.TRAVEL) return '';
+  const cleanKey = String(key || '').trim().replace(/^\/+/, '');
+  if (!cleanKey.startsWith('promo-dm/images/') || cleanKey.includes('..') || cleanKey.includes('\\')) return '';
+  const object = await env.TRAVEL.get(cleanKey);
+  if (!object) return '';
+  const contentType = object.httpMetadata?.contentType || 'image/jpeg';
+  const buffer = await object.arrayBuffer();
+  return `data:${contentType};base64,${arrayBufferToBase64(buffer)}`;
+}
 function isGeneratedPlaceholderImageUrl(url) {
   return /(?:placehold\.co|placeholder\.com|via\.placeholder|loremflickr\.com)/i.test(String(url || ''));
 }
