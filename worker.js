@@ -3565,12 +3565,20 @@ function safeOutboundAssetName(value = '') {
   return cleaned || 'asset';
 }
 
+function normalizeOutboundImageFilename(filename = '', contentType = '') {
+  const base = safeOutboundAssetName(filename || `line-asset-${Date.now()}`)
+    .replace(/\.(png|jpe?g|webp|gif|bmp|heic)$/i, '');
+  if (/png/i.test(contentType)) return `${base}.png`;
+  return `${base}.jpg`;
+}
+
 async function uploadLineOaAsset(env, body = {}) {
   if (!env.TRAVEL) return { success: false, error: 'R2_BINDING_MISSING' };
   const decoded = decodeBase64DataUrl(body.base64 || body.dataUrl || body.file || '');
   if (!decoded?.bytes?.length) return { success: false, error: 'MISSING_FILE' };
-  const filename = safeOutboundAssetName(body.filename || `line-asset-${Date.now()}`);
-  const contentType = String(body.contentType || decoded.contentType || 'application/octet-stream').trim();
+  const contentType = String(body.contentType || decoded.contentType || 'image/jpeg').trim();
+  if (!/^image\/(png|jpe?g)$/i.test(contentType)) return { success: false, error: 'UNSUPPORTED_IMAGE_TYPE' };
+  const filename = normalizeOutboundImageFilename(body.filename || `line-asset-${Date.now()}`, contentType);
   const key = `line-oa/outbound/${Date.now()}_${filename}`;
   await env.TRAVEL.put(key, decoded.bytes, { httpMetadata: { contentType } });
   return {
@@ -5449,32 +5457,34 @@ async function d1SendLineBroadcast(env, body = {}) {
   if (!title) return { success: false, error: 'MISSING_TITLE' };
   if (!messages.length) return { success: false, error: 'MISSING_MESSAGES' };
 
-  let recipients = [];
-  if (testMode) {
-    recipients = [{ id: `admin:${uid}`, display_name: '測試管理員', source_user_id: uid, source_group_id: '' }];
-  } else {
-    const targetThreadIds = [...new Set((Array.isArray(body.targetThreadIds) ? body.targetThreadIds : [])
-      .map(id => String(id || '').trim())
-      .filter(Boolean))].slice(0, 100);
-    if (!targetThreadIds.length) return { success: false, error: 'MISSING_TARGETS' };
-    const placeholders = targetThreadIds.map(() => '?').join(',');
-    const { results } = await env.DB.prepare(`
-      SELECT id, display_name, source_user_id, source_group_id
-      FROM line_threads
-      WHERE id IN (${placeholders})
-    `).bind(...targetThreadIds).all();
-    const found = new Set((results || []).map(row => row.id));
-    const missing = targetThreadIds.filter(id => !found.has(id));
-    if (missing.length) return { success: false, error: 'THREAD_NOT_FOUND', missing };
-    recipients = results || [];
+  const targetLimit = testMode ? 1 : 100;
+  const targetThreadIds = [...new Set((Array.isArray(body.targetThreadIds) ? body.targetThreadIds : [])
+    .map(id => String(id || '').trim())
+    .filter(Boolean))].slice(0, targetLimit);
+  if (!targetThreadIds.length) {
+    return {
+      success: false,
+      error: testMode ? 'MISSING_TEST_TARGET' : 'MISSING_TARGETS',
+      detail: testMode ? '測試推播請先勾選一個 LINE 聊天室作為測試收件人。' : '請先勾選推播受眾。',
+    };
   }
+  const placeholders = targetThreadIds.map(() => '?').join(',');
+  const { results } = await env.DB.prepare(`
+    SELECT id, display_name, source_user_id, source_group_id
+    FROM line_threads
+    WHERE id IN (${placeholders})
+  `).bind(...targetThreadIds).all();
+  const found = new Set((results || []).map(row => row.id));
+  const missing = targetThreadIds.filter(id => !found.has(id));
+  if (missing.length) return { success: false, error: 'THREAD_NOT_FOUND', missing };
+  let recipients = results || [];
 
   const outboundMessages = testMode ? markLineBroadcastMessagesAsTest(messages, title) : messages;
   const errors = [];
   let sent = 0;
   const now = new Date().toISOString();
   for (const thread of recipients) {
-    const target = testMode ? { type: 'user', to: uid } : resolveLinePushTarget(thread);
+    const target = resolveLinePushTarget(thread);
     if (!target?.to) {
       errors.push(`${thread.display_name || thread.id}: LINE target not found`);
       continue;

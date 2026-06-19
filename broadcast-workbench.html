@@ -99,7 +99,7 @@
             </div>
             <div class="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
               <button id="reload-data" class="btn-soft" type="button">重新整理</button>
-              <button id="send-test" class="btn-soft text-indigo-700 bg-indigo-50 border-indigo-100" type="button">測試送給自己</button>
+              <button id="send-test" class="btn-soft text-indigo-700 bg-indigo-50 border-indigo-100" type="button">測試送給勾選對象</button>
               <button id="start-broadcast" class="btn-primary" type="button">開始分批推播</button>
             </div>
             <div id="progress-box" class="hidden rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900"></div>
@@ -137,7 +137,7 @@
         <section class="card overflow-hidden">
           <div class="border-b border-slate-100 px-5 py-4">
             <h2 class="text-xl font-black">送出前檢查</h2>
-            <p class="text-sm text-slate-500 font-bold mt-1">此頁不會自動選取全體名單，必須人工勾選。</p>
+            <p class="text-sm text-slate-500 font-bold mt-1">此頁不會自動選取全體名單；測試推播會送給已勾選的第一個聊天室。</p>
           </div>
           <div class="p-5 grid grid-cols-2 gap-3">
             <div class="rounded-lg bg-slate-50 p-4">
@@ -395,6 +395,8 @@
       if (!title) throw new Error('請輸入推播名稱');
       await ensureSelectedImageUploaded();
       const messages = buildMessages();
+      const testTarget = [...selectedIds][0];
+      if (!testTarget) throw new Error('請先勾選一個聊天室作為測試收件人');
       const data = await fetchJson(`${WORKER_URL}/api/line-oa/broadcast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -403,6 +405,7 @@
           operatorName: profile.displayName || '',
           title,
           messages,
+          targetThreadIds: [testTarget],
           testMode: true,
           batchSize: Number($('batch-size').value || 20),
           batchDelaySeconds: Number($('batch-delay').value || 0),
