@@ -1159,6 +1159,10 @@
       return DOCUMENT_UPLOAD_KEYWORDS.some(keyword => String(text || '').includes(keyword));
     }
 
+    function hasTravelIntent(text) {
+      return /(\u65e5\u672c|\u6eab\u6cc9|\u8cde\u96ea|\u8cde\u6953|\u8cde\u696d|\u4e5d\u5dde|\u5317\u6d77\u9053|\u6771\u4eac|\u95dc\u897f|\u5927\u962a|\u4eac\u90fd|\u6c96\u7e69|\u5bb6\u65cf|\u89aa\u5b50|\u884c\u7a0b|\u65c5\u904a|\u51fa\u767c|\u5e7e\u5929|\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528)/.test(String(text || ''));
+    }
+
     function buildDocumentServiceSuggestion(thread) {
       const haystack = threadText(thread);
       const documentIntent = hasDocumentIntent(haystack);
@@ -1188,22 +1192,28 @@
     function buildSuggestions(thread) {
       const haystack = threadText(thread);
       const suggestions = [];
+      const travelIntent = hasTravelIntent(haystack);
+      const documentIntent = hasDocumentIntent(haystack) || hasImageUpload(thread);
+      if (travelIntent) {
+        suggestions.push('您好，日本行程可以協助您整理。請問您預計幾位出發、想安排幾天、出發月份或日期區間，以及大概預算？我可以依照條件先幫您挑幾個適合的日本行程方向。');
+        suggestions.push('可以的，我先幫您往日本行程方向整理。若您有偏好的地區，例如東京、關西、九州、北海道或沖繩，也可以一起告訴我；沒有指定的話，我會先用天數、預算與出發地幫您篩選。');
+      }
       const documentSuggestion = buildDocumentServiceSuggestion(thread);
-      if (documentSuggestion) {
+      if (documentSuggestion && (!travelIntent || hasDocumentIntent(haystack))) {
         suggestions.push(documentSuggestion);
       }
       const travelQaSuggestion = window.TravelKeeperTravelQa?.buildSuggestion?.(haystack);
-      if (travelQaSuggestion) {
+      if (travelQaSuggestion && !travelIntent) {
         suggestions.push(travelQaSuggestion);
       }
-      if (/(\u65e5\u672c|\u6eab\u6cc9|\u8cde\u96ea|\u8cde\u696d|\u4e5d\u5dde|\u5bb6\u65cf|\u89aa\u5b50)/.test(haystack)) {
-        suggestions.push('\u60a8\u597d\uff0c\u82e5\u60a8\u60f3\u53c3\u8003\u65e5\u672c\u3001\u6eab\u6cc9\u6216\u89aa\u5b50\u65c5\u904a\u65b9\u5411\uff0c\u6211\u5011\u9019\u908a\u6709\u5e7e\u652f\u9069\u5408\u7684\u884c\u7a0b\u53ef\u4ee5\u63d0\u4f9b\u60a8\u53c3\u8003\uff0c\u6211\u518d\u5e6b\u60a8\u6574\u7406\u6210\u6bd4\u8f03\u61f6\u4eba\u597d\u6311\u9078\u7684\u9078\u9805\u3002');
-      }
-      if (/(\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528|\u5929\u6578|\u884c\u7a0b|\u5167\u5bb9)/.test(haystack)) {
+      if (!travelIntent && /(\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528|\u5929\u6578|\u884c\u7a0b|\u5167\u5bb9)/.test(haystack)) {
         suggestions.push('\u53ef\u4ee5\u7684\uff0c\u8acb\u554f\u60a8\u6bd4\u8f03\u504f\u597d\u7684\u9810\u7b97\u5340\u9593\u3001\u60f3\u8981\u5e7e\u5929\u7684\u884c\u7a0b\uff0c\u4ee5\u53ca\u60f3\u53bb\u7684\u5730\u5340\uff1f\u6211\u53ef\u4ee5\u4f9d\u7167\u60a8\u7684\u689d\u4ef6\u5e6b\u60a8\u6311\u5e7e\u500b\u6bd4\u8f03\u9069\u5408\u7684\u9078\u64c7\u3002');
       }
       if (NEGATIVE_KEYWORDS.some(k => haystack.includes(k)) || URGENT_KEYWORDS.some(k => haystack.includes(k))) {
         suggestions.push('\u4e0d\u597d\u610f\u601d\u8b93\u60a8\u7b49\u5019\u4e86\uff0c\u6211\u9019\u908a\u5df2\u7d93\u5e6b\u60a8\u8a18\u4e0b\u554f\u984c\uff0c\u6703\u76e1\u5feb\u78ba\u8a8d\u5f8c\u518d\u56de\u8986\u60a8\uff0c\u4e5f\u8b1d\u8b1d\u60a8\u7684\u63d0\u9192\u3002');
+      }
+      if (!travelIntent && !documentIntent && suggestions.length < 2) {
+        suggestions.push('您好，請問您目前想了解的是行程推薦、報名付款、證件辦理，還是訂單協助？我可以依照您的需求接著幫您確認。');
       }
       if (!suggestions.length) {
         suggestions.push('\u60a8\u597d\uff0c\u611f\u8b1d\u60a8\u4f86\u8a0a\uff01\u8acb\u554f\u60a8\u60f3\u77ad\u89e3\u54ea\u500b\u65b9\u5411\u7684\u884c\u7a0b\u5462\uff1f\u4f8b\u5982\u60f3\u53bb\u7684\u5730\u5340\u3001\u5927\u6982\u9810\u7b97\u3001\u51fa\u767c\u65e5\u671f\u6216\u51fa\u904a\u4eba\u6578\uff0c\u6211\u53ef\u4ee5\u518d\u5e6b\u60a8\u6574\u7406\u5408\u9069\u7684\u5efa\u8b70\u3002');
