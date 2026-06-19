@@ -471,9 +471,13 @@ function getTaipeiDateString(date = new Date()) {
 function normalizeDateOnly(value = '') {
   const text = String(value || '').trim();
   if (!text) return '';
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const match = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (!match) return '';
-  return `${match[1]}-${match[2]}-${match[3]}`;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || !month || !day) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 async function ensureItineraryExpireAtColumn(env) {
@@ -5543,17 +5547,6 @@ function normalizePromoDmKeywords(values = []) {
       return true;
     })
     .slice(0, 30);
-}
-
-function normalizeDateOnly(value = '') {
-  const text = String(value || '').trim();
-  const match = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (!match) return '';
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (!year || !month || !day) return '';
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function extractLatestDateOnly(value = '') {
