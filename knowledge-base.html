@@ -197,6 +197,19 @@ entries 每一筆建議欄位：
       return String(value || '').toLowerCase();
     }
 
+    function folderLabel(folder = '') {
+      const key = String(folder || '').trim();
+      const labels = {
+        all: '全部知識',
+        'promo-dm': '宣傳 DM',
+        qa: '問答知識',
+        custom: '自訂知識',
+        root: '根目錄',
+        uncategorized: '未分類',
+      };
+      return labels[key] || key;
+    }
+
     function normalizeDateOnly(value = '') {
       const match = String(value || '').match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
       if (!match) return '';
@@ -274,7 +287,7 @@ entries 每一筆建議欄位：
       const folders = groupedFolders();
       folderListEl.innerHTML = '';
       const visible = visibleDocuments();
-      const rows = [['all', '全部知識', visible.length], ...[...folders.entries()].map(([folder, docs]) => [folder, folder, docs.length])];
+      const rows = [['all', '全部知識', visible.length], ...[...folders.entries()].map(([folder, docs]) => [folder, folderLabel(folder), docs.length])];
       rows.forEach(([id, label, count]) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -304,7 +317,7 @@ entries 每一筆建議欄位：
         const folder = doc.manifestItem?.folder || 'uncategorized';
         return (activeFolder === 'all' || activeFolder === folder) && docMatches(doc, keyword);
       });
-      folderTitleEl.textContent = activeFolder === 'all' ? '全部知識' : `資料夾：${activeFolder}`;
+      folderTitleEl.textContent = activeFolder === 'all' ? '全部知識' : `資料夾：${folderLabel(activeFolder)}`;
       const hiddenExpired = documents.filter(isExpiredDoc).length;
       folderSubtitleEl.textContent = `${rows.length} 個知識檔，資料來源由 ${manifestSource === 'worker' ? 'R2 知識庫' : '本機 knowledge 資料夾'} manifest 管理。${!showExpired && hiddenExpired ? `已隱藏 ${hiddenExpired} 個過期 DM。` : ''}`;
       fileListEl.innerHTML = '';
