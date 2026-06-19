@@ -2836,6 +2836,39 @@ async function getWegoPerformanceDashboard(env, query = {}) {
       AND status <> 'cancelled'
   `).first();
 
+  const trendMonths = [];
+  const base = new Date(`${month}-01T00:00:00+08:00`);
+  for (let i = 5; i >= 0; i -= 1) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    trendMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const trendBinds = trendMonths.map(() => '?').join(',');
+  const publicTrend = await env.DB.prepare(`
+    SELECT
+      substr(created_at, 1, 7) AS month,
+      COUNT(*) AS count,
+      COALESCE(SUM(total_amount), 0) AS revenue,
+      COALESCE(SUM(commission_amount), 0) AS commission
+    FROM orders
+    WHERE status <> 'cancelled'
+      AND substr(created_at, 1, 7) IN (${trendBinds})
+    GROUP BY substr(created_at, 1, 7)
+  `).bind(...trendMonths).all();
+  const internalTrend = await env.DB.prepare(`
+    SELECT
+      substr(COALESCE(NULLIF(departure_date, ''), order_date), 1, 7) AS month,
+      COUNT(*) AS count,
+      COALESCE(SUM(report_total), 0) AS revenue,
+      COALESCE(SUM(profit), 0) AS profit,
+      COALESCE(SUM(commission), 0) AS commission,
+      COALESCE(SUM(paid_amount), 0) AS paid
+    FROM internal_orders
+    WHERE deleted_at = ''
+      AND status <> 'cancelled'
+      AND substr(COALESCE(NULLIF(departure_date, ''), order_date), 1, 7) IN (${trendBinds})
+    GROUP BY substr(COALESCE(NULLIF(departure_date, ''), order_date), 1, 7)
+  `).bind(...trendMonths).all();
+
   const normalizePublic = row => ({
     count: Number(row?.count || 0),
     revenue: Number(row?.revenue || 0),
@@ -2862,6 +2895,19 @@ async function getWegoPerformanceDashboard(env, query = {}) {
   const totalPublic = normalizePublic(publicTotal);
   const monthInternal = normalizeInternal(internalMonth);
   const totalInternal = normalizeInternal(internalTotal);
+  const publicTrendMap = new Map((publicTrend.results || []).map(row => [row.month, normalizePublic(row)]));
+  const internalTrendMap = new Map((internalTrend.results || []).map(row => [row.month, normalizeInternal(row)]));
+  const trend = trendMonths.map(ym => {
+    const publicData = publicTrendMap.get(ym) || normalizePublic({});
+    const internalData = internalTrendMap.get(ym) || normalizeInternal({});
+    return {
+      month: ym,
+      label: `${Number(ym.slice(5, 7))}月`,
+      public: publicData,
+      internal: internalData,
+      combined: combine(publicData, internalData),
+    };
+  });
 
   return {
     success: true,
@@ -2878,6 +2924,7 @@ async function getWegoPerformanceDashboard(env, query = {}) {
         internal: totalInternal,
         combined: combine(totalPublic, totalInternal),
       },
+      trend,
       generatedAt: formatTaipeiDateTime(new Date()),
     },
   };
@@ -4359,23 +4406,33 @@ async function ensureLineLearningExamplesTable(env) {
   `).run();
 }
 
-function normalizeLineLearningExample(row = {}) {
+function maskLineLearningUserId(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/^U[a-f0-9]{32}$/i.test(text)) return `${text.slice(0, 6)}...${text.slice(-4)}`;
+  return maskLineLearningPrivateText(text).slice(0, 80);
+}
+
+function normalizeLineLearningExample(row = {}, options = {}) {
+  const masked = options.mask !== false;
+  const maskText = value => masked ? maskLineLearningPrivateText(value) : String(value || '');
   return {
     id: row.id || '',
     threadId: row.thread_id || '',
-    userId: row.source_user_id || '',
-    customerName: row.customer_name || '',
-    pictureUrl: row.picture_url || '',
-    customerContext: row.customer_context || '',
-    customerMessages: row.customer_messages || '',
-    guideResponses: row.guide_responses || '',
-    learnedReplyStyle: row.learned_reply_style || '',
+    userId: masked ? maskLineLearningUserId(row.source_user_id || '') : (row.source_user_id || ''),
+    customerName: masked ? maskLineLearningName(row.customer_name || '') : (row.customer_name || ''),
+    pictureUrl: masked ? '' : (row.picture_url || ''),
+    customerContext: maskText(row.customer_context || ''),
+    customerMessages: maskText(row.customer_messages || ''),
+    guideResponses: maskText(row.guide_responses || ''),
+    learnedReplyStyle: maskText(row.learned_reply_style || ''),
     intentTags: String(row.intent_tags || '').split(',').map(v => v.trim()).filter(Boolean),
-    outcome: row.outcome || '',
+    outcome: maskText(row.outcome || ''),
     status: row.status || 'active',
-    createdBy: row.created_by || '',
+    createdBy: masked ? maskLineLearningUserId(row.created_by || '') : (row.created_by || ''),
     createdAt: row.created_at || '',
     updatedAt: row.updated_at || '',
+    privacyMasked: masked,
   };
 }
 
@@ -5028,6 +5085,8 @@ async function d1SendLineOaReply(env, body = {}) {
         targetType: target.type,
         targetPreview: `${target.to.slice(0, 6)}...${target.to.slice(-6)}`,
         messageCount: messages.length,
+        messageTypes: messages.map(message => message.type || 'unknown'),
+        summaries: messages.map(summarizeLineOutboundMessage),
         hasLineToken: !!env.LINE_CHANNEL_ACCESS_TOKEN,
       },
     };

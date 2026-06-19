@@ -337,6 +337,7 @@
             <textarea id="draft-reply" rows="4" class="flex-1 min-h-[120px] rounded-3xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" placeholder="建議回覆會放在這裡，也可直接人工改寫後送出。"></textarea>
             <div class="flex flex-col gap-2">
               <button id="send-reply" class="rounded-2xl bg-emerald-500 text-white font-semibold px-5 py-3 hover:bg-emerald-600">送出</button>
+              <button id="test-reply-modes" type="button" class="rounded-2xl bg-white border border-slate-200 text-slate-700 font-semibold px-5 py-3 hover:bg-slate-50">全模式檢查</button>
               <button id="copy-reply" class="rounded-2xl bg-slate-100 text-slate-700 font-semibold px-5 py-3 hover:bg-slate-200">&#35079;&#35069;</button>
             </div>
           </div>
@@ -381,7 +382,17 @@
             </div>
             <div id="learning-plan" class="space-y-2"></div>
             <div class="mt-3 border-t border-violet-100 pt-3">
-              <button id="load-learning-list" type="button" class="w-full rounded-xl bg-white border border-violet-200 text-violet-700 px-3 py-2 text-xs font-semibold hover:bg-violet-100">查看近期學習樣本</button>
+              <div class="flex items-center gap-2">
+                <select id="learning-list-status" class="flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                  <option value="">有效樣本</option>
+                  <option value="active">可學習</option>
+                  <option value="pending_response">待客服回覆</option>
+                  <option value="archived">不可學習</option>
+                  <option value="all">全部</option>
+                </select>
+                <button id="load-learning-list" type="button" class="rounded-xl bg-white border border-violet-200 text-violet-700 px-3 py-2 text-xs font-semibold hover:bg-violet-100">查看</button>
+              </div>
+              <p class="mt-2 text-[11px] leading-5 text-violet-700">列表已套用隱私遮罩：UID、電話、Email、身分證與帳號類資料不顯示原文。</p>
               <div id="learning-list" class="mt-2 space-y-2"></div>
             </div>
           </section>
@@ -580,6 +591,7 @@
       const markLearningUsefulEl = document.getElementById('mark-learning-useful');
       const markLearningSkipEl = document.getElementById('mark-learning-skip');
       const loadLearningListEl = document.getElementById('load-learning-list');
+      const learningListStatusEl = document.getElementById('learning-list-status');
       const learningListEl = document.getElementById('learning-list');
       const replySuggestionsEl = document.getElementById('reply-suggestions');
     const threadTagsEl = document.getElementById('thread-tags');
@@ -1541,6 +1553,15 @@
       return text.length > 180 ? text.slice(0, 180) + '…' : text;
     }
 
+    function escapeHtml(value = '') {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function syncLearningReviewControls(thread) {
       const disabled = !thread || !profile?.userId;
       [markLearningUsefulEl, markLearningSkipEl].forEach(button => {
@@ -1677,38 +1698,72 @@
         const top = document.createElement('div');
         top.className = 'flex items-start justify-between gap-2';
         const title = document.createElement('div');
+        const statusLabel = {
+          active: '可學習',
+          pending_response: '待客服回覆',
+          archived: '不可學習',
+        }[item.status] || item.status || '可學習';
         title.innerHTML = `
-          <p class="text-xs font-black text-slate-800">${item.customerName || '客戶'} · ${item.status || 'active'}</p>
-          <p class="text-[11px] text-slate-400 mt-0.5">${item.updatedAt || item.createdAt || ''}</p>
+          <p class="text-xs font-black text-slate-800">${escapeHtml(item.customerName || '客戶')} · ${escapeHtml(statusLabel)}</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(item.updatedAt || item.createdAt || '')}${item.privacyMasked ? ' · 已遮罩' : ''}</p>
         `;
-        const archive = document.createElement('button');
-        archive.type = 'button';
-        archive.className = 'shrink-0 text-[11px] font-black text-slate-500 hover:text-red-600';
-        archive.textContent = '不可學習';
-        archive.addEventListener('click', () => {
+        const actions = document.createElement('div');
+        actions.className = 'flex shrink-0 gap-2';
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'text-[11px] font-black text-violet-700 hover:text-violet-900';
+        toggle.textContent = '展開';
+        const review = document.createElement('button');
+        review.type = 'button';
+        review.className = item.status === 'archived'
+          ? 'text-[11px] font-black text-emerald-700 hover:text-emerald-900'
+          : 'text-[11px] font-black text-slate-500 hover:text-red-600';
+        review.textContent = item.status === 'archived' ? '恢復' : '不可學習';
+        review.addEventListener('click', () => {
           fetchJson(`${WORKER_URL}/api/line-oa/learning/review`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid: profile.userId, threadId: item.threadId, learnable: false }),
+            body: JSON.stringify({ uid: profile.userId, threadId: item.threadId, learnable: item.status === 'archived' }),
           })
             .then(() => {
               const idx = allThreads.findIndex(thread => thread.id === item.threadId);
               if (idx >= 0) {
-                allThreads[idx] = { ...allThreads[idx], learningPlan: null, learningCount: 0, learningStatus: 'archived' };
+                allThreads[idx] = item.status === 'archived'
+                  ? { ...allThreads[idx], learningCount: 1, learningStatus: 'active' }
+                  : { ...allThreads[idx], learningPlan: null, learningCount: 0, learningStatus: 'archived' };
                 renderThreadList();
                 if (activeThreadId === item.threadId) renderActiveThread(allThreads[idx]);
               }
               return loadLearningList();
             })
-            .catch(err => showToast(err.message || '封存學習樣本失敗', 'error'));
+            .catch(err => showToast(err.message || '更新學習樣本失敗', 'error'));
         });
+        actions.appendChild(toggle);
+        actions.appendChild(review);
         top.appendChild(title);
-        top.appendChild(archive);
+        top.appendChild(actions);
         const context = document.createElement('p');
         context.className = 'mt-2 text-xs leading-5 text-slate-600 whitespace-pre-line';
         context.textContent = shortLearningText(item.customerContext || item.customerMessages, '尚無客戶摘要');
+        const details = document.createElement('div');
+        details.hidden = true;
+        details.className = 'mt-2 space-y-2 rounded-xl bg-violet-50/70 border border-violet-100 p-3 text-xs leading-5 text-slate-600';
+        const tags = Array.isArray(item.intentTags) && item.intentTags.length
+          ? item.intentTags.map(tag => `<span class="inline-flex rounded-full bg-white border border-violet-100 px-2 py-1 text-[11px] font-bold text-violet-700">${escapeHtml(tag)}</span>`).join('')
+          : '<span class="text-slate-400">尚無標籤</span>';
+        details.innerHTML = `
+          <div><b class="text-slate-900">客戶訊息</b><p class="mt-1 whitespace-pre-line">${escapeHtml(shortLearningText(item.customerMessages, '尚無客戶訊息'))}</p></div>
+          <div><b class="text-slate-900">客服回應</b><p class="mt-1 whitespace-pre-line">${escapeHtml(shortLearningText(item.guideResponses, '尚無客服回應'))}</p></div>
+          <div><b class="text-slate-900">學習重點</b><p class="mt-1 whitespace-pre-line">${escapeHtml(shortLearningText(item.learnedReplyStyle, '尚無學習重點'))}</p></div>
+          <div class="flex flex-wrap gap-1">${tags}</div>
+        `;
+        toggle.addEventListener('click', () => {
+          details.hidden = !details.hidden;
+          toggle.textContent = details.hidden ? '展開' : '收合';
+        });
         card.appendChild(top);
         card.appendChild(context);
+        card.appendChild(details);
         learningListEl.appendChild(card);
       });
     }
@@ -1718,10 +1773,16 @@
       loadLearningListEl.disabled = true;
       loadLearningListEl.classList.add('opacity-60');
       try {
+        const status = learningListStatusEl?.value || '';
         const result = await fetchJson(`${WORKER_URL}/api/line-oa/learning/list`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: profile.userId, limit: 20 }),
+          body: JSON.stringify({
+            uid: profile.userId,
+            limit: 30,
+            status: status === 'all' ? '' : status,
+            includeArchived: status === 'all' || status === 'archived',
+          }),
         });
         renderLearningList(result.data || []);
         showToast('已載入近期學習樣本');
@@ -2076,6 +2137,84 @@
       }
     }
 
+    async function testReplyModes() {
+      if (!canUseReplyComposer()) {
+        showToast('此帳戶未開放回應檢查。', 'error');
+        return;
+      }
+      const thread = getActiveThread();
+      if (!thread) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      const button = document.getElementById('test-reply-modes');
+      button.disabled = true;
+      button.classList.add('opacity-60');
+      try {
+        const messages = [
+          { type: 'text', text: 'LINE 回覆 dry-run：文字模式檢查。' },
+          {
+            type: 'image',
+            originalContentUrl: 'https://placehold.co/1024x1024/png?text=TravelKeeper',
+            previewImageUrl: 'https://placehold.co/240x240/png?text=TravelKeeper',
+          },
+          buildFileFlex({
+            filename: 'reply-mode-test.pdf',
+            url: 'https://example.com/reply-mode-test.pdf',
+            contentType: 'application/pdf',
+            size: 1024,
+          }),
+          {
+            type: 'flex',
+            altText: 'LINE 回覆 dry-run：多頁訊息檢查',
+            contents: {
+              type: 'carousel',
+              contents: [
+                {
+                  type: 'bubble',
+                  body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    contents: [
+                      { type: 'text', text: '多頁訊息 1', weight: 'bold', size: 'lg' },
+                      { type: 'text', text: 'dry-run 不會推送給客戶', size: 'sm', color: '#64748b', wrap: true },
+                    ],
+                  },
+                },
+                {
+                  type: 'bubble',
+                  body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    contents: [
+                      { type: 'text', text: '多頁訊息 2', weight: 'bold', size: 'lg' },
+                      { type: 'text', text: '用於檢查 Flex 格式', size: 'sm', color: '#64748b', wrap: true },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ];
+        validateReplyMessagesForSend(messages);
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            threadId: thread.id,
+            messages,
+            dryRun: true,
+          }),
+        });
+        const info = result.data || {};
+        showToast(`全模式 dry-run 通過：${(info.messageTypes || []).join(' / ') || info.messageCount + ' 則'}`);
+      } finally {
+        button.disabled = false;
+        button.classList.remove('opacity-60');
+      }
+    }
+
     document.querySelectorAll('.thread-filter').forEach(button => {
       button.addEventListener('click', () => {
         currentFilter = button.dataset.filter || 'all';
@@ -2105,6 +2244,9 @@
     document.getElementById('send-reply').addEventListener('click', () => {
       sendReply().catch(err => showToast(err.message || '送出失敗', 'error'));
     });
+    document.getElementById('test-reply-modes').addEventListener('click', () => {
+      testReplyModes().catch(err => showToast(err.message || '全模式檢查失敗', 'error'));
+    });
     document.getElementById('refresh-learning').addEventListener('click', () => {
       refreshLearningPlan().catch(err => showToast(err.message || '更新學習案例失敗', 'error'));
     });
@@ -2115,6 +2257,9 @@
       reviewLearningPlan(false).catch(err => showToast(err.message || '標記不可學習失敗', 'error'));
     });
     document.getElementById('load-learning-list').addEventListener('click', () => {
+      loadLearningList().catch(err => showToast(err.message || '讀取學習樣本失敗', 'error'));
+    });
+    learningListStatusEl?.addEventListener('change', () => {
       loadLearningList().catch(err => showToast(err.message || '讀取學習樣本失敗', 'error'));
     });
 

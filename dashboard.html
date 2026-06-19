@@ -1487,6 +1487,7 @@ function App() {
   const [publishedItems, setPublishedItems] = useState([]);    // ★ v8：全平台已上架（推廣用，雙角色都拉）
   const [customers,     setCustomers]     = useState([]);      // 業務
   const [shareAnalytics,setShareAnalytics]= useState(null);    // share conversion funnel
+  const [performanceDashboard, setPerformanceDashboard] = useState(null); // unified public + internal performance source
 
   // 視圖狀態
   const [view, setView] = useState('overview');
@@ -1808,16 +1809,18 @@ function App() {
     }
 
     if (targetView === 'overview') {
-      const [pendingRes, allOrdersRes, distRes, shareRes] = await Promise.all([
+      const [pendingRes, allOrdersRes, distRes, shareRes, performanceRes] = await Promise.all([
         fetchJson(`${WORKER_URL}/api/itineraries?action=getPendingReviews`, { data: [] }),
         fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] }),
         fetchJson(`${WORKER_URL}/api/itineraries?action=getDistributors`, []),
         fetchJson(`${WORKER_URL}/api/share/analytics?uid=${encodeURIComponent(userId)}`, null),
+        fetchJson(`${WORKER_URL}/api/wego/internal/performance?uid=${encodeURIComponent(userId)}`, null),
       ]);
       setPendingItems(pendingRes?.data || []);
       setOrders(allOrdersRes?.data || []);
       setDistributors(Array.isArray(distRes) ? distRes : []);
       if (shareRes?.success) setShareAnalytics(shareRes.data);
+      setPerformanceDashboard(performanceRes?.success ? performanceRes.data : null);
     }
   };
 
@@ -2529,9 +2532,16 @@ function App() {
     const allRevenue      = sumDeposit(orders) + sumBalance(orders);
     const payableCommissionTotal = sumPayableCommission(orders);
     const paidCommissionTotal = sumPaidCommission(orders);
+    const unifiedMonth = performanceDashboard?.month?.combined || null;
+    const unifiedTotal = performanceDashboard?.total?.combined || null;
+    const unifiedTrend = Array.isArray(performanceDashboard?.trend) ? performanceDashboard.trend : [];
+    const hasUnifiedPerformance = !!performanceDashboard;
+    const unifiedMonthRevenue = Number(unifiedMonth?.revenue || 0);
+    const unifiedMonthCommission = Number(unifiedMonth?.performance || 0);
+    const unifiedTotalRevenue = Number(unifiedTotal?.revenue || 0);
 
     // 近 6 個月趨勢：每月實收金額 + 應付佣金
-    const trend = [];
+    let trend = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -2545,21 +2555,30 @@ function App() {
         orderCount: monthList.length,
       });
     }
+    if (unifiedTrend.length) {
+      trend = unifiedTrend.map(row => ({
+        month: row.month,
+        label: row.label || `${Number(String(row.month || '').slice(5, 7)) || ''}月`,
+        revenue: Number(row.combined?.revenue || 0),
+        commission: Number(row.combined?.performance || 0),
+        orderCount: Number(row.combined?.count || 0),
+      }));
+    }
 
     return {
       pendingReview:   pendingItems.length,
       pendingOrders:   orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
       // 訂單金額 vs 實際收到的錢 — 兩種視角
-      monthGrossSales,    // 本月所有訂單總額（含未付）
-      monthRevenue,       // 本月「實收」金額
-      monthCommission,    // 本月應付佣金（含未到結算）
+      monthGrossSales: hasUnifiedPerformance ? unifiedMonthRevenue : monthGrossSales,    // 統一業績金額，無資料時回退前端訂單總額
+      monthRevenue: hasUnifiedPerformance ? unifiedMonthRevenue : monthRevenue,       // 本月合併業績
+      monthCommission: hasUnifiedPerformance ? unifiedMonthCommission : monthCommission,    // 本月合併佣金/業績指標
       // 全平台實收金額
-      allRevenue,
+      allRevenue: hasUnifiedPerformance ? unifiedTotalRevenue : allRevenue,
       // 佣金狀態
       payableCommissionTotal,
       paidCommissionTotal,
       // 毛利估算（實收 - 應付佣金）
-      monthGross: monthRevenue - monthOrders
+      monthGross: (hasUnifiedPerformance ? unifiedMonthRevenue : monthRevenue) - monthOrders
         .filter(o => String(o.commissionstatus||'').toLowerCase() !== 'pending')
         .reduce((s,o) => s + Number(o.commissionamount||0), 0),
       // 統計
@@ -2569,8 +2588,9 @@ function App() {
       totalItems:      myItems.length,
       // 趨勢
       trend,
+      performanceSource: performanceDashboard ? 'unified' : 'orders',
     };
-  }, [pendingItems, orders, monthOrders, distributors, myItems]);
+  }, [pendingItems, orders, monthOrders, distributors, myItems, performanceDashboard]);
 
   const shareFunnel = useMemo(() => {
     const pick = (scope, key) => Number(shareAnalytics?.[scope]?.[key] || 0);
@@ -2966,6 +2986,9 @@ function App() {
                         </button>
                       ))}
                     </div>
+                    <p className="mt-3 text-xs font-bold text-slate-500">
+                      業績資料源：{adminStats.performanceSource === 'unified' ? '統一業績 API（public orders + internal_orders）' : '前端訂單列表回退'}
+                    </p>
                   </div>
 
                   {overviewMode === 'balanced' && (
