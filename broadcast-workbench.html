@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分時推播工作台 | TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', sans-serif; background:#f3f6fa; color:#0f172a; letter-spacing:0; }
+    button, input, textarea, select { transition: border-color .16s ease, background-color .16s ease, color .16s ease, box-shadow .16s ease; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline:3px solid rgba(16,185,129,.22); outline-offset:2px; }
+    .card { border:1px solid #dbe3ee; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+    .field { width:100%; border:1px solid #dbe3ee; border-radius:8px; background:#fff; padding:12px 14px; font-weight:700; }
+    .field:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.12); }
+    .btn-primary { background:#10b981; color:#fff; border-radius:8px; font-weight:900; padding:12px 18px; }
+    .btn-primary:hover { background:#059669; }
+    .btn-dark { background:#0f172a; color:#fff; border-radius:8px; font-weight:900; padding:12px 18px; }
+    .btn-soft { background:#f1f5f9; color:#334155; border:1px solid #dbe3ee; border-radius:8px; font-weight:900; padding:12px 18px; }
+    .btn-danger { background:#fff1f2; color:#e11d48; border:1px solid #fecdd3; border-radius:8px; font-weight:900; padding:12px 18px; }
+    .badge { border-radius:999px; padding:5px 10px; font-size:12px; font-weight:900; }
+    .scrollbar::-webkit-scrollbar { width:10px; }
+    .scrollbar::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; }
+  </style>
+</head>
+<body>
+  <main class="min-h-screen p-4 lg:p-8">
+    <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <div class="text-xs font-black tracking-[.22em] text-slate-400">LINE OA BROADCAST</div>
+        <h1 class="text-3xl lg:text-4xl font-black mt-1">分時推播工作台</h1>
+        <p class="mt-2 text-slate-500 font-bold">移植 action 推播模式：先選受眾、確認內容，再分批送出 LINE OA 訊息。</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="./line-oa-monitor.html" class="btn-soft no-underline">回監控台</a>
+        <a href="./dashboard.html" class="btn-dark no-underline">回主頁</a>
+      </div>
+    </header>
+
+    <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,.9fr)] gap-5">
+      <div class="space-y-5">
+        <section class="card overflow-hidden">
+          <div class="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+            <div>
+              <h2 class="text-xl font-black">建立推播</h2>
+              <p class="text-sm text-slate-500 font-bold mt-1">文字、圖片與 Flex 訊息合計最多 5 則。</p>
+            </div>
+            <span id="auth-badge" class="badge bg-amber-50 text-amber-700">登入確認中</span>
+          </div>
+          <div class="p-5 space-y-5">
+            <div>
+              <label class="block text-sm font-black text-slate-600 mb-2">推播名稱</label>
+              <input id="campaign-title" class="field" placeholder="例如：暑假日本行程名單通知">
+            </div>
+            <div>
+              <label class="block text-sm font-black text-slate-600 mb-2">文字訊息</label>
+              <textarea id="message-text" class="field min-h-[150px] resize-y leading-relaxed" maxlength="4900" placeholder="請輸入要推播的 LINE 文字訊息"></textarea>
+              <div class="mt-1 text-right text-xs font-bold text-slate-400"><span id="message-count">0</span> / 4900</div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <label class="block text-sm font-black text-slate-600 mb-2">圖片 URL</label>
+                <input id="image-url" class="field" placeholder="https://...jpg 或 png">
+                <p class="mt-2 text-xs font-bold text-slate-500">需為公開 HTTPS 圖片。若要上傳圖片，先在監控台附件上傳取得網址。</p>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <label class="block text-sm font-black text-slate-600 mb-2">Flex JSON</label>
+                <textarea id="flex-json" class="field min-h-[120px] resize-y font-mono text-xs" placeholder='{"type":"bubble",...}'></textarea>
+                <p class="mt-2 text-xs font-bold text-slate-500">可貼 bubble/carousel contents；系統會包成 flex message。</p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-black text-emerald-800 mb-2">每批人數</label>
+                <input id="batch-size" type="number" min="1" max="100" value="20" class="field">
+              </div>
+              <div>
+                <label class="block text-sm font-black text-emerald-800 mb-2">批次間隔秒數</label>
+                <input id="batch-delay" type="number" min="0" max="3600" value="10" class="field">
+              </div>
+              <div class="flex items-end">
+                <div class="w-full rounded-lg bg-white border border-emerald-100 p-3">
+                  <div class="text-xs font-black text-emerald-700">目前訊息數</div>
+                  <div class="text-2xl font-black"><span id="line-message-total">0</span> / 5</div>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
+              <button id="reload-data" class="btn-soft" type="button">重新整理</button>
+              <button id="send-test" class="btn-soft text-indigo-700 bg-indigo-50 border-indigo-100" type="button">測試送給自己</button>
+              <button id="start-broadcast" class="btn-primary" type="button">開始分批推播</button>
+            </div>
+            <div id="progress-box" class="hidden rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900"></div>
+          </div>
+        </section>
+
+        <section class="card overflow-hidden">
+          <div class="border-b border-slate-100 px-5 py-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 class="text-xl font-black">受眾預覽</h2>
+              <p class="text-sm text-slate-500 font-bold mt-1">只會推播給已勾選的 LINE 聊天室。</p>
+            </div>
+            <div class="flex gap-2">
+              <button id="select-filtered" class="btn-soft py-2 px-3" type="button">全選篩選</button>
+              <button id="clear-selected" class="btn-danger py-2 px-3" type="button">清空</button>
+            </div>
+          </div>
+          <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 mb-4">
+              <input id="audience-search" class="field" placeholder="搜尋姓名、UID、摘要、標籤">
+              <select id="audience-status" class="field md:w-40">
+                <option value="">全部狀態</option>
+                <option value="open">待回覆</option>
+                <option value="processing">處理中</option>
+                <option value="done">已處理</option>
+              </select>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-700">已選 <span id="selected-count">0</span></div>
+            </div>
+            <div id="audience-list" class="max-h-[560px] overflow-y-auto divide-y divide-slate-100 scrollbar"></div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="space-y-5">
+        <section class="card overflow-hidden">
+          <div class="border-b border-slate-100 px-5 py-4">
+            <h2 class="text-xl font-black">送出前檢查</h2>
+            <p class="text-sm text-slate-500 font-bold mt-1">此頁不會自動選取全體名單，必須人工勾選。</p>
+          </div>
+          <div class="p-5 grid grid-cols-2 gap-3">
+            <div class="rounded-lg bg-slate-50 p-4">
+              <div class="text-xs font-black text-slate-400">聊天室數</div>
+              <div id="thread-total" class="text-2xl font-black mt-1">0</div>
+            </div>
+            <div class="rounded-lg bg-emerald-50 p-4">
+              <div class="text-xs font-black text-emerald-700">推播目標</div>
+              <div id="target-total" class="text-2xl font-black mt-1">0</div>
+            </div>
+            <div class="rounded-lg bg-indigo-50 p-4">
+              <div class="text-xs font-black text-indigo-700">預估批次</div>
+              <div id="batch-total" class="text-2xl font-black mt-1">0</div>
+            </div>
+            <div class="rounded-lg bg-amber-50 p-4">
+              <div class="text-xs font-black text-amber-700">間隔</div>
+              <div id="delay-total" class="text-2xl font-black mt-1">0 秒</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card overflow-hidden">
+          <div class="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+            <h2 class="text-xl font-black">推播紀錄</h2>
+            <button id="reload-campaigns" class="text-sm font-black text-emerald-700" type="button">更新</button>
+          </div>
+          <div id="campaign-list" class="max-h-[620px] overflow-y-auto divide-y divide-slate-100 scrollbar"></div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toast" class="fixed bottom-5 left-1/2 hidden -translate-x-1/2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg"></div>
+
+  <script>
+    const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const LIFF_ID = '2009367829-BDZCGti8';
+    let profile = null;
+    let threads = [];
+    let campaigns = [];
+    const selectedIds = new Set();
+
+    const $ = id => document.getElementById(id);
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    function showToast(message, type = 'info') {
+      const el = $('toast');
+      el.textContent = message;
+      el.className = `fixed bottom-5 left-1/2 -translate-x-1/2 rounded-lg px-5 py-3 text-sm font-bold text-white shadow-lg ${type === 'error' ? 'bg-rose-600' : 'bg-slate-900'}`;
+      el.classList.remove('hidden');
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => el.classList.add('hidden'), 2600);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const res = await fetch(url, options);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    function textOf(value) {
+      return String(value || '').trim();
+    }
+
+    function buildMessages() {
+      const messages = [];
+      const text = textOf($('message-text').value);
+      const imageUrl = textOf($('image-url').value);
+      const flexText = textOf($('flex-json').value);
+      if (text) messages.push({ type: 'text', text });
+      if (imageUrl) messages.push({ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl });
+      if (flexText) {
+        let contents;
+        try { contents = JSON.parse(flexText); }
+        catch (err) { throw new Error('Flex JSON 格式錯誤'); }
+        const flexMessage = contents.type === 'flex' && contents.contents
+          ? contents
+          : { type: 'flex', altText: textOf($('campaign-title').value) || '推播訊息', contents };
+        messages.push(flexMessage);
+      }
+      if (!messages.length) throw new Error('請至少輸入一種推播內容');
+      if (messages.length > 5) throw new Error('LINE 一次最多可推播 5 則訊息');
+      return messages;
+    }
+
+    function filteredThreads() {
+      const q = textOf($('audience-search').value).toLowerCase();
+      const status = $('audience-status').value;
+      return threads.filter(thread => {
+        if (status && thread.status !== status) return false;
+        if (!q) return true;
+        const raw = [
+          thread.name,
+          thread.userId,
+          thread.summary,
+          thread.note,
+          (thread.tags || []).join(' '),
+        ].join(' ').toLowerCase();
+        return raw.includes(q);
+      });
+    }
+
+    function renderAudience() {
+      const list = $('audience-list');
+      const rows = filteredThreads();
+      if (!rows.length) {
+        list.innerHTML = '<div class="p-10 text-center font-bold text-slate-400">目前沒有符合條件的聊天室</div>';
+      } else {
+        list.innerHTML = rows.map(thread => {
+          const checked = selectedIds.has(thread.id) ? 'checked' : '';
+          const tags = (thread.tags || []).slice(0, 4).map(tag => `<span class="badge bg-slate-100 text-slate-600">${escapeHtml(tag)}</span>`).join('');
+          return `
+            <label class="flex cursor-pointer items-center gap-3 p-4 hover:bg-slate-50">
+              <input type="checkbox" class="h-5 w-5 accent-emerald-500" data-thread-id="${escapeHtml(thread.id)}" ${checked}>
+              <img src="${escapeAttr(thread.pictureUrl || 'https://placehold.co/80x80/e2e8f0/0f172a?text=OA')}" class="h-12 w-12 rounded-full object-cover" alt="">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-base font-black">${escapeHtml(thread.name || '未命名客戶')}</span>
+                <span class="mt-1 block truncate font-mono text-xs text-slate-400">${escapeHtml(thread.userId || thread.id)}</span>
+                <span class="mt-2 flex flex-wrap gap-1">${tags}</span>
+              </span>
+              <span class="hidden max-w-[280px] truncate text-sm font-bold text-slate-500 lg:block">${escapeHtml(thread.summary || '')}</span>
+            </label>
+          `;
+        }).join('');
+      }
+      list.querySelectorAll('input[data-thread-id]').forEach(input => {
+        input.addEventListener('change', event => {
+          const id = event.target.dataset.threadId;
+          if (event.target.checked) selectedIds.add(id);
+          else selectedIds.delete(id);
+          updateStats();
+        });
+      });
+      updateStats();
+    }
+
+    function updateStats() {
+      $('message-count').textContent = $('message-text').value.length;
+      let messageTotal = 0;
+      if (textOf($('message-text').value)) messageTotal += 1;
+      if (textOf($('image-url').value)) messageTotal += 1;
+      if (textOf($('flex-json').value)) messageTotal += 1;
+      $('line-message-total').textContent = messageTotal;
+      const selected = selectedIds.size;
+      const batchSize = Math.max(1, Number($('batch-size').value || 20));
+      const delay = Math.max(0, Number($('batch-delay').value || 0));
+      $('selected-count').textContent = selected;
+      $('thread-total').textContent = threads.length;
+      $('target-total').textContent = selected;
+      $('batch-total').textContent = selected ? Math.ceil(selected / batchSize) : 0;
+      $('delay-total').textContent = `${delay} 秒`;
+    }
+
+    function renderCampaigns() {
+      const el = $('campaign-list');
+      if (!campaigns.length) {
+        el.innerHTML = '<div class="p-10 text-center font-bold text-slate-400">尚無推播紀錄</div>';
+        return;
+      }
+      el.innerHTML = campaigns.map(campaign => `
+        <article class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="truncate font-black text-slate-900">${escapeHtml(campaign.title || '未命名推播')}</div>
+              <div class="mt-1 text-xs font-mono text-slate-400">${escapeHtml(campaign.createdAt || '')}</div>
+            </div>
+            <span class="badge ${campaign.testMode ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}">${campaign.testMode ? '測試' : '正式'}</span>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-black">
+            <div class="rounded bg-slate-50 p-2">目標<br><span class="text-base">${Number(campaign.targetCount || 0)}</span></div>
+            <div class="rounded bg-emerald-50 p-2 text-emerald-700">成功<br><span class="text-base">${Number(campaign.sent || 0)}</span></div>
+            <div class="rounded bg-rose-50 p-2 text-rose-700">失敗<br><span class="text-base">${Number(campaign.failed || 0)}</span></div>
+          </div>
+          ${campaign.errors?.length ? `<div class="mt-3 rounded bg-rose-50 p-3 text-xs font-bold leading-relaxed text-rose-700">${escapeHtml(campaign.errors.slice(0, 3).join('\\n'))}</div>` : ''}
+        </article>
+      `).join('');
+    }
+
+    async function loadThreads() {
+      const data = await fetchJson(`${WORKER_URL}/api/line-oa/threads?uid=${encodeURIComponent(profile.userId)}&limit=200&offset=0`);
+      threads = Array.isArray(data.data) ? data.data : [];
+      selectedIds.clear();
+      renderAudience();
+    }
+
+    async function loadCampaigns() {
+      const data = await fetchJson(`${WORKER_URL}/api/line-oa/broadcasts?uid=${encodeURIComponent(profile.userId)}&limit=50`);
+      campaigns = Array.isArray(data.data) ? data.data : [];
+      renderCampaigns();
+    }
+
+    async function sendTest() {
+      const title = textOf($('campaign-title').value);
+      if (!title) throw new Error('請輸入推播名稱');
+      const messages = buildMessages();
+      const data = await fetchJson(`${WORKER_URL}/api/line-oa/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          operatorName: profile.displayName || '',
+          title,
+          messages,
+          testMode: true,
+          batchSize: Number($('batch-size').value || 20),
+          batchDelaySeconds: Number($('batch-delay').value || 0),
+        }),
+      });
+      campaigns.unshift(data.campaign);
+      renderCampaigns();
+      showToast('測試訊息已送出');
+    }
+
+    async function startBroadcast() {
+      const title = textOf($('campaign-title').value);
+      if (!title) throw new Error('請輸入推播名稱');
+      const messages = buildMessages();
+      const ids = [...selectedIds];
+      if (!ids.length) throw new Error('請先勾選推播受眾');
+      const batchSize = Math.max(1, Math.min(Number($('batch-size').value || 20), 100));
+      const delay = Math.max(0, Math.min(Number($('batch-delay').value || 0), 3600));
+      const batches = [];
+      for (let i = 0; i < ids.length; i += batchSize) batches.push(ids.slice(i, i + batchSize));
+      if (!confirm(`確定要推播給 ${ids.length} 個聊天室？\\n共 ${batches.length} 批，每批間隔 ${delay} 秒。\\n送出後會直接進 LINE OA。`)) return;
+
+      const progress = $('progress-box');
+      progress.classList.remove('hidden');
+      let sent = 0;
+      let failed = 0;
+      for (let index = 0; index < batches.length; index += 1) {
+        progress.textContent = `正在送出第 ${index + 1} / ${batches.length} 批...`;
+        const data = await fetchJson(`${WORKER_URL}/api/line-oa/broadcast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: profile.userId,
+            operatorName: profile.displayName || '',
+            title: batches.length > 1 ? `${title}（第 ${index + 1} 批）` : title,
+            messages,
+            targetThreadIds: batches[index],
+            testMode: false,
+            batchSize,
+            batchDelaySeconds: delay,
+          }),
+        });
+        campaigns.unshift(data.campaign);
+        sent += Number(data.campaign?.sent || 0);
+        failed += Number(data.campaign?.failed || 0);
+        renderCampaigns();
+        if (index < batches.length - 1 && delay > 0) {
+          progress.textContent = `第 ${index + 1} 批完成，等待 ${delay} 秒後送下一批...`;
+          await sleep(delay * 1000);
+        }
+      }
+      progress.textContent = `推播完成：成功 ${sent}，失敗 ${failed}`;
+      showToast('分批推播完成');
+      await loadThreads();
+    }
+
+    function escapeHtml(value = '') {
+      return String(value || '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function escapeAttr(value = '') {
+      return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+
+    async function init() {
+      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+      profile = await liff.getProfile();
+      $('auth-badge').textContent = `管理員：${profile.displayName || profile.userId}`;
+      $('auth-badge').className = 'badge bg-emerald-50 text-emerald-700';
+      await Promise.all([loadThreads(), loadCampaigns()]);
+    }
+
+    ['message-text', 'image-url', 'flex-json', 'batch-size', 'batch-delay'].forEach(id => {
+      $(id).addEventListener('input', updateStats);
+    });
+    $('audience-search').addEventListener('input', renderAudience);
+    $('audience-status').addEventListener('change', renderAudience);
+    $('select-filtered').addEventListener('click', () => {
+      filteredThreads().forEach(thread => selectedIds.add(thread.id));
+      renderAudience();
+    });
+    $('clear-selected').addEventListener('click', () => {
+      selectedIds.clear();
+      renderAudience();
+    });
+    $('reload-data').addEventListener('click', () => Promise.all([loadThreads(), loadCampaigns()]).then(() => showToast('已重新整理')).catch(err => showToast(err.message, 'error')));
+    $('reload-campaigns').addEventListener('click', () => loadCampaigns().catch(err => showToast(err.message, 'error')));
+    $('send-test').addEventListener('click', () => sendTest().catch(err => showToast(err.message, 'error')));
+    $('start-broadcast').addEventListener('click', () => startBroadcast().catch(err => showToast(err.message, 'error')));
+
+    init().catch(err => {
+      $('auth-badge').textContent = '登入或權限失敗';
+      $('auth-badge').className = 'badge bg-rose-50 text-rose-700';
+      showToast(err.message, 'error');
+    });
+  </script>
+</body>
+</html>

@@ -5357,6 +5357,206 @@ async function d1SendLineOaReply(env, body = {}) {
   };
 }
 
+async function ensureLineBroadcastCampaignsTable(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS line_broadcast_campaigns (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      message_summary TEXT,
+      message_count INTEGER DEFAULT 0,
+      target_count INTEGER DEFAULT 0,
+      sent INTEGER DEFAULT 0,
+      failed INTEGER DEFAULT 0,
+      errors_json TEXT,
+      operator_uid TEXT,
+      operator_name TEXT,
+      test_mode INTEGER DEFAULT 0,
+      batch_size INTEGER DEFAULT 0,
+      batch_delay_seconds INTEGER DEFAULT 0,
+      created_at TEXT,
+      created_ts INTEGER
+    )
+  `).run();
+}
+
+async function d1ListLineBroadcastCampaigns(env, limit = 50) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineBroadcastCampaignsTable(env);
+  const safeLimit = Math.max(1, Math.min(Number(limit || 50), 100));
+  const { results } = await env.DB.prepare(`
+    SELECT *
+    FROM line_broadcast_campaigns
+    ORDER BY created_ts DESC
+    LIMIT ?
+  `).bind(safeLimit).all();
+  return {
+    success: true,
+    data: (results || []).map(row => ({
+      id: row.id,
+      title: row.title || '',
+      messageSummary: row.message_summary || '',
+      messageCount: Number(row.message_count || 0),
+      targetCount: Number(row.target_count || 0),
+      sent: Number(row.sent || 0),
+      failed: Number(row.failed || 0),
+      errors: safeJsonParse(row.errors_json || '[]', []),
+      operatorUid: row.operator_uid || '',
+      operatorName: row.operator_name || '',
+      testMode: Number(row.test_mode || 0) === 1,
+      batchSize: Number(row.batch_size || 0),
+      batchDelaySeconds: Number(row.batch_delay_seconds || 0),
+      createdAt: row.created_at || '',
+      createdTs: Number(row.created_ts || 0),
+    })),
+  };
+}
+
+function markLineBroadcastMessagesAsTest(messages = [], title = '') {
+  const nextMessages = JSON.parse(JSON.stringify(messages || []));
+  const prefix = '【測試訊息】';
+  if (nextMessages[0]?.type === 'text') {
+    nextMessages[0].text = `${prefix}\n${nextMessages[0].text || ''}`.slice(0, 5000);
+    return nextMessages;
+  }
+  if (nextMessages[0]?.type === 'flex') {
+    nextMessages[0].altText = `${prefix}${String(nextMessages[0].altText || title || '推播訊息').slice(0, 380)}`;
+    return nextMessages;
+  }
+  if (nextMessages.length < 5) return [{ type: 'text', text: `${prefix} ${title || '推播訊息'}` }, ...nextMessages];
+  return nextMessages;
+}
+
+async function d1SendLineBroadcast(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return { success: false, error: 'LINE_CHANNEL_ACCESS_TOKEN_MISSING' };
+  await ensureLineMessageMediaColumns(env);
+  await ensureLineBroadcastCampaignsTable(env);
+
+  const uid = String(body.uid || '').trim();
+  const title = String(body.title || '').trim();
+  const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+  const text = String(body.text || body.message || '').trim();
+  const testMode = body.testMode === true;
+  const batchSize = Math.max(1, Math.min(Number(body.batchSize || 20), 100));
+  const batchDelaySeconds = Math.max(0, Math.min(Number(body.batchDelaySeconds || 0), 3600));
+  const messages = rawMessages.length ? normalizeLineOutboundMessages(rawMessages) : (text ? normalizeLineOutboundMessages([{ type: 'text', text }]) : []);
+  if (!uid) return { success: false, error: 'MISSING_UID' };
+  if (!title) return { success: false, error: 'MISSING_TITLE' };
+  if (!messages.length) return { success: false, error: 'MISSING_MESSAGES' };
+
+  let recipients = [];
+  if (testMode) {
+    recipients = [{ id: `admin:${uid}`, display_name: '測試管理員', source_user_id: uid, source_group_id: '' }];
+  } else {
+    const targetThreadIds = [...new Set((Array.isArray(body.targetThreadIds) ? body.targetThreadIds : [])
+      .map(id => String(id || '').trim())
+      .filter(Boolean))].slice(0, 100);
+    if (!targetThreadIds.length) return { success: false, error: 'MISSING_TARGETS' };
+    const placeholders = targetThreadIds.map(() => '?').join(',');
+    const { results } = await env.DB.prepare(`
+      SELECT id, display_name, source_user_id, source_group_id
+      FROM line_threads
+      WHERE id IN (${placeholders})
+    `).bind(...targetThreadIds).all();
+    const found = new Set((results || []).map(row => row.id));
+    const missing = targetThreadIds.filter(id => !found.has(id));
+    if (missing.length) return { success: false, error: 'THREAD_NOT_FOUND', missing };
+    recipients = results || [];
+  }
+
+  const outboundMessages = testMode ? markLineBroadcastMessagesAsTest(messages, title) : messages;
+  const errors = [];
+  let sent = 0;
+  const now = new Date().toISOString();
+  for (const thread of recipients) {
+    const target = testMode ? { type: 'user', to: uid } : resolveLinePushTarget(thread);
+    if (!target?.to) {
+      errors.push(`${thread.display_name || thread.id}: LINE target not found`);
+      continue;
+    }
+    try {
+      const lineResult = await pushLineMessages(env, target.to, outboundMessages);
+      sent += 1;
+      if (!testMode) {
+        for (const message of outboundMessages) {
+          await env.DB.prepare(`
+            INSERT INTO line_messages (
+              id, thread_id, line_event_id, reply_token, message_type, sender_role,
+              sender_id, sender_name, message_text, raw_json, media_url, media_content_type, media_size, created_at
+            ) VALUES (?, ?, '', '', ?, 'guide', ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            crypto.randomUUID(),
+            thread.id,
+            message.type || 'text',
+            uid,
+            '客服推播',
+            summarizeLineOutboundMessage(message),
+            JSON.stringify({ kind: 'broadcast', title, targetType: target.type, line: lineResult, message }),
+            message.type === 'image' ? message.originalContentUrl : '',
+            message.type === 'image' ? 'image' : '',
+            0,
+            now
+          ).run();
+        }
+        const summaryText = outboundMessages.map(summarizeLineOutboundMessage).filter(Boolean).join('\n').slice(0, 1000);
+        await env.DB.prepare(`
+          UPDATE line_threads
+          SET summary = ?,
+              last_message_at = ?,
+              updated_at = ?
+          WHERE id = ?
+        `).bind(summaryText, now, now, thread.id).run();
+      }
+    } catch (err) {
+      errors.push(`${thread.display_name || thread.id}: ${err.message || String(err)}`);
+    }
+  }
+
+  const messageSummary = outboundMessages.map(summarizeLineOutboundMessage).filter(Boolean).join('\n').slice(0, 1000);
+  const campaign = {
+    id: crypto.randomUUID(),
+    title,
+    messageSummary,
+    messageCount: outboundMessages.length,
+    targetCount: recipients.length,
+    sent,
+    failed: recipients.length - sent,
+    errors,
+    operatorUid: uid,
+    operatorName: String(body.operatorName || '').trim(),
+    testMode,
+    batchSize,
+    batchDelaySeconds,
+    createdAt: formatTaipeiDateTime(new Date()),
+    createdTs: Date.now(),
+  };
+  await env.DB.prepare(`
+    INSERT INTO line_broadcast_campaigns (
+      id, title, message_summary, message_count, target_count, sent, failed,
+      errors_json, operator_uid, operator_name, test_mode, batch_size, batch_delay_seconds, created_at, created_ts
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    campaign.id,
+    campaign.title,
+    campaign.messageSummary,
+    campaign.messageCount,
+    campaign.targetCount,
+    campaign.sent,
+    campaign.failed,
+    JSON.stringify(campaign.errors || []),
+    campaign.operatorUid,
+    campaign.operatorName,
+    campaign.testMode ? 1 : 0,
+    campaign.batchSize,
+    campaign.batchDelaySeconds,
+    campaign.createdAt,
+    campaign.createdTs
+  ).run();
+
+  return { success: true, campaign };
+}
+
 async function publishLineRichMenu(env, body = {}) {
   const richMenu = body.richMenu || body.linePayload || body.rendered?.linePayload || body.rendered?.richMenu || null;
   const image = decodeBase64DataUrl(body.imageBase64 || body.image || '');
@@ -8274,6 +8474,23 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1SendLineOaReply(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/broadcasts' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1ListLineBroadcastCampaigns(env, url.searchParams.get('limit') || '50');
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/broadcast' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1SendLineBroadcast(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
