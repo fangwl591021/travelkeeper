@@ -14,7 +14,13 @@
     .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
     .crm-shell { display: grid; grid-template-columns: minmax(720px, 1fr) minmax(380px, 460px); gap: 16px; align-items: start; }
     .crm-shell.detail-collapsed { grid-template-columns: minmax(720px, 1fr); }
-    @media (max-width: 1180px) { .crm-shell { grid-template-columns: 1fr; } }
+    #detail-panel { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+    #customer-detail { overflow: auto; }
+    @media (max-width: 1180px) {
+      .crm-shell { grid-template-columns: 1fr; }
+      #detail-panel { position: static; max-height: none; }
+      #customer-detail { overflow: visible; }
+    }
   </style>
 </head>
 <body class="min-h-screen text-slate-900">
