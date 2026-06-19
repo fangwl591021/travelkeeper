@@ -1256,11 +1256,12 @@ function PromoteModal({
         {/* Step 2：卡片格式 */}
         <div className="p-5 border-b border-slate-100">
           <p className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">② 卡片格式</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {[
               { v:'single',   label:'\u55ae\u5f35',   hint:'1 \u7b46',     enabled: selectedCount === 1 },
               { v:'carousel', label:'\u8f2a\u64ad',   hint:'2-10 \u7b46',  enabled: selectedCount >= 2 },
               { v:'list',     label:'\u5217\u8868',   hint:'2-10 \u7b46',  enabled: selectedCount >= 2 },
+              { v:'travel4',  label:'四格',     hint:'剛好 4 筆', enabled: selectedCount === 4 },
             ].map(m => (
               <button key={m.v} type="button"
                 onClick={() => m.enabled && setMode(m.v)}
@@ -1276,24 +1277,6 @@ function PromoteModal({
               </button>
             ))}
           </div>
-          <button type="button"
-            onClick={() => selectedCount === 4 && setMode(mode === 'travel4' ? 'carousel' : 'travel4')}
-            disabled={selectedCount !== 4}
-            className={`mt-3 w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition ${
-              mode === 'travel4'
-                ? 'bg-emerald-50 border-emerald-500 text-slate-900'
-                : selectedCount === 4
-                  ? 'bg-white border-slate-200 hover:border-emerald-300 text-slate-700'
-                  : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
-            }`}>
-            <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-black ${
-              mode === 'travel4' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300'
-            }`}>{mode === 'travel4' ? '\u2713' : ''}</span>
-            <span className="flex-1">
-              <span className="block text-sm font-black">Giga+ 四格模式</span>
-              <span className="block text-[11px] font-medium opacity-70">剛好選 4 個行程，產生 2x2 旅遊宣傳版型。</span>
-            </span>
-          </button>
           <button type="button"
             onClick={() => selectedCount === 6 && setMode(mode === 'travel6' ? 'carousel' : 'travel6')}
             disabled={selectedCount !== 6}
