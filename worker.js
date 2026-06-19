@@ -5872,7 +5872,8 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
       uploadedImageUrls.push(source);
     }
   }
-  const aiImageInputs = uploadedImageUrls.length ? uploadedImageUrls : imageInputs;
+  // Keep OCR on the original upload payload. R2 URLs are persisted for audit/display only; OpenAI can reject fetching some public storage URLs by region.
+  const aiImageInputs = imageInputs;
 
   const sourceIntro = markdownText
     ? `以下是宣傳 DM 或推播素材轉出的文字/Markdown，請抽取可供 LINE 客服查詢的資訊。\n\n${markdownText}`
