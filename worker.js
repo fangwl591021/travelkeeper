@@ -3653,7 +3653,7 @@ async function handleLineWebhookGateway(request, env, ctx) {
 }
 
 function isLineAutoReplyEnabled(env) {
-  if (String(env.LINE_AUTO_REPLY_ENABLED || '').trim() === '0') return false;
+  if (String(env.LINE_AUTO_REPLY_ENABLED || '').trim() !== '1') return false;
   return getLineAutoReplyAllowedUids(env).size > 0;
 }
 
@@ -7677,6 +7677,20 @@ export default {
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1ApplyWasabiProductionImport(env, body);
         return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/ai-reply-status' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        return json({
+          success: true,
+          data: {
+            enabled: isLineAutoReplyEnabled(env),
+            label: isLineAutoReplyEnabled(env) ? 'AI回應開啟中' : 'AI回應關閉中',
+            mode: isLineAutoReplyEnabled(env) ? 'enabled' : 'disabled',
+          },
+        });
       }
 
       if (path === '/api/line-oa/threads' && request.method === 'GET') {

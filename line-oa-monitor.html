@@ -219,7 +219,7 @@
           <button id="open-broadcast-workbench" type="button" class="rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800">分時推播工作台</button>
           <button id="open-customer-crm" type="button" class="rounded-2xl bg-emerald-500 text-white px-4 py-3 text-sm font-semibold hover:bg-emerald-600">客戶 CRM</button>
           <a href="./knowledge-base.html" class="col-span-2 rounded-2xl bg-amber-500 text-center text-white px-4 py-3 text-sm font-semibold hover:bg-amber-600">知識庫</a>
-          <a href="./rich-menu-manager.html" class="col-span-2 rounded-2xl bg-blue-600 text-center text-white px-4 py-3 text-sm font-semibold hover:bg-blue-700">圖文選單管理</a>
+          <button id="global-ai-reply-status" type="button" class="col-span-2 rounded-2xl border border-slate-300 bg-white text-center text-slate-700 px-4 py-3 text-sm font-semibold hover:bg-slate-50">AI回應關閉中</button>
         </div>
       </div>
 
@@ -290,7 +290,7 @@
           </div>
           <div class="flex flex-wrap gap-2 items-center">
             <button id="open-visitor-records" class="px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-semibold">重要紀錄</button>
-            <button id="manual-handoff" class="px-4 py-2 rounded-xl border border-emerald-500 bg-emerald-500 text-white text-sm font-semibold shadow-sm">AI回應啟用中</button>
+            <button id="manual-handoff" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50">AI回應關閉中</button>
             <button id="mark-open" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">待回覆</button>
             <button id="mark-pending" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">處理中</button>
             <button id="mark-closed" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">已處理</button>
@@ -298,7 +298,7 @@
         </div>
 
         <div id="ai-mode-banner" class="px-6 py-2 text-xs font-semibold">
-          監看、標記與建議回覆；可切換 AI 回應或人工回應。
+          目前為 AI 回應關閉中：系統只監看、標記與提供人工回覆工具，不會自動回覆客戶。
         </div>
 
         <div id="chat-messages" class="flex-1 overflow-y-auto bg-slate-300/80 grid-bg px-6 py-6 space-y-4"></div>
@@ -631,8 +631,9 @@
     const manualHandoffEl = document.getElementById('manual-handoff');
     const aiModeBannerEl = document.getElementById('ai-mode-banner');
     const replyContentPanelEl = document.getElementById('reply-content-panel');
-    const replyContentHintEl = document.getElementById('reply-content-hint');
-    const replyImageFileEl = document.getElementById('reply-image-file');
+      const replyContentHintEl = document.getElementById('reply-content-hint');
+      const globalAiReplyStatusEl = document.getElementById('global-ai-reply-status');
+      const replyImageFileEl = document.getElementById('reply-image-file');
     const replyImageUrlEl = document.getElementById('reply-image-url');
     const replyFileInputEl = document.getElementById('reply-file-input');
     const replyFileTitleEl = document.getElementById('reply-file-title');
@@ -643,6 +644,7 @@
     let publishedItineraries = [];
     let replyToolMode = '';
     let replyContentMode = 'text';
+    let aiReplyGlobalEnabled = false;
     const REPLY_TEST_UIDS = new Set([
       'U8f54ad2575d5414d8f8a1c41433e5eb5',
       'U9e3c3092d3038fd1bbc296ae5eebfd03',
@@ -990,19 +992,24 @@
       });
     }
 
-    function syncAiPauseControls(thread) {
-      const paused = !!thread?.aiPaused;
-      manualHandoffEl.disabled = !thread;
-      manualHandoffEl.textContent = paused ? '人工回應啟用中' : 'AI回應啟用中';
-      manualHandoffEl.className = paused
-        ? 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50'
-        : 'px-4 py-2 rounded-xl border border-emerald-500 bg-emerald-500 text-white text-sm font-semibold shadow-sm hover:bg-emerald-600';
-      aiModeBannerEl.className = paused
-        ? 'px-6 py-2 bg-white text-slate-600 border-b border-slate-200 text-xs font-semibold'
-        : 'px-6 py-2 bg-emerald-50 text-emerald-700 border-b border-emerald-100 text-xs font-semibold';
-      aiModeBannerEl.textContent = paused
-        ? '目前為人工回應：此聊天室的新訊息會暫停自動回覆。'
-        : '目前為AI回應：白名單測試帳戶可使用回應與切換。';
+    function renderAiReplyStatus() {
+      const label = aiReplyGlobalEnabled ? 'AI回應開啟中' : 'AI回應關閉中';
+      const openClass = 'border border-emerald-500 bg-emerald-500 text-white font-semibold shadow-sm hover:bg-emerald-600';
+      const closedClass = 'border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50';
+      globalAiReplyStatusEl.textContent = label;
+      globalAiReplyStatusEl.className = `col-span-2 rounded-2xl text-center px-4 py-3 text-sm ${aiReplyGlobalEnabled ? openClass : closedClass}`;
+      manualHandoffEl.textContent = label;
+      manualHandoffEl.className = `px-4 py-2 rounded-xl text-sm ${aiReplyGlobalEnabled ? openClass : closedClass}`;
+      aiModeBannerEl.className = aiReplyGlobalEnabled
+        ? 'px-6 py-2 bg-emerald-50 text-emerald-700 border-b border-emerald-100 text-xs font-semibold'
+        : 'px-6 py-2 bg-white text-slate-600 border-b border-slate-200 text-xs font-semibold';
+      aiModeBannerEl.textContent = aiReplyGlobalEnabled
+        ? '目前為 AI 回應開啟中：系統會依正式開關與白名單規則處理自動回覆。'
+        : '目前為 AI 回應關閉中：系統只監看、標記與提供人工回覆工具，不會自動回覆客戶。';
+    }
+
+    function syncAiPauseControls(_thread) {
+      renderAiReplyStatus();
     }
 
     function recordPriorityLabel(priority) {
@@ -1389,6 +1396,18 @@
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       return data;
+    }
+
+    async function loadAiReplyStatus() {
+      if (!profile?.userId) return;
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/ai-reply-status?uid=${encodeURIComponent(profile.userId)}`);
+        aiReplyGlobalEnabled = !!result.data?.enabled;
+      } catch (err) {
+        aiReplyGlobalEnabled = false;
+        console.warn('load ai reply status failed:', err?.message || err);
+      }
+      renderAiReplyStatus();
     }
 
     function mergeThreadPage(items = []) {
@@ -2336,18 +2355,11 @@
     document.getElementById('mark-open').addEventListener('click', () => updateThreadMeta({ status: 'open', note: internalNoteEl.value, tags: (allThreads.find(item => item.id === activeThreadId)?.tags || []) }).catch(err => showToast(err.message, 'error')));
     document.getElementById('mark-pending').addEventListener('click', () => updateThreadMeta({ status: 'pending', note: internalNoteEl.value, tags: (allThreads.find(item => item.id === activeThreadId)?.tags || []) }).catch(err => showToast(err.message, 'error')));
     document.getElementById('mark-closed').addEventListener('click', () => updateThreadMeta({ status: 'closed', note: internalNoteEl.value, tags: (allThreads.find(item => item.id === activeThreadId)?.tags || []) }).catch(err => showToast(err.message, 'error')));
+    globalAiReplyStatusEl.addEventListener('click', () => {
+      showToast(aiReplyGlobalEnabled ? 'AI 回應目前為開啟中' : 'AI 回應目前為關閉中');
+    });
     manualHandoffEl.addEventListener('click', () => {
-      const active = allThreads.find(item => item.id === activeThreadId);
-      if (!active) {
-        showToast('請先選擇聊天室', 'error');
-        return;
-      }
-      updateThreadMeta({
-        aiPaused: !active.aiPaused,
-        status: active.aiPaused ? (active.status || 'open') : 'pending',
-        note: internalNoteEl.value,
-        tags: active.tags || [],
-      }).catch(err => showToast(err.message, 'error'));
+      showToast(aiReplyGlobalEnabled ? 'AI 回應目前為開啟中' : 'AI 回應目前為關閉中');
     });
 
     async function init() {
@@ -2364,6 +2376,7 @@
       }
       profile = await liff.getProfile();
       syncReplyComposerAccess();
+      await loadAiReplyStatus();
       userStatus = await fetchJson(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${encodeURIComponent(profile.userId)}`);
       if (!userStatus?.data?.isAdmin) {
         threadListEl.innerHTML = '<div class="rounded-3xl border border-dashed border-rose-300 bg-rose-50 p-8 text-center text-rose-500 font-bold">\u53ea\u6709\u7ba1\u7406\u54e1\u53ef\u4ee5\u4f7f\u7528 LINE OA \u76e3\u770b\u5f8c\u53f0\u3002</div>'; 
