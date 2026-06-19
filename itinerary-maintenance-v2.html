@@ -203,35 +203,43 @@
   </div>
 
   <template id="section-template">
-    <section class="rounded-3xl border border-slate-200 bg-slate-50 p-4 md:p-5">
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div class="text-sm font-semibold text-slate-500 section-label"></div>
+        <div class="flex items-center gap-2">
+          <div class="text-sm font-semibold text-slate-500 section-label"></div>
+          <span class="section-status px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold"></span>
+        </div>
         <button type="button" class="remove-section-btn px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-rose-600 font-semibold hover:bg-rose-50"></button>
       </div>
-      <div class="grid grid-cols-1 gap-4">
-        <label class="block">
-          <span class="section-title-label block text-sm font-semibold mb-2"></span>
-          <input class="section-title w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
-        </label>
-        <div>
-          <span class="section-image-label block text-sm font-semibold mb-2"></span>
+      <div class="grid grid-cols-1 md:grid-cols-[160px_minmax(0,1fr)] gap-4 items-start">
+        <div class="section-media space-y-2">
+          <div class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+            <img class="section-preview w-full aspect-[4/3] object-cover bg-slate-100" alt="section-preview">
+          </div>
           <div class="flex gap-2">
-            <input class="section-image flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
-            <button type="button" class="fix-section-image-btn shrink-0 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100 text-amber-700 font-semibold"></button>
-            <label class="section-upload-label shrink-0 px-4 py-3 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer">
+            <button type="button" class="fix-section-image-btn flex-1 px-3 py-2 rounded-xl bg-amber-50 border border-amber-100 hover:bg-amber-100 text-amber-700 text-sm font-semibold"></button>
+            <label class="section-upload-label flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold cursor-pointer text-center">
               <span class="section-upload-text"></span>
               <input type="file" accept="image/*" class="section-file hidden">
             </label>
           </div>
-          <p class="section-image-hint mt-2 text-xs text-slate-500"></p>
+          <button type="button" class="toggle-image-details w-full text-xs font-semibold text-slate-500 hover:text-slate-900"></button>
         </div>
-        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <img class="section-preview w-full h-56 object-cover bg-slate-100" alt="section-preview">
+        <div class="space-y-3 min-w-0">
+          <label class="block">
+            <span class="section-title-label block text-sm font-semibold mb-2"></span>
+            <input class="section-title w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500">
+          </label>
+          <div class="section-image-details hidden">
+            <span class="section-image-label block text-sm font-semibold mb-2"></span>
+            <input class="section-image w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500">
+            <p class="section-image-hint mt-2 text-xs text-slate-500"></p>
+          </div>
+          <label class="block">
+            <span class="section-body-label block text-sm font-semibold mb-2"></span>
+            <textarea rows="5" class="section-body w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
+          </label>
         </div>
-        <label class="block">
-          <span class="section-body-label block text-sm font-semibold mb-2"></span>
-          <textarea rows="8" class="section-body w-full rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-blue-500"></textarea>
-        </label>
       </div>
     </section>
   </template>
@@ -286,8 +294,14 @@
       sectionTitle: '\u6bb5\u843d\u6a19\u984c',
       sectionImage: '\u5716\u7247\u7db2\u5740',
       sectionBody: '\u6bb5\u843d\u5167\u5bb9',
-      fixImage: '\u4fee\u88dc\u5716\u7247',
+      fixImage: '\u4fee\u5716',
       fixingImage: '\u4fee\u88dc\u4e2d...',
+      showImageDetails: '\u986f\u793a\u5716\u7247\u7db2\u5740',
+      hideImageDetails: '\u6536\u8d77\u5716\u7247\u7db2\u5740',
+      statusTransfer: '\u79fb\u52d5\u65e5\uff0c\u4e0d\u9700\u5716\u7247',
+      statusMissingImage: '\u7f3a\u5716',
+      statusImageOk: '\u5716\u7247 OK',
+      statusCheckImage: '\u9700\u78ba\u8a8d\u5716\u7247',
       noTitle: '\u672a\u547d\u540d\u884c\u7a0b',
       previewRole: '\u9810\u89bd\u6a21\u5f0f',
       adminRole: '\u7ba1\u7406\u54e1',
@@ -647,6 +661,14 @@
       return value.includes('loremflickr.com') || value.includes('via.placeholder.com') || value.includes('placeholder.com');
     }
 
+    function isTransferOnlySection(section = {}) {
+      const text = `${section.title || ''}\n${section.body || ''}`.replace(/\s+/g, '');
+      if (!text) return false;
+      const hasTransfer = /(出發|啟程|集合|機場|搭機|飛機|航班|飛往|抵達|返回|返程|回程|返國|回台|回臺|返家|回家|賦歸)/.test(text);
+      if (!hasTransfer) return false;
+      return !/(樂園|古城|城堡|博物館|美術館|神社|寺|湖|山|海灘|市場|公園|小鎮|市區觀光|巡航|纜車|溫泉|花田|運河|峽谷|瀑布|國家公園|博覽館|大埃及|金字塔|清真寺|教堂|宮殿)/.test(text);
+    }
+
     function sanitizeDescriptionMarkdown(rawText) {
       const text = String(rawText || '')
         .replace(/\r\n/g, '\n')
@@ -676,7 +698,7 @@
       return list.map(section => {
         const parts = [];
         const title = String(section.title || '').trim();
-        const image = String(section.image || '').trim();
+        const image = isTransferOnlySection(section) ? '' : String(section.image || '').trim();
         const body = String(section.body || '').trim();
         if (title) parts.push(title);
         if (image) parts.push(`![圖片](${image})`);
@@ -707,7 +729,13 @@
       const wrap = sectionsListEl.children[index];
       if (!wrap) return;
       const img = wrap.querySelector('.section-preview');
+      if (!img) return;
       const image = String(sections[index]?.image || '').trim();
+      if (isTransferOnlySection(sections[index])) {
+        img.removeAttribute('src');
+        img.alt = '';
+        return;
+      }
       img.onerror = () => {
         const fallback = visiblePlaceholderImageUrl(sections[index]?.title || UI.noTitle);
         if (img.src !== fallback) img.src = fallback;
@@ -786,17 +814,25 @@
         const bodyInput = node.querySelector('.section-body');
         const fileInput = node.querySelector('.section-file');
         const removeBtn = node.querySelector('.remove-section-btn');
+        const statusPill = node.querySelector('.section-status');
+        const mediaWrap = node.querySelector('.section-media');
+        const imageDetails = node.querySelector('.section-image-details');
+        const toggleImageDetailsBtn = node.querySelector('.toggle-image-details');
         const imageHint = node.querySelector('.section-image-hint');
         const uploadText = node.querySelector('.section-upload-text');
         const fixImageBtn = node.querySelector('.fix-section-image-btn');
 
-        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !imageHint || !uploadText || !fixImageBtn) {
+        if (!titleInput || !imageInput || !bodyInput || !fileInput || !removeBtn || !statusPill || !mediaWrap || !imageDetails || !toggleImageDetailsBtn || !imageHint || !uploadText || !fixImageBtn) {
           console.warn('section template missing nodes', {
             titleInput: !!titleInput,
             imageInput: !!imageInput,
             bodyInput: !!bodyInput,
             fileInput: !!fileInput,
             removeBtn: !!removeBtn,
+            statusPill: !!statusPill,
+            mediaWrap: !!mediaWrap,
+            imageDetails: !!imageDetails,
+            toggleImageDetailsBtn: !!toggleImageDetailsBtn,
             imageHint: !!imageHint,
             uploadText: !!uploadText,
             fixImageBtn: !!fixImageBtn,
@@ -813,12 +849,43 @@
         imageInput.setAttribute('value', imageInput.value);
         bodyInput.value = section.body || '';
         bodyInput.textContent = bodyInput.value;
-        imageHint.textContent = /commons\.wikimedia\.org\/wiki\/Special:Redirect\/file/i.test(section.image || '')
-          ? UI.repairedLegacyImage
-          : (isPlaceholderImage(section.image) ? UI.placeholderImage : '');
+        function syncSectionVisualState() {
+          const current = sections[index] || {};
+          const transferOnly = isTransferOnlySection(current);
+          const image = String(current.image || '').trim();
+          const placeholder = isPlaceholderImage(image);
+          mediaWrap.hidden = transferOnly;
+          imageDetails.classList.add('hidden');
+          t(toggleImageDetailsBtn, UI.showImageDetails);
+          if (transferOnly) {
+            current.image = '';
+            imageInput.value = '';
+            imageInput.setAttribute('value', '');
+            statusPill.textContent = UI.statusTransfer;
+            statusPill.className = 'section-status px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold';
+            imageHint.textContent = '';
+          } else if (!image) {
+            statusPill.textContent = UI.statusMissingImage;
+            statusPill.className = 'section-status px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold';
+            imageHint.textContent = '';
+          } else if (placeholder) {
+            statusPill.textContent = UI.statusCheckImage;
+            statusPill.className = 'section-status px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold';
+            imageHint.textContent = UI.placeholderImage;
+          } else {
+            statusPill.textContent = UI.statusImageOk;
+            statusPill.className = 'section-status px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold';
+            imageHint.textContent = /commons\.wikimedia\.org\/wiki\/Special:Redirect\/file/i.test(image)
+              ? UI.repairedLegacyImage
+              : '';
+          }
+          updateSectionPreview(index);
+        }
+        syncSectionVisualState();
 
         titleInput.addEventListener('input', () => {
           sections[index].title = titleInput.value;
+          syncSectionVisualState();
           syncDescriptionField();
         });
 
@@ -826,16 +893,19 @@
           sections[index].image = repairedLegacyImageUrl(imageInput.value, sections[index].title);
           imageInput.value = sections[index].image;
           imageInput.setAttribute('value', sections[index].image);
-          imageHint.textContent = /commons\.wikimedia\.org\/wiki\/Special:Redirect\/file/i.test(sections[index].image || '')
-            ? UI.repairedLegacyImage
-            : (isPlaceholderImage(sections[index].image) ? UI.placeholderImage : '');
-          updateSectionPreview(index);
+          syncSectionVisualState();
           syncDescriptionField();
         });
 
         bodyInput.addEventListener('input', () => {
           sections[index].body = bodyInput.value;
+          syncSectionVisualState();
           syncDescriptionField();
+        });
+
+        toggleImageDetailsBtn.addEventListener('click', () => {
+          const hidden = imageDetails.classList.toggle('hidden');
+          t(toggleImageDetailsBtn, hidden ? UI.showImageDetails : UI.hideImageDetails);
         });
 
         fileInput.addEventListener('change', async () => {
@@ -848,8 +918,7 @@
             sections[index].image = url;
             imageInput.value = url;
             imageInput.setAttribute('value', url);
-            imageHint.textContent = isPlaceholderImage(url) ? UI.placeholderImage : '';
-            updateSectionPreview(index);
+            syncSectionVisualState();
             syncDescriptionField();
             showToast(UI.uploadSectionDone);
           } catch (err) {
@@ -872,8 +941,7 @@
             sections[index].image = url;
             imageInput.value = url;
             imageInput.setAttribute('value', url);
-            imageHint.textContent = isPlaceholderImage(url) ? UI.placeholderImage : '';
-            updateSectionPreview(index);
+            syncSectionVisualState();
             syncDescriptionField();
             showToast(UI.fixImageDone);
           } catch (err) {
