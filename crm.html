@@ -292,15 +292,23 @@
 
     function normalizeLineCustomer(thread) {
       const records = Array.isArray(thread.visitorRecords) ? thread.visitorRecords : [];
+      const customerProfile = thread.customerProfile || {};
       return {
         id: thread.id,
         source: 'line',
         lineThreadId: thread.id,
-        name: thread.name || '未命名客戶',
+        profileId: customerProfile.id || thread.id,
+        name: customerProfile.displayName || thread.name || '未命名客戶',
         pictureUrl: thread.pictureUrl || '',
         userId: thread.userId || '',
-        phone: '',
-        email: '',
+        phone: customerProfile.phone || '',
+        email: customerProfile.email || '',
+        birthday: customerProfile.birthday || '',
+        address: customerProfile.address || '',
+        identityNote: customerProfile.identityNote || '',
+        preferenceNote: customerProfile.preferenceNote || '',
+        tabooNote: customerProfile.tabooNote || '',
+        privacyConsent: customerProfile.privacyConsent || '',
         status: thread.status || 'open',
         risk: thread.risk || 'low',
         opportunityStage: thread.opportunityStage || 'new',
@@ -331,10 +339,37 @@
       };
     }
 
-    function mergeCustomers(lineThreads, orders) {
+    function applyProfileToCustomer(customer, profileData = {}) {
+      if (!profileData) return customer;
+      customer.profileId = profileData.id || customer.profileId || customer.id;
+      customer.name = profileData.displayName || customer.name;
+      customer.phone = profileData.phone || customer.phone;
+      customer.email = profileData.email || customer.email;
+      customer.birthday = profileData.birthday || customer.birthday || '';
+      customer.address = profileData.address || customer.address || '';
+      customer.identityNote = profileData.identityNote || customer.identityNote || '';
+      customer.preferenceNote = profileData.preferenceNote || customer.preferenceNote || '';
+      customer.tabooNote = profileData.tabooNote || customer.tabooNote || '';
+      customer.privacyConsent = profileData.privacyConsent || customer.privacyConsent || '';
+      return customer;
+    }
+
+    function mergeCustomers(lineThreads, orders, profiles = []) {
       const map = new Map();
+      const profileById = new Map();
+      const profileByThread = new Map();
+      const profileByUid = new Map();
+      const profileByPhone = new Map();
+      profiles.forEach(profileData => {
+        if (profileData.id) profileById.set(profileData.id, profileData);
+        if (profileData.threadId) profileByThread.set(profileData.threadId, profileData);
+        if (profileData.userId) profileByUid.set(profileData.userId, profileData);
+        const phoneKey = normalizePhone(profileData.phone);
+        if (phoneKey) profileByPhone.set(phoneKey, profileData);
+      });
       lineThreads.forEach(thread => {
         const customer = normalizeLineCustomer(thread);
+        applyProfileToCustomer(customer, profileById.get(customer.profileId) || profileByThread.get(customer.lineThreadId) || profileByUid.get(customer.userId));
         map.set(customer.id, customer);
       });
 
@@ -353,11 +388,18 @@
             id: key,
             source: 'order',
             lineThreadId: '',
+            profileId: key,
             name: order.customerName || '訂單客戶',
             pictureUrl: '',
             userId: order.lineUid || '',
             phone: order.phone || '',
             email: order.email || '',
+            birthday: '',
+            address: '',
+            identityNote: '',
+            preferenceNote: '',
+            tabooNote: '',
+            privacyConsent: '',
             status: 'closed',
             risk: 'low',
             opportunityStage: 'won',
@@ -371,6 +413,7 @@
             lastMessageAt: order.createdAt || '',
             orders: [],
           };
+          applyProfileToCustomer(matched, profileById.get(key) || profileByPhone.get(phoneKey) || profileByUid.get(order.lineUid));
           map.set(key, matched);
         }
         if (!matched.phone && order.phone) matched.phone = order.phone;
@@ -387,6 +430,7 @@
         customer.hasIdentity = Boolean(customer.phone || customer.email || customer.userId);
         customer.searchBlob = [
           customer.name, customer.userId, customer.phone, customer.email, customer.summary, customer.note,
+          customer.birthday, customer.address, customer.identityNote, customer.preferenceNote, customer.tabooNote,
           customer.opportunityNote, ...(customer.tags || []),
           ...(customer.visitorRecords || []).flatMap(record => [record.category, record.content, record.status, record.priority]),
           ...(customer.orders || []).flatMap(order => [order.customerName, order.phone, order.email, order.title, order.status])
@@ -407,13 +451,15 @@
       els.loadButton.classList.add('opacity-60', 'cursor-not-allowed');
       try {
         els.loadState.textContent = '正在載入 LINE 客戶與訂單資料...';
-        const [crm, orderPayload] = await Promise.all([
+        const [crm, orderPayload, profilePayload] = await Promise.all([
           fetchJson(`${WORKER_URL}/api/line-oa/crm?uid=${encodeURIComponent(profile.userId)}`),
           fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, null, { data: [] }),
+          fetchJson(`${WORKER_URL}/api/line-oa/customer-profiles?uid=${encodeURIComponent(profile.userId)}`, null, { data: [] }),
         ]);
         const lineThreads = Array.isArray(crm.data) ? crm.data : [];
         const orderRows = Array.isArray(orderPayload?.data) ? orderPayload.data : Array.isArray(orderPayload) ? orderPayload : [];
-        customers = mergeCustomers(lineThreads, orderRows);
+        const profileRows = Array.isArray(profilePayload?.data) ? profilePayload.data : [];
+        customers = mergeCustomers(lineThreads, orderRows, profileRows);
         applyFilters();
         els.loadState.textContent = `已載入 ${customers.length} 筆客戶、${orderRows.length} 筆訂單`;
         if (targetThreadId) {
@@ -559,11 +605,56 @@
         </div>
 
         <section class="mt-5">
-          <h4 class="font-black text-slate-900">個資</h4>
-          <div class="mt-2 space-y-2 rounded-xl border border-slate-200 p-4">
-            <p><b>電話：</b>${escapeHtml(customer.phone || '尚未建立')}</p>
-            <p><b>Email：</b>${escapeHtml(customer.email || '尚未建立')}</p>
-            <p><b>來源：</b>${customer.source === 'line' ? 'LINE 聊天室' : '訂單資料'}</p>
+          <div class="flex items-center justify-between gap-3">
+            <h4 class="font-black text-slate-900">客戶主檔</h4>
+            <button id="save-customer-profile" type="button" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700">儲存資料</button>
+          </div>
+          <div class="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4">
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">姓名</span>
+              <input id="profile-name" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.name)}">
+            </label>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">電話</span>
+                <input id="profile-phone" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.phone || '')}" placeholder="例如 0912-345-678">
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">Email</span>
+                <input id="profile-email" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.email || '')}" placeholder="customer@example.com">
+              </label>
+            </div>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">生日</span>
+                <input id="profile-birthday" type="date" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.birthday || '')}">
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">個資同意</span>
+                <select id="profile-privacy-consent" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500">
+                  <option value="" ${!customer.privacyConsent ? 'selected' : ''}>尚未確認</option>
+                  <option value="yes" ${customer.privacyConsent === 'yes' ? 'selected' : ''}>已同意</option>
+                  <option value="no" ${customer.privacyConsent === 'no' ? 'selected' : ''}>不同意</option>
+                </select>
+              </label>
+            </div>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">地址</span>
+              <input id="profile-address" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.address || '')}" placeholder="可填寄送地址或常用聯絡地址">
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">證件 / 個資備註</span>
+              <textarea id="profile-identity-note" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" placeholder="例如護照效期、台胞證需求、身分證件注意事項">${escapeHtml(customer.identityNote || '')}</textarea>
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">旅遊偏好</span>
+              <textarea id="profile-preference-note" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" placeholder="例如日本、親子、溫泉、不走購物站、預算區間">${escapeHtml(customer.preferenceNote || '')}</textarea>
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">禁忌 / 注意事項</span>
+              <textarea id="profile-taboo-note" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" placeholder="例如素食、長輩行動不便、不要紅眼班機">${escapeHtml(customer.tabooNote || '')}</textarea>
+            </label>
+            <p class="text-xs text-slate-400">來源：${customer.source === 'line' ? 'LINE 聊天室' : '訂單資料'}。儲存後會寫入 CRM 客戶主檔。</p>
           </div>
         </section>
 
@@ -604,6 +695,65 @@
           </div>
         </section>
       `;
+      document.getElementById('save-customer-profile')?.addEventListener('click', () => {
+        saveCustomerProfile(customer).catch(err => showToast(err.message || '儲存失敗', 'error'));
+      });
+    }
+
+    async function saveCustomerProfile(customer) {
+      if (!profile?.userId) throw new Error('尚未取得管理員身分');
+      if (!customer) throw new Error('請先選擇客戶');
+      const button = document.getElementById('save-customer-profile');
+      button.disabled = true;
+      button.classList.add('opacity-60');
+      try {
+        const payload = {
+          uid: profile.userId,
+          id: customer.profileId || customer.id,
+          threadId: customer.lineThreadId || '',
+          userId: customer.userId || '',
+          displayName: document.getElementById('profile-name')?.value || '',
+          phone: document.getElementById('profile-phone')?.value || '',
+          email: document.getElementById('profile-email')?.value || '',
+          birthday: document.getElementById('profile-birthday')?.value || '',
+          address: document.getElementById('profile-address')?.value || '',
+          identityNote: document.getElementById('profile-identity-note')?.value || '',
+          preferenceNote: document.getElementById('profile-preference-note')?.value || '',
+          tabooNote: document.getElementById('profile-taboo-note')?.value || '',
+          privacyConsent: document.getElementById('profile-privacy-consent')?.value || '',
+        };
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/customer-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const saved = result.data || {};
+        Object.assign(customer, {
+          profileId: saved.id || payload.id,
+          name: saved.displayName || payload.displayName || customer.name,
+          phone: saved.phone || payload.phone,
+          email: saved.email || payload.email,
+          birthday: saved.birthday || payload.birthday,
+          address: saved.address || payload.address,
+          identityNote: saved.identityNote || payload.identityNote,
+          preferenceNote: saved.preferenceNote || payload.preferenceNote,
+          tabooNote: saved.tabooNote || payload.tabooNote,
+          privacyConsent: saved.privacyConsent || payload.privacyConsent,
+          hasIdentity: Boolean(payload.phone || payload.email || customer.userId),
+        });
+        customer.searchBlob = [
+          customer.name, customer.userId, customer.phone, customer.email, customer.summary, customer.note,
+          customer.identityNote, customer.preferenceNote, customer.tabooNote, customer.opportunityNote, ...(customer.tags || []),
+          ...(customer.visitorRecords || []).flatMap(record => [record.category, record.content, record.status, record.priority]),
+          ...(customer.orders || []).flatMap(order => [order.customerName, order.phone, order.email, order.title, order.status])
+        ].join(' ').toLowerCase();
+        applyFilters();
+        selectCustomer(customer.id);
+        showToast('客戶資料已儲存');
+      } finally {
+        button.disabled = false;
+        button.classList.remove('opacity-60');
+      }
     }
 
     function downloadCsv() {

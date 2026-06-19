@@ -4331,6 +4331,137 @@ async function ensureLineThreadAiPauseColumn(env) {
   `).run();
 }
 
+async function ensureLineCustomerProfilesTable(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS line_customer_profiles (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL DEFAULT '',
+      source_user_id TEXT NOT NULL DEFAULT '',
+      display_name TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      birthday TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      identity_note TEXT NOT NULL DEFAULT '',
+      preference_note TEXT NOT NULL DEFAULT '',
+      taboo_note TEXT NOT NULL DEFAULT '',
+      privacy_consent TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_customer_profiles_thread_id
+    ON line_customer_profiles(thread_id)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_customer_profiles_source_user_id
+    ON line_customer_profiles(source_user_id)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_customer_profiles_phone
+    ON line_customer_profiles(phone)
+  `).run();
+}
+
+function normalizeLineCustomerProfile(row = {}) {
+  return {
+    id: row.id || '',
+    threadId: row.thread_id || '',
+    userId: row.source_user_id || '',
+    displayName: row.display_name || '',
+    phone: row.phone || '',
+    email: row.email || '',
+    birthday: row.birthday || '',
+    address: row.address || '',
+    identityNote: row.identity_note || '',
+    preferenceNote: row.preference_note || '',
+    tabooNote: row.taboo_note || '',
+    privacyConsent: row.privacy_consent || '',
+    updatedAt: row.updated_at || '',
+  };
+}
+
+async function d1UpsertLineCustomerProfile(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineCustomerProfilesTable(env);
+  const uid = String(body.uid || '').trim();
+  const threadId = String(body.threadId || body.thread_id || '').trim();
+  const sourceUserId = String(body.userId || body.sourceUserId || body.source_user_id || '').trim();
+  const id = String(body.id || threadId || sourceUserId || crypto.randomUUID()).trim();
+  if (!id) return { success: false, error: 'MISSING_CUSTOMER_ID' };
+  const displayName = String(body.displayName || body.name || '').trim();
+  const phone = String(body.phone || '').trim();
+  const email = String(body.email || '').trim();
+  const birthday = String(body.birthday || '').trim();
+  const address = String(body.address || '').trim();
+  const identityNote = String(body.identityNote || body.identity_note || '').trim();
+  const preferenceNote = String(body.preferenceNote || body.preference_note || '').trim();
+  const tabooNote = String(body.tabooNote || body.taboo_note || '').trim();
+  const privacyConsent = String(body.privacyConsent || body.privacy_consent || '').trim();
+
+  await env.DB.prepare(`
+    INSERT INTO line_customer_profiles (
+      id, thread_id, source_user_id, display_name, phone, email, birthday, address,
+      identity_note, preference_note, taboo_note, privacy_consent, created_by, updated_by, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      thread_id = excluded.thread_id,
+      source_user_id = excluded.source_user_id,
+      display_name = excluded.display_name,
+      phone = excluded.phone,
+      email = excluded.email,
+      birthday = excluded.birthday,
+      address = excluded.address,
+      identity_note = excluded.identity_note,
+      preference_note = excluded.preference_note,
+      taboo_note = excluded.taboo_note,
+      privacy_consent = excluded.privacy_consent,
+      updated_by = excluded.updated_by,
+      updated_at = datetime('now')
+  `).bind(
+    id,
+    threadId,
+    sourceUserId,
+    displayName,
+    phone,
+    email,
+    birthday,
+    address,
+    identityNote,
+    preferenceNote,
+    tabooNote,
+    privacyConsent,
+    uid,
+    uid
+  ).run();
+
+  const row = await env.DB.prepare(`
+    SELECT *
+    FROM line_customer_profiles
+    WHERE id = ?
+  `).bind(id).first();
+  return { success: true, data: normalizeLineCustomerProfile(row || {}) };
+}
+
+async function d1ListLineCustomerProfiles(env) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineCustomerProfilesTable(env);
+  const { results } = await env.DB.prepare(`
+    SELECT *
+    FROM line_customer_profiles
+    ORDER BY updated_at DESC
+    LIMIT 1000
+  `).all();
+  return {
+    success: true,
+    data: (results || []).map(normalizeLineCustomerProfile),
+  };
+}
+
 function normalizeLineAiReplyOverride(value = '') {
   const raw = String(value || '').trim().toLowerCase();
   if (['enabled', 'on', '1', 'true'].includes(raw)) return 'enabled';
@@ -4864,6 +4995,7 @@ async function d1GetLineCrm(env) {
   await ensureLineVisitorRequirementsTable(env);
   await ensureLineThreadOpportunityColumns(env);
   await ensureLineThreadAiPauseColumn(env);
+  await ensureLineCustomerProfilesTable(env);
   const { results } = await env.DB.prepare(`
     SELECT
       id,
@@ -4892,6 +5024,7 @@ async function d1GetLineCrm(env) {
   if (!rows.length) return { success: true, data: [] };
 
   const recordMap = new Map();
+  const profileMap = new Map();
   if (rows.length) {
     const recordRows = await env.DB.prepare(`
       WITH recent_threads AS (
@@ -4916,12 +5049,37 @@ async function d1GetLineCrm(env) {
       list.push(item);
       recordMap.set(item.threadId, list);
     }
+
+    const profileRows = await env.DB.prepare(`
+      WITH recent_threads AS (
+        SELECT id
+        FROM line_threads
+        ORDER BY COALESCE(last_message_at, created_at) DESC
+        LIMIT 500
+      )
+      SELECT profile.*
+      FROM line_customer_profiles AS profile
+      LEFT JOIN recent_threads rt ON rt.id = profile.thread_id
+      WHERE rt.id IS NOT NULL
+         OR profile.source_user_id IN (
+           SELECT COALESCE(source_user_id, '')
+           FROM line_threads
+           ORDER BY COALESCE(last_message_at, created_at) DESC
+           LIMIT 500
+         )
+    `).all();
+    for (const profile of (profileRows.results || [])) {
+      const item = normalizeLineCustomerProfile(profile);
+      if (item.threadId) profileMap.set(`thread:${item.threadId}`, item);
+      if (item.userId) profileMap.set(`uid:${item.userId}`, item);
+    }
   }
 
   return {
     success: true,
     data: rows.map(row => {
       const visitorRecords = recordMap.get(row.id) || [];
+      const customerProfile = profileMap.get(`thread:${row.id}`) || profileMap.get(`uid:${row.source_user_id || row.source_group_id || ''}`) || null;
       return {
         id: row.id,
         name: row.display_name || '????',
@@ -4941,6 +5099,7 @@ async function d1GetLineCrm(env) {
         aiReplyOverride: normalizeLineAiReplyOverride(row.ai_reply_override || ''),
         importantCount: visitorRecords.length,
         latestImportantNote: visitorRecords[0]?.content || '',
+        customerProfile,
         visitorRecords,
         lastMessageAt: row.last_message_at || '',
       };
@@ -7759,6 +7918,13 @@ export default {
         return json(await d1GetLineCrm(env));
       }
 
+      if (path === '/api/line-oa/customer-profiles' && request.method === 'GET') {
+        const uid = url.searchParams.get('uid') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        return json(await d1ListLineCustomerProfiles(env));
+      }
+
       if (path === '/api/line-oa/thread' && request.method === 'GET') {
         const uid = url.searchParams.get('uid') || '';
         const threadId = url.searchParams.get('id') || '';
@@ -7794,6 +7960,15 @@ export default {
         if (!uid) return json({ success: false, error: '蝻箏? uid' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: '???' }, 403);
         const result = await d1UpdateLineThread(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/customer-profile' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1UpsertLineCustomerProfile(env, body);
         return json(result, result.success ? 200 : 400);
       }
 
