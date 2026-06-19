@@ -280,31 +280,42 @@
           ? imageItems
           : [{ name: els.source.value || els.title.value || 'promotion-dm', dataUrl: '' }];
         const savedResults = [];
+        const failedResults = [];
         for (let index = 0; index < jobs.length; index += 1) {
           const job = jobs[index];
           const start = 10 + (index / jobs.length) * 80;
           setProgress(start, `AI OCR 轉換 ${index + 1}/${jobs.length}`);
-          const result = await fetchJson(`${WORKER_URL}/api/promo-dm/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              uid: profile.userId,
-              title: jobs.length > 1 ? `${els.title.value || '宣傳 DM'} ${index + 1}` : els.title.value,
-              source: els.source.value,
-              expiresAt: els.expiresAt.value,
-              markdown: imageItems.length ? '' : markdown,
-              images: job.dataUrl ? [job.dataUrl] : [],
-              filename: job.name || els.source.value || els.title.value || 'promotion-dm',
-            }),
-          });
-          savedResults.push(result);
+          try {
+            const result = await fetchJson(`${WORKER_URL}/api/promo-dm/upload`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                uid: profile.userId,
+                title: jobs.length > 1 ? '' : els.title.value,
+                source: els.source.value || job.name,
+                expiresAt: els.expiresAt.value,
+                markdown: imageItems.length ? '' : markdown,
+                images: job.dataUrl ? [job.dataUrl] : [],
+                filename: job.name || els.source.value || els.title.value || 'promotion-dm',
+              }),
+            });
+            savedResults.push(result);
+          } catch (err) {
+            failedResults.push({ name: job.name || `DM ${index + 1}`, error: err.message || '轉換失敗' });
+          }
         }
-        setProgress(100, `已完成 ${savedResults.length} 筆`);
+        setProgress(100, `完成 ${savedResults.length} 筆，失敗 ${failedResults.length} 筆`);
+        if (!savedResults.length && failedResults.length) throw new Error(failedResults[0].error || '批次轉換失敗');
         const result = savedResults[savedResults.length - 1] || {};
         const doc = result.data?.document || {};
         const entry = Array.isArray(doc.entries) ? doc.entries[0] || {} : {};
-        els.resultTitle.textContent = savedResults.length > 1 ? `已批次存入 ${savedResults.length} 筆宣傳 DM` : (doc.title || '已存入宣傳 DM');
-        els.resultPath.textContent = savedResults.map(item => item.data?.path || '').filter(Boolean).join('\n');
+        els.resultTitle.textContent = failedResults.length
+          ? `已存入 ${savedResults.length} 筆，失敗 ${failedResults.length} 筆`
+          : (savedResults.length > 1 ? `已批次存入 ${savedResults.length} 筆宣傳 DM` : (doc.title || '已存入宣傳 DM'));
+        els.resultPath.textContent = [
+          ...savedResults.map(item => item.data?.path || '').filter(Boolean),
+          ...failedResults.map(item => `失敗：${item.name} - ${item.error}`),
+        ].join('\n');
         els.resultSummary.textContent = entry.answer || doc.usage || '';
         els.resultReply.textContent = entry.reply_template || '';
         els.resultSocial.textContent = entry.social_post || '';
