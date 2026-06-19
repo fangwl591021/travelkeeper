@@ -1244,7 +1244,12 @@
     const ITINERARY_DESTINATION_GROUPS = [
       {
         label: '日本',
-        terms: ['日本', '東京', '大阪', '京都', '關西', '九州', '北海道', '沖繩', '名古屋', '富士', '箱根', '立山', '黑部']
+        terms: [
+          '日本', '東京', '大阪', '京都', '關西', '九州', '北海道', '沖繩', '名古屋',
+          '富士', '箱根', '立山', '黑部', '福岡', '札幌', '小樽', '富良野',
+          '藏王', '仙台', '會津', '福島', '五色沼', '河口湖', '成田', '淺草',
+          '晴空塔', '博多', '日韓'
+        ]
       },
       {
         label: '韓國',
@@ -1269,13 +1274,30 @@
     ];
 
     function getItinerarySearchText(itinerary) {
+      const keywordText = Array.isArray(itinerary?.keywords) ? itinerary.keywords.join(' ') : itinerary?.keywords;
+      const tagText = Array.isArray(itinerary?.tags) ? itinerary.tags.join(' ') : itinerary?.tags;
+      const segmentText = Array.isArray(itinerary?.segments)
+        ? itinerary.segments.map(segment => [
+            segment?.title,
+            segment?.content,
+            segment?.imageKeyword,
+            segment?.imageUrl
+          ].filter(Boolean).join(' ')).join(' ')
+        : '';
       return normalizeText([
         itinerary?.title,
         itinerary?.name,
         itinerary?.region,
+        itinerary?.destination,
+        itinerary?.country,
+        itinerary?.category,
+        keywordText,
+        tagText,
+        itinerary?.imageKeyword,
         itinerary?.description,
         itinerary?.notes,
-        itinerary?.summary
+        itinerary?.summary,
+        segmentText
       ].filter(Boolean).join(' '));
     }
 
@@ -1434,6 +1456,8 @@
         } else {
           publishedItineraries = [];
         }
+        const active = getActiveThread();
+        if (active) renderItinerarySuggestions(active);
       } catch (_err) {
         publishedItineraries = [];
       }
