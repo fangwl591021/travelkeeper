@@ -293,7 +293,7 @@ entries 每一筆建議欄位：
       const entries = Array.isArray(doc.entries) ? doc.entries : [];
       const haystack = [
         doc.title, doc.source, doc.category, doc.usage, doc.expires_at,
-        ...entries.flatMap(entry => [entry.title, ...(entry.keywords || []), ...(entry.tags || []), entry.answer, entry.reply_template]),
+        ...entries.flatMap(entry => [entry.title, ...(entry.keywords || []), ...(entry.tags || []), entry.answer, entry.reply_template, entry.social_post]),
       ].join(' ');
       return normalize(haystack).includes(normalize(keyword));
     }
@@ -331,6 +331,7 @@ entries 每一筆建議欄位：
                 <span class="rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-bold">${doc.status || doc.manifestItem?.status || 'published'}</span>
                 ${expiresAt ? `<span class="rounded-full ${expired ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'} px-3 py-1 text-xs font-bold">有效至 ${expiresAt}</span>` : ''}
                 <span class="rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs font-bold">${entries.length} 段</span>
+                <button type="button" class="delete-knowledge rounded-full bg-rose-50 text-rose-700 px-3 py-1 text-xs font-bold hover:bg-rose-100" data-path="${doc.manifestItem?.path || ''}">刪除</button>
               </div>
             </div>
             <p class="text-sm text-slate-500 leading-6 mt-3">${doc.usage || ''}</p>
@@ -343,6 +344,7 @@ entries 每一筆建議欄位：
                 <div class="mt-3 space-y-3 text-sm leading-7 text-slate-600">
                   <p><span class="font-bold text-slate-900">關鍵字：</span>${(entry.keywords || []).join('、')}</p>
                   <p><span class="font-bold text-slate-900">標籤：</span>${(entry.tags || []).join('、')}</p>
+                  ${entry.social_post ? `<p><span class="font-bold text-slate-900">社群文案：</span>${entry.social_post}</p>` : ''}
                   <p><span class="font-bold text-slate-900">客服建議：</span>${entry.reply_template || entry.answer || ''}</p>
                 </div>
               </details>
@@ -351,12 +353,40 @@ entries 每一筆建議欄位：
         `;
         fileListEl.appendChild(card);
       });
+      fileListEl.querySelectorAll('.delete-knowledge').forEach(button => {
+        button.addEventListener('click', () => deleteKnowledgeFile(button.dataset.path || ''));
+      });
     }
 
     function render() {
       renderStats();
       renderFolders();
       renderFiles();
+    }
+
+    async function deleteKnowledgeFile(path) {
+      if (!path) {
+        showToast('找不到要刪除的知識檔');
+        return;
+      }
+      if (!profile?.userId) {
+        showToast('請先登入管理員帳號');
+        return;
+      }
+      const ok = confirm(`確定刪除這份知識檔？\n${path}\n\n刪除後 AI 不會再讀取這份資料。`);
+      if (!ok) return;
+      const res = await fetch(`${WORKER_URL}/api/knowledge/file?uid=${encodeURIComponent(profile.userId)}&path=${encodeURIComponent(path)}`, {
+        method: 'DELETE',
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || payload?.success === false) {
+        showToast(payload?.error || '刪除失敗');
+        return;
+      }
+      documents = documents.filter(doc => String(doc.manifestItem?.path || '') !== path);
+      manifest = payload.data?.manifest || manifest;
+      render();
+      showToast('已刪除知識檔');
     }
 
     function validateKnowledgeJson(data) {

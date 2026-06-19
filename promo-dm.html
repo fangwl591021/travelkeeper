@@ -103,6 +103,10 @@
               <p class="text-xs font-black text-slate-400">回覆模板</p>
               <p id="result-reply" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700"></p>
             </div>
+            <div class="rounded-2xl bg-slate-50 p-4 md:col-span-2">
+              <p class="text-xs font-black text-slate-400">社群宣傳文案</p>
+              <p id="result-social" class="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700"></p>
+            </div>
           </div>
           <div class="mt-4">
             <p class="text-xs font-black text-slate-400">關鍵字</p>
@@ -159,6 +163,7 @@
       resultPath: document.getElementById('result-path'),
       resultSummary: document.getElementById('result-summary'),
       resultReply: document.getElementById('result-reply'),
+      resultSocial: document.getElementById('result-social'),
       resultKeywords: document.getElementById('result-keywords'),
       toast: document.getElementById('toast'),
     };
@@ -286,6 +291,7 @@
         els.resultPath.textContent = result.data?.path || '';
         els.resultSummary.textContent = entry.answer || doc.usage || '';
         els.resultReply.textContent = entry.reply_template || '';
+        els.resultSocial.textContent = entry.social_post || '未產生社群宣傳文案';
         els.resultKeywords.innerHTML = '';
         (entry.keywords || []).forEach(keyword => {
           const pill = document.createElement('span');

@@ -5523,6 +5523,25 @@ async function setKnowledgeFileStatus(env, path, status = 'published') {
   return { success: true, data: { file: files[index], manifest: nextManifest } };
 }
 
+async function deleteKnowledgeDocument(env, path) {
+  if (!env.TRAVEL) throw new Error('R2 binding missing');
+  const key = normalizeKnowledgePath(path);
+  if (key === 'knowledge/manifest.json') {
+    return { success: false, error: 'RESERVED_MANIFEST_PATH' };
+  }
+  const manifest = await getKnowledgeManifest(env);
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  const nextFiles = files.filter(file => String(file.path || '') !== key);
+  await env.TRAVEL.delete(key);
+  const nextManifest = {
+    ...manifest,
+    updated_at: new Date().toISOString(),
+    files: nextFiles,
+  };
+  await writeKnowledgeJson(env, 'knowledge/manifest.json', nextManifest);
+  return { success: true, data: { path: key, manifest: nextManifest } };
+}
+
 function safeKnowledgeSlug(value = '') {
   const ascii = String(value || '')
     .normalize('NFKD')
@@ -5601,14 +5620,16 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
   "ocr_text": "完整抽取文字，保留重要價格、天數、電話、限制與備註",
   "summary": "100-180 字客服可讀摘要",
   "keywords": ["客戶可能會問的關鍵字"],
-  "reply_template": "客戶詢問這張 DM 或相關行程時，客服可直接使用的回覆。不能說已報名成功，只能說可協助確認日期、名額、價格與報名方式。"
+  "reply_template": "客戶詢問這張 DM 或相關行程時，客服可直接使用的回覆。不能說已報名成功，只能說可協助確認日期、名額、價格與報名方式。",
+  "social_post": "約 100 字社群宣傳文案，需包含表情符號與 3-5 個 hashtag"
 }
 
 規則：
 1. 不要建立正式行程，不要自行補不存在的日期、價格或名額。
 2. keywords 必須包含 DM 上明確可見的目的地、行程名、俗稱、價格、天數、出發地。
 3. reply_template 要能讓 LINE 監控台直接建議給客服使用。
-4. 如果圖片文字不清楚，ocr_text 仍要保留可辨識內容，summary 要註明需人工核對。
+4. social_post 要適合 Facebook / LINE VOOM / Instagram 文案，不得超過 130 字。
+5. 如果圖片文字不清楚，ocr_text 仍要保留可辨識內容，summary 要註明需人工核對。
 
 ${sourceIntro}` },
           ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } })),
@@ -5665,6 +5686,7 @@ ${sourceIntro}` },
       tags: ['宣傳DM', '推播', '行程詢問', String(parsed.destination || '').trim()].filter(Boolean),
       answer,
       reply_template: String(parsed.reply_template || '').trim() || `您好，您詢問的「${title}」可以協助確認。請問您預計幾位、希望哪一天出發，以及是否需要我們幫您確認目前名額與報名方式？`,
+      social_post: String(parsed.social_post || '').trim().slice(0, 180),
       metadata: {
         destination: parsed.destination || '',
         days: parsed.days || 0,
@@ -7766,6 +7788,16 @@ export default {
           return json({ success: false, error: 'INVALID_JSON', detail: err.message || String(err) }, 400);
         }
         const result = await putKnowledgeDocument(env, key, doc);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/knowledge/file' && request.method === 'DELETE') {
+        const uid = String(url.searchParams.get('uid') || '').trim();
+        const key = url.searchParams.get('path') || '';
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        if (!key) return json({ success: false, error: 'MISSING_PATH' }, 400);
+        const result = await deleteKnowledgeDocument(env, key);
         return json(result, result.success ? 200 : 400);
       }
 
