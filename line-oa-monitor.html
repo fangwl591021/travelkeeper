@@ -1145,6 +1145,22 @@
       return (thread?.messages || []).map(m => readableMessageText(m)).join('\n');
     }
 
+    function customerThreadText(thread) {
+      return (thread?.messages || [])
+        .filter(message => message.senderRole === 'user')
+        .map(message => readableMessageText(message))
+        .join('\n');
+    }
+
+    function latestCustomerMessageText(thread) {
+      const messages = (thread?.messages || []).filter(message => message.senderRole === 'user');
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const text = readableMessageText(messages[i]);
+        if (text && !/^客戶傳送/.test(text)) return text;
+      }
+      return messages.length ? readableMessageText(messages[messages.length - 1]) : '';
+    }
+
     function hasImageUpload(thread) {
       return (thread?.messages || []).some(message => {
         const type = String(message.type || '').toLowerCase();
@@ -1193,25 +1209,43 @@
 
     function buildSuggestions(thread) {
       const haystack = threadText(thread);
+      const customerText = customerThreadText(thread) || haystack;
+      const latestText = latestCustomerMessageText(thread);
+      const contextText = [latestText, customerText].filter(Boolean).join('\n');
       const suggestions = [];
-      const travelIntent = hasTravelIntent(haystack);
-      const documentIntent = hasDocumentIntent(haystack) || hasImageUpload(thread);
+      const travelIntent = hasTravelIntent(contextText);
+      const documentIntent = hasDocumentIntent(contextText) || hasImageUpload(thread);
       if (travelIntent) {
-        suggestions.push('您好，日本行程可以協助您整理。請問您預計幾位出發、想安排幾天、出發月份或日期區間，以及大概預算？我可以依照條件先幫您挑幾個適合的日本行程方向。');
-        suggestions.push('可以的，我先幫您往日本行程方向整理。若您有偏好的地區，例如東京、關西、九州、北海道或沖繩，也可以一起告訴我；沒有指定的話，我會先用天數、預算與出發地幫您篩選。');
+        const destination = detectItineraryDestination(contextText);
+        const destinationTerm = detectItineraryDestinationTerm(contextText, destination);
+        const recommendations = recommendPublishedItineraries(thread);
+        if (recommendations.length) {
+          const title = recommendations[0].title || recommendations[0].name || '目前上架行程';
+          suggestions.push(`您好，您詢問的${destinationTerm || destination?.label || '行程'}可以協助確認。目前可先參考「${title}」，我可以再幫您確認出發日期、集合地點、剩餘名額與報名方式。`);
+        } else if (destination?.label === '日本') {
+          suggestions.push('您好，日本行程可以協助您整理。請問您預計幾位出發、想安排幾天、出發月份或日期區間，以及大概預算？我可以依照條件先幫您挑幾個適合的日本行程方向。');
+        } else if (destinationTerm || destination) {
+          suggestions.push(`您好，${destinationTerm || destination.label}行程可以協助您確認。請問您預計幾位參加、希望哪一天出發，以及是否需要從指定地點集合或接送？我再幫您核對目前可報名的行程。`);
+        } else {
+          suggestions.push('您好，行程可以協助您整理。請問您預計幾位出發、想安排幾天、出發月份或日期區間，以及大概預算？我可以依照條件先幫您挑幾個適合的方向。');
+        }
+        if (recommendations.length > 1) {
+          const titles = recommendations.slice(0, 2).map(item => `「${item.title || item.name || '行程'}」`).join('、');
+          suggestions.push(`我這邊先找到 ${titles} 可以參考。您如果方便提供人數與預計日期，我可以幫您比對哪一個比較適合。`);
+        }
       }
       const documentSuggestion = buildDocumentServiceSuggestion(thread);
-      if (documentSuggestion && (!travelIntent || hasDocumentIntent(haystack))) {
+      if (documentSuggestion && (!travelIntent || hasDocumentIntent(contextText))) {
         suggestions.push(documentSuggestion);
       }
-      const travelQaSuggestion = window.TravelKeeperTravelQa?.buildSuggestion?.(haystack);
+      const travelQaSuggestion = window.TravelKeeperTravelQa?.buildSuggestion?.(contextText);
       if (travelQaSuggestion && !travelIntent) {
         suggestions.push(travelQaSuggestion);
       }
-      if (!travelIntent && /(\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528|\u5929\u6578|\u884c\u7a0b|\u5167\u5bb9)/.test(haystack)) {
+      if (!travelIntent && /(\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528|\u5929\u6578|\u884c\u7a0b|\u5167\u5bb9)/.test(contextText)) {
         suggestions.push('\u53ef\u4ee5\u7684\uff0c\u8acb\u554f\u60a8\u6bd4\u8f03\u504f\u597d\u7684\u9810\u7b97\u5340\u9593\u3001\u60f3\u8981\u5e7e\u5929\u7684\u884c\u7a0b\uff0c\u4ee5\u53ca\u60f3\u53bb\u7684\u5730\u5340\uff1f\u6211\u53ef\u4ee5\u4f9d\u7167\u60a8\u7684\u689d\u4ef6\u5e6b\u60a8\u6311\u5e7e\u500b\u6bd4\u8f03\u9069\u5408\u7684\u9078\u64c7\u3002');
       }
-      if (NEGATIVE_KEYWORDS.some(k => haystack.includes(k)) || URGENT_KEYWORDS.some(k => haystack.includes(k))) {
+      if (NEGATIVE_KEYWORDS.some(k => contextText.includes(k)) || URGENT_KEYWORDS.some(k => contextText.includes(k))) {
         suggestions.push('\u4e0d\u597d\u610f\u601d\u8b93\u60a8\u7b49\u5019\u4e86\uff0c\u6211\u9019\u908a\u5df2\u7d93\u5e6b\u60a8\u8a18\u4e0b\u554f\u984c\uff0c\u6703\u76e1\u5feb\u78ba\u8a8d\u5f8c\u518d\u56de\u8986\u60a8\uff0c\u4e5f\u8b1d\u8b1d\u60a8\u7684\u63d0\u9192\u3002');
       }
       if (!travelIntent && !documentIntent && suggestions.length < 2) {
@@ -1310,6 +1344,16 @@
       ) || null;
     }
 
+    function detectItineraryDestinationTerm(haystack, destination) {
+      if (!destination) return '';
+      const text = normalizeText(haystack);
+      const matched = destination.terms
+        .map(term => String(term || '').trim())
+        .filter(Boolean)
+        .find(term => text.includes(normalizeText(term)));
+      return matched || destination.label || '';
+    }
+
     function matchesItineraryDestination(itinerary, destination) {
       if (!destination) return true;
       const text = getItinerarySearchText(itinerary);
@@ -1338,7 +1382,9 @@
     }
 
     function recommendPublishedItineraries(thread) {
-      const haystack = normalizeText((thread?.messages || []).map(m => m.text || '').join('\n'));
+      const latestText = latestCustomerMessageText(thread);
+      const customerText = customerThreadText(thread);
+      const haystack = normalizeText([latestText, customerText].filter(Boolean).join('\n'));
       const destination = detectItineraryDestination(haystack);
       const ranked = publishedItineraries
         .map(item => ({ item, score: scoreItineraryMatch(item, haystack, destination) }))
