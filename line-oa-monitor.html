@@ -998,18 +998,35 @@
       const closedClass = 'border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50';
       globalAiReplyStatusEl.textContent = label;
       globalAiReplyStatusEl.className = `col-span-2 rounded-2xl text-center px-4 py-3 text-sm ${aiReplyGlobalEnabled ? openClass : closedClass}`;
-      manualHandoffEl.textContent = label;
-      manualHandoffEl.className = `px-4 py-2 rounded-xl text-sm ${aiReplyGlobalEnabled ? openClass : closedClass}`;
-      aiModeBannerEl.className = aiReplyGlobalEnabled
-        ? 'px-6 py-2 bg-emerald-50 text-emerald-700 border-b border-emerald-100 text-xs font-semibold'
-        : 'px-6 py-2 bg-white text-slate-600 border-b border-slate-200 text-xs font-semibold';
-      aiModeBannerEl.textContent = aiReplyGlobalEnabled
-        ? '目前為 AI 回應開啟中：系統會依正式開關與白名單規則處理自動回覆。'
-        : '目前為 AI 回應關閉中：系統只監看、標記與提供人工回覆工具，不會自動回覆客戶。';
     }
 
-    function syncAiPauseControls(_thread) {
+    function syncAiPauseControls(thread) {
       renderAiReplyStatus();
+      const hasThread = !!thread;
+      const personalEnabled = hasThread && !thread.aiPaused;
+      const label = personalEnabled ? 'AI回應開啟中' : 'AI回應關閉中';
+      manualHandoffEl.disabled = !hasThread;
+      manualHandoffEl.textContent = label;
+      manualHandoffEl.className = personalEnabled
+        ? 'px-4 py-2 rounded-xl border border-emerald-500 bg-emerald-500 text-white text-sm font-semibold shadow-sm hover:bg-emerald-600'
+        : 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50';
+      const effectiveEnabled = aiReplyGlobalEnabled && personalEnabled;
+      aiModeBannerEl.className = effectiveEnabled
+        ? 'px-6 py-2 bg-emerald-50 text-emerald-700 border-b border-emerald-100 text-xs font-semibold'
+        : 'px-6 py-2 bg-white text-slate-600 border-b border-slate-200 text-xs font-semibold';
+      if (!hasThread) {
+        aiModeBannerEl.textContent = aiReplyGlobalEnabled
+          ? '目前全體 AI 回應開啟中；請選擇聊天室查看個人開關。'
+          : '目前全體 AI 回應關閉中：系統只監看、標記與提供人工回覆工具，不會自動回覆客戶。';
+      } else if (!aiReplyGlobalEnabled) {
+        aiModeBannerEl.textContent = personalEnabled
+          ? '此聊天室個人 AI 回應已開啟，但全體開關目前關閉，所以仍不會自動回覆客戶。'
+          : '目前全體與此聊天室個人 AI 回應皆關閉：系統只監看、標記與提供人工回覆工具。';
+      } else {
+        aiModeBannerEl.textContent = personalEnabled
+          ? '目前全體與此聊天室個人 AI 回應皆開啟：符合白名單規則時才會自動回覆。'
+          : '目前全體 AI 回應開啟，但此聊天室個人 AI 回應關閉，不會自動回覆此客戶。';
+      }
     }
 
     function recordPriorityLabel(priority) {
@@ -2359,7 +2376,17 @@
       showToast(aiReplyGlobalEnabled ? 'AI 回應目前為開啟中' : 'AI 回應目前為關閉中');
     });
     manualHandoffEl.addEventListener('click', () => {
-      showToast(aiReplyGlobalEnabled ? 'AI 回應目前為開啟中' : 'AI 回應目前為關閉中');
+      const active = allThreads.find(item => item.id === activeThreadId);
+      if (!active) {
+        showToast('請先選擇聊天室', 'error');
+        return;
+      }
+      updateThreadMeta({
+        aiPaused: !active.aiPaused,
+        status: active.aiPaused ? (active.status || 'open') : 'pending',
+        note: internalNoteEl.value,
+        tags: active.tags || [],
+      }).catch(err => showToast(err.message, 'error'));
     });
 
     async function init() {
