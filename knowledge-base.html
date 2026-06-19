@@ -317,6 +317,8 @@ entries 每一筆建議欄位：
         const entries = Array.isArray(doc.entries) ? doc.entries : [];
         const expiresAt = docExpiresAt(doc);
         const expired = isExpiredDoc(doc);
+        const isPromoDm = (doc.category || doc.manifestItem?.category || '') === 'promotion_dm' || String(doc.manifestItem?.path || '').includes('/promo-dm/');
+        const hasSocialPost = entries.some(entry => String(entry.social_post || '').trim());
         const card = document.createElement('article');
         card.className = 'rounded-3xl bg-white border border-slate-200 overflow-hidden';
         card.innerHTML = `
@@ -329,6 +331,7 @@ entries 每一筆建議欄位：
               </div>
               <div class="flex flex-wrap gap-2">
                 <span class="rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-bold">${doc.status || doc.manifestItem?.status || 'published'}</span>
+                ${isPromoDm && !hasSocialPost ? `<button type="button" class="generate-social rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-bold hover:bg-blue-100" data-path="${doc.manifestItem?.path || ''}">補社群文案</button>` : ''}
                 ${expiresAt ? `<span class="rounded-full ${expired ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'} px-3 py-1 text-xs font-bold">有效至 ${expiresAt}</span>` : ''}
                 <span class="rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs font-bold">${entries.length} 段</span>
                 <button type="button" class="delete-knowledge rounded-full bg-rose-50 text-rose-700 px-3 py-1 text-xs font-bold hover:bg-rose-100" data-path="${doc.manifestItem?.path || ''}">刪除</button>
@@ -356,6 +359,9 @@ entries 每一筆建議欄位：
       fileListEl.querySelectorAll('.delete-knowledge').forEach(button => {
         button.addEventListener('click', () => deleteKnowledgeFile(button.dataset.path || ''));
       });
+      fileListEl.querySelectorAll('.generate-social').forEach(button => {
+        button.addEventListener('click', () => generateSocialPost(button.dataset.path || ''));
+      });
     }
 
     function render() {
@@ -364,12 +370,33 @@ entries 每一筆建議欄位：
       renderFiles();
     }
 
+    async function ensureLoginForWrite() {
+      if (profile?.userId) return true;
+      if (location.protocol === 'file:') {
+        showToast('請用線上頁面登入後操作');
+        return false;
+      }
+      try {
+        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: location.href });
+          return false;
+        }
+        profile = await liff.getProfile();
+        return !!profile?.userId;
+      } catch (err) {
+        showToast(err.message || '登入失敗');
+        return false;
+      }
+    }
+
     async function deleteKnowledgeFile(path) {
       if (!path) {
         showToast('找不到要刪除的知識檔');
         return;
       }
-      if (!profile?.userId) {
+      if (!(await ensureLoginForWrite())) return;
+      if (false) {
         showToast('請先登入管理員帳號');
         return;
       }
@@ -387,6 +414,31 @@ entries 每一筆建議欄位：
       manifest = payload.data?.manifest || manifest;
       render();
       showToast('已刪除知識檔');
+    }
+
+    async function generateSocialPost(path) {
+      if (!path) {
+        showToast('找不到要補文案的知識檔');
+        return;
+      }
+      if (!(await ensureLoginForWrite())) return;
+      showToast('正在產生社群文案...');
+      const res = await fetch(`${WORKER_URL}/api/knowledge/promo-dm/social-post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: profile.userId, path }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || payload?.success === false) {
+        showToast(payload?.error || '社群文案產生失敗');
+        return;
+      }
+      const index = documents.findIndex(doc => String(doc.manifestItem?.path || '') === path);
+      if (index >= 0) {
+        documents[index] = { ...(payload.data?.document || documents[index]), manifestItem: documents[index].manifestItem };
+      }
+      render();
+      showToast('已補上社群文案');
     }
 
     function validateKnowledgeJson(data) {

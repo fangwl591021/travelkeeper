@@ -5542,6 +5542,58 @@ async function deleteKnowledgeDocument(env, path) {
   return { success: true, data: { path: key, manifest: nextManifest } };
 }
 
+async function generatePromoDmSocialPost(env, path) {
+  if (!env.OPENAI_API_KEY) return { success: false, error: 'OPENAI_KEY_MISSING' };
+  const key = normalizeKnowledgePath(path);
+  const doc = await readKnowledgeJson(env, key);
+  if (!doc) return { success: false, error: 'KNOWLEDGE_FILE_NOT_FOUND' };
+  if (String(doc.category || '') !== 'promotion_dm' && !key.includes('/promo-dm/')) {
+    return { success: false, error: 'NOT_PROMOTION_DM' };
+  }
+  const entries = Array.isArray(doc.entries) ? doc.entries : [];
+  const entry = entries[0] || {};
+  const sourceText = [
+    doc.title,
+    doc.source,
+    doc.usage,
+    entry.title,
+    (entry.keywords || []).join('、'),
+    entry.answer,
+    entry.reply_template,
+    entry.metadata?.ocr_text,
+  ].filter(Boolean).join('\n').slice(0, 5000);
+  const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      temperature: 0.7,
+      max_tokens: 220,
+      messages: [{
+        role: 'user',
+        content: `請依照下列旅行社宣傳 DM 資訊，產生一段適合 Facebook / LINE VOOM / Instagram 的社群宣傳文案。\n\n要求：\n- 約 100 字，最多 130 字\n- 使用繁體中文\n- 加入 2-4 個表情符號\n- 結尾加入 3-5 個 hashtag\n- 不要承諾一定有名額，不要捏造未提供的日期或價格\n- 只輸出文案，不要解釋\n\nDM 資訊：\n${sourceText}`,
+      }],
+    }),
+  });
+  const aiData = await aiRes.json();
+  if (!aiRes.ok || aiData.error) {
+    return { success: false, error: aiData?.error?.message || `OPENAI_${aiRes.status}` };
+  }
+  const socialPost = String(aiData?.choices?.[0]?.message?.content || '').trim().replace(/^["'`]+|["'`]+$/g, '').slice(0, 180);
+  if (!socialPost) return { success: false, error: 'EMPTY_SOCIAL_POST' };
+  const nextEntries = entries.length
+    ? entries.map((item, index) => index === 0 ? { ...item, social_post: socialPost } : item)
+    : [{ id: 'main', title: doc.title || '宣傳 DM', social_post: socialPost, keywords: [], tags: ['宣傳DM'] }];
+  const nextDoc = {
+    ...doc,
+    updated_at: new Date().toISOString(),
+    entries: nextEntries,
+  };
+  const saved = await putKnowledgeDocument(env, key, nextDoc);
+  if (!saved.success) return saved;
+  return { success: true, data: { path: key, document: nextDoc, social_post: socialPost, file: saved.data?.file } };
+}
+
 function safeKnowledgeSlug(value = '') {
   const ascii = String(value || '')
     .normalize('NFKD')
@@ -7807,6 +7859,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await setKnowledgeFileStatus(env, body.path || '', body.status || 'published');
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/knowledge/promo-dm/social-post' && request.method === 'POST') {
+        const body = await request.json();
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await generatePromoDmSocialPost(env, body.path || '');
         return json(result, result.success ? 200 : 400);
       }
 
