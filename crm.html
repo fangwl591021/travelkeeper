@@ -13,6 +13,7 @@
     .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
     .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
     .crm-shell { display: grid; grid-template-columns: minmax(720px, 1fr) minmax(380px, 460px); gap: 16px; align-items: start; }
+    .crm-shell.detail-collapsed { grid-template-columns: minmax(720px, 1fr); }
     @media (max-width: 1180px) { .crm-shell { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -150,14 +151,17 @@
       </div>
     </section>
 
-    <section class="crm-shell mt-5">
+    <section id="crm-shell" class="crm-shell mt-5">
       <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 class="text-xl font-black">客戶名單</h2>
             <p class="mt-1 text-sm text-slate-500">每一列都是一個客戶主檔，LINE 與訂單資料會盡量合併。</p>
           </div>
-          <p id="table-count" class="text-sm font-bold text-slate-400">0 筆</p>
+          <div class="flex items-center gap-3">
+            <p id="table-count" class="text-sm font-bold text-slate-400">0 筆</p>
+            <button id="show-detail-panel" type="button" hidden class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">展開詳細資料</button>
+          </div>
         </div>
         <div class="overflow-auto scrollbar-thin">
           <table class="min-w-[1180px] w-full text-left text-sm">
@@ -178,10 +182,13 @@
         <div id="empty-state" hidden class="px-5 py-12 text-center text-slate-400 font-bold">沒有符合條件的客戶資料。</div>
       </div>
 
-      <aside class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="border-b border-slate-100 px-5 py-4">
-          <p class="text-xs font-bold tracking-[0.2em] text-slate-400">CUSTOMER DETAIL</p>
-          <h2 class="mt-1 text-xl font-black">客戶詳細資料</h2>
+      <aside id="detail-panel" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <p class="text-xs font-bold tracking-[0.2em] text-slate-400">CUSTOMER DETAIL</p>
+            <h2 class="mt-1 text-xl font-black">客戶詳細資料</h2>
+          </div>
+          <button id="hide-detail-panel" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">收合側欄</button>
         </div>
         <div id="customer-detail" class="p-5 text-sm text-slate-500">
           請從左側選擇一位客戶。
@@ -206,6 +213,7 @@
     let crmLoading = false;
     let selectedCustomerId = '';
     let profileEditorExpanded = false;
+    let detailPanelCollapsed = false;
     const targetThreadId = new URLSearchParams(location.search).get('thread') || '';
 
     const els = {
@@ -221,6 +229,10 @@
       tableCount: document.getElementById('table-count'),
       emptyState: document.getElementById('empty-state'),
       detail: document.getElementById('customer-detail'),
+      shell: document.getElementById('crm-shell'),
+      detailPanel: document.getElementById('detail-panel'),
+      showDetailPanel: document.getElementById('show-detail-panel'),
+      hideDetailPanel: document.getElementById('hide-detail-panel'),
       stats: {
         customers: document.getElementById('stat-customers'),
         identities: document.getElementById('stat-identities'),
@@ -571,6 +583,13 @@
       });
     }
 
+    function setDetailPanelCollapsed(collapsed) {
+      detailPanelCollapsed = collapsed;
+      els.shell.classList.toggle('detail-collapsed', collapsed);
+      els.detailPanel.hidden = collapsed;
+      els.showDetailPanel.hidden = !collapsed;
+    }
+
     function selectCustomer(id) {
       selectedCustomerId = id;
       const customer = customers.find(item => item.id === id);
@@ -821,6 +840,8 @@
     });
     document.getElementById('load-crm').addEventListener('click', () => loadCrm().catch(err => showToast(err.message, 'error')));
     document.getElementById('download-csv').addEventListener('click', downloadCsv);
+    els.showDetailPanel.addEventListener('click', () => setDetailPanelCollapsed(false));
+    els.hideDetailPanel.addEventListener('click', () => setDetailPanelCollapsed(true));
 
     init().catch(err => {
       els.loadState.textContent = err.message;
