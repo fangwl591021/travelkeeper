@@ -143,6 +143,7 @@
     let profile = null;
     let canUse = false;
     let imageDataUrls = [];
+    const MAX_BATCH_IMAGES = 50;
 
     const els = {
       authBadge: document.getElementById('auth-badge'),
@@ -194,7 +195,8 @@
 
     function renderPreview() {
       els.preview.innerHTML = '';
-      imageDataUrls.forEach((url, index) => {
+      imageDataUrls.forEach((item, index) => {
+        const url = typeof item === 'string' ? item : item.dataUrl;
         const box = document.createElement('div');
         box.className = 'relative overflow-hidden rounded-2xl border border-slate-200 bg-white';
         box.innerHTML = `<img src="${url}" alt="DM ${index + 1}" class="h-36 w-full object-contain bg-slate-50"><button type="button" class="remove-image absolute right-2 top-2 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-rose-600 shadow" data-index="${index}">移除</button>`;
@@ -237,10 +239,10 @@
     }
 
     els.images.addEventListener('change', async () => {
-      const files = Array.from(els.images.files || []).slice(0, 6 - imageDataUrls.length);
+      const files = Array.from(els.images.files || []).slice(0, Math.max(0, MAX_BATCH_IMAGES - imageDataUrls.length));
       for (const file of files) {
         if (!/^image\//i.test(file.type)) continue;
-        imageDataUrls.push(await fileToDataUrl(file));
+        imageDataUrls.push({ name: file.name || `dm-${imageDataUrls.length + 1}.jpg`, dataUrl: await fileToDataUrl(file) });
       }
       renderPreview();
       els.images.value = '';
@@ -268,30 +270,44 @@
         return;
       }
       els.submit.disabled = true;
-      setProgress(12, '準備送出');
+      setProgress(8, '準備批次處理');
       try {
-        setProgress(42, 'AI OCR 與文字抽取中');
-        const result = await fetchJson(`${WORKER_URL}/api/promo-dm/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uid: profile.userId,
-            title: els.title.value,
-            source: els.source.value,
-            expiresAt: els.expiresAt.value,
-            markdown,
-            images: imageDataUrls,
-            filename: els.source.value || els.title.value || 'promotion-dm',
-          }),
-        });
-        setProgress(100, '已存入知識庫');
+        const imageItems = imageDataUrls.map((item, index) => ({
+          name: typeof item === 'string' ? `dm-${index + 1}.jpg` : item.name,
+          dataUrl: typeof item === 'string' ? item : item.dataUrl,
+        }));
+        const jobs = imageItems.length
+          ? imageItems
+          : [{ name: els.source.value || els.title.value || 'promotion-dm', dataUrl: '' }];
+        const savedResults = [];
+        for (let index = 0; index < jobs.length; index += 1) {
+          const job = jobs[index];
+          const start = 10 + (index / jobs.length) * 80;
+          setProgress(start, `AI OCR 轉換 ${index + 1}/${jobs.length}`);
+          const result = await fetchJson(`${WORKER_URL}/api/promo-dm/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              uid: profile.userId,
+              title: jobs.length > 1 ? `${els.title.value || '宣傳 DM'} ${index + 1}` : els.title.value,
+              source: els.source.value,
+              expiresAt: els.expiresAt.value,
+              markdown: imageItems.length ? '' : markdown,
+              images: job.dataUrl ? [job.dataUrl] : [],
+              filename: job.name || els.source.value || els.title.value || 'promotion-dm',
+            }),
+          });
+          savedResults.push(result);
+        }
+        setProgress(100, `已完成 ${savedResults.length} 筆`);
+        const result = savedResults[savedResults.length - 1] || {};
         const doc = result.data?.document || {};
         const entry = Array.isArray(doc.entries) ? doc.entries[0] || {} : {};
-        els.resultTitle.textContent = doc.title || '已存入宣傳 DM 知識庫';
-        els.resultPath.textContent = result.data?.path || '';
+        els.resultTitle.textContent = savedResults.length > 1 ? `已批次存入 ${savedResults.length} 筆宣傳 DM` : (doc.title || '已存入宣傳 DM');
+        els.resultPath.textContent = savedResults.map(item => item.data?.path || '').filter(Boolean).join('\n');
         els.resultSummary.textContent = entry.answer || doc.usage || '';
         els.resultReply.textContent = entry.reply_template || '';
-        els.resultSocial.textContent = entry.social_post || '未產生社群宣傳文案';
+        els.resultSocial.textContent = entry.social_post || '';
         els.resultKeywords.innerHTML = '';
         (entry.keywords || []).forEach(keyword => {
           const pill = document.createElement('span');
@@ -300,7 +316,7 @@
           els.resultKeywords.appendChild(pill);
         });
         els.resultBox.hidden = false;
-        showToast('宣傳 DM 已存入知識庫');
+        showToast(`已完成 ${savedResults.length} 筆宣傳 DM`);
       } catch (err) {
         showToast(err.message || '宣傳 DM 存檔失敗', 'error');
       } finally {

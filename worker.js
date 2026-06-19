@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // TravelKeeper BFF Worker
 // ?瑁痊嚗???API??鋆?Flex Message?2 ??銝?I 閫?????桀遣蝡?
 // ?垢?芷?????API ?踹???券鞈?
@@ -5858,6 +5858,22 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
   ].filter(Boolean).slice(0, 6);
   if (!markdownText && !imageInputs.length) return { success: false, error: 'MISSING_PROMO_DM_CONTENT' };
 
+  const now = new Date().toISOString();
+  const uploadedImageUrls = [];
+  for (let index = 0; index < imageInputs.length; index += 1) {
+    const source = String(imageInputs[index] || '');
+    if (/^data:image\//i.test(source)) {
+      const extMatch = source.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,/);
+      const ext = String(extMatch?.[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'jpg';
+      const titlePart = safeKnowledgeSlug(body.title || body.filename || 'promotion-dm');
+      const url = await uploadDataUrlToR2(source, `promo-dm/images/${now.slice(0, 10)}/${Date.now()}-${index + 1}-${titlePart}.${ext}`, env);
+      if (url) uploadedImageUrls.push(url);
+    } else if (/^https?:\/\//i.test(source)) {
+      uploadedImageUrls.push(source);
+    }
+  }
+  const aiImageInputs = uploadedImageUrls.length ? uploadedImageUrls : imageInputs;
+
   const sourceIntro = markdownText
     ? `以下是宣傳 DM 或推播素材轉出的文字/Markdown，請抽取可供 LINE 客服查詢的資訊。\n\n${markdownText}`
     : '請 OCR 並分析這張宣傳 DM 圖片，抽取可供 LINE 客服查詢的資訊。';
@@ -5909,7 +5925,7 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
 7. 如果圖片文字不清楚，ocr_text 仍要保留可辨識內容，summary 要註明需人工核對。
 
 ${sourceIntro}` },
-          ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } })),
+          ...aiImageInputs.map(url => ({ type: 'image_url', image_url: { url } })),
         ],
       }],
     }),
@@ -5928,7 +5944,6 @@ ${sourceIntro}` },
     return { success: false, error: 'PROMO_DM_JSON_INVALID', detail: err.message };
   }
 
-  const now = new Date().toISOString();
   const title = String(parsed.title || body.title || '宣傳 DM').trim().slice(0, 120);
   const expiresAt = normalizeDateOnly(body.expiresAt || body.expires_at || '')
     || extractLatestDateOnly(parsed.validity || parsed.ocr_text || '');
@@ -5970,7 +5985,7 @@ ${sourceIntro}` },
     id: `promo_dm_${Date.now()}`,
     title,
     source: String(body.source || body.filename || 'LINE OA 宣傳 DM').slice(0, 160),
-    source_url: '',
+    source_url: uploadedImageUrls[0] || '',
     version: now.slice(0, 10),
     status: 'published',
     category: 'promotion_dm',
@@ -6000,6 +6015,7 @@ ${sourceIntro}` },
         contact: Array.isArray(parsed.contact) ? parsed.contact : [],
         terms: Array.isArray(parsed.terms) ? parsed.terms : [],
         customer_faq: Array.isArray(parsed.customer_faq) ? parsed.customer_faq : [],
+        image_urls: uploadedImageUrls,
       },
     }, ...faqEntries],
   };
@@ -10308,4 +10324,3 @@ function stripTransferDayImages(text = '') {
   }
   return output;
 }
-
