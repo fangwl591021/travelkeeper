@@ -179,6 +179,7 @@
     let threads = [];
     let campaigns = [];
     const selectedIds = new Set();
+    let uploadedImageSignature = '';
 
     const $ = id => document.getElementById(id);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -255,6 +256,7 @@
       const url = result?.data?.url || '';
       if (!url) throw new Error('上傳完成但未取得圖片網址');
       $('image-url').value = url;
+      uploadedImageSignature = `${file.name}:${file.size}:${file.lastModified}`;
       $('image-preview').src = url;
       $('image-url-label').textContent = url;
       $('image-preview-box').classList.remove('hidden');
@@ -266,11 +268,20 @@
     function clearImageUpload() {
       $('image-file').value = '';
       $('image-url').value = '';
+      uploadedImageSignature = '';
       $('image-preview').removeAttribute('src');
       $('image-url-label').textContent = '';
       $('image-preview-box').classList.add('hidden');
       $('image-upload-state').textContent = '支援 JPG / PNG；上傳後會轉成 LINE 可用圖片網址。';
       updateStats();
+    }
+
+    async function ensureSelectedImageUploaded() {
+      const file = $('image-file').files?.[0];
+      if (!file) return;
+      const signature = `${file.name}:${file.size}:${file.lastModified}`;
+      if ($('image-url').value && uploadedImageSignature === signature) return;
+      await uploadImageFile();
     }
 
     function filteredThreads() {
@@ -382,6 +393,7 @@
     async function sendTest() {
       const title = textOf($('campaign-title').value);
       if (!title) throw new Error('請輸入推播名稱');
+      await ensureSelectedImageUploaded();
       const messages = buildMessages();
       const data = await fetchJson(`${WORKER_URL}/api/line-oa/broadcast`, {
         method: 'POST',
@@ -404,6 +416,7 @@
     async function startBroadcast() {
       const title = textOf($('campaign-title').value);
       if (!title) throw new Error('請輸入推播名稱');
+      await ensureSelectedImageUploaded();
       const messages = buildMessages();
       const ids = [...selectedIds];
       if (!ids.length) throw new Error('請先勾選推播受眾');
@@ -474,6 +487,17 @@
       $('image-upload-state').textContent = err.message;
       showToast(err.message, 'error');
     }));
+    $('image-file').addEventListener('change', () => {
+      $('image-url').value = '';
+      uploadedImageSignature = '';
+      $('image-preview').removeAttribute('src');
+      $('image-url-label').textContent = '';
+      $('image-preview-box').classList.add('hidden');
+      $('image-upload-state').textContent = $('image-file').files?.[0]
+        ? '已選擇圖片，按上傳圖片或送出時會自動上傳。'
+        : '支援 JPG / PNG；上傳後會轉成 LINE 可用圖片網址。';
+      updateStats();
+    });
     $('clear-image').addEventListener('click', clearImageUpload);
     $('audience-search').addEventListener('input', renderAudience);
     $('audience-status').addEventListener('change', renderAudience);

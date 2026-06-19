@@ -3505,7 +3505,11 @@ async function pushLineMessages(env, to, messages = []) {
   });
   const responseText = await res.text();
   if (!res.ok) {
-    throw new Error(`LINE push failed (${res.status}): ${responseText.slice(0, 300)}`);
+    const messageTypes = safeMessages.map(message => message.type || 'unknown').join(',');
+    const imageHint = safeMessages.some(message => message.type === 'image')
+      ? '；圖片訊息請確認圖片已上傳完成、URL 可公開 HTTPS 存取，且為 JPG/PNG'
+      : '';
+    throw new Error(`LINE push failed (${res.status}) [${messageTypes}]: ${responseText.slice(0, 300)}${imageHint}`);
   }
   return { status: res.status, body: responseText, count: safeMessages.length };
 }
