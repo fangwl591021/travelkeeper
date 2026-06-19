@@ -217,6 +217,20 @@
       return data;
     }
 
+    async function fetchJsonRetry(url, options, retries = 2) {
+      let lastError = null;
+      for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+          return await fetchJson(url, options);
+        } catch (err) {
+          lastError = err;
+          if (attempt >= retries) break;
+          await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+        }
+      }
+      throw lastError || new Error('Network connection lost');
+    }
+
     async function initAuth() {
       if (location.protocol === 'file:') {
         els.authBadge.textContent = '本機預覽';
@@ -280,29 +294,35 @@
           ? imageItems.filter(item => item.key)
           : [{ name: els.source.value || els.title.value || 'promotion-dm', dataUrl: '' }];
         const pendingUploads = imageItems.filter(item => !item.key && item.dataUrl);
+        const uploadErrors = [];
         if (pendingUploads.length) {
-          setProgress(5, `建立圖片檔 ${pendingUploads.length} 張`);
-          const uploaded = await fetchJson(`${WORKER_URL}/api/promo-dm/images`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              uid: profile.userId,
-              images: pendingUploads.map(item => ({ name: item.name, dataUrl: item.dataUrl })),
-            }),
-          });
-          const files = uploaded.data?.files || [];
-          files.forEach((file, index) => {
-            pendingUploads[index].key = file.key;
-            pendingUploads[index].url = file.url;
-            pendingUploads[index].dataUrl = '';
-          });
-          const uploadErrors = uploaded.data?.errors || [];
+          for (let uploadIndex = 0; uploadIndex < pendingUploads.length; uploadIndex += 1) {
+            const item = pendingUploads[uploadIndex];
+            setProgress(5 + (uploadIndex / pendingUploads.length) * 20, `建立圖片檔 ${uploadIndex + 1}/${pendingUploads.length}`);
+            try {
+              const uploaded = await fetchJsonRetry(`${WORKER_URL}/api/promo-dm/images`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  uid: profile.userId,
+                  images: [{ name: item.name, dataUrl: item.dataUrl }],
+                }),
+              });
+              const file = uploaded.data?.files?.[0];
+              if (!file?.key) throw new Error(uploaded.data?.errors?.[0]?.error || 'UPLOAD_FAILED');
+              item.key = file.key;
+              item.url = file.url;
+              item.dataUrl = '';
+              renderPreview();
+            } catch (err) {
+              uploadErrors.push({ name: item.name || `DM ${uploadIndex + 1}`, error: err.message || '圖片建檔失敗' });
+            }
+          }
           if (uploadErrors.length) {
             showToast(`圖片建檔失敗 ${uploadErrors.length} 張，已略過`, 'error');
           }
           jobs = imageItems.filter(item => item.key);
           if (!jobs.length) throw new Error('圖片建檔失敗，請重試或減少批次數量');
-          renderPreview();
         }
         const savedResults = [];
         const failedResults = [];
