@@ -1225,19 +1225,88 @@
       return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
-    function scoreItineraryMatch(itinerary, haystack) {
+    const GENERIC_ITINERARY_WORDS = new Set([
+      '行程',
+      '旅遊',
+      '旅行',
+      '自由行',
+      '國旅',
+      '國外',
+      '推薦',
+      '參考',
+      '價格',
+      '預算',
+      '費用',
+      '出發',
+      '天數'
+    ]);
+
+    const ITINERARY_DESTINATION_GROUPS = [
+      {
+        label: '日本',
+        terms: ['日本', '東京', '大阪', '京都', '關西', '九州', '北海道', '沖繩', '名古屋', '富士', '箱根', '立山', '黑部']
+      },
+      {
+        label: '韓國',
+        terms: ['韓國', '首爾', '釜山', '濟州']
+      },
+      {
+        label: '台灣',
+        terms: ['台灣', '花蓮', '台東', '日月潭', '阿里山', '墾丁', '澎湖', '金門', '馬祖']
+      },
+      {
+        label: '中國大陸',
+        terms: ['中國', '大陸', '張家界', '桂林', '上海', '北京', '四川', '雲南', '杭州']
+      },
+      {
+        label: '越南',
+        terms: ['越南', '峴港', '河內', '胡志明', '富國島']
+      },
+      {
+        label: '泰國',
+        terms: ['泰國', '曼谷', '清邁', '普吉', '芭達雅']
+      }
+    ];
+
+    function getItinerarySearchText(itinerary) {
+      return normalizeText([
+        itinerary?.title,
+        itinerary?.name,
+        itinerary?.region,
+        itinerary?.description,
+        itinerary?.notes,
+        itinerary?.summary
+      ].filter(Boolean).join(' '));
+    }
+
+    function detectItineraryDestination(haystack) {
+      const text = normalizeText(haystack);
+      return ITINERARY_DESTINATION_GROUPS.find(group =>
+        group.terms.some(term => text.includes(normalizeText(term)))
+      ) || null;
+    }
+
+    function matchesItineraryDestination(itinerary, destination) {
+      if (!destination) return true;
+      const text = getItinerarySearchText(itinerary);
+      return destination.terms.some(term => text.includes(normalizeText(term)));
+    }
+
+    function scoreItineraryMatch(itinerary, haystack, destination) {
       if (!haystack) return 0;
+      if (destination && !matchesItineraryDestination(itinerary, destination)) return 0;
       const title = normalizeText(itinerary.title || itinerary.name || '');
       const region = normalizeText(itinerary.region || '');
       const description = normalizeText(itinerary.description || itinerary.notes || '');
       let score = 0;
+      if (destination && matchesItineraryDestination(itinerary, destination)) score += 20;
       if (title && haystack.includes(title)) score += 8;
       if (region && haystack.includes(region)) score += 5;
       const keywords = [title, region, description]
         .join(' ')
         .split(/[^\p{L}\p{N}]+/u)
         .map(v => v.trim())
-        .filter(v => v.length >= 2);
+        .filter(v => v.length >= 2 && !GENERIC_ITINERARY_WORDS.has(v));
       keywords.forEach(word => {
         if (haystack.includes(word)) score += 1;
       });
@@ -1246,13 +1315,15 @@
 
     function recommendPublishedItineraries(thread) {
       const haystack = normalizeText((thread?.messages || []).map(m => m.text || '').join('\n'));
+      const destination = detectItineraryDestination(haystack);
       const ranked = publishedItineraries
-        .map(item => ({ item, score: scoreItineraryMatch(item, haystack) }))
+        .map(item => ({ item, score: scoreItineraryMatch(item, haystack, destination) }))
         .filter(entry => entry.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 3)
         .map(entry => entry.item);
       if (ranked.length) return ranked;
+      if (destination) return [];
       return publishedItineraries.slice(0, 3);
     }
 
@@ -1265,6 +1336,15 @@
       }
       const recommendations = recommendPublishedItineraries(thread);
       itinerarySuggestionCountEl.textContent = String(recommendations.length);
+      if (!recommendations.length) {
+        const haystack = normalizeText((thread?.messages || []).map(m => m.text || '').join('\n'));
+        const destination = detectItineraryDestination(haystack);
+        const message = destination
+          ? `目前沒有符合「${destination.label}」的已上架行程。`
+          : '目前沒有符合對話內容的已上架行程。';
+        itinerarySuggestionListEl.innerHTML = `<div class="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-400">${message}</div>`;
+        return;
+      }
       recommendations.forEach((item, idx) => {
         const title = item.title || item.name || '未命名行程';
         const price = Number(item.price || 0);
