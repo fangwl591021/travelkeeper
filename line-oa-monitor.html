@@ -49,10 +49,11 @@
     }
     .conversation-pane {
       min-width: 520px;
+      max-width: clamp(560px, 49vw, 760px);
       background: #f8fafc;
     }
     .insight-rail {
-      width: clamp(340px, 24vw, 390px);
+      width: clamp(420px, 31vw, 520px);
       background: #f8fafc;
       box-shadow: -8px 0 18px rgba(15, 23, 42, .025);
       z-index: 2;
@@ -188,8 +189,8 @@
     }
     @media (max-width: 1180px) {
       .left-rail { width: 340px; }
-      .insight-rail { width: 320px; }
-      .conversation-pane { min-width: 440px; }
+      .insight-rail { width: 380px; }
+      .conversation-pane { min-width: 420px; max-width: 520px; }
     }
     @media (max-width: 980px) {
       .monitor-shell {
@@ -197,9 +198,10 @@
       }
       .left-rail { width: 320px; }
       .conversation-pane {
-        min-width: 460px;
+        min-width: 420px;
+        max-width: 420px;
       }
-      .insight-rail { width: 300px; }
+      .insight-rail { width: 360px; }
     }
   </style>
 </head>
