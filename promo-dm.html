@@ -48,6 +48,10 @@
               <label class="text-xs font-black text-slate-500">來源備註</label>
               <input id="dm-source" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500" placeholder="例如：6/19 LINE OA 推播">
             </div>
+            <div>
+              <label class="text-xs font-black text-slate-500">有效至 / 自動隱藏日</label>
+              <input id="dm-expires-at" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500">
+            </div>
           </div>
 
           <div class="mt-5 grid gap-5 md:grid-cols-2">
@@ -140,6 +144,7 @@
       authBadge: document.getElementById('auth-badge'),
       title: document.getElementById('dm-title'),
       source: document.getElementById('dm-source'),
+      expiresAt: document.getElementById('dm-expires-at'),
       images: document.getElementById('dm-images'),
       text: document.getElementById('dm-text'),
       preview: document.getElementById('preview-list'),
@@ -240,6 +245,7 @@
       imageDataUrls = [];
       els.title.value = '';
       els.source.value = '';
+      els.expiresAt.value = '';
       els.text.value = '';
       els.resultBox.hidden = true;
       els.progressBox.hidden = true;
@@ -267,6 +273,7 @@
             uid: profile.userId,
             title: els.title.value,
             source: els.source.value,
+            expiresAt: els.expiresAt.value,
             markdown,
             images: imageDataUrls,
             filename: els.source.value || els.title.value || 'promotion-dm',

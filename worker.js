@@ -3717,6 +3717,7 @@ async function getPublishedKnowledgeEntries(env) {
   for (const file of published) {
     try {
       const doc = await readKnowledgeJson(env, file.path || '');
+      if (isKnowledgeDocExpired(doc)) continue;
       const docEntries = Array.isArray(doc?.entries) ? doc.entries : [];
       docEntries.forEach(entry => {
         entries.push({
@@ -5544,6 +5545,32 @@ function normalizePromoDmKeywords(values = []) {
     .slice(0, 30);
 }
 
+function normalizeDateOnly(value = '') {
+  const text = String(value || '').trim();
+  const match = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || !month || !day) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function extractLatestDateOnly(value = '') {
+  const text = String(value || '');
+  const matches = [...text.matchAll(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/g)];
+  const dates = matches.map(match => normalizeDateOnly(match[0])).filter(Boolean).sort();
+  return dates.at(-1) || '';
+}
+
+function isKnowledgeDocExpired(doc = {}, now = new Date()) {
+  const raw = doc.expires_at || doc.expire_at || doc.valid_until || doc.metadata?.expires_at || '';
+  const expiresAt = normalizeDateOnly(raw);
+  if (!expiresAt) return false;
+  const today = now.toISOString().slice(0, 10);
+  return expiresAt < today;
+}
+
 async function buildPromoDmKnowledgeDocument(env, body = {}) {
   if (!env.OPENAI_API_KEY) return { success: false, error: 'OPENAI_KEY_MISSING' };
   const markdownText = String(body.markdown || body.text || '').trim().slice(0, 40000);
@@ -5612,6 +5639,8 @@ ${sourceIntro}` },
 
   const now = new Date().toISOString();
   const title = String(parsed.title || body.title || '宣傳 DM').trim().slice(0, 120);
+  const expiresAt = normalizeDateOnly(body.expiresAt || body.expires_at || '')
+    || extractLatestDateOnly(parsed.validity || parsed.ocr_text || '');
   const keywords = normalizePromoDmKeywords([
     ...(Array.isArray(parsed.keywords) ? parsed.keywords : []),
     parsed.title,
@@ -5635,6 +5664,7 @@ ${sourceIntro}` },
     category: 'promotion_dm',
     usage: '店家推播宣傳 DM。供 LINE OA 監控台、AI 客服與知識庫比對客戶詢問使用；不是正式上架行程。',
     created_at: now,
+    expires_at: expiresAt,
     entries: [{
       id: `promo_dm_${Date.now()}_main`,
       title,
@@ -5648,6 +5678,7 @@ ${sourceIntro}` },
         price: parsed.price || 0,
         departure: parsed.departure || '',
         validity: parsed.validity || '',
+        expires_at: expiresAt,
         ocr_text: parsed.ocr_text || '',
       },
     }],

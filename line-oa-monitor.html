@@ -1234,6 +1234,17 @@
         .slice(0, limit);
     }
 
+    function normalizeDateOnly(value = '') {
+      const match = String(value || '').match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (!match) return '';
+      return `${match[1]}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[3])).padStart(2, '0')}`;
+    }
+
+    function isExpiredKnowledgeDoc(doc = {}) {
+      const expiresAt = normalizeDateOnly(doc.expires_at || doc.expire_at || doc.valid_until || doc.metadata?.expires_at || '');
+      return !!expiresAt && expiresAt < new Date().toISOString().slice(0, 10);
+    }
+
     function buildSuggestions(thread) {
       const haystack = threadText(thread);
       const customerText = customerThreadText(thread) || haystack;
@@ -1635,6 +1646,7 @@
         ));
         promoKnowledgeEntries = docs
           .filter(Boolean)
+          .filter(({ doc }) => !isExpiredKnowledgeDoc(doc))
           .flatMap(({ file, doc }) => (doc.entries || []).map(entry => ({
             ...entry,
             documentTitle: doc.title || file.title || '',
