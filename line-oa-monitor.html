@@ -219,7 +219,7 @@
           <button id="open-broadcast-workbench" type="button" class="rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800">分時推播工作台</button>
           <button id="open-customer-crm" type="button" class="rounded-2xl bg-emerald-500 text-white px-4 py-3 text-sm font-semibold hover:bg-emerald-600">客戶 CRM</button>
           <a href="./knowledge-base.html" class="col-span-2 rounded-2xl bg-amber-500 text-center text-white px-4 py-3 text-sm font-semibold hover:bg-amber-600">知識庫</a>
-          <button id="global-ai-reply-status" type="button" class="col-span-2 rounded-2xl border border-slate-300 bg-white text-center text-slate-700 px-4 py-3 text-sm font-semibold hover:bg-slate-50">全體AI：已關閉</button>
+          <button id="global-ai-reply-status" type="button" class="col-span-2 rounded-2xl border border-slate-300 bg-white text-center text-slate-700 px-4 py-3 text-sm font-semibold hover:bg-slate-50">總開關：關閉</button>
         </div>
       </div>
 
@@ -290,7 +290,7 @@
           </div>
           <div class="flex flex-wrap gap-2 items-center">
             <button id="open-visitor-records" class="px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-semibold">重要紀錄</button>
-            <button id="manual-handoff" title="點擊切換此客戶 AI 回應" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50">此客戶AI：已關閉</button>
+            <button id="manual-handoff" title="點擊切換此客戶個人 AI 設定" class="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100">個人設定：跟隨總開關</button>
             <button id="mark-open" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">待回覆</button>
             <button id="mark-pending" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">處理中</button>
             <button id="mark-closed" class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold">已處理</button>
@@ -1003,29 +1003,43 @@
     function syncAiPauseControls(thread) {
       renderAiReplyStatus();
       const hasThread = !!thread;
-      const personalEnabled = hasThread && !thread.aiPaused;
-      const label = personalEnabled ? '此客戶AI：已開啟' : '此客戶AI：已關閉';
+      const override = String(thread?.aiReplyOverride || '').trim();
+      const hasOverride = override === 'enabled' || override === 'disabled';
+      const personalEnabled = override === 'enabled'
+        ? true
+        : override === 'disabled'
+          ? false
+          : aiReplyGlobalEnabled;
+      const label = !hasThread
+        ? '個人設定：未選擇'
+        : override === 'enabled'
+          ? '個人設定：開啟'
+          : override === 'disabled'
+            ? '個人設定：關閉'
+            : '個人設定：跟隨總開關';
       manualHandoffEl.disabled = !hasThread;
       manualHandoffEl.textContent = label;
-      manualHandoffEl.className = personalEnabled
+      manualHandoffEl.className = override === 'enabled'
         ? 'px-4 py-2 rounded-xl border border-emerald-500 bg-emerald-500 text-white text-sm font-semibold shadow-sm hover:bg-emerald-600'
-        : 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50';
-      const effectiveEnabled = aiReplyGlobalEnabled && personalEnabled;
+        : override === 'disabled'
+          ? 'px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50'
+          : 'px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100';
+      const effectiveEnabled = !!hasThread && personalEnabled;
       aiModeBannerEl.className = effectiveEnabled
         ? 'px-6 py-2 bg-emerald-50 text-emerald-700 border-b border-emerald-100 text-xs font-semibold'
         : 'px-6 py-2 bg-white text-slate-600 border-b border-slate-200 text-xs font-semibold';
       if (!hasThread) {
         aiModeBannerEl.textContent = aiReplyGlobalEnabled
-          ? '目前全體 AI 回應開啟中；請選擇聊天室查看個人開關。'
-          : '目前全體 AI 回應關閉中：系統只監看、標記與提供人工回覆工具，不會自動回覆客戶。';
-      } else if (!aiReplyGlobalEnabled) {
-        aiModeBannerEl.textContent = personalEnabled
-          ? '此聊天室個人 AI 回應已開啟，但全體開關目前關閉，所以仍不會自動回覆客戶。'
-          : '目前全體與此聊天室個人 AI 回應皆關閉：系統只監看、標記與提供人工回覆工具。';
+          ? '總開關目前開啟；未單獨設定的聊天室會跟隨總開關。'
+          : '總開關目前關閉；可在單一聊天室用個人設定例外開啟。';
+      } else if (effectiveEnabled) {
+        aiModeBannerEl.textContent = hasOverride
+          ? '目前此客戶已單獨開啟 AI 回應，會自動回覆此客戶。'
+          : '目前此客戶跟隨總開關，總開關已開啟，會自動回覆此客戶。';
       } else {
-        aiModeBannerEl.textContent = personalEnabled
-          ? '目前全體與此聊天室個人 AI 回應皆開啟：符合白名單規則時才會自動回覆。'
-          : '目前全體 AI 回應開啟，但此聊天室個人 AI 回應關閉，不會自動回覆此客戶。';
+        aiModeBannerEl.textContent = hasOverride
+          ? '目前此客戶已單獨關閉 AI 回應，不會自動回覆此客戶。'
+          : '目前此客戶跟隨總開關，總開關已關閉，不會自動回覆此客戶。';
       }
     }
 
@@ -1535,7 +1549,8 @@
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${opportunityClass(item.opportunityStage)}">${opportunityLabel(item.opportunityStage)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
-          ${item.aiPaused ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-600 text-white">人工接手</span>' : ''}
+          ${item.aiReplyOverride === 'enabled' ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">AI例外開</span>' : ''}
+          ${item.aiReplyOverride === 'disabled' ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-600 text-white">AI例外關</span>' : ''}
           ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} 則</span>` : ''}
           ${Number(item.importantCount || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">重要 ${item.importantCount}</span>` : ''}
           ${Number(item.learningCount || 0) > 0 ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-violet-600 text-white">學習中</span>' : ''}
@@ -2381,9 +2396,16 @@
         showToast('請先選擇聊天室', 'error');
         return;
       }
+      const currentOverride = String(active.aiReplyOverride || '').trim();
+      const effectiveEnabled = currentOverride === 'enabled'
+        ? true
+        : currentOverride === 'disabled'
+          ? false
+          : aiReplyGlobalEnabled;
+      const nextOverride = effectiveEnabled ? 'disabled' : 'enabled';
       updateThreadMeta({
-        aiPaused: !active.aiPaused,
-        status: active.aiPaused ? (active.status || 'open') : 'pending',
+        aiReplyOverride: nextOverride,
+        status: nextOverride === 'enabled' ? (active.status || 'open') : 'pending',
         note: internalNoteEl.value,
         tags: active.tags || [],
       }).catch(err => showToast(err.message, 'error'));

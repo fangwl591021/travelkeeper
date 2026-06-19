@@ -3632,15 +3632,13 @@ async function handleLineWebhookGateway(request, env, ctx) {
       }
     }
 
-    if (isLineAutoReplyEnabled(env)) {
-      try {
-        const autoReplyResult = await replyLineWebhookWithKnowledge(env, payload);
-        if (autoReplyResult?.replied) {
-          console.log(`line webhook knowledge replies sent: ${autoReplyResult.replied}`);
-        }
-      } catch (err) {
-        console.error('line webhook background processing failed:', err.message);
+    try {
+      const autoReplyResult = await replyLineWebhookWithKnowledge(env, payload);
+      if (autoReplyResult?.replied) {
+        console.log(`line webhook knowledge replies sent: ${autoReplyResult.replied}`);
       }
+    } catch (err) {
+      console.error('line webhook background processing failed:', err.message);
     }
   })());
 
@@ -3832,8 +3830,8 @@ async function filterLineWebhookPayloadForAutoReply(env, payload = {}) {
   const activeEvents = [];
   for (const event of events) {
     const threadId = getLineThreadId(event?.source || {});
-    const paused = await isLineThreadAiPaused(env, threadId);
-    if (!paused) activeEvents.push(event);
+    const enabled = await isLineThreadAutoReplyEnabled(env, threadId);
+    if (enabled) activeEvents.push(event);
   }
   if (!activeEvents.length) return null;
   if (activeEvents.length === events.length) return payload;
@@ -4219,6 +4217,7 @@ async function d1GetLineThreads(env, options = {}) {
       opportunity_value,
       opportunity_note,
       ai_paused,
+      ai_reply_override,
       (
         SELECT COUNT(*)
         FROM line_visitor_requirements req
@@ -4280,6 +4279,7 @@ async function d1GetLineThreads(env, options = {}) {
       opportunityValue: Number(row.opportunity_value || 0),
       opportunityNote: row.opportunity_note || '',
       aiPaused: Number(row.ai_paused || 0) === 1,
+      aiReplyOverride: normalizeLineAiReplyOverride(row.ai_reply_override || ''),
       importantCount: Number(row.important_count || 0),
       latestImportantNote: row.latest_important_note || '',
       learningCount: Number(row.learning_count || 0),
@@ -4316,21 +4316,57 @@ async function ensureLineThreadAiPauseColumn(env) {
   } catch (err) {
     if (!String(err?.message || err).toLowerCase().includes('duplicate column')) throw err;
   }
+  try {
+    await env.DB.prepare(`ALTER TABLE line_threads ADD COLUMN ai_reply_override TEXT NOT NULL DEFAULT ''`).run();
+  } catch (err) {
+    if (!String(err?.message || err).toLowerCase().includes('duplicate column')) throw err;
+  }
   await env.DB.prepare(`
     CREATE INDEX IF NOT EXISTS idx_line_threads_ai_paused
     ON line_threads(ai_paused, updated_at)
   `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_threads_ai_reply_override
+    ON line_threads(ai_reply_override, updated_at)
+  `).run();
 }
 
-async function isLineThreadAiPaused(env, threadId) {
-  if (!env.DB || !threadId) return false;
+function normalizeLineAiReplyOverride(value = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['enabled', 'on', '1', 'true'].includes(raw)) return 'enabled';
+  if (['disabled', 'off', '0', 'false'].includes(raw)) return 'disabled';
+  return '';
+}
+
+async function getLineThreadAiReplyState(env, threadId) {
+  const globalEnabled = isLineAutoReplyEnabled(env);
+  if (!env.DB || !threadId) {
+    return { override: '', aiPaused: false, enabled: globalEnabled, globalEnabled };
+  }
   await ensureLineThreadAiPauseColumn(env);
   const row = await env.DB.prepare(`
-    SELECT ai_paused
+    SELECT ai_paused, ai_reply_override
     FROM line_threads
     WHERE id = ?
   `).bind(threadId).first();
-  return Number(row?.ai_paused || 0) === 1;
+  const aiPaused = Number(row?.ai_paused || 0) === 1;
+  const override = normalizeLineAiReplyOverride(row?.ai_reply_override || '');
+  const enabled = override === 'enabled'
+    ? true
+    : override === 'disabled'
+      ? false
+      : (globalEnabled && !aiPaused);
+  return { override, aiPaused, enabled, globalEnabled };
+}
+
+async function isLineThreadAutoReplyEnabled(env, threadId) {
+  const state = await getLineThreadAiReplyState(env, threadId);
+  return !!state.enabled;
+}
+
+async function isLineThreadAiPaused(env, threadId) {
+  const state = await getLineThreadAiReplyState(env, threadId);
+  return !state.enabled;
 }
 
 async function ensureLineVisitorRequirementsTable(env) {
@@ -4707,6 +4743,7 @@ async function d1GetLineThread(env, threadId) {
       opportunity_value,
       opportunity_note,
       ai_paused,
+      ai_reply_override,
       (
         SELECT COUNT(*)
         FROM line_visitor_requirements req
@@ -4809,6 +4846,7 @@ async function d1GetLineThread(env, threadId) {
       opportunityValue: Number(thread.opportunity_value || 0),
       opportunityNote: thread.opportunity_note || '',
       aiPaused: Number(thread.ai_paused || 0) === 1,
+      aiReplyOverride: normalizeLineAiReplyOverride(thread.ai_reply_override || ''),
       importantCount: Number(thread.important_count || visitorRecords.length || 0),
       latestImportantNote: thread.latest_important_note || visitorRecords[0]?.content || '',
       visitorRecords,
@@ -4844,6 +4882,7 @@ async function d1GetLineCrm(env) {
       opportunity_value,
       opportunity_note,
       ai_paused,
+      ai_reply_override,
       last_message_at
     FROM line_threads
     ORDER BY COALESCE(last_message_at, created_at) DESC
@@ -4899,6 +4938,7 @@ async function d1GetLineCrm(env) {
         opportunityValue: Number(row.opportunity_value || 0),
         opportunityNote: row.opportunity_note || '',
         aiPaused: Number(row.ai_paused || 0) === 1,
+        aiReplyOverride: normalizeLineAiReplyOverride(row.ai_reply_override || ''),
         importantCount: visitorRecords.length,
         latestImportantNote: visitorRecords[0]?.content || '',
         visitorRecords,
@@ -5006,6 +5046,9 @@ async function d1UpdateLineThread(env, body = {}) {
   const aiPaused = body.aiPaused === undefined && body.ai_paused === undefined
     ? null
     : ((body.aiPaused ?? body.ai_paused) === true || String(body.aiPaused ?? body.ai_paused) === '1' ? 1 : 0);
+  const aiReplyOverride = body.aiReplyOverride === undefined && body.ai_reply_override === undefined
+    ? null
+    : normalizeLineAiReplyOverride(body.aiReplyOverride ?? body.ai_reply_override);
   const sets = [];
   const values = [];
   if (status !== null) {
@@ -5035,6 +5078,12 @@ async function d1UpdateLineThread(env, body = {}) {
   if (aiPaused !== null) {
     sets.push('ai_paused = ?');
     values.push(aiPaused);
+  }
+  if (aiReplyOverride !== null) {
+    sets.push('ai_reply_override = ?');
+    values.push(aiReplyOverride);
+    sets.push('ai_paused = ?');
+    values.push(aiReplyOverride === 'disabled' ? 1 : 0);
   }
   if (!sets.length) return { success: false, error: '????????' };
   sets.push("updated_at = datetime('now')");
@@ -7687,7 +7736,7 @@ export default {
           success: true,
           data: {
             enabled: isLineAutoReplyEnabled(env),
-            label: isLineAutoReplyEnabled(env) ? 'AI回應開啟中' : 'AI回應關閉中',
+            label: isLineAutoReplyEnabled(env) ? '總開關：開啟' : '總開關：關閉',
             mode: isLineAutoReplyEnabled(env) ? 'enabled' : 'disabled',
           },
         });
