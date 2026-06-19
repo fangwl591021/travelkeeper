@@ -1122,6 +1122,7 @@ function PromoteModal({
     if (selectedCount === 1 && mode !== 'single') setMode('single');
     if (selectedCount >= 2 && mode === 'single') setMode('carousel');
     if (selectedCount !== 6 && mode === 'travel6') setMode(selectedCount >= 2 ? 'carousel' : 'single');
+    if (selectedCount !== 4 && mode === 'travel4') setMode(selectedCount >= 2 ? 'carousel' : 'single');
   }, [selectedCount, mode]);
 
   // 組 socFields 物件（同時包含 boolean key 跟 field 值）
@@ -1276,6 +1277,24 @@ function PromoteModal({
             ))}
           </div>
           <button type="button"
+            onClick={() => selectedCount === 4 && setMode(mode === 'travel4' ? 'carousel' : 'travel4')}
+            disabled={selectedCount !== 4}
+            className={`mt-3 w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition ${
+              mode === 'travel4'
+                ? 'bg-emerald-50 border-emerald-500 text-slate-900'
+                : selectedCount === 4
+                  ? 'bg-white border-slate-200 hover:border-emerald-300 text-slate-700'
+                  : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+            }`}>
+            <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs font-black ${
+              mode === 'travel4' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300'
+            }`}>{mode === 'travel4' ? '\u2713' : ''}</span>
+            <span className="flex-1">
+              <span className="block text-sm font-black">Giga+ 四格模式</span>
+              <span className="block text-[11px] font-medium opacity-70">剛好選 4 個行程，產生 2x2 旅遊宣傳版型。</span>
+            </span>
+          </button>
+          <button type="button"
             onClick={() => selectedCount === 6 && setMode(mode === 'travel6' ? 'carousel' : 'travel6')}
             disabled={selectedCount !== 6}
             className={`mt-3 w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition ${
@@ -1293,7 +1312,7 @@ function PromoteModal({
               <span className="block text-[11px] font-medium opacity-70">勾選後使用 LINE Giga 大版型，需剛好 6 筆行程</span>
             </span>
           </button>
-          {mode === 'travel6' && (
+          {(mode === 'travel6' || mode === 'travel4') && (
             <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <label className="block text-xs font-black text-slate-700">中央主標文字</label>
@@ -1376,7 +1395,7 @@ function PromoteModal({
             <div className="text-sm space-y-1">
               <p>📦 將推送 <span className="font-black">{selectedCount} 筆</span> 行程</p>
               <p>🎨 格式：<span className="font-black">{
-                mode === 'single' ? '\u55ae\u5f35\u5361\u7247' : mode === 'carousel' ? '\u8f2a\u64ad\u5361\u7247' : mode === 'travel6' ? 'Giga+ \u516d\u5bae\u683c' : '\u5217\u8868\u5361\u7247'
+                mode === 'single' ? '\u55ae\u5f35\u5361\u7247' : mode === 'carousel' ? '\u8f2a\u64ad\u5361\u7247' : mode === 'travel4' ? 'Giga+ 四格模式' : mode === 'travel6' ? 'Giga+ \u516d\u5bae\u683c' : '\u5217\u8868\u5361\u7247'
               }</span></p>
               <p>📞 含 <span className="font-black">{enabledSocs.size}</span> 個聯絡按鈕</p>
               <p>🏷️ 推薦碼：<span className="font-mono font-black text-emerald-600">{inviteCode || '無'}</span></p>
@@ -2280,6 +2299,7 @@ function App() {
     const { ids = [], mode = 'single', socFields = {}, ctaText = '\u67e5\u770b\u5b8c\u6574\u884c\u7a0b', centerText = '\u5fc3\u52d5\u5c31\u8981\u884c\u52d5\uff01\u56de\u994b\u90fd\u5728\u9019', centerTextColor = '#ffffff', travel6BgColor = '#15569a' } = opts || {};
     if (ids.length === 0) { showToast('\u8acb\u5148\u9078\u64c7\u884c\u7a0b', 'error'); return; }
     if (mode === 'travel6' && ids.length !== 6) { showToast('\u65c5\u904a\u516d\u5bae\u683c\u9700\u8981\u525b\u597d 6 \u500b\u884c\u7a0b', 'error'); return; }
+    if (mode === 'travel4' && ids.length !== 4) { showToast('\u65c5\u904a\u56db\u683c\u6a21\u5f0f\u9700\u8981\u525b\u597d 4 \u500b\u884c\u7a0b', 'error'); return; }
 
     // \u78ba\u8a8d LIFF \u74b0\u5883\u652f\u63f4 shareTargetPicker
     if (typeof liff === 'undefined' || !liff.isApiAvailable || !liff.isApiAvailable('shareTargetPicker')) {

@@ -8652,6 +8652,9 @@ export default {
         if (mode === 'travel6' && items.length !== 6) {
           return json({ success: false, error: '旅遊六宮格需要剛好 6 個行程' }, 400);
         }
+        if (mode === 'travel4' && items.length !== 4) {
+          return json({ success: false, error: '旅遊四格模式需要剛好 4 個行程' }, 400);
+        }
 
         // LIFF ID 敺?config ?選?雿???? URL ???典?
         const cfgRes = await readConfigWithFallback(env, agencySlug);
@@ -8853,8 +8856,126 @@ export default {
           contents: rowItems.map(makeTravelSixTile)
         });
 
+        const makeTravelFourTile = (tour) => {
+          const id = String(tour.id || tour.timestamp || '');
+          const detailUri = buildDetailUri(id);
+          return {
+            type: 'box',
+            layout: 'vertical',
+            flex: 1,
+            cornerRadius: '14px',
+            backgroundColor: '#14532d',
+            action: { type: 'uri', uri: detailUri },
+            contents: [
+              {
+                type: 'image',
+                url: safeImageUrl(tour.image),
+                size: 'full',
+                aspectRatio: '20:11',
+                aspectMode: 'cover',
+                gravity: 'center'
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#14532d',
+                paddingAll: '8px',
+                contents: [
+                  {
+                    type: 'text',
+                    text: `${shortText(tour.title || '精選行程', '精選行程')} ＞`,
+                    size: 'sm',
+                    weight: 'bold',
+                    color: '#ffffff',
+                    align: 'center',
+                    wrap: true,
+                    maxLines: 1
+                  }
+                ]
+              }
+            ]
+          };
+        };
+
+        const makeTravelFourRow = (rowItems) => ({
+          type: 'box',
+          layout: 'horizontal',
+          spacing: 'md',
+          contents: rowItems.map(makeTravelFourTile)
+        });
+
         let flex;
-        if (mode === 'travel6') {
+        if (mode === 'travel4') {
+          const centerLines = normalizeCenterLines(centerText, '解鎖世界之最！\n此生必去哪？');
+          const altTitleText = shortText(centerLines.join(' '), '解鎖世界之最');
+          const titleColor = safeFlexColor(centerTextColor, '#ffffff');
+          const panelBgColor = safeFlexColor(travel6BgColor, '#78be34');
+          const firstId = String(items[0]?.id || items[0]?.timestamp || '');
+          flex = {
+            type: 'flex',
+            altText: `精選 4 款旅遊行程：${altTitleText}`,
+            contents: {
+              type: 'bubble',
+              size: 'giga',
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: panelBgColor,
+                paddingAll: '16px',
+                spacing: 'lg',
+                contents: [
+                  makeTravelFourRow(items.slice(0, 2)),
+                  {
+                    type: 'box',
+                    layout: 'vertical',
+                    spacing: 'xs',
+                    paddingAll: '10px',
+                    contents: [
+                      {
+                        type: 'text',
+                        text: 'LINE 旅遊',
+                        color: titleColor,
+                        weight: 'bold',
+                        size: 'xl',
+                        align: 'center'
+                      },
+                      ...centerLines.map((line, index) => ({
+                        type: 'text',
+                        text: line,
+                        color: titleColor,
+                        weight: 'bold',
+                        size: index === 0 ? 'xxl' : 'lg',
+                        align: 'center',
+                        wrap: true
+                      }))
+                    ]
+                  },
+                  makeTravelFourRow(items.slice(2, 4))
+                ]
+              },
+              footer: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'sm',
+                paddingAll: '14px',
+                contents: [
+                  {
+                    type: 'button',
+                    style: 'primary',
+                    color: '#06c755',
+                    height: 'sm',
+                    action: {
+                      type: 'uri',
+                      label: actionLabel(ctaText, '查看完整行程'),
+                      uri: buildDetailUri(firstId)
+                    }
+                  },
+                  ...socBtns
+                ]
+              }
+            }
+          };
+        } else if (mode === 'travel6') {
           const centerLines = normalizeCenterLines(centerText, '心動就要行動！回饋都在這');
           const titleText = centerLines.join('\n');
           const altTitleText = shortText(centerLines.join(' '), '心動就要行動！回饋都在這');
