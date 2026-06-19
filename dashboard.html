@@ -230,7 +230,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         alt: String(img[1] || '').trim(),
         url: String(img[2] || '').trim(),
       }));
-      const transferOnly = /出發|回程|返程|返回|搭機|飛機|航班|機場|抵達|返家|回家/.test(`${heading}\n${block}`.slice(0, 220));
+      const transferOnly = isTransferOnlyDay(heading, block);
       const riskyImages = imageMatches.filter(img =>
         !img.url ||
         /^data:/i.test(img.url) ||
@@ -239,6 +239,39 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
       return { index: idx + 1, heading, block, images: imageMatches, transferOnly, riskyImages };
     });
   };
+  const isTransferOnlyDay = (heading = '', body = '') => {
+    const text = `${heading}\n${body}`.replace(/\s+/g, '');
+    if (!text) return false;
+    const hasTransfer = /(出發|啟程|集合|機場|搭機|飛機|航班|飛往|抵達|返回|返程|回程|返國|回台|回臺|返家|回家|賦歸)/.test(text);
+    if (!hasTransfer) return false;
+    return !/(樂園|古城|城堡|博物館|美術館|神社|寺|湖|山|海灘|市場|公園|小鎮|市區觀光|巡航|纜車|溫泉|花田|運河|峽谷|瀑布|國家公園|博覽館|大埃及|金字塔|清真寺|教堂|宮殿)/.test(text);
+  };
+  const stripTransferDayImages = (text = '') => {
+    const source = String(text || '');
+    const headingRegex = /(^|\n)(第\s*[0-9一二三四五六七八九十百]+\s*天[^\n]*)/g;
+    const matches = [...source.matchAll(headingRegex)];
+    if (!matches.length) return source;
+    let output = source.slice(0, matches[0].index);
+    matches.forEach((match, idx) => {
+      const next = matches[idx + 1];
+      const prefix = match[1] || '';
+      const heading = match[2] || '';
+      const bodyStart = (match.index || 0) + prefix.length + heading.length;
+      const bodyEnd = next ? next.index : source.length;
+      let body = source.slice(bodyStart, bodyEnd);
+      if (isTransferOnlyDay(heading, body)) {
+        body = body
+          .replace(/(^|\n)!\[[^\]]*\]\([^)]+\)\s*(?=\n|$)/g, '$1')
+          .replace(/\n{3,}/g, '\n\n');
+      }
+      output += `${prefix}${heading}${body}`;
+    });
+    return output;
+  };
+  const sanitizeItineraryDraft = (draft = {}) => ({
+    ...draft,
+    ...(draft.description == null ? {} : { description: stripTransferDayImages(draft.description || '') }),
+  });
   const descriptionText = String(data.description || '');
   const daySectionCount = (descriptionText.match(/(^|\n)\s*第\s*[0-9一二三四五六七八九十百]+\s*天/g) || []).length;
   const descriptionImageCount = (descriptionText.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
@@ -246,7 +279,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
   const aiDaySections = parseDaySections(descriptionText);
   const imageRequiredSections = aiDaySections.filter(section => !section.transferOnly);
   const missingImageSections = imageRequiredSections.filter(section => section.images.length === 0);
-  const riskyImageSections = aiDaySections.filter(section => section.riskyImages.length > 0);
+  const riskyImageSections = aiDaySections.filter(section => !section.transferOnly && section.riskyImages.length > 0);
   const dayCountMismatch = expectedDays > 0 && aiDaySections.length > 0 && aiDaySections.length !== expectedDays;
   const dayImageAuditOk = !aiDraft || (
     aiDaySections.length > 0 &&
@@ -330,7 +363,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         const result = await res.json();
         if (!result.success) throw new Error(aiUploadErrorText(result.error));
         setStage(90, '整理解析結果並填入表單...');
-        setData(prev => ({ ...prev, ...result.data }));
+        setData(prev => ({ ...prev, ...sanitizeItineraryDraft(result.data || {}) }));
         markAiDraft(file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '') ? 'PDF / 圖片 AI 解析' : '圖片 AI 解析', result.data || {});
         setStage(100, '解析完成，已帶入表單');
       setTimeout(() => setAiProgress(null), 900);
@@ -361,7 +394,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         const result = await res.json();
         if (!result.success) throw new Error(aiUploadErrorText(result.error));
       setStage(90, '整理解析結果並填入表單...');
-        setData(prev => ({ ...prev, ...result.data }));
+        setData(prev => ({ ...prev, ...sanitizeItineraryDraft(result.data || {}) }));
         markAiDraft('Markdown AI 解析', result.data || {});
         setMarkitdownStage('Markdown 已解析成 AI 草稿，請核對每日圖片後再提交。');
         setStage(100, '解析完成，已帶入表單');
@@ -511,19 +544,19 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
             {aiDaySections.length ? aiDaySections.map(section => {
               const missing = !section.transferOnly && section.images.length === 0;
               const risky = section.riskyImages.length > 0;
-              const ok = !missing && !risky;
+              const ok = section.transferOnly || (!missing && !risky);
               return (
                 <div key={section.index} className="grid grid-cols-[72px_minmax(0,1fr)_96px] border-t border-amber-100 text-xs">
                   <div className="px-3 py-2 font-black text-slate-600">第 {section.index} 天</div>
                   <div className="px-3 py-2 min-w-0">
                     <p className="font-bold text-slate-800 truncate">{section.heading}</p>
                     <p className="text-slate-500 mt-0.5">
-                      {section.transferOnly ? '移動日可不上圖' : `圖片 ${section.images.length} 張`}
-                      {section.images[0]?.url ? `：${section.images[0].url.slice(0, 54)}${section.images[0].url.length > 54 ? '…' : ''}` : ''}
+                      {section.transferOnly ? '出發/回程/移動日，不需圖片' : `圖片 ${section.images.length} 張`}
+                      {!section.transferOnly && section.images[0]?.url ? `：${section.images[0].url.slice(0, 54)}${section.images[0].url.length > 54 ? '…' : ''}` : ''}
                     </p>
                   </div>
                   <div className={`px-3 py-2 text-right font-black ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {ok ? '可送審' : (missing ? '缺圖' : '需換圖')}
+                    {section.transferOnly ? '不需圖片' : (ok ? '可送審' : (missing ? '缺圖' : '需換圖'))}
                   </div>
                 </div>
               );
@@ -697,7 +730,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
 
       <div>
         <label className="text-xs font-black text-slate-400 uppercase tracking-widest">行程描述</label>
-        <textarea rows="10" value={data.description||''} onChange={e=>setData({...data,description:e.target.value})}
+        <textarea rows="10" value={data.description||''} onChange={e=>setData({...data,description:stripTransferDayImages(e.target.value)})}
           className="w-full mt-1 p-3 border-2 border-slate-100 rounded-xl text-sm outline-none focus:border-blue-500 leading-relaxed" />
       </div>
 
@@ -715,7 +748,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
               alert('AI 草稿尚未完成審核清單，請先核對欄位與圖片。');
               return;
             }
-            onSave(data);
+            onSave(sanitizeItineraryDraft(data));
           }} disabled={saving || !data.title || !aiReviewComplete}
           className="flex-[2] bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
           {saving ? '儲存中…' : '提交'}
