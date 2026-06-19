@@ -205,6 +205,7 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
   const [aiMarkdownFilename, setAiMarkdownFilename] = useState('');
   const [aiDraft, setAiDraft] = useState(null);
   const [aiReview, setAiReview] = useState({ fields: false, images: false, payment: false, expire: false });
+  const [markitdownStage, setMarkitdownStage] = useState('');
   const resetAiReview = () => setAiReview({ fields: false, images: false, payment: false, expire: false });
     const markAiDraft = (source, resultData = {}) => {
       setAiDraft({ source, createdAt: new Date().toISOString(), imageKeyword: resultData.imageKeyword || '' });
@@ -216,11 +217,44 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
       OPENAI_KEY_MISSING: '尚未設定 AI 金鑰',
       AI_PARSE_FAILED: 'AI 解析失敗，請改用手動填寫或縮短內容後重試',
     }[error] || error || 'AI 解析失敗');
-    const descriptionText = String(data.description || '');
+  const parseDaySections = (text) => {
+    const source = String(text || '');
+    const headingRegex = /(^|\n)(第\s*[0-9一二三四五六七八九十百]+\s*天[^\n]*)/g;
+    const matches = [...source.matchAll(headingRegex)];
+    return matches.map((match, idx) => {
+      const start = (match.index || 0) + (match[1] || '').length;
+      const end = matches[idx + 1]?.index ?? source.length;
+      const block = source.slice(start, end).trim();
+      const heading = String(match[2] || '').trim();
+      const imageMatches = [...block.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].map(img => ({
+        alt: String(img[1] || '').trim(),
+        url: String(img[2] || '').trim(),
+      }));
+      const transferOnly = /出發|回程|返程|返回|搭機|飛機|航班|機場|抵達|返家|回家/.test(`${heading}\n${block}`.slice(0, 220));
+      const riskyImages = imageMatches.filter(img =>
+        !img.url ||
+        /^data:/i.test(img.url) ||
+        /(?:placehold|placeholder|loremflickr|dm|screenshot|截圖|pdf|scan|頁面)/i.test(`${img.alt} ${img.url}`)
+      );
+      return { index: idx + 1, heading, block, images: imageMatches, transferOnly, riskyImages };
+    });
+  };
+  const descriptionText = String(data.description || '');
   const daySectionCount = (descriptionText.match(/(^|\n)\s*第\s*[0-9一二三四五六七八九十百]+\s*天/g) || []).length;
   const descriptionImageCount = (descriptionText.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
   const expectedDays = Number(data.days || 0);
-  const aiReviewComplete = !aiDraft || Object.values(aiReview).every(Boolean);
+  const aiDaySections = parseDaySections(descriptionText);
+  const imageRequiredSections = aiDaySections.filter(section => !section.transferOnly);
+  const missingImageSections = imageRequiredSections.filter(section => section.images.length === 0);
+  const riskyImageSections = aiDaySections.filter(section => section.riskyImages.length > 0);
+  const dayCountMismatch = expectedDays > 0 && aiDaySections.length > 0 && aiDaySections.length !== expectedDays;
+  const dayImageAuditOk = !aiDraft || (
+    aiDaySections.length > 0 &&
+    !dayCountMismatch &&
+    missingImageSections.length === 0 &&
+    riskyImageSections.length === 0
+  );
+  const aiReviewComplete = !aiDraft || (Object.values(aiReview).every(Boolean) && dayImageAuditOk);
   const aiReviewItems = [
     { key: 'fields', label: '標題、天數、價格、出發日期與行程文字已核對' },
     { key: 'images', label: `每日圖片已核對正確性（目前 ${daySectionCount || 0} 個日程段落、${descriptionImageCount || 0} 張內文圖）` },
@@ -327,9 +361,10 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         const result = await res.json();
         if (!result.success) throw new Error(aiUploadErrorText(result.error));
       setStage(90, '整理解析結果並填入表單...');
-      setData(prev => ({ ...prev, ...result.data }));
-      markAiDraft('Markdown AI 解析', result.data || {});
-      setStage(100, '解析完成，已帶入表單');
+        setData(prev => ({ ...prev, ...result.data }));
+        markAiDraft('Markdown AI 解析', result.data || {});
+        setMarkitdownStage('Markdown 已解析成 AI 草稿，請核對每日圖片後再提交。');
+        setStage(100, '解析完成，已帶入表單');
       setAiMarkdown('');
       setAiMarkdownFilename('');
       setAiMarkdownOpen(false);
@@ -344,10 +379,11 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
     const file = e.target.files[0]; if (!file) return;
     try {
       if (file.size > 1024 * 1024 * 2) throw new Error('Markdown 檔案超過 2MB，請先縮小內容');
-      const text = await file.text();
-      setAiMarkdown(text);
-      setAiMarkdownFilename(file.name || 'markitdown-itinerary.md');
-      setAiMarkdownOpen(true);
+        const text = await file.text();
+        setAiMarkdown(text);
+        setAiMarkdownFilename(file.name || 'markitdown-itinerary.md');
+        setAiMarkdownOpen(true);
+        setMarkitdownStage('已載入 Markdown，請先檢查內容，再按「解析 Markdown」。');
     } catch (err) {
       alert(err.message || 'Markdown 檔案讀取失敗');
     }
@@ -391,11 +427,12 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
         FILE_TOO_LARGE: '文件過大，請先壓縮或拆分',
         EMPTY_MARKDOWN_RESULT: '轉檔完成但沒有取得 Markdown 內容',
       };
-      if (!result.success) throw new Error(convertErrorMap[result.error] || result.error || '文件轉 Markdown 失敗');
-      setAiMarkdown(result.data?.markdown || '');
-      setAiMarkdownFilename(result.data?.filename || file.name || 'document.md');
-      setAiMarkdownOpen(true);
-      setStage(100, 'Markdown 已產生，可檢查後解析');
+        if (!result.success) throw new Error(convertErrorMap[result.error] || result.error || '文件轉 Markdown 失敗');
+        setAiMarkdown(result.data?.markdown || '');
+        setAiMarkdownFilename(result.data?.filename || file.name || 'document.md');
+        setAiMarkdownOpen(true);
+        setMarkitdownStage('文件已轉成 Markdown。請先預覽文字是否完整，再交給 AI 解析。');
+        setStage(100, 'Markdown 已產生，可檢查後解析');
       setTimeout(() => setAiProgress(null), 900);
     } catch (err) {
       alert(err.message || '文件轉 Markdown 失敗');
@@ -452,12 +489,47 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
             <div>
               <p className="text-sm font-black text-amber-800">AI 草稿未審核</p>
               <p className="text-xs text-amber-700 mt-1">來源：{aiDraft.source}。送出前必須人工核對；圖片正確性優先。</p>
-              {expectedDays > 0 && daySectionCount > 0 && daySectionCount !== expectedDays && (
+              {dayCountMismatch && (
                 <p className="text-xs text-red-600 font-bold mt-1">天數與段落數不一致：表單天數 {expectedDays}，內文段落 {daySectionCount}。</p>
+              )}
+              {missingImageSections.length > 0 && (
+                <p className="text-xs text-red-600 font-bold mt-1">有 {missingImageSections.length} 個非移動日缺少圖片，請補圖或調整段落。</p>
+              )}
+              {riskyImageSections.length > 0 && (
+                <p className="text-xs text-red-600 font-bold mt-1">有 {riskyImageSections.length} 個段落含疑似截圖、暫示圖或非圖庫圖片，請替換。</p>
               )}
             </div>
             <button type="button" onClick={() => { setAiDraft(null); resetAiReview(); }}
               className="text-xs font-black text-slate-500 hover:text-slate-900">解除草稿標記</button>
+          </div>
+          <div className="rounded-2xl border border-amber-100 bg-white overflow-hidden">
+            <div className="grid grid-cols-[72px_minmax(0,1fr)_96px] bg-amber-100/70 text-[11px] font-black text-amber-900">
+              <div className="px-3 py-2">天數</div>
+              <div className="px-3 py-2">段落 / 圖片狀態</div>
+              <div className="px-3 py-2 text-right">結果</div>
+            </div>
+            {aiDaySections.length ? aiDaySections.map(section => {
+              const missing = !section.transferOnly && section.images.length === 0;
+              const risky = section.riskyImages.length > 0;
+              const ok = !missing && !risky;
+              return (
+                <div key={section.index} className="grid grid-cols-[72px_minmax(0,1fr)_96px] border-t border-amber-100 text-xs">
+                  <div className="px-3 py-2 font-black text-slate-600">第 {section.index} 天</div>
+                  <div className="px-3 py-2 min-w-0">
+                    <p className="font-bold text-slate-800 truncate">{section.heading}</p>
+                    <p className="text-slate-500 mt-0.5">
+                      {section.transferOnly ? '移動日可不上圖' : `圖片 ${section.images.length} 張`}
+                      {section.images[0]?.url ? `：${section.images[0].url.slice(0, 54)}${section.images[0].url.length > 54 ? '…' : ''}` : ''}
+                    </p>
+                  </div>
+                  <div className={`px-3 py-2 text-right font-black ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {ok ? '可送審' : (missing ? '缺圖' : '需換圖')}
+                  </div>
+                </div>
+              );
+            }) : (
+              <div className="px-3 py-4 text-xs text-red-600 font-bold">尚未拆出「第 N 天」段落，AI 草稿不能直接提交。</div>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {aiReviewItems.map(item => (
@@ -496,12 +568,17 @@ function ItineraryForm({ initial, onSave, onCancel, saving, currentUser, isAdmin
               <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
                 載入 .md/.txt
                 <input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onChange={handleAIMarkdownFile} className="hidden" />
-              </label>
-              {aiMarkdownFilename && <span className="text-xs text-slate-500 font-bold truncate max-w-[240px]">{aiMarkdownFilename}</span>}
-            </div>
-            <textarea value={aiMarkdown}
-              onChange={e => setAiMarkdown(e.target.value)}
-              rows={7}
+                </label>
+                {aiMarkdownFilename && <span className="text-xs text-slate-500 font-bold truncate max-w-[240px]">{aiMarkdownFilename}</span>}
+              </div>
+              {markitdownStage && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                  {markitdownStage}
+                </div>
+              )}
+              <textarea value={aiMarkdown}
+                onChange={e => setAiMarkdown(e.target.value)}
+                rows={7}
               placeholder="貼上 MarkItDown 轉出的 Markdown 行程內容..."
               className="w-full p-3 rounded-xl border-2 border-slate-100 outline-none focus:border-blue-500 bg-white text-sm leading-6"/>
             <div className="flex items-center justify-between gap-3 flex-wrap">

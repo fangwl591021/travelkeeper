@@ -3477,12 +3477,15 @@ function normalizeLineOutboundMessage(item = {}) {
     if (text.length > 5000) throw new Error('TEXT_TOO_LONG');
     return { type: 'text', text };
   }
-  if (type === 'image') {
-    const originalContentUrl = String(item.originalContentUrl || item.url || '').trim();
-    const previewImageUrl = String(item.previewImageUrl || item.previewUrl || originalContentUrl).trim();
-    if (!originalContentUrl || !previewImageUrl) return null;
-    return { type: 'image', originalContentUrl, previewImageUrl };
-  }
+    if (type === 'image') {
+      const originalContentUrl = String(item.originalContentUrl || item.url || '').trim();
+      const previewImageUrl = String(item.previewImageUrl || item.previewUrl || originalContentUrl).trim();
+      if (!originalContentUrl || !previewImageUrl) return null;
+      if (!/^https:\/\//i.test(originalContentUrl) || !/^https:\/\//i.test(previewImageUrl)) {
+        throw new Error('IMAGE_URL_MUST_BE_HTTPS');
+      }
+      return { type: 'image', originalContentUrl, previewImageUrl };
+    }
   if (type === 'flex') {
     const altText = String(item.altText || '客服訊息').trim().slice(0, 400) || '客服訊息';
     const contents = item.contents;
@@ -4380,6 +4383,23 @@ function compactLineLearningText(value = '', limit = 1600) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
 }
 
+function maskLineLearningPrivateText(value = '') {
+  return String(value || '')
+    .replace(/U[a-f0-9]{32}/gi, '[LINE_UID]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[EMAIL]')
+    .replace(/(?:\+?886[-\s]?)?0?9\d{2}[-\s]?\d{3}[-\s]?\d{3}/g, '[PHONE]')
+    .replace(/\b0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}\b/g, '[PHONE]')
+    .replace(/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, '[CARD_OR_ACCOUNT]')
+    .replace(/\b[A-Z][0-9]{9}\b/g, '[ID_NO]');
+}
+
+function maskLineLearningName(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/^[A-Za-z\s]{2,}$/.test(text)) return `${text.slice(0, 1)}***`;
+  return `${text.slice(0, 1)}○○`;
+}
+
 function inferLineLearningTags(messages = []) {
   const text = messages.map(msg => msg.message_text || '').join('\n');
   const checks = [
@@ -4465,8 +4485,16 @@ async function d1RefreshLineLearningExample(env, body = {}) {
   const tags = inferLineLearningTags(messages);
   const now = new Date().toISOString();
   const id = `learning:${threadId}`;
-  const customerLines = customerMessages.slice(-20).map(msg => `${msg.sender_name || '客戶'}：${msg.message_text || `[${msg.message_type || 'message'}]`}`);
-  const guideLines = guideMessages.slice(-20).map(msg => `${msg.sender_name || '客服'}：${msg.message_text || `[${msg.message_type || 'message'}]`}`);
+  const customerLines = customerMessages.slice(-20).map(msg => {
+    const name = msg.sender_name ? maskLineLearningName(msg.sender_name) : '客戶';
+    const text = maskLineLearningPrivateText(msg.message_text || `[${msg.message_type || 'message'}]`);
+    return `${name}：${text}`;
+  });
+  const guideLines = guideMessages.slice(-20).map(msg => {
+    const name = msg.sender_name ? maskLineLearningName(msg.sender_name) : '客服';
+    const text = maskLineLearningPrivateText(msg.message_text || `[${msg.message_type || 'message'}]`);
+    return `${name}：${text}`;
+  });
   const status = guideMessages.length ? 'active' : 'pending_response';
   await env.DB.prepare(`
     INSERT INTO line_learning_examples (
@@ -4492,7 +4520,7 @@ async function d1RefreshLineLearningExample(env, body = {}) {
     id,
     threadId,
     String(thread.source_user_id || ''),
-    String(thread.display_name || ''),
+    maskLineLearningName(thread.display_name || ''),
     String(thread.picture_url || ''),
     compactLineLearningText(customerLines.slice(-8).join('\n'), 1200),
     compactLineLearningText(customerLines.join('\n'), 3000),
@@ -4533,6 +4561,35 @@ async function d1UpdateLineLearningReview(env, body = {}) {
        AND archived_at = ''
   `).bind(threadId).run();
   return { success: true, data: null, archived: true };
+}
+
+async function d1ListLineLearningExamples(env, body = {}) {
+  if (!env.DB) throw new Error('D1 binding missing');
+  await ensureLineLearningExamplesTable(env);
+  const uid = String(body.uid || body.operatorUid || '').trim();
+  if (!(await isAdminUid(env, uid))) return { success: false, error: 'ADMIN_REQUIRED' };
+  const status = String(body.status || '').trim();
+  const includeArchived = body.includeArchived === true || String(body.includeArchived || '') === '1';
+  const limit = Math.min(80, Math.max(1, Number(body.limit || 30) || 30));
+  const where = [];
+  const binds = [];
+  if (!includeArchived) where.push(`learn.archived_at = ''`);
+  if (['active', 'pending_response', 'archived'].includes(status)) {
+    where.push(`learn.status = ?`);
+    binds.push(status);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const { results } = await env.DB.prepare(`
+    SELECT learn.*
+    FROM line_learning_examples learn
+    ${whereSql}
+    ORDER BY learn.updated_at DESC, learn.created_at DESC
+    LIMIT ?
+  `).bind(...binds, limit).all();
+  return {
+    success: true,
+    data: (results || []).map(normalizeLineLearningExample),
+  };
 }
 
 function normalizeLineVisitorRequirement(row = {}) {
@@ -7642,6 +7699,15 @@ export default {
         if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
         if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
         const result = await d1UpdateLineLearningReview(env, body);
+        return json(result, result.success ? 200 : 400);
+      }
+
+      if (path === '/api/line-oa/learning/list' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const uid = String(body.uid || '').trim();
+        if (!uid) return json({ success: false, error: 'MISSING_UID' }, 400);
+        if (!(await isAdminUid(env, uid))) return json({ success: false, error: 'FORBIDDEN' }, 403);
+        const result = await d1ListLineLearningExamples(env, body);
         return json(result, result.success ? 200 : 400);
       }
 

@@ -380,6 +380,10 @@
               <button id="mark-learning-skip" type="button" class="rounded-xl bg-white border border-slate-200 text-slate-600 px-3 py-2 text-xs font-semibold hover:bg-slate-100 disabled:opacity-40">不可學習</button>
             </div>
             <div id="learning-plan" class="space-y-2"></div>
+            <div class="mt-3 border-t border-violet-100 pt-3">
+              <button id="load-learning-list" type="button" class="w-full rounded-xl bg-white border border-violet-200 text-violet-700 px-3 py-2 text-xs font-semibold hover:bg-violet-100">查看近期學習樣本</button>
+              <div id="learning-list" class="mt-2 space-y-2"></div>
+            </div>
           </section>
 
         <section class="module-card rounded-3xl border border-slate-200 bg-white p-3">
@@ -575,6 +579,8 @@
       const learningStatusEl = document.getElementById('learning-status');
       const markLearningUsefulEl = document.getElementById('mark-learning-useful');
       const markLearningSkipEl = document.getElementById('mark-learning-skip');
+      const loadLearningListEl = document.getElementById('load-learning-list');
+      const learningListEl = document.getElementById('learning-list');
       const replySuggestionsEl = document.getElementById('reply-suggestions');
     const threadTagsEl = document.getElementById('thread-tags');
     const threadStatusBadgeEl = document.getElementById('thread-status-badge');
@@ -810,6 +816,56 @@
       if (!messages.length) throw new Error('請先輸入或選擇要送出的內容');
       if (messages.length > 5) throw new Error('LINE 一次最多送出 5 則訊息');
       return messages;
+    }
+
+    function validateReplyMessagesForSend(messages = []) {
+      messages.forEach(message => {
+        if (message.type === 'text' && String(message.text || '').length > 5000) {
+          throw new Error('文字訊息超過 LINE 5000 字限制');
+        }
+        if (message.type === 'image') {
+          const url = String(message.originalContentUrl || '').trim();
+          if (!/^https:\/\//i.test(url)) throw new Error('圖片訊息必須使用 HTTPS 圖片網址');
+        }
+        if (message.type === 'flex') {
+          if (!message.contents || typeof message.contents !== 'object') throw new Error('多頁訊息缺少 contents');
+          if (!String(message.altText || '').trim()) throw new Error('多頁訊息需要替代文字');
+        }
+      });
+    }
+
+    function describeReplyMessages(messages = []) {
+      return messages.map((message, index) => {
+        if (message.type === 'text') return `${index + 1}. 文字 ${String(message.text || '').length} 字`;
+        if (message.type === 'image') return `${index + 1}. 圖片`;
+        if (message.type === 'flex') return `${index + 1}. 多頁訊息：${message.altText || '未命名'}`;
+        return `${index + 1}. ${message.type || '訊息'}`;
+      }).join('\n');
+    }
+
+    async function confirmReplyPreflight(thread, messages) {
+      validateReplyMessagesForSend(messages);
+      const result = await fetchJson(`${WORKER_URL}/api/line-oa/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          threadId: thread.id,
+          messages,
+          dryRun: true,
+        }),
+      });
+      const info = result.data || {};
+      if (!info.hasLineToken) throw new Error('LINE Channel Access Token 尚未設定，不能送出');
+      return window.confirm([
+        `即將送出給：${thread.name || thread.displayName || thread.id}`,
+        `目標：${info.targetType || 'LINE'} ${info.targetPreview || ''}`,
+        `訊息數：${info.messageCount || messages.length}`,
+        '',
+        describeReplyMessages(messages),
+        '',
+        '確認送出後會直接推送到 LINE。'
+      ].join('\n'));
     }
 
     function insertFlexSample() {
@@ -1609,6 +1665,72 @@
       }
     }
 
+    function renderLearningList(items = []) {
+      learningListEl.innerHTML = '';
+      if (!items.length) {
+        learningListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-violet-200 bg-white/70 px-4 py-4 text-xs text-slate-500">目前沒有可顯示的學習樣本。</div>';
+        return;
+      }
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'rounded-2xl border border-violet-100 bg-white px-3 py-2.5';
+        const top = document.createElement('div');
+        top.className = 'flex items-start justify-between gap-2';
+        const title = document.createElement('div');
+        title.innerHTML = `
+          <p class="text-xs font-black text-slate-800">${item.customerName || '客戶'} · ${item.status || 'active'}</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">${item.updatedAt || item.createdAt || ''}</p>
+        `;
+        const archive = document.createElement('button');
+        archive.type = 'button';
+        archive.className = 'shrink-0 text-[11px] font-black text-slate-500 hover:text-red-600';
+        archive.textContent = '不可學習';
+        archive.addEventListener('click', () => {
+          fetchJson(`${WORKER_URL}/api/line-oa/learning/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: profile.userId, threadId: item.threadId, learnable: false }),
+          })
+            .then(() => {
+              const idx = allThreads.findIndex(thread => thread.id === item.threadId);
+              if (idx >= 0) {
+                allThreads[idx] = { ...allThreads[idx], learningPlan: null, learningCount: 0, learningStatus: 'archived' };
+                renderThreadList();
+                if (activeThreadId === item.threadId) renderActiveThread(allThreads[idx]);
+              }
+              return loadLearningList();
+            })
+            .catch(err => showToast(err.message || '封存學習樣本失敗', 'error'));
+        });
+        top.appendChild(title);
+        top.appendChild(archive);
+        const context = document.createElement('p');
+        context.className = 'mt-2 text-xs leading-5 text-slate-600 whitespace-pre-line';
+        context.textContent = shortLearningText(item.customerContext || item.customerMessages, '尚無客戶摘要');
+        card.appendChild(top);
+        card.appendChild(context);
+        learningListEl.appendChild(card);
+      });
+    }
+
+    async function loadLearningList() {
+      if (!profile?.userId) return;
+      loadLearningListEl.disabled = true;
+      loadLearningListEl.classList.add('opacity-60');
+      try {
+        const result = await fetchJson(`${WORKER_URL}/api/line-oa/learning/list`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: profile.userId, limit: 20 }),
+        });
+        renderLearningList(result.data || []);
+        showToast('已載入近期學習樣本');
+      } finally {
+        loadLearningListEl.disabled = false;
+        loadLearningListEl.classList.remove('opacity-60');
+      }
+    }
+
     async function refreshLearningPlan() {
       const thread = getActiveThread();
       if (!thread) {
@@ -1917,11 +2039,16 @@
       }
       const sendButton = document.getElementById('send-reply');
       sendButton.disabled = true;
-      sendButton.classList.add('opacity-60');
-      try {
-        const messages = await buildReplyMessages(text);
-        const result = await fetchJson(`${WORKER_URL}/api/line-oa/reply`, {
-          method: 'POST',
+        sendButton.classList.add('opacity-60');
+        try {
+          const messages = await buildReplyMessages(text);
+          const confirmed = await confirmReplyPreflight(thread, messages);
+          if (!confirmed) {
+            showToast('已取消送出', 'error');
+            return;
+          }
+          const result = await fetchJson(`${WORKER_URL}/api/line-oa/reply`, {
+            method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             uid: profile.userId,
@@ -1938,10 +2065,11 @@
         replyImageFileEl.value = '';
         replyImageUrlEl.value = '';
         replyFileInputEl.value = '';
-        replyFileTitleEl.value = '';
-        replyFileNoteEl.value = '';
-        replyFlexJsonEl.value = '';
-        showToast('已送出 LINE 回覆');
+          replyFileTitleEl.value = '';
+          replyFileNoteEl.value = '';
+          replyFlexJsonEl.value = '';
+          replyFlexAltEl.value = '';
+          showToast('已送出 LINE 回覆');
       } finally {
         sendButton.disabled = false;
         sendButton.classList.remove('opacity-60');
@@ -1985,6 +2113,9 @@
     });
     document.getElementById('mark-learning-skip').addEventListener('click', () => {
       reviewLearningPlan(false).catch(err => showToast(err.message || '標記不可學習失敗', 'error'));
+    });
+    document.getElementById('load-learning-list').addEventListener('click', () => {
+      loadLearningList().catch(err => showToast(err.message || '讀取學習樣本失敗', 'error'));
     });
 
     document.getElementById('copy-reply').addEventListener('click', async () => {
