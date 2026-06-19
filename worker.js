@@ -5655,7 +5655,7 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
       model: 'gpt-4o',
       response_format: { type: 'json_object' },
       temperature: 0.2,
-      max_tokens: 2500,
+      max_tokens: 4200,
       messages: [{
         role: 'user',
         content: [
@@ -5669,8 +5669,17 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
   "price": 0,
   "departure": "出發地或出發資訊",
   "validity": "活動期間或出發日期",
-  "ocr_text": "完整抽取文字，保留重要價格、天數、電話、限制與備註",
+  "ocr_text": "完整逐行 OCR 文字，盡量保留原始順序、價格、天數、電話、LINE ID、限制與備註",
   "summary": "100-180 字客服可讀摘要",
+  "selling_points": ["DM 上明確可見的賣點，每點 10-30 字"],
+  "itinerary_points": ["DM 上明確可見的景點、體驗、交通、餐食或住宿資訊"],
+  "dates": ["DM 上明確可見的出發日、活動日或效期"],
+  "pricing": ["DM 上明確可見的價格、優惠、加價或費用條件"],
+  "contact": ["DM 上明確可見的電話、LINE、地址或報名方式"],
+  "terms": ["DM 上明確可見的限制、注意事項、名額、適用對象或備註"],
+  "customer_faq": [
+    {"question":"客戶可能會問的問題","answer":"依 DM 內容可回答的完整答案；不確定就提醒需人工確認"}
+  ],
   "keywords": ["客戶可能會問的關鍵字"],
   "reply_template": "客戶詢問這張 DM 或相關行程時，客服可直接使用的回覆。不能說已報名成功，只能說可協助確認日期、名額、價格與報名方式。",
   "social_post": "約 100 字社群宣傳文案，需包含表情符號與 3-5 個 hashtag"
@@ -5678,10 +5687,12 @@ async function buildPromoDmKnowledgeDocument(env, body = {}) {
 
 規則：
 1. 不要建立正式行程，不要自行補不存在的日期、價格或名額。
-2. keywords 必須包含 DM 上明確可見的目的地、行程名、俗稱、價格、天數、出發地。
-3. reply_template 要能讓 LINE 監控台直接建議給客服使用。
-4. social_post 要適合 Facebook / LINE VOOM / Instagram 文案，不得超過 130 字。
-5. 如果圖片文字不清楚，ocr_text 仍要保留可辨識內容，summary 要註明需人工核對。
+2. 不要只摘要。ocr_text 必須盡量完整逐行保留 DM 文字，metadata 也要分類保存。
+3. keywords 必須包含 DM 上明確可見的目的地、行程名、俗稱、價格、天數、出發地、船班/航班/特色景點。
+4. reply_template 要能讓 LINE 監控台直接建議給客服使用。
+5. social_post 要適合 Facebook / LINE VOOM / Instagram 文案，不得超過 130 字。
+6. customer_faq 至少產生 4 題，涵蓋日期、價格、出發地、報名方式；資料不確定要寫「需人工確認」。
+7. 如果圖片文字不清楚，ocr_text 仍要保留可辨識內容，summary 要註明需人工核對。
 
 ${sourceIntro}` },
           ...imageInputs.map(url => ({ type: 'image_url', image_url: { url } })),
@@ -5713,13 +5724,34 @@ ${sourceIntro}` },
     parsed.destination,
     parsed.departure,
     parsed.validity,
+    ...(Array.isArray(parsed.selling_points) ? parsed.selling_points : []),
+    ...(Array.isArray(parsed.itinerary_points) ? parsed.itinerary_points : []),
+    ...(Array.isArray(parsed.dates) ? parsed.dates : []),
+    ...(Array.isArray(parsed.pricing) ? parsed.pricing : []),
     parsed.price ? String(parsed.price) : '',
     parsed.days ? `${parsed.days}天` : '',
   ]);
   const answer = [
     String(parsed.summary || '').trim(),
-    String(parsed.ocr_text || '').trim() ? `DM 文字重點：${String(parsed.ocr_text).trim()}` : '',
+    Array.isArray(parsed.selling_points) && parsed.selling_points.length ? `賣點：${parsed.selling_points.join('、')}` : '',
+    Array.isArray(parsed.itinerary_points) && parsed.itinerary_points.length ? `行程重點：${parsed.itinerary_points.join('、')}` : '',
+    Array.isArray(parsed.dates) && parsed.dates.length ? `日期：${parsed.dates.join('、')}` : '',
+    Array.isArray(parsed.pricing) && parsed.pricing.length ? `價格/優惠：${parsed.pricing.join('、')}` : '',
+    Array.isArray(parsed.contact) && parsed.contact.length ? `聯絡/報名：${parsed.contact.join('、')}` : '',
+    Array.isArray(parsed.terms) && parsed.terms.length ? `注意事項：${parsed.terms.join('、')}` : '',
+    String(parsed.ocr_text || '').trim() ? `完整 OCR：\n${String(parsed.ocr_text).trim()}` : '',
   ].filter(Boolean).join('\n\n').slice(0, 4000);
+  const faqEntries = Array.isArray(parsed.customer_faq)
+    ? parsed.customer_faq.slice(0, 8).map((faq, index) => ({
+      id: `promo_dm_${Date.now()}_faq_${index + 1}`,
+      title: String(faq?.question || `常見問題 ${index + 1}`).trim().slice(0, 120),
+      keywords: normalizePromoDmKeywords([faq?.question, title, ...(Array.isArray(parsed.keywords) ? parsed.keywords : [])]).slice(0, 12),
+      tags: ['宣傳DM', 'FAQ', String(parsed.destination || '').trim()].filter(Boolean),
+      answer: String(faq?.answer || '').trim().slice(0, 1200),
+      reply_template: String(faq?.answer || '').trim().slice(0, 1200),
+      metadata: { source_entry: 'customer_faq' },
+    })).filter(entry => entry.answer)
+    : [];
   const doc = {
     id: `promo_dm_${Date.now()}`,
     title,
@@ -5747,8 +5779,15 @@ ${sourceIntro}` },
         validity: parsed.validity || '',
         expires_at: expiresAt,
         ocr_text: parsed.ocr_text || '',
+        selling_points: Array.isArray(parsed.selling_points) ? parsed.selling_points : [],
+        itinerary_points: Array.isArray(parsed.itinerary_points) ? parsed.itinerary_points : [],
+        dates: Array.isArray(parsed.dates) ? parsed.dates : [],
+        pricing: Array.isArray(parsed.pricing) ? parsed.pricing : [],
+        contact: Array.isArray(parsed.contact) ? parsed.contact : [],
+        terms: Array.isArray(parsed.terms) ? parsed.terms : [],
+        customer_faq: Array.isArray(parsed.customer_faq) ? parsed.customer_faq : [],
       },
-    }],
+    }, ...faqEntries],
   };
   const path = `knowledge/promo-dm/${now.slice(0, 10)}-${safeKnowledgeSlug(title)}.json`;
   const saved = await putKnowledgeDocument(env, path, doc);

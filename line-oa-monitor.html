@@ -1219,7 +1219,17 @@
         if (value && haystack.includes(value)) score += 3;
       });
       const meta = entry.metadata || {};
-      [meta.destination, meta.departure, meta.validity].forEach(term => {
+      [
+        meta.destination,
+        meta.departure,
+        meta.validity,
+        ...(meta.selling_points || []),
+        ...(meta.itinerary_points || []),
+        ...(meta.dates || []),
+        ...(meta.pricing || []),
+        ...(meta.contact || []),
+        ...(meta.terms || []),
+      ].forEach(term => {
         const value = normalizeText(term);
         if (value && haystack.includes(value)) score += 2;
       });

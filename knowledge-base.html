@@ -348,6 +348,13 @@ entries 每一筆建議欄位：
                   <p><span class="font-bold text-slate-900">關鍵字：</span>${(entry.keywords || []).join('、')}</p>
                   <p><span class="font-bold text-slate-900">標籤：</span>${(entry.tags || []).join('、')}</p>
                   ${entry.social_post ? `<p><span class="font-bold text-slate-900">社群文案：</span>${entry.social_post}</p>` : ''}
+                  ${entry.metadata?.selling_points?.length ? `<p><span class="font-bold text-slate-900">賣點：</span>${entry.metadata.selling_points.join('、')}</p>` : ''}
+                  ${entry.metadata?.itinerary_points?.length ? `<p><span class="font-bold text-slate-900">行程重點：</span>${entry.metadata.itinerary_points.join('、')}</p>` : ''}
+                  ${entry.metadata?.dates?.length ? `<p><span class="font-bold text-slate-900">日期：</span>${entry.metadata.dates.join('、')}</p>` : ''}
+                  ${entry.metadata?.pricing?.length ? `<p><span class="font-bold text-slate-900">價格/優惠：</span>${entry.metadata.pricing.join('、')}</p>` : ''}
+                  ${entry.metadata?.contact?.length ? `<p><span class="font-bold text-slate-900">聯絡/報名：</span>${entry.metadata.contact.join('、')}</p>` : ''}
+                  ${entry.metadata?.terms?.length ? `<p><span class="font-bold text-slate-900">注意事項：</span>${entry.metadata.terms.join('、')}</p>` : ''}
+                  ${entry.metadata?.ocr_text ? `<details class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><summary class="cursor-pointer font-bold text-slate-900">完整 OCR</summary><pre class="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-600">${entry.metadata.ocr_text}</pre></details>` : ''}
                   <p><span class="font-bold text-slate-900">客服建議：</span>${entry.reply_template || entry.answer || ''}</p>
                 </div>
               </details>
