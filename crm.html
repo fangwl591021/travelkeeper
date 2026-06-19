@@ -160,7 +160,7 @@
           </div>
           <div class="flex items-center gap-3">
             <p id="table-count" class="text-sm font-bold text-slate-400">0 筆</p>
-            <button id="show-detail-panel" type="button" hidden class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">展開詳細資料</button>
+            <button id="show-detail-panel" type="button" hidden class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">展開詳細資料</button>
           </div>
         </div>
         <div class="overflow-auto scrollbar-thin">
@@ -188,7 +188,7 @@
             <p class="text-xs font-bold tracking-[0.2em] text-slate-400">CUSTOMER DETAIL</p>
             <h2 class="mt-1 text-xl font-black">客戶詳細資料</h2>
           </div>
-          <button id="hide-detail-panel" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">收合側欄</button>
+          <button id="hide-detail-panel" type="button" class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">收合側欄</button>
         </div>
         <div id="customer-detail" class="p-5 text-sm text-slate-500">
           請從左側選擇一位客戶。
@@ -535,6 +535,20 @@
       return 'bg-emerald-100 text-emerald-700';
     }
 
+    function recordPreviewHtml(text) {
+      const value = String(text || '');
+      if (value.length <= 100) {
+        return `<div class="whitespace-pre-line break-words">${escapeHtml(value)}</div>`;
+      }
+      return `
+        <div class="record-preview whitespace-pre-line break-words">
+          <span class="record-short">${escapeHtml(value.slice(0, 100))}...</span>
+          <span class="record-full hidden">${escapeHtml(value)}</span>
+          <button type="button" class="record-toggle mt-2 block text-xs font-bold text-emerald-700 hover:text-emerald-800">看更多</button>
+        </div>
+      `;
+    }
+
     function renderTable() {
       els.tableCount.textContent = `${filteredCustomers.length} 筆`;
       els.emptyState.hidden = filteredCustomers.length > 0;
@@ -570,7 +584,7 @@
               <p class="font-black text-slate-900">${fmt(customer.totalAmount)}</p>
               <p class="mt-1 text-xs text-slate-400">${customer.orderCount} 筆訂單</p>
             </td>
-            <td class="max-w-[320px] px-5 py-4 align-top text-slate-600">${escapeHtml(recordText)}</td>
+            <td class="max-w-[320px] px-5 py-4 align-top text-slate-600">${recordPreviewHtml(recordText)}</td>
             <td class="px-5 py-4 align-top text-slate-500">${formatTime(customer.lastMessageAt || customer.lastOrderAt)}</td>
             <td class="px-5 py-4 align-top">
               ${customer.lineThreadId ? `<a class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800" href="./line-oa-monitor.html?thread=${encodeURIComponent(customer.lineThreadId)}">開啟聊天室</a>` : '<span class="text-xs text-slate-400">無聊天室</span>'}
@@ -580,6 +594,16 @@
       }).join('');
       document.querySelectorAll('.customer-select').forEach(button => {
         button.addEventListener('click', () => selectCustomer(button.dataset.id));
+      });
+      document.querySelectorAll('.record-toggle').forEach(button => {
+        button.addEventListener('click', () => {
+          const preview = button.closest('.record-preview');
+          const expanded = button.dataset.expanded === 'true';
+          preview.querySelector('.record-short').classList.toggle('hidden', !expanded);
+          preview.querySelector('.record-full').classList.toggle('hidden', expanded);
+          button.dataset.expanded = expanded ? 'false' : 'true';
+          button.textContent = expanded ? '看更多' : '收合';
+        });
       });
     }
 
