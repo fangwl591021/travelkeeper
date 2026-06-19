@@ -205,6 +205,7 @@
     let filteredCustomers = [];
     let crmLoading = false;
     let selectedCustomerId = '';
+    let profileEditorExpanded = false;
     const targetThreadId = new URLSearchParams(location.search).get('thread') || '';
 
     const els = {
@@ -607,9 +608,19 @@
         <section class="mt-5">
           <div class="flex items-center justify-between gap-3">
             <h4 class="font-black text-slate-900">客戶主檔</h4>
-            <button id="save-customer-profile" type="button" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700">儲存資料</button>
+            <div class="flex gap-2">
+              <button id="toggle-customer-profile" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">${profileEditorExpanded ? '收合' : '展開編輯'}</button>
+              <button id="save-customer-profile" type="button" class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700" ${profileEditorExpanded ? '' : 'hidden'}>儲存資料</button>
+            </div>
           </div>
-          <div class="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 p-4">
+          <div class="mt-2 rounded-xl border border-slate-200 p-4">
+            <div class="grid grid-cols-1 gap-2 text-sm text-slate-600">
+              <p><b class="text-slate-900">電話：</b>${escapeHtml(customer.phone || '尚未建立')}</p>
+              <p><b class="text-slate-900">Email：</b>${escapeHtml(customer.email || '尚未建立')}</p>
+              <p><b class="text-slate-900">偏好：</b>${escapeHtml(customer.preferenceNote || customer.opportunityNote || '尚未建立')}</p>
+            </div>
+          </div>
+          <div id="customer-profile-editor" class="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-blue-100 bg-blue-50/30 p-4" ${profileEditorExpanded ? '' : 'hidden'}>
             <label class="block">
               <span class="mb-1 block text-xs font-bold text-slate-500">姓名</span>
               <input id="profile-name" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.name)}">
@@ -695,6 +706,10 @@
           </div>
         </section>
       `;
+      document.getElementById('toggle-customer-profile')?.addEventListener('click', () => {
+        profileEditorExpanded = !profileEditorExpanded;
+        renderDetail(customer);
+      });
       document.getElementById('save-customer-profile')?.addEventListener('click', () => {
         saveCustomerProfile(customer).catch(err => showToast(err.message || '儲存失敗', 'error'));
       });
