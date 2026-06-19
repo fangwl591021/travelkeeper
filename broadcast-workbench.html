@@ -60,9 +60,20 @@
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <label class="block text-sm font-black text-slate-600 mb-2">圖片 URL</label>
-                <input id="image-url" class="field" placeholder="https://...jpg 或 png">
-                <p class="mt-2 text-xs font-bold text-slate-500">需為公開 HTTPS 圖片。若要上傳圖片，先在監控台附件上傳取得網址。</p>
+                <label class="block text-sm font-black text-slate-600 mb-2">圖片上傳</label>
+                <div class="grid grid-cols-[1fr_auto] gap-3">
+                  <input id="image-file" type="file" accept="image/png,image/jpeg,image/jpg" class="field bg-white">
+                  <button id="upload-image" class="btn-soft whitespace-nowrap" type="button">上傳圖片</button>
+                </div>
+                <input id="image-url" type="hidden">
+                <div id="image-upload-state" class="mt-2 text-xs font-bold text-slate-500">支援 JPG / PNG；上傳後會轉成 LINE 可用圖片網址。</div>
+                <div id="image-preview-box" class="mt-3 hidden rounded-lg border border-slate-200 bg-white p-3">
+                  <img id="image-preview" class="max-h-44 w-full rounded object-contain bg-slate-50" alt="">
+                  <div class="mt-2 flex items-center justify-between gap-2">
+                    <span id="image-url-label" class="truncate text-xs font-mono text-slate-400"></span>
+                    <button id="clear-image" type="button" class="text-xs font-black text-rose-600">移除</button>
+                  </div>
+                </div>
               </div>
               <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <label class="block text-sm font-black text-slate-600 mb-2">Flex JSON</label>
@@ -213,6 +224,53 @@
       if (!messages.length) throw new Error('請至少輸入一種推播內容');
       if (messages.length > 5) throw new Error('LINE 一次最多可推播 5 則訊息');
       return messages;
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('圖片讀取失敗'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function uploadImageFile() {
+      if (!profile?.userId) throw new Error('尚未登入');
+      const file = $('image-file').files?.[0];
+      if (!file) throw new Error('請先選擇圖片');
+      if (!/^image\/(png|jpe?g)$/i.test(file.type || '')) throw new Error('只支援 JPG / PNG');
+      $('image-upload-state').textContent = '圖片上傳中...';
+      const dataUrl = await readFileAsDataUrl(file);
+      const result = await fetchJson(`${WORKER_URL}/api/line-oa/upload-asset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: profile.userId,
+          filename: file.name,
+          contentType: file.type || 'image/png',
+          base64: dataUrl,
+        }),
+      });
+      const url = result?.data?.url || '';
+      if (!url) throw new Error('上傳完成但未取得圖片網址');
+      $('image-url').value = url;
+      $('image-preview').src = url;
+      $('image-url-label').textContent = url;
+      $('image-preview-box').classList.remove('hidden');
+      $('image-upload-state').textContent = '圖片已上傳，會隨推播送出。';
+      updateStats();
+      showToast('圖片已上傳');
+    }
+
+    function clearImageUpload() {
+      $('image-file').value = '';
+      $('image-url').value = '';
+      $('image-preview').removeAttribute('src');
+      $('image-url-label').textContent = '';
+      $('image-preview-box').classList.add('hidden');
+      $('image-upload-state').textContent = '支援 JPG / PNG；上傳後會轉成 LINE 可用圖片網址。';
+      updateStats();
     }
 
     function filteredThreads() {
@@ -409,9 +467,14 @@
       await Promise.all([loadThreads(), loadCampaigns()]);
     }
 
-    ['message-text', 'image-url', 'flex-json', 'batch-size', 'batch-delay'].forEach(id => {
+    ['message-text', 'flex-json', 'batch-size', 'batch-delay'].forEach(id => {
       $(id).addEventListener('input', updateStats);
     });
+    $('upload-image').addEventListener('click', () => uploadImageFile().catch(err => {
+      $('image-upload-state').textContent = err.message;
+      showToast(err.message, 'error');
+    }));
+    $('clear-image').addEventListener('click', clearImageUpload);
     $('audience-search').addEventListener('input', renderAudience);
     $('audience-status').addEventListener('change', renderAudience);
     $('select-filtered').addEventListener('click', () => {
