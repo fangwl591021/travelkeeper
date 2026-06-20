@@ -4120,6 +4120,107 @@ async function storeLineMessageMedia(env, event = {}, threadId = '', createdAt =
   }
 }
 
+function lineMediaKeyFromUrl(url = '') {
+  const value = String(url || '').trim();
+  if (!value.startsWith(`${R2_PUBLIC}/`)) return '';
+  const key = value.slice(`${R2_PUBLIC}/`.length).replace(/^\/+/, '');
+  if (!key.startsWith('line-oa/') || key.includes('..') || key.includes('\\')) return '';
+  return key;
+}
+
+async function readLineMediaImageDataUrl(env, mediaUrl = '') {
+  if (!env.TRAVEL) return '';
+  const key = lineMediaKeyFromUrl(mediaUrl);
+  if (!key) return '';
+  const object = await env.TRAVEL.get(key);
+  if (!object) return '';
+  const contentType = object.httpMetadata?.contentType || 'image/jpeg';
+  if (!String(contentType).toLowerCase().startsWith('image/')) return '';
+  const buffer = await object.arrayBuffer();
+  return `data:${contentType};base64,${arrayBufferToBase64(buffer)}`;
+}
+
+function isGenericLineImageMessageText(text = '') {
+  const value = String(text || '').trim();
+  if (!value) return true;
+  if (value === '客戶傳送圖片' || value.includes('客戶傳送圖片')) return true;
+  if (value.includes('[image]') || value.includes('[photo]')) return true;
+  return false;
+}
+
+function formatLineImageAnalysis(parsed = {}) {
+  const lines = [
+    '[圖片解析]',
+    parsed.title ? `DM標題：${parsed.title}` : '',
+    parsed.destination ? `地點/主題：${parsed.destination}` : '',
+    parsed.days ? `天數：${parsed.days}` : '',
+    parsed.price ? `價格：${parsed.price}` : '',
+    parsed.departure ? `出發/集合：${parsed.departure}` : '',
+    Array.isArray(parsed.dates) && parsed.dates.length ? `日期：${parsed.dates.join('、')}` : '',
+    Array.isArray(parsed.key_points) && parsed.key_points.length ? `重點：${parsed.key_points.join('、')}` : '',
+    parsed.eligibility ? `報名限制：${parsed.eligibility}` : '',
+    parsed.customer_reply ? `客服建議：${parsed.customer_reply}` : '',
+    parsed.ocr_text ? `OCR文字：${String(parsed.ocr_text).slice(0, 900)}` : '',
+  ].filter(Boolean);
+  return lines.join('\n').slice(0, 3000);
+}
+
+async function analyzeLineImageForTravelContext(env, mediaUrl = '') {
+  if (!env.OPENAI_API_KEY) return '';
+  const dataUrl = await readLineMediaImageDataUrl(env, mediaUrl);
+  if (!dataUrl) return '';
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0,
+        max_tokens: 1200,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `你是旅行社 LINE OA 客服的圖片理解模組。請精準 OCR 並解析客戶上傳的旅遊 DM 圖片，輸出 JSON。
+不可猜測圖片沒有的行程；看不清楚就留空或寫「需人工確認」。
+特別抽出：DM標題、目的地/主題、天數、價格、出發日期、集合地、報名限制、兒童/學生是否可報名、客服可直接回覆的一句話。
+JSON 格式：
+{
+  "title":"",
+  "destination":"",
+  "days":"",
+  "price":"",
+  "departure":"",
+  "dates":[],
+  "key_points":[],
+  "eligibility":"",
+  "customer_reply":"",
+  "ocr_text":""
+}
+customer_reply 要基於圖片內容回答，不要改成其他行程；若客戶之後問人數、兒童、日期或價格，這段會作為優先上下文。`
+            },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
+        }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      console.warn('LINE image OCR failed:', data?.error?.message || res.status);
+      return '';
+    }
+    const raw = String(data?.choices?.[0]?.message?.content || '').replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return '';
+    const parsed = JSON.parse(match[0]);
+    return formatLineImageAnalysis(parsed);
+  } catch (err) {
+    console.warn('LINE image analysis failed:', err?.message || err);
+    return '';
+  }
+}
 async function storeLineWebhookEvents(env, payload = {}) {
   if (!env.DB) return;
   await ensureLineMessageMediaColumns(env);
@@ -4136,7 +4237,11 @@ async function storeLineWebhookEvents(env, payload = {}) {
     const remoteProfile = await fetchLineSourceProfile(env, source);
     const displayName = remoteProfile?.displayName || getLineDisplayName(source);
     const pictureUrl = remoteProfile?.pictureUrl || '';
-    const summary = messageText || `[${messageType}]`;
+    let summary = messageText || `[${messageType}]`;
+    if (media?.mediaUrl && String(messageType || '').toLowerCase() === 'image' && isGenericLineImageMessageText(summary)) {
+      const imageAnalysis = await analyzeLineImageForTravelContext(env, media.mediaUrl);
+      if (imageAnalysis) summary = imageAnalysis;
+    }
 
     await env.DB.prepare(`
       INSERT INTO line_threads (
@@ -4960,6 +5065,23 @@ async function d1GetLineThread(env, threadId) {
         `).bind(mediaUrl, mediaContentType, mediaSize, msg.id).run();
       }
     }
+    let messageText = msg.message_text || '';
+    if (mediaUrl && String(msg.message_type || '').toLowerCase() === 'image' && isGenericLineImageMessageText(messageText)) {
+      const imageAnalysis = await analyzeLineImageForTravelContext(env, mediaUrl);
+      if (imageAnalysis) {
+        messageText = imageAnalysis;
+        await env.DB.prepare(`
+          UPDATE line_messages
+          SET message_text = ?
+          WHERE id = ?
+        `).bind(messageText, msg.id).run();
+        await env.DB.prepare(`
+          UPDATE line_threads
+          SET summary = ?, updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(messageText.slice(0, 1000), threadId).run();
+      }
+    }
     messages.push({
       id: msg.id,
       type: msg.message_type || 'text',
@@ -4968,7 +5090,7 @@ async function d1GetLineThread(env, threadId) {
       senderName: msg.sender_role === 'user'
         ? (thread.display_name || msg.sender_name || '????')
         : (msg.sender_name || '??'),
-      text: msg.message_text || '',
+      text: messageText,
       mediaUrl,
       mediaContentType,
       mediaSize,

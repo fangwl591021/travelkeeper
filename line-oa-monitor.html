@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
@@ -1142,24 +1142,47 @@
       return wrapper;
     }
 
+    function isGenericImageLabel(text = '') {
+      const value = String(text || '').trim();
+      return !value || /^客戶傳送圖片/.test(value) || value === '[image]' || value === '[photo]';
+    }
+
+    function messageContextText(message = {}) {
+      const type = String(message.type || '').toLowerCase();
+      const text = String(message.text || '').trim();
+      if (type === 'image' && text && !isGenericImageLabel(text)) return text;
+      return readableMessageText(message);
+    }
+
+    function latestImageContextText(thread) {
+      const messages = (thread?.messages || []).filter(message => message.senderRole === 'user');
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const message = messages[i];
+        if (String(message.type || '').toLowerCase() !== 'image') continue;
+        const text = String(message.text || '').trim();
+        if (text && !isGenericImageLabel(text)) return text;
+      }
+      return '';
+    }
+
     function threadText(thread) {
-      return (thread?.messages || []).map(m => readableMessageText(m)).join('\n');
+      return (thread?.messages || []).map(m => messageContextText(m)).join('\n');
     }
 
     function customerThreadText(thread) {
       return (thread?.messages || [])
         .filter(message => message.senderRole === 'user')
-        .map(message => readableMessageText(message))
+        .map(message => messageContextText(message))
         .join('\n');
     }
 
     function latestCustomerMessageText(thread) {
       const messages = (thread?.messages || []).filter(message => message.senderRole === 'user');
       for (let i = messages.length - 1; i >= 0; i -= 1) {
-        const text = readableMessageText(messages[i]);
+        const text = messageContextText(messages[i]);
         if (text && !/^客戶傳送/.test(text)) return text;
       }
-      return messages.length ? readableMessageText(messages[messages.length - 1]) : '';
+      return messages.length ? messageContextText(messages[messages.length - 1]) : '';
     }
 
     function hasImageUpload(thread) {
@@ -1179,7 +1202,7 @@
     }
 
     function hasTravelIntent(text) {
-      return /(\u65e5\u672c|\u6eab\u6cc9|\u8cde\u96ea|\u8cde\u6953|\u8cde\u696d|\u4e5d\u5dde|\u5317\u6d77\u9053|\u6771\u4eac|\u95dc\u897f|\u5927\u962a|\u4eac\u90fd|\u6c96\u7e69|\u5bb6\u65cf|\u89aa\u5b50|\u884c\u7a0b|\u65c5\u904a|\u51fa\u767c|\u5e7e\u5929|\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528)/.test(String(text || ''));
+      return /(\u65e5\u672c|\u6eab\u6cc9|\u8cde\u96ea|\u8cde\u6953|\u8cde\u696d|\u4e5d\u5dde|\u5317\u6d77\u9053|\u6771\u4eac|\u95dc\u897f|\u5927\u962a|\u4eac\u90fd|\u6c96\u7e69|\u5bb6\u65cf|\u89aa\u5b50|\u884c\u7a0b|\u65c5\u904a|\u51fa\u767c|\u5e7e\u5929|\u9810\u7b97|\u50f9\u683c|\u8cbb\u7528|報名|可報|人數|大人|小孩|兒童|學生|小五|DM|圖片解析)/.test(String(text || ''));
     }
 
     function buildDocumentServiceSuggestion(thread) {
@@ -1244,6 +1267,36 @@
         .slice(0, limit);
     }
 
+    function extractContextField(context = '', label = '') {
+      const escaped = String(label || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`${escaped}：([^\n]+)`);
+      return String((String(context || '').match(re) || [])[1] || '').trim();
+    }
+
+    function buildImageDmReplySuggestion(thread) {
+      const imageContext = latestImageContextText(thread);
+      if (!imageContext) return '';
+      const latestText = latestCustomerMessageText(thread);
+      const asksEligibility = /(可報|報名|幾位|人數|大人|小孩|兒童|學生|小五|小六|國小|國中|親子)/.test(latestText);
+      const asksPriceOrDate = /(價格|費用|多少|日期|出發|哪天|名額|集合)/.test(latestText);
+      if (!asksEligibility && !asksPriceOrDate && !/\[圖片解析\]|DM標題|客服建議/.test(imageContext)) return '';
+      const reply = extractContextField(imageContext, '客服建議');
+      const title = extractContextField(imageContext, 'DM標題');
+      const price = extractContextField(imageContext, '價格');
+      const dates = extractContextField(imageContext, '日期');
+      const eligibility = extractContextField(imageContext, '報名限制');
+      const parts = [];
+      if (reply) parts.push(reply.replace(/^您好[，,]\s*/, ''));
+      else if (title) parts.push(`我先依照您上傳的 DM「${title}」協助確認。`);
+      if (price) parts.push(`DM 上看到的價格資訊是 ${price}。`);
+      if (dates) parts.push(`可參考日期：${dates}。`);
+      if (eligibility && !/需人工確認|不清楚|未標示|未明確/.test(eligibility)) {
+        parts.push(`報名限制：${eligibility}。`);
+      } else if (asksEligibility) {
+        parts.push('一大兩小是否適用或是否有兒童價，DM 沒有明確標示，我先幫您確認名額與兒童/學生規定後再回覆。');
+      }
+      return `您好，${parts.join('')}`.replace(/。+/g, '。').slice(0, 900);
+    }
     function normalizeDateOnly(value = '') {
       const match = String(value || '').match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
       if (!match) return '';
@@ -1263,11 +1316,13 @@
       const suggestions = [];
       const travelIntent = hasTravelIntent(contextText);
       const documentIntent = hasDocumentIntent(contextText) || hasImageUpload(thread);
+      const imageDmSuggestion = buildImageDmReplySuggestion(thread);
+      if (imageDmSuggestion) suggestions.push(imageDmSuggestion);
       findPromotionDmMatches(contextText, 2).forEach(match => {
         const text = String(match.reply_template || match.answer || '').trim();
         if (text) suggestions.push(text);
       });
-      if (travelIntent) {
+      if (travelIntent && !imageDmSuggestion) {
         const destination = detectItineraryDestination(contextText);
         const destinationTerm = detectItineraryDestinationTerm(contextText, destination);
         const recommendations = recommendPublishedItineraries(thread);
