@@ -344,7 +344,7 @@ async function d1CheckUserStatus(env, uid) {
         status: normalizedStatus || '',
         commission: row.commission_pct || '',
         canUpload: distCanUpload,
-        inviteCode: row.invite_code || '',
+        inviteCode: row.invite_code || row.referrer_invite_code || row.referrerInviteCode || '',
         lineLink: row.line_link || '',
         lineAtLink: row.line_at_link || '',
         fbLink: row.fb_link || '',
@@ -394,7 +394,7 @@ async function d1GetAgentPublicProfile(env, { code = '', uid = '' } = {}) {
     success: true,
     data: {
       name: row.name || '',
-      inviteCode: row.invite_code || '',
+      inviteCode: row.invite_code || row.referrer_invite_code || row.referrerInviteCode || '',
       phone: row.phone || '',
       avatar: row.avatar || '',
       bio: row.bio || '',
@@ -1291,7 +1291,7 @@ async function d1GetDistributorProfile(env, uid) {
       phone: row.phone || '',
       email: row.email || '',
       agencySlug: row.agency_slug || '',
-      inviteCode: row.invite_code || '',
+      inviteCode: row.invite_code || row.referrer_invite_code || row.referrerInviteCode || '',
       status: row.status || '',
       commission: Number(row.commission_pct || 0),
       canUpload: !!Number(row.can_upload || 0),
@@ -2944,7 +2944,7 @@ async function getWegoPerformanceDashboard(env, query = {}) {
   const referrers = (referrerStats.results || []).map(row => ({
     uid: row.distributor_uid || '',
     name: row.distributor_name || '未歸屬',
-    inviteCode: row.invite_code || '',
+    inviteCode: row.invite_code || row.referrer_invite_code || row.referrerInviteCode || '',
     orderCount: Number(row.order_count || 0),
     revenue: Number(row.revenue || 0),
     commission: Number(row.commission || 0),
@@ -4438,10 +4438,14 @@ async function d1GetLineThreads(env, options = {}) {
     const threadIds = enrichedResults.map(row => row.id).filter(Boolean);
     const sourceUids = enrichedResults.map(row => row.source_user_id || row.source_group_id || '').filter(Boolean);
     const profileRows = await env.DB.prepare(`
-      SELECT *
-      FROM line_customer_profiles
-      WHERE thread_id IN (${threadIds.map(() => '?').join(',') || "''"})
-         OR source_user_id IN (${sourceUids.map(() => '?').join(',') || "''"})
+      SELECT
+        profile.*,
+        COALESCE(NULLIF(d.name, ''), '') AS referrer_name,
+        COALESCE(d.invite_code, '') AS referrer_invite_code
+      FROM line_customer_profiles AS profile
+      LEFT JOIN distributors AS d ON d.uid = profile.ref_uid
+      WHERE profile.thread_id IN (${threadIds.map(() => '?').join(',') || "''"})
+         OR profile.source_user_id IN (${sourceUids.map(() => '?').join(',') || "''"})
     `).bind(...threadIds, ...sourceUids).all();
     for (const profile of (profileRows.results || [])) {
       const item = normalizeLineCustomerProfile(profile);
@@ -4652,8 +4656,8 @@ function normalizeLineCustomerProfile(row = {}) {
     tabooNote: row.taboo_note || '',
     privacyConsent: row.privacy_consent || '',
     refUid: row.ref_uid || '',
-    inviteCode: row.invite_code || '',
-    referralNote: row.referral_note || '',
+    inviteCode: row.invite_code || row.referrer_invite_code || row.referrerInviteCode || '',
+    referralNote: row.referral_note || row.referrer_name || row.referrerName || '',
     updatedAt: row.updated_at || '',
   };
 }
@@ -5388,8 +5392,12 @@ async function d1GetLineCrm(env) {
         ORDER BY COALESCE(last_message_at, created_at) DESC
         LIMIT 500
       )
-      SELECT profile.*
+      SELECT
+        profile.*,
+        COALESCE(NULLIF(d.name, ''), '') AS referrer_name,
+        COALESCE(d.invite_code, '') AS referrer_invite_code
       FROM line_customer_profiles AS profile
+      LEFT JOIN distributors AS d ON d.uid = profile.ref_uid
       LEFT JOIN recent_threads rt ON rt.id = profile.thread_id
       WHERE rt.id IS NOT NULL
          OR profile.source_user_id IN (

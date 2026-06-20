@@ -122,6 +122,11 @@ const readViewFromHash = () => {
   return h || '';
 };
 
+const readDistributorSearchFromUrl = () => {
+  const params = new URLSearchParams(location.search || '');
+  return params.get('distributorUid') || params.get('inviteCode') || params.get('q') || '';
+};
+
 // ══════════════════════════════════════════════════════════════
 // 小元件
 // ══════════════════════════════════════════════════════════════
@@ -1511,7 +1516,7 @@ function App() {
 
   // CRM 篩選
   const [distFilter,    setDistFilter]    = useState('all');
-  const [distSearch,    setDistSearch]    = useState('');
+  const [distSearch,    setDistSearch]    = useState(readDistributorSearchFromUrl());
   const [orderFilter,   setOrderFilter]   = useState('all');
   const [orderSearch,   setOrderSearch]   = useState('');
   const [customerSearch,setCustomerSearch]= useState('');
@@ -2678,10 +2683,14 @@ function App() {
 
   const filteredDist = useMemo(() => distributors.filter(d => {
     const matchStatus = distFilter === 'all' || String(d.status).toLowerCase() === distFilter;
+    const q = distSearch.toLowerCase();
     const matchSearch = !distSearch ||
-      String(d.name  || '').toLowerCase().includes(distSearch.toLowerCase()) ||
+      String(d.name  || '').toLowerCase().includes(q) ||
       String(d.phone || '').includes(distSearch) ||
-      String(d.companyname || d.companyName || '').toLowerCase().includes(distSearch.toLowerCase());
+      String(d.companyname || d.companyName || '').toLowerCase().includes(q) ||
+      String(d.uid || '').toLowerCase().includes(q) ||
+      String(d.invitecode || d.inviteCode || '').toLowerCase().includes(q) ||
+      String(d.ref_uid || '').toLowerCase().includes(q);
     return matchStatus && matchSearch;
   }), [distributors, distFilter, distSearch]);
 
@@ -3697,7 +3706,7 @@ function App() {
               </div>
 
               <input value={distSearch} onChange={e => setDistSearch(e.target.value)}
-                placeholder="搜尋姓名、電話、公司..."
+                placeholder="搜尋姓名、電話、公司、UID、推薦碼..."
                 className="w-full p-4 border-2 border-slate-200 rounded-2xl font-medium outline-none focus:border-blue-500 bg-white" />
 
               <div className="bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm">
