@@ -1586,10 +1586,31 @@
       }
     }
 
+    function resolveThreadReferralAttribution(thread = null) {
+      const active = thread || getActiveThread?.() || null;
+      const customerProfile = active?.customerProfile || {};
+      const tags = Array.isArray(active?.tags) ? active.tags : [];
+      let inviteCode = String(customerProfile.inviteCode || customerProfile.invite_code || '').trim().toUpperCase();
+      let refUid = String(customerProfile.refUid || customerProfile.ref_uid || '').trim();
+      if (!inviteCode) {
+        const tagText = tags.join(' ');
+        const inviteMatch = tagText.match(/(?:推薦碼|invite|邀請碼)[:：\s-]*([A-Z0-9]{3,20})/i);
+        if (inviteMatch) inviteCode = String(inviteMatch[1] || '').trim().toUpperCase();
+      }
+      if (!refUid) {
+        const tagText = tags.join(' ');
+        const refMatch = tagText.match(/(?:歸屬UID|ref|refUid)[:：\s-]*(U[a-f0-9]{20,}|[A-Za-z0-9_-]{8,})/i);
+        if (refMatch) refUid = String(refMatch[1] || '').trim();
+      }
+      if (!refUid && !inviteCode) refUid = String(profile?.userId || '').trim();
+      return { inviteCode, refUid };
+    }
     function buildItineraryFlexBubble(item = {}) {
       const title = String(item.title || item.name || '未命名行程').slice(0, 80);
       const itineraryId = String(item.id || item.timestamp || '').trim();
-      const refUid = String(profile?.userId || '').trim();
+      const attribution = resolveThreadReferralAttribution();
+      const refUid = attribution.refUid;
+      const inviteCode = attribution.inviteCode;
       const agencySlug = 'demo';
       const price = Number(item.price || 0);
       const summary = [
@@ -1602,6 +1623,10 @@
         .slice(0, 120);
       const detailParams = new URLSearchParams({ t: itineraryId, a: agencySlug });
       const bookingParams = new URLSearchParams({ a: agencySlug, itinerary: itineraryId });
+      if (inviteCode) {
+        detailParams.set('invite', inviteCode);
+        bookingParams.set('invite', inviteCode);
+      }
       if (refUid) {
         detailParams.set('r', refUid);
         bookingParams.set('ref', refUid);

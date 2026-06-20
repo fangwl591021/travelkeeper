@@ -4492,9 +4492,26 @@ async function ensureLineCustomerProfilesTable(env) {
     CREATE INDEX IF NOT EXISTS idx_line_customer_profiles_source_user_id
     ON line_customer_profiles(source_user_id)
   `).run();
+  const alterStatements = [
+    `ALTER TABLE line_customer_profiles ADD COLUMN ref_uid TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE line_customer_profiles ADD COLUMN invite_code TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE line_customer_profiles ADD COLUMN referral_note TEXT NOT NULL DEFAULT ''`,
+  ];
+  for (const sql of alterStatements) {
+    try {
+      await env.DB.prepare(sql).run();
+    } catch (err) {
+      const message = String(err?.message || err).toLowerCase();
+      if (!message.includes('duplicate column')) throw err;
+    }
+  }
   await env.DB.prepare(`
     CREATE INDEX IF NOT EXISTS idx_line_customer_profiles_phone
     ON line_customer_profiles(phone)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_line_customer_profiles_invite_code
+    ON line_customer_profiles(invite_code)
   `).run();
 }
 
@@ -4512,6 +4529,9 @@ function normalizeLineCustomerProfile(row = {}) {
     preferenceNote: row.preference_note || '',
     tabooNote: row.taboo_note || '',
     privacyConsent: row.privacy_consent || '',
+    refUid: row.ref_uid || '',
+    inviteCode: row.invite_code || '',
+    referralNote: row.referral_note || '',
     updatedAt: row.updated_at || '',
   };
 }
@@ -4533,12 +4553,15 @@ async function d1UpsertLineCustomerProfile(env, body = {}) {
   const preferenceNote = String(body.preferenceNote || body.preference_note || '').trim();
   const tabooNote = String(body.tabooNote || body.taboo_note || '').trim();
   const privacyConsent = String(body.privacyConsent || body.privacy_consent || '').trim();
+  const refUid = String(body.refUid || body.ref_uid || '').trim();
+  const inviteCode = String(body.inviteCode || body.invite_code || '').trim().toUpperCase();
+  const referralNote = String(body.referralNote || body.referral_note || '').trim();
 
   await env.DB.prepare(`
     INSERT INTO line_customer_profiles (
       id, thread_id, source_user_id, display_name, phone, email, birthday, address,
-      identity_note, preference_note, taboo_note, privacy_consent, created_by, updated_by, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      identity_note, preference_note, taboo_note, privacy_consent, ref_uid, invite_code, referral_note, created_by, updated_by, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       thread_id = excluded.thread_id,
       source_user_id = excluded.source_user_id,
@@ -4551,6 +4574,9 @@ async function d1UpsertLineCustomerProfile(env, body = {}) {
       preference_note = excluded.preference_note,
       taboo_note = excluded.taboo_note,
       privacy_consent = excluded.privacy_consent,
+      ref_uid = excluded.ref_uid,
+      invite_code = excluded.invite_code,
+      referral_note = excluded.referral_note,
       updated_by = excluded.updated_by,
       updated_at = datetime('now')
   `).bind(
@@ -4566,6 +4592,9 @@ async function d1UpsertLineCustomerProfile(env, body = {}) {
     preferenceNote,
     tabooNote,
     privacyConsent,
+    refUid,
+    inviteCode,
+    referralNote,
     uid,
     uid
   ).run();

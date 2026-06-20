@@ -328,6 +328,9 @@
         preferenceNote: customerProfile.preferenceNote || '',
         tabooNote: customerProfile.tabooNote || '',
         privacyConsent: customerProfile.privacyConsent || '',
+        refUid: customerProfile.refUid || '',
+        inviteCode: customerProfile.inviteCode || '',
+        referralNote: customerProfile.referralNote || '',
         status: thread.status || 'open',
         risk: thread.risk || 'low',
         opportunityStage: thread.opportunityStage || 'new',
@@ -667,6 +670,8 @@
               <p><b class="text-slate-900">電話：</b>${escapeHtml(customer.phone || '尚未建立')}</p>
               <p><b class="text-slate-900">Email：</b>${escapeHtml(customer.email || '尚未建立')}</p>
               <p><b class="text-slate-900">偏好：</b>${escapeHtml(customer.preferenceNote || customer.opportunityNote || '尚未建立')}</p>
+              <p><b class="text-slate-900">推薦碼：</b>${escapeHtml(customer.inviteCode || '尚未建立')}</p>
+              <p><b class="text-slate-900">歸屬 UID：</b>${escapeHtml(customer.refUid || '尚未建立')}</p>
             </div>
           </div>
           <div id="customer-profile-editor" class="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-blue-100 bg-blue-50/30 p-4" ${profileEditorExpanded ? '' : 'hidden'}>
@@ -698,6 +703,20 @@
                 </select>
               </label>
             </div>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">推薦碼</span>
+                <input id="profile-invite-code" class="w-full rounded-xl border border-slate-200 px-3 py-2 uppercase outline-none focus:border-blue-500" value="${escapeHtml(customer.inviteCode || '')}" placeholder="例如 HTSCQY">
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-bold text-slate-500">歸屬 UID</span>
+                <input id="profile-ref-uid" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.refUid || '')}" placeholder="分銷商 LINE UID 或管理員 UID">
+              </label>
+            </div>
+            <label class="block">
+              <span class="mb-1 block text-xs font-bold text-slate-500">推薦 / 歸屬備註</span>
+              <textarea id="profile-referral-note" rows="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" placeholder="例如由某張名片、活動或業務轉介而來">${escapeHtml(customer.referralNote || '')}</textarea>
+            </label>
             <label class="block">
               <span class="mb-1 block text-xs font-bold text-slate-500">地址</span>
               <input id="profile-address" class="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500" value="${escapeHtml(customer.address || '')}" placeholder="可填寄送地址或常用聯絡地址">
@@ -785,6 +804,9 @@
           preferenceNote: document.getElementById('profile-preference-note')?.value || '',
           tabooNote: document.getElementById('profile-taboo-note')?.value || '',
           privacyConsent: document.getElementById('profile-privacy-consent')?.value || '',
+          inviteCode: document.getElementById('profile-invite-code')?.value || '',
+          refUid: document.getElementById('profile-ref-uid')?.value || '',
+          referralNote: document.getElementById('profile-referral-note')?.value || '',
         };
         const result = await fetchJson(`${WORKER_URL}/api/line-oa/customer-profile`, {
           method: 'POST',
@@ -803,11 +825,14 @@
           preferenceNote: saved.preferenceNote || payload.preferenceNote,
           tabooNote: saved.tabooNote || payload.tabooNote,
           privacyConsent: saved.privacyConsent || payload.privacyConsent,
+          inviteCode: saved.inviteCode || payload.inviteCode,
+          refUid: saved.refUid || payload.refUid,
+          referralNote: saved.referralNote || payload.referralNote,
           hasIdentity: Boolean(payload.phone || payload.email || customer.userId),
         });
         customer.searchBlob = [
           customer.name, customer.userId, customer.phone, customer.email, customer.summary, customer.note,
-          customer.identityNote, customer.preferenceNote, customer.tabooNote, customer.opportunityNote, ...(customer.tags || []),
+          customer.identityNote, customer.preferenceNote, customer.tabooNote, customer.opportunityNote, customer.inviteCode, customer.refUid, customer.referralNote, ...(customer.tags || []),
           ...(customer.visitorRecords || []).flatMap(record => [record.category, record.content, record.status, record.priority]),
           ...(customer.orders || []).flatMap(order => [order.customerName, order.phone, order.email, order.title, order.status])
         ].join(' ').toLowerCase();
