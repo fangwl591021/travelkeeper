@@ -564,6 +564,7 @@
 
   <script>
     const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const PUBLIC_SITE_URL = 'https://fangwl591021.github.io/travelkeeper/';
     const LIFF_ID = '2009367829-BDZCGti8';
     const NEGATIVE_KEYWORDS = ['\u9000\u6b3e', '\u9000\u8cbb', '\u751f\u6c23', '\u5931\u671b', '\u53d6\u6d88', '\u62b1\u6028', '\u5ba2\u670d\u5dee', '\u5dee\u8a55', '\u8ca0\u8a55', '\u6295\u8a34'];
     const URGENT_KEYWORDS = ['\u7acb\u5373', '\u76e1\u5feb', '\u7dca\u6025', '\u4eca\u5929', '\u99ac\u4e0a', '\u8655\u7406', '\u5ba2\u670d', '\u9000\u6b3e'];
@@ -1513,6 +1514,71 @@
       return publishedItineraries.slice(0, 3);
     }
 
+    function absolutePageUrl(path = '') {
+      try {
+        const base = location.protocol === 'file:' ? PUBLIC_SITE_URL : location.href;
+        return new URL(path, base).href;
+      } catch (_err) {
+        return path;
+      }
+    }
+
+    function buildItineraryFlexBubble(item = {}) {
+      const title = String(item.title || item.name || '未命名行程').slice(0, 80);
+      const price = Number(item.price || 0);
+      const summary = [
+        item.region || item.destination || '',
+        item.days ? String(item.days) + '天' : '',
+        price > 0 ? 'NT$ ' + price.toLocaleString() : '',
+      ].filter(Boolean).join('・') || '行程資訊待確認';
+      const description = String(item.summary || item.description || item.notes || '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 120);
+      const tourUrl = absolutePageUrl('tour.html?t=' + encodeURIComponent(String(item.id || '')));
+      const bodyContents = [
+        { type: 'text', text: title, weight: 'bold', size: 'md', wrap: true, color: '#0f172a' },
+        { type: 'text', text: summary, size: 'sm', color: '#475569', wrap: true, margin: 'sm' },
+      ];
+      if (description) {
+        bodyContents.push({ type: 'text', text: description, size: 'xs', color: '#64748b', wrap: true, margin: 'md' });
+      }
+      return {
+        type: 'bubble',
+        size: 'mega',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: bodyContents,
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            { type: 'button', style: 'primary', height: 'sm', action: { type: 'uri', label: '查看詳細內容', uri: tourUrl } },
+          ],
+        },
+      };
+    }
+
+    function buildItineraryCarouselMessage(items = []) {
+      return {
+        type: 'carousel',
+        contents: items.slice(0, 10).map(buildItineraryFlexBubble),
+      };
+    }
+
+    function insertItineraryCarousel(items = [], destinationLabel = '') {
+      const list = items.slice(0, 10);
+      if (!list.length) return;
+      setReplyContentMode('flex');
+      replyContentPanelEl.hidden = false;
+      replyFlexAltEl.value = `${destinationLabel || '推薦'}行程參考`;
+      replyFlexJsonEl.value = JSON.stringify(buildItineraryCarouselMessage(list), null, 2);
+      panelDraftEl.value = `您好，以下整理 ${list.length} 個${destinationLabel || '相關'}行程給您參考，每一頁都可以點開查看詳細內容。`;
+      showToast('已組合成多頁行程訊息');
+    }
     function renderItinerarySuggestions(thread) {
       itinerarySuggestionListEl.innerHTML = '';
       if (!thread || !publishedItineraries.length) {
@@ -1530,6 +1596,33 @@
           : '目前沒有符合對話內容的已上架行程。';
         itinerarySuggestionListEl.innerHTML = `<div class="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-400">${message}</div>`;
         return;
+      }
+      if (recommendations.length > 1) {
+        const haystack = normalizeText((thread?.messages || []).map(m => m.text || '').join('\n'));
+        const destination = resolveThreadDestination(thread, haystack);
+        const groupCard = document.createElement('div');
+        groupCard.className = 'rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4';
+
+        const groupTitle = document.createElement('p');
+        groupTitle.className = 'font-semibold text-slate-900';
+        groupTitle.textContent = '同質行程多頁';
+
+        const groupHint = document.createElement('p');
+        groupHint.className = 'mt-1 text-sm text-slate-600';
+        groupHint.textContent = `把目前 ${recommendations.length} 個相近行程組成 LINE 多頁訊息，每頁可點開查看詳細內容。`;
+
+        const groupBtn = document.createElement('button');
+        groupBtn.className = 'mt-3 w-full rounded-xl bg-emerald-600 text-white px-3 py-2 text-sm font-semibold hover:bg-emerald-700';
+        groupBtn.type = 'button';
+        groupBtn.textContent = '組合多頁';
+        groupBtn.addEventListener('click', () => {
+          insertItineraryCarousel(recommendations, destination?.label || '');
+        });
+
+        groupCard.appendChild(groupTitle);
+        groupCard.appendChild(groupHint);
+        groupCard.appendChild(groupBtn);
+        itinerarySuggestionListEl.appendChild(groupCard);
       }
       recommendations.forEach((item, idx) => {
         const title = item.title || item.name || '未命名行程';
