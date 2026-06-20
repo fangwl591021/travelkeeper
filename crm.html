@@ -373,6 +373,9 @@
       customer.preferenceNote = profileData.preferenceNote || customer.preferenceNote || '';
       customer.tabooNote = profileData.tabooNote || customer.tabooNote || '';
       customer.privacyConsent = profileData.privacyConsent || customer.privacyConsent || '';
+      customer.refUid = profileData.refUid || customer.refUid || '';
+      customer.inviteCode = profileData.inviteCode || customer.inviteCode || '';
+      customer.referralNote = profileData.referralNote || customer.referralNote || '';
       return customer;
     }
 
@@ -453,7 +456,7 @@
         customer.searchBlob = [
           customer.name, customer.userId, customer.phone, customer.email, customer.summary, customer.note,
           customer.birthday, customer.address, customer.identityNote, customer.preferenceNote, customer.tabooNote,
-          customer.opportunityNote, ...(customer.tags || []),
+          customer.opportunityNote, customer.inviteCode, customer.refUid, customer.referralNote, ...(customer.tags || []),
           ...(customer.visitorRecords || []).flatMap(record => [record.category, record.content, record.status, record.priority]),
           ...(customer.orders || []).flatMap(order => [order.customerName, order.phone, order.email, order.title, order.status])
         ].join(' ').toLowerCase();

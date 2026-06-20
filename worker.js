@@ -4431,6 +4431,77 @@ async function d1GetLineThreads(env, options = {}) {
   for (const row of results) {
     enrichedResults.push(await enrichStoredLineThreadProfile(env, row));
   }
+  const profileMap = new Map();
+  const referralMap = new Map();
+  if (enrichedResults.length) {
+    await ensureLineCustomerProfilesTable(env);
+    const threadIds = enrichedResults.map(row => row.id).filter(Boolean);
+    const sourceUids = enrichedResults.map(row => row.source_user_id || row.source_group_id || '').filter(Boolean);
+    const profileRows = await env.DB.prepare(`
+      SELECT *
+      FROM line_customer_profiles
+      WHERE thread_id IN (${threadIds.map(() => '?').join(',') || "''"})
+         OR source_user_id IN (${sourceUids.map(() => '?').join(',') || "''"})
+    `).bind(...threadIds, ...sourceUids).all();
+    for (const profile of (profileRows.results || [])) {
+      const item = normalizeLineCustomerProfile(profile);
+      if (item.threadId) profileMap.set(`thread:${item.threadId}`, item);
+      if (item.userId) profileMap.set(`uid:${item.userId}`, item);
+    }
+
+    try {
+      const customerReferralRows = await env.DB.prepare(`
+        SELECT customer_line_uid, owner_uid, owner_name
+        FROM customers
+        WHERE COALESCE(TRIM(customer_line_uid), '') <> ''
+          AND COALESCE(TRIM(owner_uid), '') <> ''
+          AND customer_line_uid IN (${sourceUids.map(() => '?').join(',') || "''"})
+      `).bind(...sourceUids).all();
+      for (const record of (customerReferralRows.results || [])) {
+        const userId = String(record.customer_line_uid || '').trim();
+        const refUid = String(record.owner_uid || '').trim();
+        if (!userId || !refUid || referralMap.has(userId)) continue;
+        referralMap.set(userId, {
+          userId,
+          refUid,
+          inviteCode: '',
+          referralNote: String(record.owner_name || '').trim() || refUid,
+        });
+      }
+    } catch (err) {
+      console.warn('[line-threads] customer referral lookup skipped:', err.message);
+    }
+
+    try {
+      const orderReferralRows = await env.DB.prepare(`
+        SELECT
+          o.customer_line_uid,
+          o.distributor_uid,
+          COALESCE(NULLIF(d.name, ''), o.distributor_uid) AS distributor_name,
+          COALESCE(d.invite_code, '') AS invite_code,
+          COALESCE(o.created_at, '') AS created_at
+        FROM orders AS o
+        LEFT JOIN distributors AS d ON d.uid = o.distributor_uid
+        WHERE COALESCE(TRIM(o.customer_line_uid), '') <> ''
+          AND COALESCE(TRIM(o.distributor_uid), '') <> ''
+          AND o.customer_line_uid IN (${sourceUids.map(() => '?').join(',') || "''"})
+        ORDER BY COALESCE(o.created_at, '') DESC
+      `).bind(...sourceUids).all();
+      for (const record of (orderReferralRows.results || [])) {
+        const userId = String(record.customer_line_uid || '').trim();
+        const refUid = String(record.distributor_uid || '').trim();
+        if (!userId || !refUid || referralMap.has(userId)) continue;
+        referralMap.set(userId, {
+          userId,
+          refUid,
+          inviteCode: String(record.invite_code || '').trim().toUpperCase(),
+          referralNote: String(record.distributor_name || '').trim() || refUid,
+        });
+      }
+    } catch (err) {
+      console.warn('[line-threads] order referral lookup skipped:', err.message);
+    }
+  }
   return {
     success: true,
     meta: {
@@ -4439,29 +4510,35 @@ async function d1GetLineThreads(env, options = {}) {
       returned: enrichedResults.length,
       hasMore: enrichedResults.length === limit && offset + limit < 200,
     },
-    data: enrichedResults.map(row => ({
-      id: row.id,
-      name: row.display_name || '????',
-      pictureUrl: row.picture_url || '',
-      userId: row.source_user_id || row.source_group_id || '',
-      summary: row.summary || '',
-      unread: Number(row.unread_count || 0),
-      risk: row.risk_level || 'low',
-      status: row.status || 'open',
-      assignedTo: row.assigned_to || '',
-      tags: String(row.tags || '').split(',').map(v => v.trim()).filter(Boolean),
-      note: row.note || '',
-      opportunityStage: row.opportunity_stage || 'new',
-      opportunityValue: Number(row.opportunity_value || 0),
-      opportunityNote: row.opportunity_note || '',
-      aiPaused: Number(row.ai_paused || 0) === 1,
-      aiReplyOverride: normalizeLineAiReplyOverride(row.ai_reply_override || ''),
-      importantCount: Number(row.important_count || 0),
-      latestImportantNote: row.latest_important_note || '',
-      learningCount: Number(row.learning_count || 0),
-      learningStatus: row.learning_status || '',
-      lastMessageAt: row.last_message_at || '',
-    })),
+    data: enrichedResults.map(row => {
+      const sourceUid = row.source_user_id || row.source_group_id || '';
+      const existingProfile = profileMap.get(`thread:${row.id}`) || profileMap.get(`uid:${sourceUid}`) || null;
+      const customerProfile = mergeLineCustomerReferralProfile(existingProfile, referralMap.get(sourceUid), row);
+      return {
+        id: row.id,
+        name: row.display_name || '????',
+        pictureUrl: row.picture_url || '',
+        userId: row.source_user_id || row.source_group_id || '',
+        summary: row.summary || '',
+        unread: Number(row.unread_count || 0),
+        risk: row.risk_level || 'low',
+        status: row.status || 'open',
+        assignedTo: row.assigned_to || '',
+        tags: String(row.tags || '').split(',').map(v => v.trim()).filter(Boolean),
+        note: row.note || '',
+        opportunityStage: row.opportunity_stage || 'new',
+        opportunityValue: Number(row.opportunity_value || 0),
+        opportunityNote: row.opportunity_note || '',
+        aiPaused: Number(row.ai_paused || 0) === 1,
+        aiReplyOverride: normalizeLineAiReplyOverride(row.ai_reply_override || ''),
+        importantCount: Number(row.important_count || 0),
+        latestImportantNote: row.latest_important_note || '',
+        learningCount: Number(row.learning_count || 0),
+        learningStatus: row.learning_status || '',
+        customerProfile,
+        lastMessageAt: row.last_message_at || '',
+      };
+    }),
   };
 }
 
@@ -4578,6 +4655,34 @@ function normalizeLineCustomerProfile(row = {}) {
     inviteCode: row.invite_code || '',
     referralNote: row.referral_note || '',
     updatedAt: row.updated_at || '',
+  };
+}
+
+function mergeLineCustomerReferralProfile(profile, fallback = {}, row = {}) {
+  if (!fallback || (!fallback.refUid && !fallback.inviteCode && !fallback.referralNote)) return profile || null;
+  const base = profile || {
+    id: `crm:${row.id || fallback.userId || crypto.randomUUID()}`,
+    threadId: row.id || '',
+    userId: row.source_user_id || row.source_group_id || fallback.userId || '',
+    displayName: row.display_name || '',
+    phone: '',
+    email: '',
+    birthday: '',
+    address: '',
+    identityNote: '',
+    preferenceNote: '',
+    tabooNote: '',
+    privacyConsent: '',
+    refUid: '',
+    inviteCode: '',
+    referralNote: '',
+    updatedAt: '',
+  };
+  return {
+    ...base,
+    refUid: base.refUid || fallback.refUid || '',
+    inviteCode: base.inviteCode || fallback.inviteCode || '',
+    referralNote: base.referralNote || fallback.referralNote || '',
   };
 }
 
@@ -5250,6 +5355,7 @@ async function d1GetLineCrm(env) {
 
   const recordMap = new Map();
   const profileMap = new Map();
+  const referralMap = new Map();
   if (rows.length) {
     const recordRows = await env.DB.prepare(`
       WITH recent_threads AS (
@@ -5298,13 +5404,67 @@ async function d1GetLineCrm(env) {
       if (item.threadId) profileMap.set(`thread:${item.threadId}`, item);
       if (item.userId) profileMap.set(`uid:${item.userId}`, item);
     }
+
+    try {
+      const customerReferralRows = await env.DB.prepare(`
+        SELECT customer_line_uid, owner_uid, owner_name
+        FROM customers
+        WHERE COALESCE(TRIM(customer_line_uid), '') <> ''
+          AND COALESCE(TRIM(owner_uid), '') <> ''
+      `).all();
+      for (const record of (customerReferralRows.results || [])) {
+        const userId = String(record.customer_line_uid || '').trim();
+        const refUid = String(record.owner_uid || '').trim();
+        if (!userId || !refUid || referralMap.has(userId)) continue;
+        referralMap.set(userId, {
+          userId,
+          refUid,
+          inviteCode: '',
+          referralNote: String(record.owner_name || '').trim() || refUid,
+        });
+      }
+    } catch (err) {
+      console.warn('[line-crm] customer referral lookup skipped:', err.message);
+    }
+
+    try {
+      const orderReferralRows = await env.DB.prepare(`
+        SELECT
+          o.customer_line_uid,
+          o.distributor_uid,
+          COALESCE(NULLIF(d.name, ''), o.distributor_uid) AS distributor_name,
+          COALESCE(d.invite_code, '') AS invite_code,
+          COALESCE(o.created_at, '') AS created_at
+        FROM orders AS o
+        LEFT JOIN distributors AS d ON d.uid = o.distributor_uid
+        WHERE COALESCE(TRIM(o.customer_line_uid), '') <> ''
+          AND COALESCE(TRIM(o.distributor_uid), '') <> ''
+        ORDER BY COALESCE(o.created_at, '') DESC
+        LIMIT 1000
+      `).all();
+      for (const record of (orderReferralRows.results || [])) {
+        const userId = String(record.customer_line_uid || '').trim();
+        const refUid = String(record.distributor_uid || '').trim();
+        if (!userId || !refUid || referralMap.has(userId)) continue;
+        referralMap.set(userId, {
+          userId,
+          refUid,
+          inviteCode: String(record.invite_code || '').trim().toUpperCase(),
+          referralNote: String(record.distributor_name || '').trim() || refUid,
+        });
+      }
+    } catch (err) {
+      console.warn('[line-crm] order referral lookup skipped:', err.message);
+    }
   }
 
   return {
     success: true,
     data: rows.map(row => {
       const visitorRecords = recordMap.get(row.id) || [];
-      const customerProfile = profileMap.get(`thread:${row.id}`) || profileMap.get(`uid:${row.source_user_id || row.source_group_id || ''}`) || null;
+      const sourceUid = row.source_user_id || row.source_group_id || '';
+      const existingProfile = profileMap.get(`thread:${row.id}`) || profileMap.get(`uid:${sourceUid}`) || null;
+      const customerProfile = mergeLineCustomerReferralProfile(existingProfile, referralMap.get(sourceUid), row);
       return {
         id: row.id,
         name: row.display_name || '????',
