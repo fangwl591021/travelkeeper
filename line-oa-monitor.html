@@ -1323,8 +1323,8 @@
         if (text) suggestions.push(text);
       });
       if (travelIntent && !imageDmSuggestion) {
-        const destination = detectItineraryDestination(contextText);
-        const destinationTerm = detectItineraryDestinationTerm(contextText, destination);
+        const destination = resolveThreadDestination(thread, contextText);
+        const destinationTerm = resolveThreadDestinationTerm(thread, destination, contextText);
         const recommendations = recommendPublishedItineraries(thread);
         if (recommendations.length) {
           const title = recommendations[0].title || recommendations[0].name || '目前上架行程';
@@ -1451,6 +1451,15 @@
       ) || null;
     }
 
+    function resolveThreadDestination(thread, fallbackText = '') {
+      const latest = latestCustomerMessageText(thread);
+      return detectItineraryDestination(latest) || detectItineraryDestination(fallbackText);
+    }
+
+    function resolveThreadDestinationTerm(thread, destination, fallbackText = '') {
+      const latest = latestCustomerMessageText(thread);
+      return detectItineraryDestinationTerm(latest, destination) || detectItineraryDestinationTerm(fallbackText, destination);
+    }
     function detectItineraryDestinationTerm(haystack, destination) {
       if (!destination) return '';
       const text = normalizeText(haystack);
@@ -1492,7 +1501,7 @@
       const latestText = latestCustomerMessageText(thread);
       const customerText = customerThreadText(thread);
       const haystack = normalizeText([latestText, customerText].filter(Boolean).join('\n'));
-      const destination = detectItineraryDestination(haystack);
+      const destination = resolveThreadDestination(thread, haystack);
       const ranked = publishedItineraries
         .map(item => ({ item, score: scoreItineraryMatch(item, haystack, destination) }))
         .filter(entry => entry.score > 0)
@@ -1515,7 +1524,7 @@
       itinerarySuggestionCountEl.textContent = String(recommendations.length);
       if (!recommendations.length) {
         const haystack = normalizeText((thread?.messages || []).map(m => m.text || '').join('\n'));
-        const destination = detectItineraryDestination(haystack);
+        const destination = resolveThreadDestination(thread, haystack);
         const message = destination
           ? `目前沒有符合「${destination.label}」的已上架行程。`
           : '目前沒有符合對話內容的已上架行程。';
