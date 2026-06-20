@@ -876,13 +876,14 @@
       const info = result.data || {};
       if (!info.hasLineToken) throw new Error('LINE Channel Access Token 尚未設定，不能送出');
       return window.confirm([
-        `即將送出給：${thread.name || thread.displayName || thread.id}`,
-        `目標：${info.targetType || 'LINE'} ${info.targetPreview || ''}`,
+        `即將送出到聊天室：${thread.name || thread.displayName || thread.id}`,
+        `收件對象：${info.targetType || 'LINE'} ${info.targetPreview || ''}`,
         `訊息數：${info.messageCount || messages.length}`,
         '',
         describeReplyMessages(messages),
         '',
-        '確認送出後會直接推送到 LINE。'
+        '確認後會送到此客戶的 LINE 聊天室。',
+        '目前使用 Messaging API 單一收件人送出；不是群發推播。'
       ].join('\n'));
     }
 
@@ -2689,7 +2690,7 @@
                     layout: 'vertical',
                     contents: [
                       { type: 'text', text: '多頁訊息 1', weight: 'bold', size: 'lg' },
-                      { type: 'text', text: 'dry-run 不會推送給客戶', size: 'sm', color: '#64748b', wrap: true },
+                      { type: 'text', text: 'dry-run 不會送到客戶聊天室', size: 'sm', color: '#64748b', wrap: true },
                     ],
                   },
                 },
