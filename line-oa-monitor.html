@@ -971,6 +971,19 @@
       if (stage === 'qualified') return 'bg-blue-100 text-blue-700';
       return 'bg-slate-100 text-slate-600';
     }
+    function getThreadReferralMeta(thread = {}) {
+      const profile = thread.customerProfile || {};
+      const inviteCode = String(profile.inviteCode || profile.invite_code || '').trim().toUpperCase();
+      const refUid = String(profile.refUid || profile.ref_uid || '').trim();
+      const note = String(profile.referralNote || profile.referral_note || '').trim();
+      const tagText = Array.isArray(thread.tags) ? thread.tags.join(' ') : String(thread.tags || '');
+      const tagInvite = tagText.match(/(?:推薦碼|invite|邀請碼)[:：\s-]*([A-Z0-9]{3,20})/i);
+      const tagRef = tagText.match(/(?:介紹人|推薦人|歸屬UID|ref|refUid)[:：\s-]*(U[a-f0-9]{20,}|[A-Za-z0-9_-]{8,})/i);
+      const code = inviteCode || String(tagInvite?.[1] || '').trim().toUpperCase();
+      const uid = refUid || String(tagRef?.[1] || '').trim();
+      const label = note || (code ? `推薦碼 ${code}` : '') || (uid ? uid : '');
+      return { hasReferral: !!(note || code || uid), label, inviteCode: code, refUid: uid, note };
+    }
 
     function renderOpportunity(thread) {
       const stage = thread?.opportunityStage || 'new';
@@ -1826,7 +1839,8 @@
         if (currentFilter === 'closed' && item.status !== 'closed') return false;
         if (currentFilter === 'risk' && item.risk !== 'high') return false;
         if (!keyword) return true;
-        const haystack = [item.name, item.userId, item.summary, item.assignedTo, opportunityLabel(item.opportunityStage), item.opportunityNote, ...(item.tags || [])].join(' ');
+        const referralMeta = getThreadReferralMeta(item);
+        const haystack = [item.name, item.userId, item.summary, item.assignedTo, opportunityLabel(item.opportunityStage), item.opportunityNote, referralMeta.label, referralMeta.inviteCode, referralMeta.refUid, referralMeta.note, ...(item.tags || [])].join(' ');
         return haystack.includes(keyword);
       });
     }
@@ -2043,10 +2057,12 @@
 
         const pills = document.createElement('div');
         pills.className = 'flex flex-wrap gap-2 mt-2.5';
+        const referralMeta = getThreadReferralMeta(item);
         pills.innerHTML = `
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusClass(item.status)}">${statusLabel(item.status)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${opportunityClass(item.opportunityStage)}">${opportunityLabel(item.opportunityStage)}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold ${riskClass(item.risk)}">${riskLabel(item.risk)}</span>
+          ${referralMeta.hasReferral ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white" title="${escapeHtml(referralMeta.refUid || referralMeta.inviteCode || referralMeta.note)}">介紹人：${escapeHtml(referralMeta.label)}</span>` : ''}
           ${item.aiReplyOverride === 'enabled' ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-600 text-white">AI例外開</span>' : ''}
           ${item.aiReplyOverride === 'disabled' ? '<span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-600 text-white">AI例外關</span>' : ''}
           ${Number(item.unread || 0) > 0 ? `<span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white">${item.unread} 則</span>` : ''}
