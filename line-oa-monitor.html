@@ -1588,6 +1588,9 @@
 
     function buildItineraryFlexBubble(item = {}) {
       const title = String(item.title || item.name || '未命名行程').slice(0, 80);
+      const itineraryId = String(item.id || item.timestamp || '').trim();
+      const refUid = String(profile?.userId || '').trim();
+      const agencySlug = 'demo';
       const price = Number(item.price || 0);
       const summary = [
         item.region || item.destination || '',
@@ -1597,7 +1600,14 @@
       const description = String(item.summary || item.description || item.notes || '')
         .replace(/\s+/g, ' ')
         .slice(0, 120);
-      const tourUrl = absolutePageUrl('tour.html?t=' + encodeURIComponent(String(item.id || '')));
+      const detailParams = new URLSearchParams({ t: itineraryId, a: agencySlug });
+      const bookingParams = new URLSearchParams({ a: agencySlug, itinerary: itineraryId });
+      if (refUid) {
+        detailParams.set('r', refUid);
+        bookingParams.set('ref', refUid);
+      }
+      const tourUrl = absolutePageUrl('tour.html?' + detailParams.toString());
+      const bookingUrl = absolutePageUrl('booking.html?' + bookingParams.toString());
       const bodyContents = [
         { type: 'text', text: title, weight: 'bold', size: 'md', wrap: true, color: '#0f172a' },
         { type: 'text', text: summary, size: 'sm', color: '#475569', wrap: true, margin: 'sm' },
@@ -1619,7 +1629,8 @@
           layout: 'vertical',
           spacing: 'sm',
           contents: [
-            { type: 'button', style: 'primary', height: 'sm', action: { type: 'uri', label: '查看詳細內容', uri: tourUrl } },
+            { type: 'button', style: 'primary', height: 'sm', action: { type: 'uri', label: '立即預約', uri: bookingUrl } },
+            { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: '查看詳細內容', uri: tourUrl } },
           ],
         },
       };
