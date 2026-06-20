@@ -816,7 +816,7 @@
 
     async function buildReplyMessages(text) {
       const messages = [];
-      if (text) messages.push({ type: 'text', text });
+      if (text && replyContentMode !== 'flex') messages.push({ type: 'text', text });
       if (replyContentMode === 'image') {
         let url = replyImageUrlEl.value.trim();
         if (!url && replyImageFileEl.files?.[0]) {
@@ -1106,9 +1106,67 @@
       return text || '收到一則 LINE 事件';
     }
 
+    function getFlexTextItems(node, result = []) {
+      if (!node || typeof node !== 'object') return result;
+      if (node.type === 'text' && node.text) result.push(String(node.text));
+      if (Array.isArray(node.contents)) node.contents.forEach(child => getFlexTextItems(child, result));
+      return result;
+    }
+
+    function getFlexBubbles(message = {}) {
+      const contents = message.flexContents || message.contents || null;
+      if (!contents || typeof contents !== 'object') return [];
+      if (contents.type === 'carousel') return Array.isArray(contents.contents) ? contents.contents : [];
+      if (contents.type === 'bubble') return [contents];
+      return [];
+    }
+
+    function renderFlexPreview(message = {}) {
+      const bubbles = getFlexBubbles(message);
+      const preview = document.createElement('div');
+      preview.className = 'mt-2 max-w-full overflow-x-auto pb-1';
+      if (!bubbles.length) {
+        const fallback = document.createElement('p');
+        fallback.className = 'text-sm font-medium leading-6 whitespace-pre-wrap';
+        fallback.textContent = readableMessageText(message);
+        preview.appendChild(fallback);
+        return preview;
+      }
+      const track = document.createElement('div');
+      track.className = 'flex gap-3 min-w-max';
+      bubbles.slice(0, 10).forEach((bubble, index) => {
+        const texts = getFlexTextItems(bubble.body || bubble).filter(Boolean);
+        const buttons = getFlexTextItems(bubble.footer || {}).filter(Boolean);
+        const card = document.createElement('div');
+        card.className = 'w-64 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm';
+        const seq = document.createElement('p');
+        seq.className = 'text-xs font-semibold text-slate-400 mb-1';
+        seq.textContent = `多頁 ${index + 1}`;
+        const title = document.createElement('p');
+        title.className = 'font-semibold text-slate-900 leading-6';
+        title.textContent = texts[0] || message.altText || '多頁訊息';
+        const summary = document.createElement('p');
+        summary.className = 'mt-1 text-sm text-slate-600 leading-5 line-clamp-3';
+        summary.textContent = texts.slice(1, 4).join('｜') || '點選手機訊息可查看內容。';
+        card.appendChild(seq);
+        card.appendChild(title);
+        card.appendChild(summary);
+        if (buttons.length) {
+          const action = document.createElement('p');
+          action.className = 'mt-3 rounded-xl bg-emerald-500 px-3 py-2 text-center text-sm font-semibold text-white';
+          action.textContent = buttons[0];
+          card.appendChild(action);
+        }
+        track.appendChild(card);
+      });
+      preview.appendChild(track);
+      return preview;
+    }
     function renderMessageBubble(message = {}, side = 'left') {
+      const type = String(message.type || '').toLowerCase();
+      const isFlex = type === 'flex';
       const wrapper = document.createElement('div');
-      wrapper.className = `max-w-[72%] bg-white text-slate-900 border ${side === 'right' ? 'border-emerald-200' : 'border-slate-200'} rounded-[22px] px-4 py-3 shadow-sm`;
+      wrapper.className = `${isFlex ? 'max-w-[92%]' : 'max-w-[72%]'} bg-white text-slate-900 border ${side === 'right' ? 'border-emerald-200' : 'border-slate-200'} rounded-[22px] px-4 py-3 shadow-sm`;
 
       const nameEl = document.createElement('p');
       nameEl.className = 'font-semibold text-xs text-slate-400 mb-2';
@@ -1124,10 +1182,14 @@
         wrapper.appendChild(img);
       }
 
-      const textEl = document.createElement('p');
-      textEl.className = 'text-sm font-medium leading-6 whitespace-pre-wrap';
-      textEl.textContent = readableMessageText(message);
-      wrapper.appendChild(textEl);
+      if (type === 'flex') {
+        wrapper.appendChild(renderFlexPreview(message));
+      } else {
+        const textEl = document.createElement('p');
+        textEl.className = 'text-sm font-medium leading-6 whitespace-pre-wrap';
+        textEl.textContent = readableMessageText(message);
+        wrapper.appendChild(textEl);
+      }
 
       if (!message.mediaUrl && String(message.type || '').toLowerCase() === 'image' && message.lineMessageId) {
         const hintEl = document.createElement('p');

@@ -4076,6 +4076,15 @@ function safeLineMessageIdFromRaw(rawJson = '') {
   }
 }
 
+function safeLineManualReplyMessageFromRaw(rawJson = '') {
+  try {
+    const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson || '{}') : rawJson;
+    if (parsed?.kind !== 'manual_reply' || !parsed?.message || typeof parsed.message !== 'object') return null;
+    return parsed.message;
+  } catch (_err) {
+    return null;
+  }
+}
 function extensionFromContentType(contentType = '') {
   const ct = String(contentType || '').toLowerCase();
   if (ct.includes('png')) return 'png';
@@ -5047,6 +5056,7 @@ async function d1GetLineThread(env, threadId) {
     let mediaContentType = msg.media_content_type || '';
     let mediaSize = Number(msg.media_size || 0);
     const lineMessageId = safeLineMessageIdFromRaw(msg.raw_json || '');
+    const manualReplyMessage = safeLineManualReplyMessageFromRaw(msg.raw_json || '');
     if (!mediaUrl && String(msg.message_type || '').toLowerCase() === 'image' && lineMessageId) {
       const media = await storeLineMessageMedia(
         env,
@@ -5095,6 +5105,8 @@ async function d1GetLineThread(env, threadId) {
       mediaContentType,
       mediaSize,
       lineMessageId,
+      altText: manualReplyMessage?.type === 'flex' ? String(manualReplyMessage.altText || '') : '',
+      flexContents: manualReplyMessage?.type === 'flex' ? manualReplyMessage.contents || null : null,
       createdAt: msg.created_at || '',
     });
   }
