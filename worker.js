@@ -1127,6 +1127,11 @@ function toSheetOrder(row) {
     itinerarytitle: row.itinerary_title,
     price: row.price,
     distributoruid: row.distributor_uid,
+    distributorname: row.distributor_name || row.sales_name || '',
+    distributorinvitecode: row.distributor_invite_code || row.invite_code || '',
+    recommendername: row.distributor_name || row.sales_name || '',
+    recommenderuid: row.distributor_uid || '',
+    recommenderinvitecode: row.distributor_invite_code || row.invite_code || '',
     customername: row.customer_name,
     customerphone: row.customer_phone,
     customerlineuid: row.customer_line_uid,
@@ -1487,9 +1492,13 @@ async function readDistributorsWithFallback(env) {
 async function d1GetAllOrders(env) {
   if (!env.DB) throw new Error('D1 binding missing');
   const { results } = await env.DB.prepare(
-    `SELECT *
-       FROM orders
-      ORDER BY created_at DESC`
+    `SELECT
+       o.*,
+       d.name AS distributor_name,
+       d.invite_code AS distributor_invite_code
+       FROM orders o
+       LEFT JOIN distributors d ON d.uid = o.distributor_uid
+      ORDER BY o.created_at DESC`
   ).all();
   return { success: true, data: results.map(toSheetOrder) };
 }
@@ -2873,6 +2882,26 @@ async function getWegoPerformanceDashboard(env, query = {}) {
     GROUP BY substr(COALESCE(NULLIF(departure_date, ''), order_date), 1, 7)
   `).bind(...trendMonths).all();
 
+  const referrerStats = await env.DB.prepare(`
+    SELECT
+      o.distributor_uid,
+      COALESCE(NULLIF(d.name, ''), o.distributor_uid, '未歸屬') AS distributor_name,
+      COALESCE(d.invite_code, '') AS invite_code,
+      COUNT(*) AS order_count,
+      COALESCE(SUM(o.total_amount), 0) AS revenue,
+      COALESCE(SUM(o.commission_amount), 0) AS commission,
+      COALESCE(SUM(CASE WHEN substr(o.created_at, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS month_order_count,
+      COALESCE(SUM(CASE WHEN substr(o.created_at, 1, 7) = ? THEN o.total_amount ELSE 0 END), 0) AS month_revenue,
+      COALESCE(SUM(CASE WHEN substr(o.created_at, 1, 7) = ? THEN o.commission_amount ELSE 0 END), 0) AS month_commission
+    FROM orders o
+    LEFT JOIN distributors d ON d.uid = o.distributor_uid
+    WHERE o.status <> 'cancelled'
+      AND COALESCE(o.distributor_uid, '') <> ''
+    GROUP BY o.distributor_uid, distributor_name, invite_code
+    ORDER BY month_revenue DESC, revenue DESC
+    LIMIT 30
+  `).bind(month, month, month).all();
+
   const normalizePublic = row => ({
     count: Number(row?.count || 0),
     revenue: Number(row?.revenue || 0),
@@ -2912,6 +2941,17 @@ async function getWegoPerformanceDashboard(env, query = {}) {
       combined: combine(publicData, internalData),
     };
   });
+  const referrers = (referrerStats.results || []).map(row => ({
+    uid: row.distributor_uid || '',
+    name: row.distributor_name || '未歸屬',
+    inviteCode: row.invite_code || '',
+    orderCount: Number(row.order_count || 0),
+    revenue: Number(row.revenue || 0),
+    commission: Number(row.commission || 0),
+    monthOrderCount: Number(row.month_order_count || 0),
+    monthRevenue: Number(row.month_revenue || 0),
+    monthCommission: Number(row.month_commission || 0),
+  }));
 
   return {
     success: true,
@@ -2929,6 +2969,7 @@ async function getWegoPerformanceDashboard(env, query = {}) {
         combined: combine(totalPublic, totalInternal),
       },
       trend,
+      referrers,
       generatedAt: formatTaipeiDateTime(new Date()),
     },
   };
@@ -3307,11 +3348,15 @@ async function readCommissionSummaryWithFallback(env, uid) {
 async function d1GetUserOrders(env, uid) {
   if (!env.DB) throw new Error('D1 binding missing');
   const { results } = await env.DB.prepare(
-    `SELECT *
-       FROM orders
-      WHERE customer_line_uid = ?
-         OR distributor_uid = ?
-      ORDER BY created_at DESC`
+    `SELECT
+       o.*,
+       d.name AS distributor_name,
+       d.invite_code AS distributor_invite_code
+       FROM orders o
+       LEFT JOIN distributors d ON d.uid = o.distributor_uid
+      WHERE o.customer_line_uid = ?
+         OR o.distributor_uid = ?
+      ORDER BY o.created_at DESC`
   ).bind(uid, uid).all();
 
   return { success: true, data: results.map(toSheetOrder) };

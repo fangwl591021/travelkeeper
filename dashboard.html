@@ -1010,8 +1010,12 @@ function OrderModal({ order, onClose, onUpdateStatus, onMarkBalancePaid, canEdit
         <div className="p-6 border-b border-slate-100">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">業務歸屬</p>
           <div className="space-y-2">
-            <div className="flex gap-3"><span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">分銷商</span>
-              <span className="text-xs font-mono text-slate-500 break-all">{order.distributoruid || '—'}</span></div>
+            <div className="flex gap-3"><span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">推薦者</span>
+              <span className="text-sm font-bold text-slate-900">{order.recommendername || order.distributorname || '未命名推薦者'}</span></div>
+            <div className="flex gap-3"><span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">推薦碼</span>
+              <span className="text-xs font-mono text-emerald-600 break-all">{order.recommenderinvitecode || order.distributorinvitecode || '—'}</span></div>
+            <div className="flex gap-3"><span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">UID</span>
+              <span className="text-xs font-mono text-slate-500 break-all">{order.recommenderuid || order.distributoruid || '—'}</span></div>
             <div className="flex gap-3"><span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">應付佣金</span>
               <span className="text-sm font-black text-emerald-600">{fmt(order.commissionamount)}</span></div>
             <div className="flex gap-3"><span className="text-xs font-bold text-slate-400 w-20 shrink-0 pt-0.5">建立時間</span>
@@ -2570,6 +2574,39 @@ function App() {
       }));
     }
 
+    const fallbackReferrerMap = {};
+    orders.forEach(o => {
+      const uid = String(o.recommenderuid || o.distributoruid || '').trim();
+      if (!uid || String(o.status || '').toLowerCase() === 'cancelled') return;
+      if (!fallbackReferrerMap[uid]) {
+        fallbackReferrerMap[uid] = {
+          uid,
+          name: o.recommendername || o.distributorname || '未命名推薦者',
+          inviteCode: o.recommenderinvitecode || o.distributorinvitecode || '',
+          orderCount: 0,
+          revenue: 0,
+          commission: 0,
+          monthOrderCount: 0,
+          monthRevenue: 0,
+          monthCommission: 0,
+        };
+      }
+      const row = fallbackReferrerMap[uid];
+      const amount = Number(o.totalamount || o.price || 0);
+      const comm = Number(o.commissionamount || 0);
+      row.orderCount += 1;
+      row.revenue += amount;
+      row.commission += comm;
+      if (String(o.createdat || '').startsWith(thisMonth)) {
+        row.monthOrderCount += 1;
+        row.monthRevenue += amount;
+        row.monthCommission += comm;
+      }
+    });
+    const referrerPerformance = Array.isArray(performanceDashboard?.referrers) && performanceDashboard.referrers.length
+      ? performanceDashboard.referrers
+      : Object.values(fallbackReferrerMap).sort((a, b) => (b.monthRevenue || b.revenue || 0) - (a.monthRevenue || a.revenue || 0));
+
     return {
       pendingReview:   pendingItems.length,
       pendingOrders:   orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
@@ -2594,6 +2631,7 @@ function App() {
       // 趨勢
       trend,
       performanceSource: performanceDashboard ? 'unified' : 'orders',
+      referrerPerformance,
     };
   }, [pendingItems, orders, monthOrders, distributors, myItems, performanceDashboard]);
 
@@ -2616,7 +2654,7 @@ function App() {
 
   const orderStats = useMemo(() => ({
     pendingCount:    orders.filter(o => String(o.status).toLowerCase() === 'pending').length,
-    monthRevenue:    monthOrders.reduce((s,o) => s + Number(o.price||0), 0),
+    monthRevenue:    monthOrders.reduce((s,o) => s + Number(o.totalamount || o.price || 0), 0),
     monthCommission: monthOrders.reduce((s,o) => s + Number(o.commissionamount||0), 0),
     totalCount:      orders.length,
     completedCommission: orders
@@ -2649,11 +2687,15 @@ function App() {
 
   const filteredOrders = useMemo(() => orders.filter(o => {
     const matchStatus = orderFilter === 'all' || String(o.status).toLowerCase() === orderFilter;
+    const q = orderSearch.toLowerCase();
     const matchSearch = !orderSearch ||
-      String(o.orderid || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-      String(o.itinerarytitle || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-      String(o.customername || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
-      String(o.customerphone || '').includes(orderSearch);
+      String(o.orderid || '').toLowerCase().includes(q) ||
+      String(o.itinerarytitle || '').toLowerCase().includes(q) ||
+      String(o.customername || '').toLowerCase().includes(q) ||
+      String(o.customerphone || '').includes(orderSearch) ||
+      String(o.recommendername || o.distributorname || '').toLowerCase().includes(q) ||
+      String(o.recommenderinvitecode || o.distributorinvitecode || '').toLowerCase().includes(q) ||
+      String(o.recommenderuid || o.distributoruid || '').toLowerCase().includes(q);
     return matchStatus && matchSearch;
   }), [orders, orderFilter, orderSearch]);
 
@@ -3144,6 +3186,39 @@ function App() {
                         </div>
 
                         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div>
+                              <h2 className="font-black text-xl text-slate-900">推薦者業績</h2>
+                              <p className="text-sm text-slate-500 mt-1">依訂單歸屬統計，含推薦碼成交。</p>
+                            </div>
+                            <span className="text-xs font-black text-emerald-600">{(adminStats.referrerPerformance || []).length} 人</span>
+                          </div>
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            {(adminStats.referrerPerformance || []).slice(0, 8).map((row, idx) => (
+                              <div key={row.uid || idx} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="font-black text-slate-900 truncate">{idx + 1}. {row.name || '未命名推薦者'}</p>
+                                    <p className="text-xs text-slate-400 font-mono truncate mt-1">{row.inviteCode || row.uid || '無推薦碼'}</p>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <p className="font-black text-emerald-600">{fmt(row.monthRevenue || 0)}</p>
+                                    <p className="text-[11px] text-slate-400">本月 {row.monthOrderCount || 0} 單</p>
+                                  </div>
+                                </div>
+                                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                                  <span>累計 {fmt(row.revenue || 0)}</span>
+                                  <span className="text-right">佣金 {fmt(row.commission || 0)}</span>
+                                </div>
+                              </div>
+                            ))}
+                            {!(adminStats.referrerPerformance || []).length && (
+                              <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm font-bold text-slate-400">尚無推薦者成交資料</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                           <h2 className="font-black text-xl text-slate-900">收款狀態</h2>
                           <div className="mt-6 mx-auto w-40 h-40 rounded-full bg-slate-100 grid place-items-center relative overflow-hidden">
                             <div className="absolute bottom-0 left-0 right-0 bg-emerald-500" style={{ height: `${Math.min(100, overviewPaidRate)}%` }}></div>
@@ -3343,7 +3418,7 @@ function App() {
                   ))}
                 </div>
                 <input value={orderSearch} onChange={e => setOrderSearch(e.target.value)}
-                  placeholder="搜尋訂單號、行程、客戶姓名、電話..."
+                  placeholder="搜尋訂單號、行程、客戶、電話、推薦者..."
                   className="flex-1 p-4 border-2 border-slate-200 rounded-2xl text-base font-medium outline-none focus:border-blue-500 bg-white" />
               </div>
 
@@ -3367,6 +3442,7 @@ function App() {
                           <th className="p-5">訂單號 / 時間</th>
                           <th className="p-5">行程 / 客戶</th>
                           <th className="p-5">人數 / 出發日</th>
+                          <th className="p-5">推薦者</th>
                           <th className="p-5 text-right">金額</th>
                           <th className="p-5 text-right">{isAdmin ? '應付佣金' : '我的佣金'}</th>
                           <th className="p-5">付款</th>
@@ -3411,6 +3487,10 @@ function App() {
                               <td className="p-5 text-base">
                                 <p className="font-bold text-slate-700">{o.travelers || 1} 人</p>
                                 <p className="text-sm text-slate-400 mt-1">{fmtTravelDate(o.traveldate)}</p>
+                              </td>
+                              <td className="p-5">
+                                <p className="font-black text-slate-700 line-clamp-1">{o.recommendername || o.distributorname || '未命名推薦者'}</p>
+                                <p className="text-xs text-slate-400 mt-1 font-mono">{o.recommenderinvitecode || o.distributorinvitecode || o.recommenderuid || o.distributoruid || '—'}</p>
                               </td>
                               <td className="p-5 text-right font-black text-red-600 text-[1.1rem]">{fmt(o.totalamount || o.price)}</td>
                               <td className="p-5 text-right font-bold text-emerald-600 text-base">{fmt(o.commissionamount)}</td>
