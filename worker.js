@@ -3814,6 +3814,77 @@ function buildKnowledgeAutoReplyText(matches = []) {
   return `${body}${sourceLine}`.slice(0, 4900);
 }
 
+function parsePromoDmPostbackData(data = '') {
+  const params = new URLSearchParams(String(data || '').replace(/^\?/, ''));
+  const action = params.get('action') || params.get('a') || '';
+  if (!['promo_dm_interest', 'promo_dm_detail'].includes(action)) return null;
+  return {
+    action,
+    dmId: params.get('dmId') || params.get('dm') || '',
+    path: params.get('path') || '',
+  };
+}
+
+async function findPromoDmKnowledgeDocument(env, query = {}) {
+  const dmId = String(query.dmId || '').trim();
+  const path = String(query.path || '').trim();
+  if (path) {
+    const doc = await readKnowledgeJson(env, path);
+    return doc ? { path, doc } : null;
+  }
+  if (!dmId) return null;
+  const manifest = await getKnowledgeManifest(env);
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  for (const file of files) {
+    if (String(file.category || '') !== 'promotion_dm' && !String(file.path || '').includes('/promo-dm/')) continue;
+    try {
+      const doc = await readKnowledgeJson(env, file.path || '');
+      if (!doc || isKnowledgeDocExpired(doc)) continue;
+      if (String(doc.id || '') === dmId || String(file.id || '') === dmId) return { path: file.path, doc };
+    } catch (err) {
+      console.warn('promo dm lookup failed:', file.path || '', err?.message || err);
+    }
+  }
+  return null;
+}
+
+function buildPromoDmQuestionnaireText(doc = {}, action = 'promo_dm_interest') {
+  const entry = Array.isArray(doc.entries) ? doc.entries[0] || {} : {};
+  const meta = entry.metadata || {};
+  const title = String(doc.title || entry.title || '這張宣傳 DM').trim();
+  const dates = Array.isArray(meta.dates) ? meta.dates.filter(Boolean).join('、') : '';
+  const pricing = Array.isArray(meta.pricing) ? meta.pricing.filter(Boolean).join('、') : '';
+  const departure = String(meta.departure || '').trim();
+  const intro = action === 'promo_dm_detail'
+    ? `您好，這張「${title}」我先幫您整理重點：${String(entry.reply_template || entry.answer || doc.usage || '').replace(/\s+/g, ' ').slice(0, 260)}`
+    : `您好，您對「${title}」有興趣，我先幫您確認報名條件。`;
+  const lines = [intro];
+  if (dates) lines.push(`可參考日期：${dates}`);
+  if (pricing) lines.push(`DM 價格資訊：${pricing}`);
+  if (departure) lines.push(`出發/集合資訊：${departure}`);
+  lines.push('請回覆以下資訊，我們會協助確認名額與報名方式：');
+  lines.push('1. 想參加哪一個出發日期？');
+  lines.push('2. 幾位參加？成人、小孩或長輩各幾位？');
+  lines.push('3. 希望從哪裡出發或上車？');
+  lines.push('4. 聯絡人姓名與電話？');
+  lines.push('5. 有沒有特殊需求，例如素食、房型、證件或行動不便？');
+  return lines.filter(Boolean).join('\n').slice(0, 4900);
+}
+
+async function replyLinePromoDmPostback(env, event = {}) {
+  const parsed = parsePromoDmPostbackData(event?.postback?.data || '');
+  if (!parsed) return { handled: false };
+  const replyToken = String(event?.replyToken || '').trim();
+  if (!replyToken) return { handled: true, replied: false, error: 'MISSING_REPLY_TOKEN' };
+  const found = await findPromoDmKnowledgeDocument(env, parsed);
+  const text = found?.doc
+    ? buildPromoDmQuestionnaireText(found.doc, parsed.action)
+    : '您好，已收到您的點選。我們先幫您確認這張宣傳 DM 的行程內容，請問您預計幾位、想哪一天出發，以及方便留下姓名與電話嗎？';
+  await replyLineMessage(env, { replyToken, messages: [{ type: 'text', text }] });
+  await storeLineAutoReplyMessage(env, event, text, []);
+  return { handled: true, replied: true, dmId: parsed.dmId || '', path: found?.path || parsed.path || '' };
+}
+
 function buildDefaultLineAutoReplyText(event = {}) {
   const text = readableLineMessageText(event, event?.message?.type || event?.type || 'message');
   if (/(\u5716\u7247|\u6a94\u6848|\u7167\u7247|\u8b49\u4ef6|\u4e0a\u50b3)/.test(text)) {
@@ -3826,16 +3897,24 @@ async function replyLineWebhookWithKnowledge(env, payload = {}) {
   const filteredPayload = await filterLineWebhookPayloadForAutoReply(env, payload);
   const events = Array.isArray(filteredPayload?.events) ? filteredPayload.events : [];
   if (!events.length) return { replied: 0, skipped: true };
-  const knowledgeEntries = await getPublishedKnowledgeEntries(env);
+  let knowledgeEntries = null;
   let replied = 0;
   for (const event of events) {
+    const eventType = String(event?.type || '').toLowerCase();
+    if (eventType === 'postback' && parsePromoDmPostbackData(event?.postback?.data || '')) {
+      const promoResult = await replyLinePromoDmPostback(env, event);
+      if (promoResult.handled && promoResult.replied) {
+        replied += 1;
+      }
+      continue;
+    }
     if (!isLineAutoReplyAllowedEvent(env, event)) continue;
     const replyToken = String(event?.replyToken || '').trim();
     if (!replyToken) continue;
-    const eventType = String(event?.type || '').toLowerCase();
     const messageType = String(event?.message?.type || '').toLowerCase();
     if (eventType !== 'message' || !['text', 'image', 'file'].includes(messageType)) continue;
     const incomingText = readableLineMessageText(event, messageType);
+    if (!knowledgeEntries) knowledgeEntries = await getPublishedKnowledgeEntries(env);
     const matches = matchKnowledgeEntries(knowledgeEntries, incomingText, 2);
     const text = buildKnowledgeAutoReplyText(matches) || buildDefaultLineAutoReplyText(event);
     if (!text) continue;
@@ -3846,7 +3925,7 @@ async function replyLineWebhookWithKnowledge(env, payload = {}) {
     await storeLineAutoReplyMessage(env, event, text, matches);
     replied += 1;
   }
-  return { replied, knowledgeEntries: knowledgeEntries.length };
+  return { replied, knowledgeEntries: knowledgeEntries?.length || 0 };
 }
 
 async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = []) {
@@ -3891,6 +3970,11 @@ async function filterLineWebhookPayloadForAutoReply(env, payload = {}) {
   if (!events.length || !env.DB) return payload;
   const activeEvents = [];
   for (const event of events) {
+    const eventType = String(event?.type || '').toLowerCase();
+    if (eventType === 'postback' && parsePromoDmPostbackData(event?.postback?.data || '')) {
+      activeEvents.push(event);
+      continue;
+    }
     const threadId = getLineThreadId(event?.source || {});
     const enabled = await isLineThreadAutoReplyEnabled(env, threadId);
     if (enabled) activeEvents.push(event);

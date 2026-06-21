@@ -113,6 +113,40 @@
             <div id="result-keywords" class="mt-2 flex flex-wrap gap-2"></div>
           </div>
         </div>
+
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.24em] text-slate-400">DM Library</p>
+              <h2 class="mt-1 text-2xl font-black">宣傳 DM 素材池</h2>
+              <p class="mt-2 text-sm leading-6 text-slate-500">勾選已存入的 DM，組成橫式多頁訊息。每頁會帶「有興趣」與「詳細說明」postback，讓客戶點擊後啟動問卷。</p>
+            </div>
+            <span id="dm-library-count" class="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-600">0 筆</span>
+          </div>
+
+          <div class="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+            <input id="dm-library-search" class="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-emerald-500" placeholder="搜尋標題、關鍵字、價格、出發地">
+            <button id="refresh-dm-library" type="button" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-700 hover:bg-slate-50">重新整理</button>
+            <button id="select-all-dm-library" type="button" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-700 hover:bg-slate-50">全選</button>
+            <button id="clear-dm-selection" type="button" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-700 hover:bg-slate-50">清除勾選</button>
+          </div>
+
+          <div id="dm-library-list" class="mt-5 grid gap-3"></div>
+
+          <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-black">多頁訊息 JSON</h3>
+                <p id="dm-selected-count" class="mt-1 text-sm font-bold text-slate-500">已選 0 筆</p>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                <button id="build-dm-flex" type="button" class="rounded-2xl bg-slate-900 px-5 py-3 font-black text-white hover:bg-slate-800">產生多頁訊息</button>
+                <button id="copy-dm-flex" type="button" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-700 hover:bg-slate-50">複製 JSON</button>
+              </div>
+            </div>
+            <textarea id="dm-flex-json" rows="10" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 outline-none focus:border-emerald-500" placeholder="勾選 DM 後產生 LINE Flex carousel JSON"></textarea>
+          </div>
+        </div>
       </div>
 
       <aside class="space-y-5">
@@ -143,6 +177,8 @@
     let profile = null;
     let canUse = false;
     let imageDataUrls = [];
+    let promoDmDocs = [];
+    const selectedPromoDmPaths = new Set();
     const MAX_BATCH_IMAGES = 50;
 
     const els = {
@@ -166,6 +202,16 @@
       resultReply: document.getElementById('result-reply'),
       resultSocial: document.getElementById('result-social'),
       resultKeywords: document.getElementById('result-keywords'),
+      libraryCount: document.getElementById('dm-library-count'),
+      librarySearch: document.getElementById('dm-library-search'),
+      libraryList: document.getElementById('dm-library-list'),
+      selectedCount: document.getElementById('dm-selected-count'),
+      refreshLibrary: document.getElementById('refresh-dm-library'),
+      selectAllLibrary: document.getElementById('select-all-dm-library'),
+      clearSelection: document.getElementById('clear-dm-selection'),
+      buildFlex: document.getElementById('build-dm-flex'),
+      copyFlex: document.getElementById('copy-dm-flex'),
+      dmFlexJson: document.getElementById('dm-flex-json'),
       toast: document.getElementById('toast'),
     };
 
@@ -250,8 +296,177 @@
       els.authBadge.textContent = canUse ? '可使用' : '無權限';
       els.authBadge.className = `rounded-full px-4 py-2 text-sm font-black ${canUse ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`;
       els.submit.disabled = !canUse;
+      if (canUse) await loadPromoDmLibrary();
     }
 
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    }
+
+    function compactText(value, limit = 80) {
+      const text = String(value || '').replace(/\s+/g, ' ').trim();
+      return text.length > limit ? `${text.slice(0, limit)}...` : text;
+    }
+
+    function getPromoDmEntry(doc) {
+      return Array.isArray(doc?.entries) ? doc.entries[0] || {} : {};
+    }
+
+    function getPromoDmMeta(doc) {
+      return getPromoDmEntry(doc).metadata || {};
+    }
+
+    function isExpiredDoc(doc) {
+      const value = String(doc?.expires_at || getPromoDmMeta(doc).expires_at || '').trim();
+      if (!value) return false;
+      const expires = new Date(`${value.slice(0, 10)}T23:59:59+08:00`);
+      return Number.isFinite(expires.getTime()) && expires.getTime() < Date.now();
+    }
+
+    function getPromoDmSearchText(item) {
+      const doc = item.doc || {};
+      const entry = getPromoDmEntry(doc);
+      const meta = getPromoDmMeta(doc);
+      return [
+        doc.title, doc.source, doc.usage, entry.title, entry.answer, entry.reply_template, entry.social_post,
+        ...(entry.keywords || []), ...(entry.tags || []), ...(meta.dates || []), ...(meta.pricing || []),
+        meta.destination, meta.days, meta.price, meta.departure, meta.contact,
+      ].filter(Boolean).join(' ').toLowerCase();
+    }
+
+    async function loadPromoDmLibrary() {
+      if (!els.libraryList) return;
+      els.libraryList.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">載入宣傳 DM...</div>';
+      try {
+        const manifest = await fetchJson(`${WORKER_URL}/api/knowledge/manifest`);
+        const files = (manifest.data?.files || [])
+          .filter(file => file.category === 'promotion_dm' || String(file.path || '').includes('/promo-dm/'));
+        const docs = [];
+        for (const file of files) {
+          try {
+            const result = await fetchJson(`${WORKER_URL}/api/knowledge/file?path=${encodeURIComponent(file.path || '')}`);
+            const doc = result.data || {};
+            if (isExpiredDoc(doc)) continue;
+            docs.push({ path: file.path || '', file, doc, searchText: getPromoDmSearchText({ doc }) });
+          } catch (err) {
+            console.warn('DM file load failed', file.path, err);
+          }
+        }
+        promoDmDocs = docs.sort((a, b) => String(b.doc.created_at || '').localeCompare(String(a.doc.created_at || '')));
+        selectedPromoDmPaths.forEach(path => {
+          if (!promoDmDocs.some(item => item.path === path)) selectedPromoDmPaths.delete(path);
+        });
+        renderPromoDmLibrary();
+      } catch (err) {
+        els.libraryList.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">載入失敗：${escapeHtml(err.message || 'UNKNOWN_ERROR')}</div>`;
+      }
+    }
+
+    function renderPromoDmLibrary() {
+      const query = String(els.librarySearch?.value || '').trim().toLowerCase();
+      const items = promoDmDocs.filter(item => !query || item.searchText.includes(query));
+      if (els.libraryCount) els.libraryCount.textContent = `${items.length} 筆`;
+      if (els.selectedCount) els.selectedCount.textContent = `已選 ${selectedPromoDmPaths.size} 筆`;
+      if (!items.length) {
+        els.libraryList.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">目前沒有可用宣傳 DM。</div>';
+        return;
+      }
+      els.libraryList.innerHTML = items.map(item => {
+        const doc = item.doc || {};
+        const entry = getPromoDmEntry(doc);
+        const meta = getPromoDmMeta(doc);
+        const image = doc.source_url || (Array.isArray(meta.image_urls) ? meta.image_urls[0] : '') || '';
+        const detail = [meta.destination, meta.days ? `${meta.days}天` : '', meta.price || (meta.pricing || [])[0]].filter(Boolean).join(' · ');
+        const checked = selectedPromoDmPaths.has(item.path) ? 'checked' : '';
+        return `<label class="flex cursor-pointer gap-4 rounded-2xl border border-slate-200 bg-white p-4 hover:border-emerald-300">
+          <input type="checkbox" class="dm-library-check mt-2 h-5 w-5" data-path="${escapeHtml(item.path)}" ${checked}>
+          ${image ? `<img src="${escapeHtml(image)}" class="h-24 w-24 rounded-xl object-cover bg-slate-100" alt="DM">` : '<div class="flex h-24 w-24 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-400">無圖片</div>'}
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <h3 class="break-words text-lg font-black">${escapeHtml(doc.title || entry.title || '未命名 DM')}</h3>
+              <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">可用</span>
+            </div>
+            <p class="mt-1 text-sm font-bold text-slate-500">${escapeHtml(detail || doc.source || '宣傳 DM')}</p>
+            <p class="mt-2 text-sm leading-6 text-slate-600">${escapeHtml(compactText(entry.social_post || entry.reply_template || entry.answer || doc.usage, 110))}</p>
+            <p class="mt-2 break-all font-mono text-[11px] text-slate-400">${escapeHtml(item.path)}</p>
+          </div>
+        </label>`;
+      }).join('');
+      els.libraryList.querySelectorAll('.dm-library-check').forEach(input => {
+        input.addEventListener('change', () => {
+          if (input.checked) selectedPromoDmPaths.add(input.dataset.path || '');
+          else selectedPromoDmPaths.delete(input.dataset.path || '');
+          renderPromoDmLibrary();
+        });
+      });
+    }
+
+    function selectedPromoDmItems() {
+      return promoDmDocs.filter(item => selectedPromoDmPaths.has(item.path)).slice(0, 10);
+    }
+
+    function flexText(value, limit = 80) {
+      const text = String(value || '').replace(/\s+/g, ' ').trim();
+      return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+    }
+
+    function buildPromoDmPostback(action, item) {
+      const doc = item.doc || {};
+      const params = new URLSearchParams({ action });
+      if (doc.id) params.set('dmId', doc.id);
+      else params.set('path', item.path || '');
+      return params.toString();
+    }
+
+    function buildPromoDmBubble(item) {
+      const doc = item.doc || {};
+      const entry = getPromoDmEntry(doc);
+      const meta = getPromoDmMeta(doc);
+      const image = doc.source_url || (Array.isArray(meta.image_urls) ? meta.image_urls[0] : '') || '';
+      const title = flexText(doc.title || entry.title || '宣傳 DM', 48);
+      const info = [meta.destination, meta.days ? `${meta.days}天` : '', meta.price || (meta.pricing || [])[0]].filter(Boolean).join(' · ');
+      const summary = flexText(entry.reply_template || entry.answer || doc.usage || '點選後由客服協助確認日期、人數、出發地與名額。', 130);
+      const bubble = {
+        type: 'bubble',
+        size: 'mega',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: [
+            { type: 'text', text: title, weight: 'bold', size: 'lg', wrap: true },
+            { type: 'text', text: flexText(info || '宣傳 DM 行程', 70), size: 'sm', color: '#64748B', wrap: true },
+            { type: 'text', text: summary, size: 'sm', color: '#334155', wrap: true },
+          ],
+        },
+        footer: {
+          type: 'box',
+          layout: 'horizontal',
+          spacing: 'sm',
+          contents: [
+            { type: 'button', style: 'primary', color: '#10B981', action: { type: 'postback', label: '有興趣', data: buildPromoDmPostback('promo_dm_interest', item), displayText: `我對「${title}」有興趣` } },
+            { type: 'button', style: 'secondary', action: { type: 'postback', label: '詳細說明', data: buildPromoDmPostback('promo_dm_detail', item), displayText: `請提供「${title}」詳細說明` } },
+          ],
+        },
+      };
+      if (image) {
+        bubble.hero = { type: 'image', url: image, size: 'full', aspectRatio: '20:13', aspectMode: 'cover' };
+      }
+      return bubble;
+    }
+
+    function buildPromoDmFlexMessage() {
+      const items = selectedPromoDmItems();
+      if (!items.length) throw new Error('請先勾選宣傳 DM');
+      return {
+        type: 'flex',
+        altText: `宣傳 DM 推薦：${items.map(item => item.doc?.title || '宣傳 DM').slice(0, 3).join('、')}`.slice(0, 400),
+        contents: {
+          type: 'carousel',
+          contents: items.map(buildPromoDmBubble),
+        },
+      };
+    }
     els.images.addEventListener('change', async () => {
       const files = Array.from(els.images.files || []).slice(0, Math.max(0, MAX_BATCH_IMAGES - imageDataUrls.length));
       for (const file of files) {
@@ -381,6 +596,50 @@
       }
     });
 
+    els.librarySearch?.addEventListener('input', renderPromoDmLibrary);
+
+    els.refreshLibrary?.addEventListener('click', () => {
+      loadPromoDmLibrary().catch(err => showToast(err.message || '素材池更新失敗', 'error'));
+    });
+
+    els.selectAllLibrary?.addEventListener('click', () => {
+      const query = String(els.librarySearch?.value || '').trim().toLowerCase();
+      promoDmDocs
+        .filter(item => !query || item.searchText.includes(query))
+        .slice(0, 10)
+        .forEach(item => selectedPromoDmPaths.add(item.path));
+      renderPromoDmLibrary();
+    });
+
+    els.clearSelection?.addEventListener('click', () => {
+      selectedPromoDmPaths.clear();
+      if (els.dmFlexJson) els.dmFlexJson.value = '';
+      renderPromoDmLibrary();
+    });
+
+    els.buildFlex?.addEventListener('click', () => {
+      try {
+        const message = buildPromoDmFlexMessage();
+        els.dmFlexJson.value = JSON.stringify(message, null, 2);
+        showToast('已產生多頁訊息 JSON');
+      } catch (err) {
+        showToast(err.message || '產生失敗', 'error');
+      }
+    });
+
+    els.copyFlex?.addEventListener('click', async () => {
+      const text = String(els.dmFlexJson?.value || '').trim();
+      if (!text) {
+        showToast('請先產生 JSON', 'error');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('已複製 JSON');
+      } catch (err) {
+        showToast('瀏覽器封鎖複製，請手動選取文字', 'error');
+      }
+    });
     initAuth().catch(err => {
       els.authBadge.textContent = '登入失敗';
       els.authBadge.className = 'rounded-full bg-rose-50 px-4 py-2 text-sm font-black text-rose-700';
