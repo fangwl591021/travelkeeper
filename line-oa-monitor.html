@@ -1169,7 +1169,7 @@
           img.src = heroImage;
           img.alt = texts[0] || message.altText || '多頁訊息圖片';
           img.loading = 'lazy';
-          img.className = 'h-36 w-full object-contain bg-slate-100';
+          img.className = 'aspect-square w-full object-cover bg-slate-100';
           card.appendChild(img);
         }
         const body = document.createElement('div');

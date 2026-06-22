@@ -9245,7 +9245,7 @@ export default {
           const bookUri = buildBookingUri(id);
           return {
             type: 'bubble', size: 'mega',
-            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'fit', backgroundColor: '#f8fafc', action: { type: 'uri', uri: detailUri } },
+            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '1:1', aspectMode: 'cover', action: { type: 'uri', uri: detailUri } },
             body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', contents: [
               { type: 'text', text: tour.title, weight: 'bold', size: 'lg', wrap: true, color: '#0f172a' },
               { type: 'text', text: `${tour.region || ''} · ${tour.days || ''}天`, size: 'sm', color: '#64748b', margin: 'sm' },
