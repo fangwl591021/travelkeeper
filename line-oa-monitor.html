@@ -1198,6 +1198,49 @@
       preview.appendChild(track);
       return preview;
     }
+    function promoDmActionLabel(action = '') {
+      if (action === 'promo_dm_detail') return '詳細說明';
+      if (action === 'promo_dm_interest') return '有興趣';
+      return action || '已互動';
+    }
+
+    function renderPromoDmMessageStatus(message = {}) {
+      const kind = String(message.messageKind || '').trim();
+      if (!kind || !kind.startsWith('promo_dm_')) return null;
+      const box = document.createElement('div');
+      box.className = 'mb-3 rounded-2xl border px-3 py-2 text-xs leading-5';
+      const title = String(message.dmTitle || '').trim();
+      const dmId = String(message.dmId || '').trim();
+      const action = promoDmActionLabel(message.dmAction || '');
+      const answer = message.promoAnswer && typeof message.promoAnswer === 'object' ? message.promoAnswer : null;
+      let headline = '';
+      let detail = '';
+      if (kind === 'promo_dm_postback') {
+        box.className += ' border-emerald-200 bg-emerald-50 text-emerald-800';
+        headline = `狀態：客戶點選「${action}」`;
+        detail = dmId ? `DM：${dmId}` : '';
+      } else if (kind === 'promo_dm_questionnaire') {
+        box.className += ' border-blue-200 bg-blue-50 text-blue-800';
+        headline = '狀態：DM 問卷已送出，等待客戶回覆';
+        detail = [title, dmId ? `DM：${dmId}` : ''].filter(Boolean).join('｜');
+      } else if (kind === 'promo_dm_answer_followup') {
+        box.className += ' border-emerald-200 bg-emerald-50 text-emerald-800';
+        headline = '狀態：已整理問卷回覆，商機已更新';
+        const fields = [];
+        if (answer?.date) fields.push(`日期 ${answer.date}`);
+        if (answer?.travelers) fields.push(`人數 ${answer.travelers}`);
+        if (answer?.departure) fields.push(`出發 ${answer.departure}`);
+        if (answer?.contact) fields.push(`聯絡 ${answer.contact}`);
+        if (answer?.needs) fields.push(`需求 ${answer.needs}`);
+        detail = fields.join('｜') || title || '';
+      } else {
+        box.className += ' border-slate-200 bg-slate-50 text-slate-700';
+        headline = '狀態：宣傳 DM 互動';
+        detail = title || dmId;
+      }
+      box.innerHTML = `<p class="font-black">${escapeHtml(headline)}</p>${detail ? `<p class="mt-1">${escapeHtml(detail)}</p>` : ''}`;
+      return box;
+    }
     function renderMessageBubble(message = {}, side = 'left') {
       const type = String(message.type || '').toLowerCase();
       const isFlex = type === 'flex';
@@ -1208,6 +1251,8 @@
       nameEl.className = 'font-semibold text-xs text-slate-400 mb-2';
       nameEl.textContent = message.senderName || (side === 'left' ? '用戶' : '客服');
       wrapper.appendChild(nameEl);
+      const promoStatus = renderPromoDmMessageStatus(message);
+      if (promoStatus) wrapper.appendChild(promoStatus);
 
       if (message.mediaUrl && String(message.type || '').toLowerCase() === 'image') {
         const img = document.createElement('img');

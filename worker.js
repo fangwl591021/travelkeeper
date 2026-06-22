@@ -5501,10 +5501,32 @@ async function d1GetLineThread(env, threadId) {
       }
     }
     let messageText = msg.message_text || '';
-    if (String(msg.message_type || '').toLowerCase() === 'postback' && msg.raw_json) {
+    let messageMeta = {};
+    if (msg.raw_json) {
       try {
         const rawEvent = JSON.parse(msg.raw_json || '{}');
-        messageText = readableLineMessageText(rawEvent, 'postback') || messageText;
+        const postbackData = rawEvent?.postback?.data || '';
+        const promoPostback = postbackData ? parsePromoDmPostbackData(postbackData) : null;
+        if (String(msg.message_type || '').toLowerCase() === 'postback') {
+          messageText = readableLineMessageText(rawEvent, 'postback') || messageText;
+        }
+        if (rawEvent?.kind) {
+          messageMeta = {
+            messageKind: String(rawEvent.kind || ''),
+            dmId: String(rawEvent.dmId || ''),
+            dmTitle: String(rawEvent.title || ''),
+            dmAction: String(rawEvent.action || ''),
+            promoAnswer: rawEvent.answer || null,
+          };
+        } else if (promoPostback) {
+          messageMeta = {
+            messageKind: 'promo_dm_postback',
+            dmId: String(promoPostback.dmId || ''),
+            dmTitle: '',
+            dmAction: String(promoPostback.action || ''),
+            promoAnswer: null,
+          };
+        }
       } catch (_err) {}
     }
     if (mediaUrl && String(msg.message_type || '').toLowerCase() === 'image' && isGenericLineImageMessageText(messageText)) {
@@ -5538,6 +5560,11 @@ async function d1GetLineThread(env, threadId) {
       lineMessageId,
       altText: storedOutboundMessage?.type === 'flex' ? String(storedOutboundMessage.altText || '') : '',
       flexContents: storedOutboundMessage?.type === 'flex' ? storedOutboundMessage.contents || null : null,
+      messageKind: messageMeta.messageKind || '',
+      dmId: messageMeta.dmId || '',
+      dmTitle: messageMeta.dmTitle || '',
+      dmAction: messageMeta.dmAction || '',
+      promoAnswer: messageMeta.promoAnswer || null,
       createdAt: msg.created_at || '',
     });
   }
