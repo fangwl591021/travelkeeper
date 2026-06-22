@@ -4452,6 +4452,18 @@ async function storeLineWebhookEvents(env, payload = {}) {
   }
 }
 
+async function d1AllInChunks(env, values = [], size = 80, buildSql, mapBinds = chunk => chunk) {
+  const clean = [...new Set((values || []).map(value => String(value || '').trim()).filter(Boolean))];
+  const results = [];
+  for (let i = 0; i < clean.length; i += size) {
+    const chunk = clean.slice(i, i + size);
+    if (!chunk.length) continue;
+    const placeholders = chunk.map(() => '?').join(',');
+    const rows = await env.DB.prepare(buildSql(placeholders)).bind(...mapBinds(chunk)).all();
+    results.push(...(rows.results || []));
+  }
+  return results;
+}
 async function d1GetLineThreads(env, options = {}) {
   if (!env.DB) throw new Error('D1 binding missing');
   await ensureLineVisitorRequirementsTable(env);
@@ -4521,31 +4533,41 @@ async function d1GetLineThreads(env, options = {}) {
     await ensureLineCustomerProfilesTable(env);
     const threadIds = enrichedResults.map(row => row.id).filter(Boolean);
     const sourceUids = enrichedResults.map(row => row.source_user_id || row.source_group_id || '').filter(Boolean);
-    const profileRows = await env.DB.prepare(`
-      SELECT
-        profile.*,
-        COALESCE(NULLIF(d.name, ''), '') AS referrer_name,
-        COALESCE(d.invite_code, '') AS referrer_invite_code
-      FROM line_customer_profiles AS profile
-      LEFT JOIN distributors AS d ON d.uid = profile.ref_uid
-      WHERE profile.thread_id IN (${threadIds.map(() => '?').join(',') || "''"})
-         OR profile.source_user_id IN (${sourceUids.map(() => '?').join(',') || "''"})
-    `).bind(...threadIds, ...sourceUids).all();
-    for (const profile of (profileRows.results || [])) {
+    const profileRows = [
+      ...(await d1AllInChunks(env, threadIds, 80, placeholders => `
+        SELECT
+          profile.*,
+          COALESCE(NULLIF(d.name, ''), '') AS referrer_name,
+          COALESCE(d.invite_code, '') AS referrer_invite_code
+        FROM line_customer_profiles AS profile
+        LEFT JOIN distributors AS d ON d.uid = profile.ref_uid
+        WHERE profile.thread_id IN (${placeholders})
+      `)),
+      ...(await d1AllInChunks(env, sourceUids, 80, placeholders => `
+        SELECT
+          profile.*,
+          COALESCE(NULLIF(d.name, ''), '') AS referrer_name,
+          COALESCE(d.invite_code, '') AS referrer_invite_code
+        FROM line_customer_profiles AS profile
+        LEFT JOIN distributors AS d ON d.uid = profile.ref_uid
+        WHERE profile.source_user_id IN (${placeholders})
+      `)),
+    ];
+    for (const profile of profileRows) {
       const item = normalizeLineCustomerProfile(profile);
       if (item.threadId) profileMap.set(`thread:${item.threadId}`, item);
       if (item.userId) profileMap.set(`uid:${item.userId}`, item);
     }
 
     try {
-      const customerReferralRows = await env.DB.prepare(`
+      const customerReferralRows = await d1AllInChunks(env, sourceUids, 80, placeholders => `
         SELECT customer_line_uid, owner_uid, owner_name
         FROM customers
         WHERE COALESCE(TRIM(customer_line_uid), '') <> ''
           AND COALESCE(TRIM(owner_uid), '') <> ''
-          AND customer_line_uid IN (${sourceUids.map(() => '?').join(',') || "''"})
-      `).bind(...sourceUids).all();
-      for (const record of (customerReferralRows.results || [])) {
+          AND customer_line_uid IN (${placeholders})
+      `);
+      for (const record of customerReferralRows) {
         const userId = String(record.customer_line_uid || '').trim();
         const refUid = String(record.owner_uid || '').trim();
         if (!userId || !refUid || referralMap.has(userId)) continue;
@@ -4561,7 +4583,7 @@ async function d1GetLineThreads(env, options = {}) {
     }
 
     try {
-      const orderReferralRows = await env.DB.prepare(`
+      const orderReferralRows = await d1AllInChunks(env, sourceUids, 80, placeholders => `
         SELECT
           o.customer_line_uid,
           o.distributor_uid,
@@ -4572,10 +4594,10 @@ async function d1GetLineThreads(env, options = {}) {
         LEFT JOIN distributors AS d ON d.uid = o.distributor_uid
         WHERE COALESCE(TRIM(o.customer_line_uid), '') <> ''
           AND COALESCE(TRIM(o.distributor_uid), '') <> ''
-          AND o.customer_line_uid IN (${sourceUids.map(() => '?').join(',') || "''"})
+          AND o.customer_line_uid IN (${placeholders})
         ORDER BY COALESCE(o.created_at, '') DESC
-      `).bind(...sourceUids).all();
-      for (const record of (orderReferralRows.results || [])) {
+      `);
+      for (const record of orderReferralRows) {
         const userId = String(record.customer_line_uid || '').trim();
         const refUid = String(record.distributor_uid || '').trim();
         if (!userId || !refUid || referralMap.has(userId)) continue;
@@ -4596,7 +4618,7 @@ async function d1GetLineThreads(env, options = {}) {
       limit,
       offset,
       returned: enrichedResults.length,
-      hasMore: enrichedResults.length === limit && offset + limit < 200,
+      hasMore: enrichedResults.length === limit,
     },
     data: enrichedResults.map(row => {
       const sourceUid = row.source_user_id || row.source_group_id || '';

@@ -1973,17 +1973,28 @@
 
     async function loadThreadPage(limit = 20, offset = 0) {
       const data = await fetchJson(`${WORKER_URL}/api/line-oa/threads?uid=${encodeURIComponent(profile.userId)}&limit=${limit}&offset=${offset}`);
-      return Array.isArray(data.data) ? data.data : [];
+      return {
+        items: Array.isArray(data.data) ? data.data : [],
+        meta: data.meta || {},
+      };
     }
 
     async function loadRemainingThreads() {
       if (threadsBackfillStarted) return;
       threadsBackfillStarted = true;
+      const pageSize = 100;
+      let offset = 20;
       try {
-        const rest = await loadThreadPage(180, 20);
-        if (rest.length) {
-          mergeThreadPage(rest);
-          renderThreadList();
+        for (let guard = 0; guard < 50; guard += 1) {
+          const page = await loadThreadPage(pageSize, offset);
+          if (page.items.length) {
+            mergeThreadPage(page.items);
+            renderThreadList();
+          }
+          const hasMore = page.meta?.hasMore === true || page.items.length === pageSize;
+          if (!hasMore || !page.items.length) break;
+          offset += page.items.length;
+          await new Promise(resolve => setTimeout(resolve, 80));
         }
       } catch (err) {
         console.warn('background LINE OA thread load failed:', err);
@@ -1993,7 +2004,7 @@
     async function loadThreads() {
       allThreads = [];
       const firstPage = await loadThreadPage(20, 0);
-      mergeThreadPage(firstPage);
+      mergeThreadPage(firstPage.items);
       if (!activeThreadId && allThreads.length) activeThreadId = allThreads[0].id;
       renderThreadList();
       if (activeThreadId) await loadThreadDetail(activeThreadId);
