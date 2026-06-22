@@ -1140,6 +1140,11 @@
       return [];
     }
 
+    function getFlexHeroImage(bubble = {}) {
+      const hero = bubble?.hero || null;
+      if (hero?.type === 'image' && hero.url) return String(hero.url || '');
+      return '';
+    }
     function renderFlexPreview(message = {}) {
       const bubbles = getFlexBubbles(message);
       const preview = document.createElement('div');
@@ -1156,8 +1161,19 @@
       bubbles.slice(0, 10).forEach((bubble, index) => {
         const texts = getFlexTextItems(bubble.body || bubble).filter(Boolean);
         const buttons = getFlexTextItems(bubble.footer || {}).filter(Boolean);
+        const heroImage = getFlexHeroImage(bubble);
         const card = document.createElement('div');
-        card.className = 'w-64 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm';
+        card.className = 'w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm';
+        if (heroImage) {
+          const img = document.createElement('img');
+          img.src = heroImage;
+          img.alt = texts[0] || message.altText || '多頁訊息圖片';
+          img.loading = 'lazy';
+          img.className = 'h-36 w-full object-contain bg-slate-100';
+          card.appendChild(img);
+        }
+        const body = document.createElement('div');
+        body.className = 'px-4 py-3';
         const seq = document.createElement('p');
         seq.className = 'text-xs font-semibold text-slate-400 mb-1';
         seq.textContent = `多頁 ${index + 1}`;
@@ -1165,17 +1181,18 @@
         title.className = 'font-semibold text-slate-900 leading-6';
         title.textContent = texts[0] || message.altText || '多頁訊息';
         const summary = document.createElement('p');
-        summary.className = 'mt-1 text-sm text-slate-600 leading-5 line-clamp-3';
-        summary.textContent = texts.slice(1, 4).join('｜') || '點選手機訊息可查看內容。';
-        card.appendChild(seq);
-        card.appendChild(title);
-        card.appendChild(summary);
+        summary.className = 'mt-1 text-sm text-slate-600 leading-5 line-clamp-4';
+        summary.textContent = texts.slice(1, 5).join('｜') || '點選手機訊息可查看內容。';
+        body.appendChild(seq);
+        body.appendChild(title);
+        body.appendChild(summary);
         if (buttons.length) {
           const action = document.createElement('p');
           action.className = 'mt-3 rounded-xl bg-emerald-500 px-3 py-2 text-center text-sm font-semibold text-white';
           action.textContent = buttons[0];
-          card.appendChild(action);
+          body.appendChild(action);
         }
+        card.appendChild(body);
         track.appendChild(card);
       });
       preview.appendChild(track);

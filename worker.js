@@ -4205,10 +4205,11 @@ function safeLineMessageIdFromRaw(rawJson = '') {
   }
 }
 
-function safeLineManualReplyMessageFromRaw(rawJson = '') {
+function safeLineStoredOutboundMessageFromRaw(rawJson = '') {
   try {
     const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson || '{}') : rawJson;
-    if (parsed?.kind !== 'manual_reply' || !parsed?.message || typeof parsed.message !== 'object') return null;
+    if (!parsed?.message || typeof parsed.message !== 'object') return null;
+    if (!['manual_reply', 'broadcast'].includes(String(parsed.kind || ''))) return null;
     return parsed.message;
   } catch (_err) {
     return null;
@@ -5345,7 +5346,7 @@ async function d1GetLineThread(env, threadId) {
     let mediaContentType = msg.media_content_type || '';
     let mediaSize = Number(msg.media_size || 0);
     const lineMessageId = safeLineMessageIdFromRaw(msg.raw_json || '');
-    const manualReplyMessage = safeLineManualReplyMessageFromRaw(msg.raw_json || '');
+    const storedOutboundMessage = safeLineStoredOutboundMessageFromRaw(msg.raw_json || '');
     if (!mediaUrl && String(msg.message_type || '').toLowerCase() === 'image' && lineMessageId) {
       const media = await storeLineMessageMedia(
         env,
@@ -5394,8 +5395,8 @@ async function d1GetLineThread(env, threadId) {
       mediaContentType,
       mediaSize,
       lineMessageId,
-      altText: manualReplyMessage?.type === 'flex' ? String(manualReplyMessage.altText || '') : '',
-      flexContents: manualReplyMessage?.type === 'flex' ? manualReplyMessage.contents || null : null,
+      altText: storedOutboundMessage?.type === 'flex' ? String(storedOutboundMessage.altText || '') : '',
+      flexContents: storedOutboundMessage?.type === 'flex' ? storedOutboundMessage.contents || null : null,
       createdAt: msg.created_at || '',
     });
   }
@@ -9244,7 +9245,7 @@ export default {
           const bookUri = buildBookingUri(id);
           return {
             type: 'bubble', size: 'mega',
-            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', gravity: 'top', action: { type: 'uri', uri: detailUri } },
+            hero: { type: 'image', url: tour.image || 'https://via.placeholder.com/800x520', size: 'full', aspectRatio: '20:13', aspectMode: 'fit', backgroundColor: '#f8fafc', action: { type: 'uri', uri: detailUri } },
             body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', contents: [
               { type: 'text', text: tour.title, weight: 'bold', size: 'lg', wrap: true, color: '#0f172a' },
               { type: 'text', text: `${tour.region || ''} · ${tour.days || ''}天`, size: 'sm', color: '#64748b', margin: 'sm' },
