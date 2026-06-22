@@ -3871,6 +3871,123 @@ function buildPromoDmQuestionnaireText(doc = {}, action = 'promo_dm_interest') {
   return lines.filter(Boolean).join('\n').slice(0, 4900);
 }
 
+function getPromoDmTitleFromDoc(doc = {}) {
+  const entry = Array.isArray(doc.entries) ? doc.entries[0] || {} : {};
+  return String(doc.title || entry.title || '這張宣傳 DM').trim();
+}
+
+function describePromoDmPostbackData(data = '') {
+  const parsed = parsePromoDmPostbackData(data);
+  if (!parsed) return '';
+  const actionLabel = parsed.action === 'promo_dm_detail' ? '詳細說明' : '有興趣';
+  const suffix = parsed.dmId ? `（DM：${parsed.dmId}）` : '';
+  return `客戶點選：${actionLabel}${suffix}`;
+}
+
+function parsePromoDmAnswerText(text = '') {
+  const normalized = String(text || '').replace(/\r/g, '').trim();
+  const answers = {};
+  const lines = normalized.split('\n').map(line => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const match = line.match(/^([1-5])\s*[\.．、:)）-]?\s*(.+)$/);
+    if (match) answers[match[1]] = match[2].trim();
+  }
+  return {
+    raw: normalized,
+    date: answers['1'] || '',
+    travelers: answers['2'] || '',
+    departure: answers['3'] || '',
+    contact: answers['4'] || '',
+    needs: answers['5'] || '',
+    answeredCount: Object.keys(answers).length,
+  };
+}
+
+function buildPromoDmOpportunityNote(context = {}, answer = {}) {
+  const lines = [`宣傳 DM 詢問：${context.title || '未命名 DM'}`];
+  if (answer.date) lines.push(`出發日期：${answer.date}`);
+  if (answer.travelers) lines.push(`人數：${answer.travelers}`);
+  if (answer.departure) lines.push(`出發/上車：${answer.departure}`);
+  if (answer.contact) lines.push(`聯絡：${answer.contact}`);
+  if (answer.needs) lines.push(`特殊需求：${answer.needs}`);
+  if (answer.raw && answer.answeredCount < 3) lines.push(`原文：${answer.raw}`);
+  return lines.join('\n').slice(0, 1000);
+}
+
+function buildPromoDmFollowupText(context = {}, answer = {}) {
+  const missing = [];
+  if (!answer.date) missing.push('出發日期');
+  if (!answer.travelers) missing.push('人數');
+  if (!answer.contact) missing.push('聯絡人姓名與電話');
+  if (missing.length) {
+    return `收到，您詢問的是「${context.title || '這張宣傳 DM'}」。目前還缺 ${missing.join('、')}，請再補充後，我們就可以協助確認名額與報名方式。`;
+  }
+  return `收到，您詢問的是「${context.title || '這張宣傳 DM'}」。我已整理您的需求，接著會協助確認名額、價格與報名方式；若有訂金或付款方式，也會再提供您確認。`;
+}
+
+async function getRecentPromoDmQuestionnaireContext(env, threadId = '') {
+  if (!env.DB || !threadId) return null;
+  const row = await env.DB.prepare(`
+    SELECT raw_json, created_at
+    FROM line_messages
+    WHERE thread_id = ?
+      AND sender_role = 'guide'
+      AND message_type = 'text'
+      AND raw_json LIKE '%promo_dm_%'
+    ORDER BY created_at DESC, inserted_at DESC
+    LIMIT 1
+  `).bind(threadId).first();
+  if (!row?.raw_json) return null;
+  try {
+    const raw = JSON.parse(row.raw_json || '{}');
+    if (raw?.kind !== 'promo_dm_questionnaire') return null;
+    return {
+      dmId: String(raw.dmId || ''),
+      path: String(raw.path || ''),
+      title: String(raw.title || ''),
+      action: String(raw.action || ''),
+      createdAt: row.created_at || '',
+    };
+  } catch (_err) {
+    return null;
+  }
+}
+
+async function handlePromoDmQuestionnaireAnswer(env, event = {}, incomingText = '') {
+  if (!env.DB) return { handled: false };
+  const threadId = getLineThreadId(event?.source || {});
+  const context = await getRecentPromoDmQuestionnaireContext(env, threadId);
+  if (!context) return { handled: false };
+  const answer = parsePromoDmAnswerText(incomingText);
+  if (answer.answeredCount < 2 && !/報名|參加|人|電話|日期|出發|上車/.test(answer.raw)) return { handled: false };
+  const note = buildPromoDmOpportunityNote(context, answer);
+  const text = buildPromoDmFollowupText(context, answer);
+  const now = new Date().toISOString();
+  await ensureLineThreadOpportunityColumns(env);
+  await env.DB.prepare(`
+    UPDATE line_threads
+    SET opportunity_stage = 'qualified',
+        opportunity_note = ?,
+        status = 'pending',
+        tags = CASE
+          WHEN tags IS NULL OR tags = '' THEN '宣傳DM,待確認名額'
+          WHEN instr(tags, '宣傳DM') = 0 THEN tags || ',宣傳DM,待確認名額'
+          ELSE tags
+        END,
+        updated_at = ?
+    WHERE id = ?
+  `).bind(note, now, threadId).run();
+  await replyLineMessage(env, { replyToken: String(event?.replyToken || ''), messages: [{ type: 'text', text }] });
+  await storeLineAutoReplyMessage(env, event, text, [], {
+    kind: 'promo_dm_answer_followup',
+    dmId: context.dmId,
+    path: context.path,
+    title: context.title,
+    answer,
+  });
+  return { handled: true, replied: true };
+}
+
 async function replyLinePromoDmPostback(env, event = {}) {
   const parsed = parsePromoDmPostbackData(event?.postback?.data || '');
   if (!parsed) return { handled: false };
@@ -3881,7 +3998,13 @@ async function replyLinePromoDmPostback(env, event = {}) {
     ? buildPromoDmQuestionnaireText(found.doc, parsed.action)
     : '您好，已收到您的點選。我們先幫您確認這張宣傳 DM 的行程內容，請問您預計幾位、想哪一天出發，以及方便留下姓名與電話嗎？';
   await replyLineMessage(env, { replyToken, messages: [{ type: 'text', text }] });
-  await storeLineAutoReplyMessage(env, event, text, []);
+  await storeLineAutoReplyMessage(env, event, text, [], {
+    kind: 'promo_dm_questionnaire',
+    dmId: parsed.dmId || '',
+    path: found?.path || parsed.path || '',
+    title: found?.doc ? getPromoDmTitleFromDoc(found.doc) : '',
+    action: parsed.action || '',
+  });
   return { handled: true, replied: true, dmId: parsed.dmId || '', path: found?.path || parsed.path || '' };
 }
 
@@ -3914,6 +4037,13 @@ async function replyLineWebhookWithKnowledge(env, payload = {}) {
     const messageType = String(event?.message?.type || '').toLowerCase();
     if (eventType !== 'message' || !['text', 'image', 'file'].includes(messageType)) continue;
     const incomingText = readableLineMessageText(event, messageType);
+    if (messageType === 'text') {
+      const promoAnswerResult = await handlePromoDmQuestionnaireAnswer(env, event, incomingText);
+      if (promoAnswerResult.handled && promoAnswerResult.replied) {
+        replied += 1;
+        continue;
+      }
+    }
     if (!knowledgeEntries) knowledgeEntries = await getPublishedKnowledgeEntries(env);
     const matches = matchKnowledgeEntries(knowledgeEntries, incomingText, 2);
     const text = buildKnowledgeAutoReplyText(matches) || buildDefaultLineAutoReplyText(event);
@@ -3928,7 +4058,7 @@ async function replyLineWebhookWithKnowledge(env, payload = {}) {
   return { replied, knowledgeEntries: knowledgeEntries?.length || 0 };
 }
 
-async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = []) {
+async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = [], extra = {}) {
   if (!env.DB) return;
   await ensureLineMessageMediaColumns(env);
   const threadId = getLineThreadId(event?.source || {});
@@ -3944,7 +4074,12 @@ async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = [
     String(event?.replyToken || ''),
     String(text || '').slice(0, 5000),
     JSON.stringify({
-      kind: 'knowledge_auto_reply',
+      kind: extra.kind || 'knowledge_auto_reply',
+      dmId: extra.dmId || '',
+      path: extra.path || '',
+      title: extra.title || '',
+      action: extra.action || '',
+      answer: extra.answer || null,
       matchedEntries: matches.map(entry => ({
         id: entry.id || '',
         title: entry.title || '',
@@ -4175,7 +4310,7 @@ function readableLineMessageText(event = {}, messageType = '') {
     const address = String(message.address || '').trim();
     return ['客戶傳送位置', title, address].filter(Boolean).join('：');
   }
-  if (type === 'postback') return `客戶點選選單${event?.postback?.data ? `：${event.postback.data}` : ''}`;
+  if (type === 'postback') return describePromoDmPostbackData(event?.postback?.data || '') || `客戶點選選單${event?.postback?.data ? `：${event.postback.data}` : ''}`;
   return `[${type || 'event'}]`;
 }
 
@@ -5366,6 +5501,12 @@ async function d1GetLineThread(env, threadId) {
       }
     }
     let messageText = msg.message_text || '';
+    if (String(msg.message_type || '').toLowerCase() === 'postback' && msg.raw_json) {
+      try {
+        const rawEvent = JSON.parse(msg.raw_json || '{}');
+        messageText = readableLineMessageText(rawEvent, 'postback') || messageText;
+      } catch (_err) {}
+    }
     if (mediaUrl && String(msg.message_type || '').toLowerCase() === 'image' && isGenericLineImageMessageText(messageText)) {
       const imageAnalysis = await analyzeLineImageForTravelContext(env, mediaUrl);
       if (imageAnalysis) {
