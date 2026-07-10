@@ -2,109 +2,119 @@
 
 ## 目標
 
-先建立不破壞既有 `demo` 租戶的隔離基礎，再逐步將 Worker API 改為「先解析租戶、再驗證成員、最後查詢資料」。
+在不破壞既有 `demo` 租戶的前提下，建立真正可擴充的 SaaS 租戶邊界：
+
+1. 每筆核心資料都具有 `tenant_slug`
+2. 使用者透過 `tenant_memberships` 加入租戶
+3. 同一位 LINE 使用者可在不同租戶擁有不同角色與業務資料
+4. V2 API 必須先驗證 LINE Access Token，再解析租戶與權限
+5. 舊 API 暫時維持相容，由新版 Worker 入口逐步接管
 
 ## 已完成
 
-1. 建立 `tenant_memberships`：同一位 LINE 使用者可以加入不同租戶，角色與狀態分開保存。
-2. 為核心資料補上 `tenant_slug`：
-   - itineraries
-   - customers
-   - orders
-   - payment_attempts
-   - payout_batches
-   - audit_logs
-3. 將既有資料回填為 `demo` 或由既有 distributor 的 `agency_slug` 推導。
-4. 建立租戶複合索引。
-5. 建立訂單／行程、付款／訂單的跨租戶阻擋 Trigger。
-6. 新增 `lib/tenant-context.js`，統一租戶解析與 membership 驗證。
+### 資料庫
 
-## 下一個程式修改順序
+- 建立 `tenant_memberships`
+- 核心資料加入 `tenant_slug`
+  - itineraries
+  - customers
+  - orders
+  - payment_attempts
+  - payout_batches
+  - payout_batch_orders
+  - audit_logs
+- 建立 `tenant_distributor_profiles`
+  - 租戶內推薦碼
+  - 租戶內佣金
+  - 租戶內銀行與社群資料
+- 既有資料回填到 `demo` 或原本 `agency_slug`
+- 建立租戶複合索引
+- 建立跨租戶關聯阻擋 Trigger
 
-### 1. Worker 入口建立 Context
+### 後端
 
-每個內部 API 必須先取得：
+- `lib/tenant-context.js`
+  - 解析 Header、網址與來源頁面的租戶
+  - membership、角色與權限驗證
+  - platform admin 支援
+- `lib/line-auth.js`
+  - 驗證 LINE Access Token
+  - 取得真正 LINE userId
+  - 比對 Token 與租戶的 LINE Login Channel
+- `lib/tenant-api.js`
+  - `GET /api/v2/tenant/context`
+  - `GET /api/v2/itineraries`
+  - `GET /api/v2/itineraries/:id`
+  - `GET /api/v2/orders`
+  - `GET /api/v2/customers`
+  - `GET /api/v2/payments`
+  - `POST /api/v2/orders/:id/status`
+- `worker-tenant.js`
+  - V2 API 經過 LINE 驗證與租戶驗證
+  - 公開行程 API 不要求登入，但強制 tenant filter
+  - 尚未改造的舊 API 繼續交給 `worker.js`
 
-```js
-const tenantSlug = requestedTenantSlug(request, body);
-const context = await requireTenantContext(env, {
-  tenantSlug,
-  userUid: verifiedLineUid,
-  allowedRoles: ['tenant_admin', 'editor', 'sales', 'finance', 'support'],
-});
+## V2 API 呼叫方式
+
+內部 API：
+
+```http
+GET /api/v2/orders
+Authorization: Bearer <LIFF access token>
+X-Tenant-Slug: demo
 ```
 
-`verifiedLineUid` 必須來自 LINE token 驗證，不可以直接相信 body.uid。
+公開行程：
 
-### 2. 所有 SQL 強制帶租戶條件
-
-錯誤：
-
-```sql
-SELECT * FROM orders WHERE distributor_uid = ?
+```http
+GET /api/v2/itineraries/<id>?tenant=demo&scope=public
 ```
 
-正確：
+## 安全原則
 
-```sql
-SELECT * FROM orders
-WHERE tenant_slug = ? AND distributor_uid = ?
+禁止使用前端傳入的 `uid` 作為登入證明。V2 API 的 userId 必須由 LINE Access Token 驗證結果取得。
+
+只有在本機或過渡測試環境明確設定以下變數時，才允許舊 UID 模式：
+
+```text
+ALLOW_LEGACY_UID_AUTH=1
 ```
 
-### 3. 所有 INSERT 強制由 Context 寫入 tenant_slug
+正式環境不得開啟。
 
-錯誤：
+## 後續接線
 
-```js
-body.tenant_slug
+前端必須建立統一 API Client：
+
+1. 從網址取得 tenant
+2. 呼叫 `liff.getAccessToken()`
+3. 自動加入 Authorization 與 X-Tenant-Slug
+4. 401 時重新登入
+5. 403 時顯示無租戶權限
+
+詳細執行規格請見：
+
+```text
+CODEX_HANDOFF_TENANT_ISOLATION.md
 ```
-
-正確：
-
-```js
-context.tenantSlug
-```
-
-前端傳入的租戶只能作為「請求租戶」，最終必須通過 membership 驗證。
-
-### 4. 首批必改 API
-
-依風險與資料敏感度排序：
-
-1. `checkUserStatus`
-2. `getItineraries` / add / update / review / hide
-3. `getAllOrders` / `getUserOrders` / update status
-4. `getMyCustomers` / `getCustomerOrders`
-5. payment create / payment detail / payment config
-6. commission summary / payout
-7. LINE OA monitor / broadcast
-8. knowledge base / promo DM / rich menu
-
-## 相容策略
-
-- 沒有指定租戶時暫時使用 `demo`。
-- 舊資料先歸屬 `demo`。
-- 新租戶不得依賴預設值，建立帳號時必須建立 tenant 與 membership。
-- 在所有核心 API 完成 tenant filter 前，不應正式開放第二個租戶。
 
 ## 已知限制
 
-目前舊資料表的主鍵仍是全域唯一，例如：
+目前舊資料表的部分主鍵仍為全域唯一：
 
-- distributors.uid
-- customers.customer_phone
-- itineraries.id
-- orders.order_id
+- `customers.customer_phone`
+- `itineraries.id`
+- `orders.order_id`
+- `payment_attempts.id`
 
-Phase 1 可防止讀取與關聯資料串租，但尚未允許不同租戶使用相同 phone / id。Phase 2 需要重建為複合主鍵或改用內部 UUID：
+其中最重要的是 `customers.customer_phone`，不同租戶暫時不能建立相同電話的客戶。Phase 2 應在完整備份、回復腳本與雙租戶測試完成後，重建 customers/orders 的複合鍵或改為內部 UUID。
 
-```text
-PRIMARY KEY (tenant_slug, customer_phone)
-PRIMARY KEY (tenant_slug, user_uid)
-```
+## 上線限制
 
-建議 Phase 2 將 `distributors` 拆成：
+在以下事項完成前，不得合併或部署到正式環境：
 
-- `user_profiles`：全域 LINE 身分
-- `tenant_memberships`：租戶角色
-- `tenant_sales_profiles`：租戶內業務資料、推薦碼、佣金與銀行資訊
+- Local D1 migration 全新與既有資料庫測試
+- dashboard 核心資料改用 V2 API
+- tour／booking 改成租戶單筆行程 API
+- 雙租戶資料不可互讀的自動測試
+- 正式環境確認未設定 `ALLOW_LEGACY_UID_AUTH=1`
