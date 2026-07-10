@@ -1,6 +1,11 @@
 import legacyWorker from './worker.js';
 import { isTenantApiRequest, routeTenantApi } from './lib/tenant-api.js';
 import { isTenantBookingApiRequest, routeTenantBookingApi } from './lib/tenant-booking-api.js';
+import {
+  isTenantPaymentApiRequest,
+  isPublicTenantPaymentRequest,
+  routeTenantPaymentApi,
+} from './lib/tenant-payment-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 
@@ -13,7 +18,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase2');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase3');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -38,7 +43,7 @@ function isPublicTenantRequest(request) {
 }
 
 async function authenticatedTenantRequest(request, env) {
-  if (isPublicTenantRequest(request)) return request;
+  if (isPublicTenantRequest(request) || isPublicTenantPaymentRequest(request)) return request;
   const tenantSlug = requestedTenantSlug(request);
   const auth = await authenticateLineRequest(request, env, { tenantSlug });
   const headers = new Headers(request.headers);
@@ -61,6 +66,15 @@ export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
+    }
+
+    if (isTenantPaymentApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
+      } catch (error) {
+        return authErrorResponse(error);
+      }
     }
 
     if (isTenantBookingApiRequest(request)) {
