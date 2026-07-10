@@ -46,4 +46,4 @@ node --check lib/tenant-booking-api.js
 node --test tests/tenant-isolation.test.mjs tests/tenant-booking-isolation.test.mjs
 ```
 
-驗證包含：跨租戶行程阻擋、偽造 LINE UID 無效、跨租戶電話衝突保護、付款租戶驗證，以及非訂單本人不得建立付款。
+驗證包含：跨租戶行程阻擋、偽造 LINE UID 無效、跨租戶電話衝突保護、付款租戶驗證，以及非訂單本人不得建立付款。GitHub Actions 結果為成功。
