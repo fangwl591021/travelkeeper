@@ -31,7 +31,12 @@ jobs:
           node --check lib/line-auth.js
           node --check lib/tenant-api.js
           node --check lib/tenant-booking-api.js
+          node --check lib/tenant-payment-policy.js
+          node --check lib/tenant-payment-api.js
 
       - name: Run tenant isolation tests
         run: |
-          node --test tests/tenant-isolation.test.mjs tests/tenant-booking-isolation.test.mjs
+          node --test \
+            tests/tenant-isolation.test.mjs \
+            tests/tenant-booking-isolation.test.mjs \
+            tests/tenant-payment-modes.test.mjs
