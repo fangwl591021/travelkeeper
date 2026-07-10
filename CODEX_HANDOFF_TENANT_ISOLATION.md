@@ -27,7 +27,9 @@ agent/tenant-isolation-phase1
   - 以 LINE Access Token 驗證真正 userId
   - 驗證 Token 的 LINE Login Channel
 - `lib/tenant-api.js`
+  - `/api/v2/tenant/public`
   - `/api/v2/tenant/context`
+  - `/api/v2/invites/:code`
   - `/api/v2/itineraries`
   - `/api/v2/itineraries/:id`
   - `/api/v2/orders`
@@ -36,11 +38,22 @@ agent/tenant-isolation-phase1
   - `/api/v2/orders/:id/status`
 - `worker-tenant.js`
   - 新 API 使用租戶隔離與 LINE 驗證
+  - 公開租戶、推薦碼及已上架行程不要求登入
   - 舊 API 暫時轉送原本 `worker.js`
+- `js/tenant-api-client.js`
+  - 統一解析租戶
+  - 自動加入 `Authorization` 與 `X-Tenant-Slug`
+  - 統一處理登入失效、跨 Channel 與租戶權限錯誤
+- `tour.html`
+  - 已改成單筆租戶行程 API
+  - 推薦碼改為租戶範圍查詢
+  - 不再下載全平台行程列表
+- `tests/tenant-isolation.test.mjs`
+  - 租戶 slug、membership、公開行程隔離與禁止偽造 UID 測試
 - `wrangler.toml`
   - main 已切換為 `worker-tenant.js`
 
-## 本次任務
+## 尚待完成
 
 ### 1. 先驗證 Migration
 
@@ -62,34 +75,9 @@ wrangler d1 migrations apply travelkeeper --local
 
 不要直接套用正式 D1。
 
-### 2. 建立統一前端 API Client
+### 2. 修改 dashboard.html
 
-新增獨立檔案，例如：
-
-```text
-js/tenant-api-client.js
-```
-
-必須負責：
-
-1. 從網址解析租戶：`tenant`、`tenant_slug`、`a`，最後才 fallback `demo`
-2. 取得 `liff.getAccessToken()`
-3. 送出：
-
-```http
-Authorization: Bearer <LIFF access token>
-X-Tenant-Slug: <tenant slug>
-```
-
-4. 統一處理：
-   - 401：重新 LINE Login
-   - 403：顯示無此租戶權限
-   - `LINE_ACCESS_TOKEN_CHANNEL_MISMATCH`：顯示目前 LINE Login Channel 不屬於該租戶
-5. 禁止把 `profile.userId` 當成登入證明；UID 只能用於畫面或查詢條件
-
-### 3. 修改 dashboard.html
-
-不要逐個散落地直接加 Header。應先建立共用 `apiFetch()`，再替換核心讀取流程。
+不要逐個散落地直接加 Header。使用 `js/tenant-api-client.js` 作為共用 Client，再替換核心讀取流程。
 
 第一批改用 V2 API：
 
@@ -102,19 +90,18 @@ X-Tenant-Slug: <tenant slug>
 
 保留舊 API 作為未改功能的暫時 fallback，但核心畫面不得再以無 tenant 條件的 `getAllOrders`、`getMyCustomers` 等作為資料來源。
 
-### 4. 修改公開行程頁
+### 3. 修改 booking.html
 
-`tour.html` 及 `booking.html` 載入指定行程時，改成單筆租戶 API：
+已完成公開行程頁，但預約頁仍需：
 
-```text
-GET /api/v2/itineraries/{id}?tenant=<slug>&scope=public
-```
+- 使用 `GET /api/v2/itineraries/{id}?tenant=<slug>&scope=public`
+- 推薦碼改用 `/api/v2/invites/:code`
+- 舊 `/api/orders/create` body 與 URL 明確帶 `tenant_slug`／`a`
+- 金流建單前驗證訂單與付款屬於同一租戶
 
-不要再下載所有行程後於瀏覽器搜尋 ID。
+在付款 API 完成租戶化前，不得讓第二租戶啟用正式金流。
 
-預約建單目前仍走舊 `/api/orders/create`，先保留，但 body 與 URL 必須明確帶 `tenant_slug`／`a`。後端建單租戶化另開下一個 PR，不要在本次任務同時大改金流。
-
-### 5. 本機雙租戶驗收
+### 4. 本機雙租戶驗收
 
 建立：
 
@@ -142,7 +129,7 @@ GET /api/v2/itineraries/{id}?tenant=<slug>&scope=public
 8. 公開行程 API 不回傳其他租戶資料
 9. 舊 demo 頁面未指定租戶時仍能正常使用
 
-### 6. 測試與交付
+### 5. 測試與交付
 
 至少執行：
 
@@ -151,10 +138,9 @@ node --check worker-tenant.js
 node --check lib/tenant-context.js
 node --check lib/line-auth.js
 node --check lib/tenant-api.js
+node --test tests/tenant-isolation.test.mjs
 wrangler dev
 ```
-
-若專案沒有測試框架，請用 Node built-in test 或腳本新增最小化測試，不要只人工點畫面。
 
 完成後：
 
@@ -166,4 +152,7 @@ wrangler dev
 
 ## 已知限制
 
-`customers.customer_phone` 目前仍是全域主鍵，因此不同租戶暫時不能建立相同電話的客戶。不要在本次任務直接重建 customers/orders 正式表；先在 PR 記錄為 Phase 2 migration，待完整備份及回復方案後處理。
+1. `customers.customer_phone` 目前仍是全域主鍵，因此不同租戶暫時不能建立相同電話的客戶。不要在未完成備份及回復方案前直接重建 customers/orders 正式表。
+2. 舊版 Worker API 仍有大量只用 UID 判權與未加 `tenant_slug` 的路徑；第二租戶只能測試 V2 API，不可全面開放。
+3. `booking.html` 與付款建立尚未完全租戶化，第二租戶暫時不得開啟正式收款。
+4. CORS 目前仍為 `*`，正式部署前應限制 GitHub Pages、LIFF 與正式品牌網域。
