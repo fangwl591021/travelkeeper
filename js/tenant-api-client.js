@@ -49,6 +49,9 @@
   }
 
   function friendlyError(error) {
+    const payloadMessage = String(error?.payload?.message || '').trim();
+    if (payloadMessage) return payloadMessage;
+
     const code = String(error?.code || error?.message || 'UNKNOWN_ERROR');
     const map = {
       AUTH_REQUIRED: 'LINE 登入已失效，請重新登入。',
@@ -68,7 +71,14 @@
       ORDER_NOT_FOUND: '找不到此訂單。',
       ORDER_CUSTOMER_MISMATCH: '此訂單不屬於目前登入的 LINE 帳號。',
       PAYMENT_AMOUNT_INVALID: '付款金額不正確，請聯絡業務人員。',
-      TENANT_PAYMENT_CONFIGURATION_REQUIRED: '此業者的獨立金流尚未完成設定，訂單已建立，客服將協助確認付款方式。',
+      PAYMENT_ALREADY_COMPLETED: '此筆款項已完成付款。',
+      TENANT_PAYMENT_CONFIGURATION_REQUIRED: '此業者目前採人工收款或金流尚未完成設定，訂單已建立，客服將協助確認付款方式。',
+      PLATFORM_PAYMENT_DISABLED: '平台代收目前未啟用，訂單已建立，客服將協助確認付款方式。',
+      PLATFORM_PAYMENT_SECRET_MISSING: '平台代收參數尚未完成，訂單已建立，客服將協助確認付款方式。',
+      PLATFORM_PAYMENT_SECRET_LENGTH_INVALID: '平台代收參數格式錯誤，訂單已建立，客服將協助確認付款方式。',
+      PLATFORM_COLLECTION_APPROVAL_REQUIRED: '平台代收必須由平台總管理員核准。',
+      PAYMENT_PROVIDER_REQUIRED: '選擇自有金流時必須指定金流服務商。',
+      INVALID_COLLECTION_MODE: '收款模式設定錯誤。',
     };
     return map[code] || code;
   }
@@ -144,6 +154,18 @@
 
     getContext(tenantSlug) {
       return apiFetch('/api/v2/tenant/context', { tenantSlug });
+    },
+
+    getPaymentPolicy(tenantSlug) {
+      return apiFetch('/api/v2/tenant/payment-policy', { tenantSlug });
+    },
+
+    updatePaymentPolicy(data, tenantSlug) {
+      return apiFetch('/api/v2/tenant/payment-policy', {
+        tenantSlug,
+        method: 'POST',
+        body: data,
+      });
     },
 
     getPublicItinerary(itineraryId, tenantSlug) {
