@@ -1,0 +1,37 @@
+name: Tenant isolation checks
+
+on:
+  push:
+    branches:
+      - agent/tenant-isolation-phase1
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  tenant-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check Worker modules
+        run: |
+          node --check worker-tenant.js
+          node --check lib/tenant-context.js
+          node --check lib/line-auth.js
+          node --check lib/tenant-api.js
+          node --check lib/tenant-booking-api.js
+
+      - name: Run tenant isolation tests
+        run: |
+          node --test tests/tenant-isolation.test.mjs tests/tenant-booking-isolation.test.mjs
