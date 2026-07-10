@@ -1,5 +1,6 @@
 import legacyWorker from './worker.js';
 import { isTenantApiRequest, routeTenantApi } from './lib/tenant-api.js';
+import { isTenantBookingApiRequest, routeTenantBookingApi } from './lib/tenant-booking-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 
@@ -12,7 +13,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase1');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase2');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -47,10 +48,28 @@ async function authenticatedTenantRequest(request, env) {
   return new Request(request, { headers });
 }
 
+function authErrorResponse(error) {
+  const code = String(error?.message || error || 'AUTH_REQUIRED');
+  const status = code === 'LINE_ACCESS_TOKEN_CHANNEL_MISMATCH' ? 403 : 401;
+  return withTenantHeaders(new Response(JSON.stringify({ success: false, error: code }), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' },
+  }));
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
+    }
+
+    if (isTenantBookingApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantBookingApi(securedRequest, env, legacyWorker));
+      } catch (error) {
+        return authErrorResponse(error);
+      }
     }
 
     if (isTenantApiRequest(request)) {
@@ -58,12 +77,7 @@ export default {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantApi(securedRequest, env));
       } catch (error) {
-        const code = String(error?.message || error || 'AUTH_REQUIRED');
-        const status = code === 'LINE_ACCESS_TOKEN_CHANNEL_MISMATCH' ? 403 : 401;
-        return withTenantHeaders(new Response(JSON.stringify({ success: false, error: code }), {
-          status,
-          headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' },
-        }));
+        return authErrorResponse(error);
       }
     }
 
