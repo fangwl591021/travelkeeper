@@ -1,0 +1,188 @@
+(function (global) {
+  'use strict';
+
+  const DEFAULT_WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+  const DEFAULT_TENANT = 'demo';
+
+  function normalizeTenantSlug(value, fallback = DEFAULT_TENANT) {
+    const slug = String(value || '').trim().toLowerCase();
+    if (!slug) return fallback;
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
+      throw new Error('INVALID_TENANT_SLUG');
+    }
+    return slug;
+  }
+
+  function resolveTenantSlug(search = global.location?.search || '') {
+    const params = new URLSearchParams(search);
+    return normalizeTenantSlug(
+      params.get('tenant') ||
+      params.get('tenant_slug') ||
+      params.get('a') ||
+      DEFAULT_TENANT
+    );
+  }
+
+  function getLiffAccessToken() {
+    if (!global.liff || typeof global.liff.getAccessToken !== 'function') return '';
+    return String(global.liff.getAccessToken() || '').trim();
+  }
+
+  async function parseResponse(response) {
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch (_) {
+      payload = { success: false, error: text || `HTTP_${response.status}` };
+    }
+
+    if (!response.ok || payload?.success === false) {
+      const code = String(payload?.error || `HTTP_${response.status}`);
+      const error = new Error(code);
+      error.code = code;
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    return payload;
+  }
+
+  function friendlyError(error) {
+    const code = String(error?.code || error?.message || 'UNKNOWN_ERROR');
+    const map = {
+      AUTH_REQUIRED: 'LINE 登入已失效，請重新登入。',
+      LINE_ACCESS_TOKEN_INVALID: 'LINE 登入憑證無效，請重新登入。',
+      LINE_PROFILE_AUTH_FAILED: '無法取得 LINE 身分，請重新登入。',
+      LINE_ACCESS_TOKEN_CHANNEL_MISMATCH: '目前 LINE Login Channel 不屬於此業者。',
+      TENANT_ACCESS_DENIED: '此帳號沒有該業者平台的使用權限。',
+      TENANT_ROLE_DENIED: '目前角色沒有執行此操作的權限。',
+      TENANT_PERMISSION_DENIED: '目前帳號缺少所需權限。',
+      TENANT_NOT_FOUND: '找不到指定的業者平台。',
+      ITINERARY_NOT_FOUND: '找不到此行程，可能已下架。',
+      INVITE_CODE_NOT_FOUND: '找不到此推薦碼。',
+      INVALID_TENANT_SLUG: '業者識別碼格式錯誤。',
+    };
+    return map[code] || code;
+  }
+
+  async function recoverLogin(error) {
+    const code = String(error?.code || error?.message || '');
+    if (!['AUTH_REQUIRED', 'LINE_ACCESS_TOKEN_INVALID', 'LINE_PROFILE_AUTH_FAILED'].includes(code)) return false;
+    if (!global.liff || typeof global.liff.login !== 'function') return false;
+    global.liff.login({ redirectUri: global.location.href });
+    return true;
+  }
+
+  async function apiFetch(path, options = {}) {
+    const {
+      tenantSlug = resolveTenantSlug(),
+      workerUrl = DEFAULT_WORKER_URL,
+      public: isPublic = false,
+      headers: customHeaders = {},
+      body,
+      ...fetchOptions
+    } = options;
+
+    const tenant = normalizeTenantSlug(tenantSlug);
+    const headers = new Headers(customHeaders);
+    headers.set('X-Tenant-Slug', tenant);
+    headers.set('Accept', 'application/json');
+
+    let requestBody = body;
+    if (body && typeof body === 'object' && !(body instanceof FormData) && !(body instanceof Blob)) {
+      headers.set('Content-Type', 'application/json');
+      requestBody = JSON.stringify({ ...body, tenant_slug: tenant });
+    }
+
+    if (!isPublic) {
+      const accessToken = getLiffAccessToken();
+      if (!accessToken) {
+        const error = new Error('AUTH_REQUIRED');
+        error.code = 'AUTH_REQUIRED';
+        throw error;
+      }
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    const url = new URL(path, workerUrl.endsWith('/') ? workerUrl : `${workerUrl}/`);
+    if (!url.searchParams.has('tenant') && !url.searchParams.has('tenant_slug') && !url.searchParams.has('a')) {
+      url.searchParams.set('tenant', tenant);
+    }
+
+    try {
+      const response = await fetch(url.toString(), {
+        ...fetchOptions,
+        headers,
+        body: requestBody,
+      });
+      return await parseResponse(response);
+    } catch (error) {
+      await recoverLogin(error);
+      throw error;
+    }
+  }
+
+  const client = {
+    DEFAULT_WORKER_URL,
+    normalizeTenantSlug,
+    resolveTenantSlug,
+    getLiffAccessToken,
+    friendlyError,
+    apiFetch,
+
+    getPublicTenant(tenantSlug) {
+      return apiFetch('/api/v2/tenant/public', { tenantSlug, public: true });
+    },
+
+    getContext(tenantSlug) {
+      return apiFetch('/api/v2/tenant/context', { tenantSlug });
+    },
+
+    getPublicItinerary(itineraryId, tenantSlug) {
+      return apiFetch(`/api/v2/itineraries/${encodeURIComponent(itineraryId)}?scope=public`, {
+        tenantSlug,
+        public: true,
+      });
+    },
+
+    listPublicItineraries(tenantSlug, limit = 100) {
+      return apiFetch(`/api/v2/itineraries?scope=public&limit=${encodeURIComponent(limit)}`, {
+        tenantSlug,
+        public: true,
+      });
+    },
+
+    resolveInvite(code, tenantSlug) {
+      return apiFetch(`/api/v2/invites/${encodeURIComponent(String(code || '').trim().toUpperCase())}`, {
+        tenantSlug,
+        public: true,
+      });
+    },
+
+    listOrders(tenantSlug, params = {}) {
+      const query = new URLSearchParams(params);
+      return apiFetch(`/api/v2/orders?${query.toString()}`, { tenantSlug });
+    },
+
+    listCustomers(tenantSlug, params = {}) {
+      const query = new URLSearchParams(params);
+      return apiFetch(`/api/v2/customers?${query.toString()}`, { tenantSlug });
+    },
+
+    listPayments(tenantSlug, params = {}) {
+      const query = new URLSearchParams(params);
+      return apiFetch(`/api/v2/payments?${query.toString()}`, { tenantSlug });
+    },
+
+    updateOrderStatus(orderId, status, tenantSlug) {
+      return apiFetch(`/api/v2/orders/${encodeURIComponent(orderId)}/status`, {
+        tenantSlug,
+        method: 'POST',
+        body: { status },
+      });
+    },
+  };
+
+  global.TravelKeeperTenantApi = client;
+})(window);
