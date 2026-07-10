@@ -6,6 +6,7 @@
   <title>行程詳情 | 旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="./js/tenant-api-client.js"></script>
   <style>
     * { font-family: 'Noto Sans TC', sans-serif; }
     @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
@@ -13,7 +14,6 @@
     .afu  { animation: fadeUp .4s ease both; }
     .spin { animation: spin .7s linear infinite; }
 
-    /* 浮動預約 bar */
     .book-bar {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: rgba(255,255,255,.97);
@@ -38,7 +38,6 @@
     }
     .book-bar-btn:active { transform: scale(0.97); }
 
-    /* ★ v3：推薦人 banner */
     .invite-banner {
       background: #ecfdf5;
       border-bottom: 1px solid #bbf7d0;
@@ -53,7 +52,6 @@
 <body>
 
 <div id="root">
-  <!-- Loading 預設畫面 -->
   <div class="flex items-center justify-center h-screen flex-col gap-4">
     <div class="spin w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full"></div>
     <p class="text-slate-400 font-bold">載入行程資料中…</p>
@@ -61,32 +59,29 @@
 </div>
 
 <script>
-const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
-
-// ── URL 參數
+const tenantApi = window.TravelKeeperTenantApi;
 const params = new URLSearchParams(window.location.search);
-const tourId      = params.get('t')  || '';
-const refUid      = params.get('r')  || '';   // 分銷商 uid（舊版佣金歸屬）
-const inviteCode  = (params.get('invite') || '').trim().toUpperCase();  // ★ v3：推薦碼（新版優先）
-const agencySlug  = params.get('a')  || 'demo';
+const tourId = params.get('t') || '';
+const refUid = params.get('r') || '';
+const inviteCode = (params.get('invite') || '').trim().toUpperCase();
+const agencySlug = tenantApi.resolveTenantSlug(window.location.search);
 
-// ── 工具
-const fmt = (n) => '$' + Number(n||0).toLocaleString();
+const fmt = (n) => '$' + Number(n || 0).toLocaleString();
 
-// ── 行程描述渲染（支援圖片 / YouTube / 天數標題 / 分隔線）
 function renderDesc(text, container) {
   if (!text) return;
   text.split('\n').forEach(line => {
-    // 圖片
     const imgM = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
     if (imgM) {
       const img = document.createElement('img');
-      img.src = imgM[2]; img.alt = imgM[1] || '';
+      img.src = imgM[2];
+      img.alt = imgM[1] || '';
+      img.loading = 'lazy';
       img.className = 'w-full rounded-2xl my-4 object-cover aspect-video shadow-md';
       container.appendChild(img);
       return;
     }
-    // YouTube
+
     const ytM = line.match(/^\[youtube:([A-Za-z0-9_-]{11})\]$/);
     if (ytM) {
       const wrap = document.createElement('div');
@@ -94,19 +89,20 @@ function renderDesc(text, container) {
       const iframe = document.createElement('iframe');
       iframe.src = `https://www.youtube.com/embed/${ytM[1]}`;
       iframe.className = 'w-full h-full';
+      iframe.loading = 'lazy';
       iframe.allowFullscreen = true;
       wrap.appendChild(iframe);
       container.appendChild(wrap);
       return;
     }
-    // 分隔線
+
     if (line.trim() === '---') {
       const hr = document.createElement('hr');
       hr.className = 'border-slate-200 my-6';
       container.appendChild(hr);
       return;
     }
-    // 天數標題（第N天 ...）
+
     if (/^第.天/.test(line)) {
       const h = document.createElement('h3');
       h.className = 'font-black text-slate-900 text-xl mt-8 mb-3 pl-3 border-l-4 border-emerald-500';
@@ -114,12 +110,12 @@ function renderDesc(text, container) {
       container.appendChild(h);
       return;
     }
-    // 空行
+
     if (!line.trim()) {
       container.appendChild(document.createElement('br'));
       return;
     }
-    // 一般段落
+
     const p = document.createElement('p');
     p.className = 'leading-relaxed text-slate-700 mb-2 text-base';
     p.textContent = line;
@@ -127,28 +123,40 @@ function renderDesc(text, container) {
   });
 }
 
-// ── ★ v3：解析推薦碼（並行執行，不阻塞主流程）
 async function resolveInvite() {
   if (!inviteCode) return null;
   try {
-    const r = await fetch(`${WORKER_URL}/api/resolve-invite?code=${encodeURIComponent(inviteCode)}`);
-    const data = await r.json();
-    return data.success ? data.data : null;
-  } catch (e) { console.warn('resolveInvite failed:', e); return null; }
+    const response = await tenantApi.resolveInvite(inviteCode, agencySlug);
+    return response.data || null;
+  } catch (error) {
+    if (String(error.code || error.message) !== 'INVITE_CODE_NOT_FOUND') {
+      console.warn('resolveInvite failed:', error);
+    }
+    return null;
+  }
 }
 
-// ── ★ v3：顯示推薦人 banner
 function showInviteBanner(referrer) {
   if (!referrer?.name) return;
   const banner = document.createElement('div');
   banner.className = 'invite-banner';
-  banner.innerHTML = `<span class="text-emerald-700 font-bold">您是</span>
-    <span class="text-emerald-900 font-black mx-1">${referrer.name}</span>
-    <span class="text-emerald-700 font-bold">邀約的貴客 🎉</span>`;
+
+  const prefix = document.createElement('span');
+  prefix.className = 'text-emerald-700 font-bold';
+  prefix.textContent = '您是 ';
+
+  const name = document.createElement('span');
+  name.className = 'text-emerald-900 font-black mx-1';
+  name.textContent = referrer.name;
+
+  const suffix = document.createElement('span');
+  suffix.className = 'text-emerald-700 font-bold';
+  suffix.textContent = ' 邀約的貴客 🎉';
+
+  banner.append(prefix, name, suffix);
   document.body.insertBefore(banner, document.body.firstChild);
 }
 
-// ── 載入並渲染
 (async function init() {
   if (!tourId) {
     showError('連結缺少行程編號');
@@ -156,52 +164,49 @@ function showInviteBanner(referrer) {
   }
 
   try {
-    // ★ v3：行程資料 + 推薦碼解析並行執行
-    const [arrRaw, referrer] = await Promise.all([
-      fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&_t=${Date.now()}`).then(r => r.json()),
+    const [tourResponse, referrer] = await Promise.all([
+      tenantApi.getPublicItinerary(tourId, agencySlug),
       resolveInvite(),
     ]);
 
-    const items = Array.isArray(arrRaw) ? arrRaw : [];
-    const tour = items.find(i => String(i.id || i.timestamp || '') === String(tourId));
-
+    const tour = tourResponse?.data;
     if (!tour) {
       showError('找不到此行程，可能已下架');
       return;
     }
 
+    document.title = `${tour.title || '行程詳情'} | 旅遊管家`;
     if (referrer) showInviteBanner(referrer);
     renderTour(tour);
-  } catch (e) {
-    console.error(e);
-    showError('載入失敗，請稍後再試');
+  } catch (error) {
+    console.error(error);
+    showError(tenantApi.friendlyError(error) || '載入失敗，請稍後再試');
   }
 })();
 
 function renderTour(tour) {
   const root = document.getElementById('root');
   root.innerHTML = '';
+  document.querySelector('.book-bar')?.remove();
 
   const wrap = document.createElement('div');
   wrap.className = 'afu';
 
-  // ── 封面圖
   if (tour.image) {
     const heroWrap = document.createElement('div');
     heroWrap.className = 'w-full bg-slate-200 overflow-hidden';
     heroWrap.style.aspectRatio = '20/13';
     const heroImg = document.createElement('img');
     heroImg.src = tour.image;
+    heroImg.alt = tour.title || '行程封面';
     heroImg.className = 'w-full h-full object-cover';
     heroWrap.appendChild(heroImg);
     wrap.appendChild(heroWrap);
   }
 
-  // ── 主資訊區
   const main = document.createElement('div');
   main.className = 'max-w-2xl mx-auto px-5 py-6';
 
-  // 地區標籤
   if (tour.region) {
     const tag = document.createElement('span');
     tag.className = 'inline-block text-xs font-black text-blue-600 uppercase tracking-widest mb-2';
@@ -209,13 +214,11 @@ function renderTour(tour) {
     main.appendChild(tag);
   }
 
-  // 標題
   const title = document.createElement('h1');
   title.className = 'text-2xl md:text-3xl font-black text-slate-900 leading-tight mb-3';
   title.textContent = tour.title || '行程';
   main.appendChild(title);
 
-  // 天數 + 價格 chip 區
   const chips = document.createElement('div');
   chips.className = 'flex flex-wrap gap-2 mb-6';
   if (tour.days) {
@@ -236,13 +239,11 @@ function renderTour(tour) {
   chips.appendChild(priceChip);
   main.appendChild(chips);
 
-  // 描述
   const descBox = document.createElement('div');
   descBox.className = 'space-y-1';
   renderDesc(tour.description, descBox);
   main.appendChild(descBox);
 
-  // 備註
   if (tour.notes && String(tour.notes).trim()) {
     const notesBox = document.createElement('div');
     notesBox.className = 'mt-8 p-5 bg-amber-50 border-l-4 border-amber-400 rounded-r-2xl';
@@ -263,7 +264,6 @@ function renderTour(tour) {
   wrap.appendChild(main);
   root.appendChild(wrap);
 
-  // ── 浮動預約 bar
   const bar = document.createElement('div');
   bar.className = 'book-bar';
   bar.innerHTML = `
@@ -276,26 +276,33 @@ function renderTour(tour) {
   document.body.appendChild(bar);
 
   document.getElementById('book-btn').onclick = () => {
-    // ★ v3：導向 booking.html 時，invite 優先（v2+），ref 為向下相容 fallback
     const bookingParams = new URLSearchParams({
       a: agencySlug,
+      tenant: agencySlug,
       itinerary: tourId,
     });
     if (inviteCode) bookingParams.set('invite', inviteCode);
-    if (refUid)     bookingParams.set('ref', refUid);
+    if (refUid) bookingParams.set('ref', refUid);
     window.location.href = `booking.html?${bookingParams.toString()}`;
   };
 }
 
 function showError(msg) {
   const root = document.getElementById('root');
-  root.innerHTML = `
-    <div class="flex flex-col items-center justify-center h-screen gap-4 p-8 text-center">
-      <div class="text-6xl">😕</div>
-      <h2 class="text-xl font-black text-slate-700">${msg}</h2>
-      <p class="text-slate-400 text-sm">請聯絡您的業務專員確認</p>
-    </div>
-  `;
+  root.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'flex flex-col items-center justify-center h-screen gap-4 p-8 text-center';
+  const icon = document.createElement('div');
+  icon.className = 'text-6xl';
+  icon.textContent = '😕';
+  const title = document.createElement('h2');
+  title.className = 'text-xl font-black text-slate-700';
+  title.textContent = msg;
+  const hint = document.createElement('p');
+  hint.className = 'text-slate-400 text-sm';
+  hint.textContent = '請聯絡您的業務專員確認';
+  box.append(icon, title, hint);
+  root.appendChild(box);
 }
 </script>
 
