@@ -27,6 +27,9 @@ function isPublicTenantRequest(request) {
   if (request.method !== 'GET') return false;
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '');
+
+  if (path === '/api/v2/tenant/public') return true;
+  if (/^\/api\/v2\/invites\/[^/]+$/.test(path)) return true;
   if (path === '/api/v2/itineraries' || /^\/api\/v2\/itineraries\/[^/]+$/.test(path)) {
     return String(url.searchParams.get('scope') || 'public').toLowerCase() === 'public';
   }
