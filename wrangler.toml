@@ -8,6 +8,8 @@ WASABI_REGION = "us-west-1"
 WASABI_BUCKET = "tonyuse"
 WASABI_PREFIX = "travelkeeper"
 MOTHER_STORAGE_WRITE_ENABLED = "1"
+# 正式環境不得設定 ALLOW_LEGACY_UID_AUTH=1。
+# PLATFORM_ADMIN_UIDS、ADMIN_UIDS 或 ADMIN_UID_WHITELIST 應透過 Cloudflare secrets/vars 管理。
 
 [[d1_databases]]
 binding = "DB"
