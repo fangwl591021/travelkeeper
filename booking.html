@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./js/tenant-api-client.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family:'Noto Sans TC',sans-serif; background:#f0f4ff; min-height:100vh; margin:0; }
@@ -26,9 +27,10 @@
 </head>
 <body>
   <div id="root"></div>
+
   <script type="text/jsx-cached" id="app-source">
     const { useState, useEffect } = React;
-const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
+    const tenantApi = window.TravelKeeperTenantApi;
 
     const CheckIcon = () => (
       <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{width:48,height:48}}>
@@ -40,8 +42,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
     function Field({ label, hint, children }) {
       return (
         <div style={{marginBottom:22}}>
-          <label style={{display:'block',fontSize:10,fontWeight:900,color:'#94a3b8',
-            textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:8}}>{label}</label>
+          <label style={{display:'block',fontSize:10,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:8}}>{label}</label>
           {children}
           {hint && <p style={{fontSize:11,color:'#94a3b8',marginTop:6,fontWeight:500}}>{hint}</p>}
         </div>
@@ -49,9 +50,9 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
     }
 
     const baseInput = {
-      width:'100%',background:'#f8fafc',border:'2px solid #f1f5f9',borderRadius:14,
-      padding:'15px 18px',fontSize:16,fontWeight:700,fontFamily:'Noto Sans TC,sans-serif',
-      color:'#0f172a',outline:'none',boxSizing:'border-box',
+      width:'100%', background:'#f8fafc', border:'2px solid #f1f5f9', borderRadius:14,
+      padding:'15px 18px', fontSize:16, fontWeight:700, fontFamily:'Noto Sans TC,sans-serif',
+      color:'#0f172a', outline:'none', boxSizing:'border-box',
       transition:'border-color .2s,box-shadow .2s,background .2s',
     };
     const focusOn = e => { e.target.style.borderColor='#10b981'; e.target.style.background='#fff'; e.target.style.boxShadow='0 0 0 4px rgba(16,185,129,.09)'; };
@@ -59,25 +60,15 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
 
     function Shell({ tenant, children }) {
       return (
-        <div style={{position:'relative',zIndex:1,minHeight:'100vh',display:'flex',
-          alignItems:'flex-start',justifyContent:'center',padding:'40px 16px 64px'}}>
-          <div style={{background:'#fff',borderRadius:36,width:'100%',maxWidth:520,
-            boxShadow:'0 32px 80px rgba(16,185,129,.09),0 2px 8px rgba(0,0,0,.04)',
-            border:'1px solid rgba(16,185,129,.08)',overflow:'hidden'}}>
-            <div style={{background:'linear-gradient(135deg,#065f46 0%,#10b981 60%,#2563eb 100%)',
-              padding:'32px 40px 28px',position:'relative',overflow:'hidden'}}>
+        <div style={{position:'relative',zIndex:1,minHeight:'100vh',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'40px 16px 64px'}}>
+          <div style={{background:'#fff',borderRadius:36,width:'100%',maxWidth:520,boxShadow:'0 32px 80px rgba(16,185,129,.09),0 2px 8px rgba(0,0,0,.04)',border:'1px solid rgba(16,185,129,.08)',overflow:'hidden'}}>
+            <div style={{background:'linear-gradient(135deg,#065f46 0%,#10b981 60%,#2563eb 100%)',padding:'32px 40px 28px',position:'relative',overflow:'hidden'}}>
               <div style={{position:'absolute',top:-40,right:-30,width:140,height:140,borderRadius:'50%',background:'rgba(255,255,255,.05)'}}/>
               <div style={{position:'absolute',bottom:-30,left:-20,width:100,height:100,borderRadius:'50%',background:'rgba(255,255,255,.04)'}}/>
               <div style={{position:'relative',zIndex:1}}>
-                <span style={{display:'inline-block',background:'rgba(255,255,255,.18)',color:'rgba(255,255,255,.9)',
-                  fontSize:10,fontWeight:900,letterSpacing:'0.15em',textTransform:'uppercase',
-                  padding:'5px 14px',borderRadius:999,marginBottom:14}}>立即預約</span>
-                <h1 style={{color:'#fff',fontSize:26,fontWeight:900,margin:0,lineHeight:1.3}}>
-                  {tenant?.name || '旅遊管家'}
-                </h1>
-                <p style={{color:'rgba(255,255,255,.75)',fontSize:13,fontWeight:600,marginTop:6}}>
-                  Travel Booking
-                </p>
+                <span style={{display:'inline-block',background:'rgba(255,255,255,.18)',color:'rgba(255,255,255,.9)',fontSize:10,fontWeight:900,letterSpacing:'0.15em',textTransform:'uppercase',padding:'5px 14px',borderRadius:999,marginBottom:14}}>立即預約</span>
+                <h1 style={{color:'#fff',fontSize:26,fontWeight:900,margin:0,lineHeight:1.3}}>{tenant?.name || '旅遊管家'}</h1>
+                <p style={{color:'rgba(255,255,255,.75)',fontSize:13,fontWeight:600,marginTop:6}}>Travel Booking</p>
               </div>
             </div>
             <div style={{padding:'36px 40px 44px'}}>{children}</div>
@@ -88,207 +79,124 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
 
     function App() {
       const p = new URLSearchParams(window.location.search);
-      const agencySlug = p.get('a') || 'demo';
+      const agencySlug = tenantApi.resolveTenantSlug(window.location.search);
       const itineraryId = p.get('itinerary') || '';
       const distributorUid = p.get('ref') || '';
       const shareId = p.get('sid') || p.get('share_id') || p.get('shareId') || '';
-      // ★ v3：推薦碼（新版優先；統一轉大寫，避開大小寫差異）
       const inviteCode = (p.get('invite') || '').trim().toUpperCase();
 
       const [step, setStep] = useState('loading');
       const [tenant, setTenant] = useState(null);
       const [profile, setProfile] = useState(null);
       const [itinerary, setItinerary] = useState(null);
-      const [referrer, setReferrer] = useState(null);  // ★ v3：推薦人資訊
+      const [referrer, setReferrer] = useState(null);
       const [resolvedDistributorUid, setResolvedDistributorUid] = useState('');
       const [successNote, setSuccessNote] = useState('');
-      const [form, setForm] = useState({
-        customer_name:'', customer_phone:'', travelers:2, travel_date:'', note:''
-      });
+      const [form, setForm] = useState({ customer_name:'', customer_phone:'', travelers:2, travel_date:'', note:'' });
       const [errMsg, setErr] = useState('');
-
-      const trackShareEvent = async (eventType, extra = {}) => {
-        if (!shareId) return;
-        try {
-          await fetch(`${WORKER_URL}/api/share/event`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              share_id: shareId,
-              distributor_uid: distributorUid || resolvedDistributorUid || '',
-              invite_code: inviteCode,
-              itinerary_id: itineraryId,
-              event_type: eventType,
-              source: 'booking',
-              target_url: window.location.href,
-              metadata: extra,
-            }),
-          });
-        } catch (err) {
-          console.warn('[booking] share event failed:', err);
-        }
-      };
 
       useEffect(() => {
         (async () => {
           try {
-            console.log('[booking] 🚀 init start', { agencySlug, itineraryId, distributorUid, inviteCode });
-
-            // ★ v3：歸屬驗證 — invite OR ref 任一存在即可
             if (!itineraryId || (!distributorUid && !inviteCode)) {
-              console.error('[booking] ❌ 缺少參數', { itineraryId, distributorUid, inviteCode });
-              setErr('缺少必要參數，請從推廣連結進入');
-              setStep('error');
-              return;
+              throw new Error('缺少必要參數，請從業務分享的行程連結進入。');
             }
 
-            // 1. 載入租戶設定 + 推薦碼解析（並行）
-            console.log('[booking] 1️⃣ fetching config + invite resolve in parallel...');
-            const tasks = [
-              fetch(`${WORKER_URL}/api/config?a=${agencySlug}`).then(r => r.json()),
-              inviteCode
-                ? fetch(`${WORKER_URL}/api/resolve-invite?code=${encodeURIComponent(inviteCode)}`).then(r => r.json())
-                : Promise.resolve(null),
-            ];
-            const [cfgData, inviteData] = await Promise.all(tasks);
+            const tenantPromise = tenantApi.getPublicTenant(agencySlug);
+            const itineraryPromise = tenantApi.getPublicItinerary(itineraryId, agencySlug);
+            const invitePromise = inviteCode
+              ? tenantApi.resolveInvite(inviteCode, agencySlug)
+              : Promise.resolve(null);
 
-            console.log('[booking] 1️⃣ config response:', cfgData);
-            if (!cfgData.success) {
-              console.error('[booking] ❌ config failed:', cfgData);
-              setErr('租戶設定載入失敗：' + (cfgData.error || '未知錯誤'));
-              setStep('error');
-              return;
-            }
-            setTenant(cfgData.data);
+            const [tenantResult, itineraryResult, inviteResult] = await Promise.all([
+              tenantPromise,
+              itineraryPromise,
+              invitePromise,
+            ]);
 
-            // ★ v3：推薦碼解析結果（解不到就靜默忽略，仍可走 ref fallback）
-            if (inviteData?.success && inviteData.data?.uid) {
-              console.log('[booking] 1️⃣ invite resolved:', inviteData.data);
-              setResolvedDistributorUid(inviteData.data.uid);
-              setReferrer({ name: inviteData.data.name || '夥伴' });
+            const tenantData = tenantResult?.data;
+            if (!tenantData?.liff_id) throw new Error('此業者尚未設定 LINE Login。');
+            setTenant(tenantData);
+            setItinerary(itineraryResult?.data || null);
+            document.title = `${itineraryResult?.data?.title || '行程預約'} | ${tenantData.name || '旅遊管家'}`;
+
+            if (inviteResult?.data?.uid) {
+              setResolvedDistributorUid(inviteResult.data.uid);
+              setReferrer({ name: inviteResult.data.name || '夥伴' });
             }
 
-            // 2. LIFF 初始化
-            console.log('[booking] 2️⃣ liff.init with ID:', cfgData.data.liff_id);
-            await liff.init({ liffId: cfgData.data.liff_id });
+            await liff.init({ liffId: tenantData.liff_id, withLoginOnExternalBrowser: true });
             if (!liff.isLoggedIn()) {
-              console.log('[booking] 2️⃣ not logged in, redirecting to login...');
               liff.login({ redirectUri: window.location.href });
               return;
             }
 
             const prof = await liff.getProfile();
-            console.log('[booking] 2️⃣ profile:', prof.displayName);
             setProfile(prof);
-            setForm(f => ({ ...f, customer_name: prof.displayName }));
-
-            // 3. 載入行程資料（GAS 直接回 array，不是 {success, data}）
-            console.log('[booking] 3️⃣ fetching itineraries...');
-            const itRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`);
-            const itData = await itRes.json();
-            const itList = Array.isArray(itData) ? itData : (itData.data || itData.itineraries || []);
-            console.log('[booking] 3️⃣ itineraries count:', itList.length);
-
-            const found = itList.find(x => String(x.id || x.timestamp || '') === String(itineraryId));
-            if (found) {
-              console.log('[booking] ✅ found itinerary:', found.title);
-              setItinerary(found);
-              await trackShareEvent('booking_landing', { title: found.title || '' });
-            } else {
-              console.error('[booking] ❌ itinerary not found in list');
-              setErr(`找不到行程 ID: ${itineraryId}`);
-              setStep('error');
-              return;
-            }
-
-            console.log('[booking] ✅ all checks passed, showing form');
+            setForm(current => ({ ...current, customer_name: current.customer_name || prof.displayName || '' }));
             setStep('form');
-          } catch (e) {
-            console.error('[booking] 💥 caught exception:', e);
-            setErr(e.message || '未知錯誤');
+          } catch (error) {
+            console.error('[booking] init failed:', error);
+            setErr(tenantApi.friendlyError(error));
             setStep('error');
           }
         })();
       }, [agencySlug, itineraryId, distributorUid, inviteCode]);
 
-      const handleSubmit = async (e) => {
-        e.preventDefault();
+      const handleSubmit = async (event) => {
+        event.preventDefault();
         if (!form.customer_phone.trim()) { setErr('請填寫聯絡電話'); return; }
         if (!form.customer_name.trim()) { setErr('請填寫姓名'); return; }
-        setErr(''); setStep('submitting');
+        setErr('');
+        setStep('submitting');
 
         try {
-          // ★ v3：送單時把 invite_code 也帶上；worker 會優先用它解析業務 uid
-          const body = {
+          const finalDistributorUid = resolvedDistributorUid || distributorUid;
+          const bookingResult = await tenantApi.createBooking({
             itinerary_id: itineraryId,
-            customer_line_uid: profile.userId,
             customer_name: form.customer_name,
             customer_phone: form.customer_phone,
             travelers: Number(form.travelers) || 1,
             travel_date: form.travel_date,
             note: form.note,
-          };
-          if (inviteCode)      body.invite_code     = inviteCode;
-          if (shareId)         body.share_id        = shareId;
-          const finalDistributorUid = distributorUid || resolvedDistributorUid;
-          if (finalDistributorUid) body.distributor_uid = finalDistributorUid;
+            invite_code: inviteCode,
+            distributor_uid: finalDistributorUid,
+            share_id: shareId,
+            source: 'referral',
+          }, agencySlug);
 
-          const res = await fetch(`${WORKER_URL}/api/orders/create?a=${agencySlug}`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify(body),
-          });
-          const result = await res.json();
-          if (!result.success) {
-            setErr(result.error || '送出失敗，請稍後重試');
-            setStep('form');
-            return;
-          }
-
-          // ★ v6：建單成功 → 接著呼叫 /api/payment/create 拿藍新付款 form
-          //   訂金階段（leg=deposit）；全額單訂金 = 全額
-          const orderData = result.data;
-          if (orderData.deposit_amount <= 0) {
-            // 沒有訂金需求（理論上不會發生，金額必定 > 0），直接顯示成功
+          const orderData = bookingResult.data;
+          if (!orderData?.order_id) throw new Error('ORDER_NOT_FOUND');
+          if (Number(orderData.deposit_amount || 0) <= 0) {
+            setSuccessNote('訂單已建立，業務專員將與您確認後續付款方式。');
             setStep('success');
             return;
           }
 
-          // 顯示「正在前往付款」過場
           setStep('redirecting');
-
-          const payRes = await fetch(`${WORKER_URL}/api/payment/create`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ order_id: orderData.order_id, leg: 'deposit' }),
-          });
-          const payResult = await payRes.json();
-          if (!payResult.success) {
-            const nonBlockingPaymentErrors = new Set([
+          try {
+            const paymentResult = await tenantApi.createPayment(orderData.order_id, 'deposit', agencySlug);
+            document.open();
+            document.write(paymentResult.data.form_html);
+            document.close();
+          } catch (paymentError) {
+            const nonBlocking = new Set([
               'NEWEBPAY_DISABLED',
               'NEWEBPAY_SECRET_MISSING',
               'NEWEBPAY_SECRET_LENGTH_INVALID',
+              'TENANT_PAYMENT_CONFIGURATION_REQUIRED',
             ]);
-            if (nonBlockingPaymentErrors.has(payResult.error)) {
-              setSuccessNote('訂單已建立。目前線上金流尚未啟用或參數未完成，客服會再與您確認付款方式。');
+            const code = String(paymentError.code || paymentError.message || '');
+            if (nonBlocking.has(code)) {
+              setSuccessNote(tenantApi.friendlyError(paymentError));
               setStep('success');
               return;
             }
-            setErr('建立付款連結失敗：' + (payResult.error || ''));
-            setStep('form');
-            return;
+            throw paymentError;
           }
-
-          // 把藍新 form 寫到當前分頁（會自動 submit POST 到藍新付款頁）
-          //   不開新分頁是因為 LIFF in-app browser 開新分頁體驗很差
-          //   藍新付完會 redirect 回 thank-you.html
-          document.open();
-          document.write(payResult.data.form_html);
-          document.close();
-          // 上面 document.write 後會自動 submit form，不會回到這裡
-        } catch (err) {
-          console.error('[booking] submit error:', err);
-          setErr('網路連線失敗，請稍後重試');
+        } catch (error) {
+          console.error('[booking] submit failed:', error);
+          setErr(tenantApi.friendlyError(error));
           setStep('form');
         }
       };
@@ -296,37 +204,27 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       if (step === 'loading') return (
         <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}>
           <div className="spin" style={{width:44,height:44,border:'4px solid #e2e8f0',borderTopColor:'#10b981',borderRadius:'50%'}}/>
-          <p style={{color:'#94a3b8',fontWeight:700,fontFamily:'Noto Sans TC,sans-serif'}}>載入中…</p>
+          <p style={{color:'#94a3b8',fontWeight:700}}>載入安全預約頁面中…</p>
         </div>
       );
 
       if (step === 'error') return (
-        <Shell tenant={null}>
+        <Shell tenant={tenant}>
           <div style={{textAlign:'center',padding:'40px 0'}}>
             <div style={{fontSize:64,marginBottom:16}}>⛔</div>
             <h2 style={{fontSize:22,fontWeight:900,color:'#0f172a',marginBottom:12}}>無法載入</h2>
-            <p style={{color:'#dc2626',fontWeight:700,fontSize:13,
-              background:'#fef2f2',padding:'10px 16px',borderRadius:10,
-              fontFamily:'monospace',wordBreak:'break-all',margin:'0 auto',maxWidth:'90%'}}>
-              {errMsg || '未知錯誤'}
-            </p>
-            <p style={{color:'#94a3b8',fontWeight:600,fontSize:12,marginTop:14}}>
-              請截圖此畫面並聯絡業務人員
-            </p>
+            <p style={{color:'#dc2626',fontWeight:700,fontSize:13,background:'#fef2f2',padding:'10px 16px',borderRadius:10,wordBreak:'break-word',margin:'0 auto',maxWidth:'90%'}}>{errMsg || '未知錯誤'}</p>
+            <p style={{color:'#94a3b8',fontWeight:600,fontSize:12,marginTop:14}}>請截圖此畫面並聯絡業務人員</p>
           </div>
         </Shell>
       );
 
-      // ★ v6：建單成功後跳藍新付款頁的過場
       if (step === 'redirecting') return (
         <Shell tenant={tenant}>
           <div style={{textAlign:'center',padding:'40px 0'}}>
             <div className="spin" style={{width:48,height:48,border:'4px solid #e2e8f0',borderTopColor:'#10b981',borderRadius:'50%',margin:'0 auto 20px'}}/>
             <h2 style={{fontSize:20,fontWeight:900,color:'#0f172a',marginBottom:8}}>正在前往付款頁面…</h2>
-            <p style={{color:'#64748b',fontWeight:600,fontSize:13,lineHeight:1.7}}>
-              您將被導向藍新金流安全付款頁<br/>
-              請勿關閉此視窗
-            </p>
+            <p style={{color:'#64748b',fontWeight:600,fontSize:13,lineHeight:1.7}}>您將被導向安全付款頁<br/>請勿關閉此視窗</p>
           </div>
         </Shell>
       );
@@ -334,190 +232,85 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       if (step === 'success') return (
         <Shell tenant={tenant}>
           <div className="fade-up" style={{textAlign:'center',padding:'32px 0'}}>
-            <div style={{width:88,height:88,background:'linear-gradient(135deg,#d1fae5,#a7f3d0)',borderRadius:'50%',
-              display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px',
-              boxShadow:'0 8px 24px rgba(16,185,129,.2)'}}>
-              <CheckIcon />
-            </div>
+            <div style={{width:88,height:88,background:'linear-gradient(135deg,#d1fae5,#a7f3d0)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px',boxShadow:'0 8px 24px rgba(16,185,129,.2)'}}><CheckIcon /></div>
             <h2 style={{fontSize:26,fontWeight:900,color:'#0f172a',marginBottom:10}}>預約已送出！🎉</h2>
-            <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8,marginBottom:28}}>
-              {successNote || '感謝您的預約。'}<br/>
-              業務專員將盡快與您聯繫確認行程細節。
-            </p>
-            <button onClick={() => liff.closeWindow()} style={{
-              background:'linear-gradient(135deg,#10b981,#059669)',color:'#fff',
-              padding:'14px 36px',borderRadius:14,fontWeight:900,fontSize:14,
-              border:'none',cursor:'pointer',boxShadow:'0 10px 24px rgba(16,185,129,.25)'}}>
-              關閉視窗
-            </button>
+            <p style={{color:'#64748b',fontWeight:600,lineHeight:1.8,marginBottom:28}}>{successNote || '感謝您的預約。'}<br/>業務專員將盡快與您聯繫確認行程細節。</p>
+            <button onClick={() => liff.isInClient() ? liff.closeWindow() : (window.location.href = `tour.html?t=${encodeURIComponent(itineraryId)}&a=${encodeURIComponent(agencySlug)}`)} style={{background:'linear-gradient(135deg,#10b981,#059669)',color:'#fff',padding:'14px 36px',borderRadius:14,fontWeight:900,fontSize:14,border:'none',cursor:'pointer',boxShadow:'0 10px 24px rgba(16,185,129,.25)'}}>完成</button>
           </div>
         </Shell>
       );
 
       const isSubmitting = step === 'submitting';
+      const travelers = Number(form.travelers) || 1;
+      const total = (Number(itinerary?.price) || 0) * travelers;
+      const paymentMode = String(itinerary?.paymentMode || itinerary?.paymentmode || 'deposit').toLowerCase();
+      const depositRatio = Number(itinerary?.depositRatio ?? itinerary?.depositratio ?? 20);
+      const depositPerTraveler = Number(itinerary?.depositAmount ?? itinerary?.depositamount ?? 0);
+      const balanceCollect = String(itinerary?.balanceCollect || itinerary?.balancecollect || 'online').toLowerCase();
+      const isFullPay = paymentMode === 'full';
+      const deposit = isFullPay ? total : Math.min(total, depositPerTraveler > 0 ? Math.round(depositPerTraveler * travelers) : Math.round(total * depositRatio / 100));
+      const balance = isFullPay ? 0 : total - deposit;
+
       return (
         <Shell tenant={tenant}>
           <form onSubmit={handleSubmit} className="fade-up">
-
-            {/* ★ v3：推薦人 banner */}
             {referrer && (
-              <div style={{background:'#ecfdf5',border:'2px solid #bbf7d0',borderRadius:14,
-                padding:'12px 16px',marginBottom:22,fontSize:13,textAlign:'center'}}>
+              <div style={{background:'#ecfdf5',border:'2px solid #bbf7d0',borderRadius:14,padding:'12px 16px',marginBottom:22,fontSize:13,textAlign:'center'}}>
                 <span style={{color:'#15803d',fontWeight:700}}>您是</span>
                 <span style={{color:'#14532d',fontWeight:900,margin:'0 6px'}}>{referrer.name}</span>
                 <span style={{color:'#15803d',fontWeight:700}}>邀約的貴客 🎉</span>
               </div>
             )}
 
-            {/* 行程資訊卡 */}
             {itinerary && (
-              <div style={{background:'linear-gradient(135deg,#f0fdf4,#ecfdf5)',
-                border:'2px solid #bbf7d0',borderRadius:18,padding:'18px 20px',marginBottom:26}}>
-                {itinerary.image && (
-                  <img src={itinerary.image} alt={itinerary.title}
-                    style={{width:'100%',height:140,objectFit:'cover',borderRadius:12,marginBottom:14}}/>
-                )}
-                <p style={{fontSize:10,fontWeight:900,color:'#16a34a',textTransform:'uppercase',
-                  letterSpacing:'0.12em',marginBottom:6}}>您正在預約</p>
-                <h3 style={{fontSize:18,fontWeight:900,color:'#0f172a',marginBottom:8,lineHeight:1.4}}>
-                  {itinerary.title}
-                </h3>
+              <div style={{background:'linear-gradient(135deg,#f0fdf4,#ecfdf5)',border:'2px solid #bbf7d0',borderRadius:18,padding:'18px 20px',marginBottom:26}}>
+                {itinerary.image && <img src={itinerary.image} alt={itinerary.title} style={{width:'100%',height:140,objectFit:'cover',borderRadius:12,marginBottom:14}}/>}
+                <p style={{fontSize:10,fontWeight:900,color:'#16a34a',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:6}}>您正在預約</p>
+                <h3 style={{fontSize:18,fontWeight:900,color:'#0f172a',marginBottom:8,lineHeight:1.4}}>{itinerary.title}</h3>
                 <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                  {itinerary.region && (
-                    <span style={{background:'#dcfce7',color:'#15803d',padding:'4px 10px',
-                      borderRadius:8,fontSize:11,fontWeight:900}}>📍 {itinerary.region}</span>
-                  )}
-                  {itinerary.days && (
-                    <span style={{background:'#dbeafe',color:'#1d4ed8',padding:'4px 10px',
-                      borderRadius:8,fontSize:11,fontWeight:900}}>📅 {itinerary.days} 天</span>
-                  )}
-                  <span style={{marginLeft:'auto',fontSize:18,fontWeight:900,color:'#dc2626'}}>
-                    NT$ {Number(itinerary.price || 0).toLocaleString()}
-                  </span>
+                  {itinerary.region && <span style={{background:'#dcfce7',color:'#15803d',padding:'4px 10px',borderRadius:8,fontSize:11,fontWeight:900}}>📍 {itinerary.region}</span>}
+                  {itinerary.days && <span style={{background:'#dbeafe',color:'#1d4ed8',padding:'4px 10px',borderRadius:8,fontSize:11,fontWeight:900}}>📅 {itinerary.days} 天</span>}
+                  <span style={{marginLeft:'auto',fontSize:18,fontWeight:900,color:'#dc2626'}}>NT$ {Number(itinerary.price || 0).toLocaleString()}</span>
                 </div>
               </div>
             )}
 
-            {/* ★ v6：付款試算（依當前人數即時計算） */}
-            {itinerary && (() => {
-              const travelers = Number(form.travelers) || 1;
-              const total     = (Number(itinerary.price)||0) * travelers;
-              const paymentMode    = String(itinerary.paymentmode || 'deposit').toLowerCase();
-              const depositRatio   = Number(itinerary.depositratio || 20);
-              const depositAmountPerTraveler = Number(itinerary.depositamount || itinerary.depositAmount || 0);
-              const balanceCollect = String(itinerary.balancecollect || 'online').toLowerCase();
-              const isFullPay = paymentMode === 'full';
-              const deposit = isFullPay ? total : Math.min(total, depositAmountPerTraveler > 0
-                ? Math.round(depositAmountPerTraveler * travelers)
-                : Math.round(total * depositRatio / 100));
-              const balance = isFullPay ? 0 : total - deposit;
-              const balanceLabel = isFullPay ? '' :
-                balanceCollect === 'offline' ? '出發前由業務收取（也可線上提前繳）' : '可隨時線上補繳';
-              return (
-                <div style={{background:'#fff',border:'2px solid #fde68a',borderRadius:14,
-                  padding:'14px 16px',marginBottom:26}}>
-                  <p style={{fontSize:10,fontWeight:900,color:'#d97706',textTransform:'uppercase',
-                    letterSpacing:'0.12em',marginBottom:10}}>付款試算（{travelers} 人）</p>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
-                    <span style={{color:'#64748b',fontSize:13,fontWeight:600}}>總金額</span>
-                    <span style={{fontSize:15,fontWeight:900,color:'#0f172a'}}>NT$ {total.toLocaleString()}</span>
-                  </div>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
-                    <span style={{color:'#dc2626',fontSize:13,fontWeight:900}}>
-                      {isFullPay ? '本次付款（全額）' : (depositAmountPerTraveler > 0 ? `訂金（每人 NT$ ${depositAmountPerTraveler.toLocaleString()}）` : `訂金（${depositRatio}%）`)}
-                    </span>
-                    <span style={{fontSize:18,fontWeight:900,color:'#dc2626'}}>NT$ {deposit.toLocaleString()}</span>
-                  </div>
-                  {balance > 0 && (
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',
-                      paddingTop:8,borderTop:'1px dashed #fde68a'}}>
-                      <span style={{color:'#92400e',fontSize:12,fontWeight:600}}>
-                        尾款 · {balanceLabel}
-                      </span>
-                      <span style={{fontSize:13,fontWeight:700,color:'#92400e'}}>NT$ {balance.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <p style={{fontSize:11,color:'#94a3b8',marginTop:10,lineHeight:1.6}}>
-                    💳 支援信用卡、LINE Pay、ATM 轉帳<br/>
-                    🔒 由藍新金流安全加密處理
-                  </p>
-                </div>
-              );
-            })()}
+            <div style={{background:'#fff',border:'2px solid #fde68a',borderRadius:14,padding:'14px 16px',marginBottom:26}}>
+              <p style={{fontSize:10,fontWeight:900,color:'#d97706',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:10}}>付款試算（{travelers} 人）</p>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><span style={{color:'#64748b',fontSize:13,fontWeight:600}}>總金額</span><span style={{fontSize:15,fontWeight:900}}>NT$ {total.toLocaleString()}</span></div>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><span style={{color:'#dc2626',fontSize:13,fontWeight:900}}>{isFullPay ? '本次付款（全額）' : '本次訂金'}</span><span style={{fontSize:18,fontWeight:900,color:'#dc2626'}}>NT$ {deposit.toLocaleString()}</span></div>
+              {balance > 0 && <div style={{display:'flex',justifyContent:'space-between',paddingTop:8,borderTop:'1px dashed #fde68a'}}><span style={{color:'#92400e',fontSize:12,fontWeight:600}}>尾款 · {balanceCollect === 'offline' ? '由業務協助收取' : '可線上補繳'}</span><span style={{fontSize:13,fontWeight:700,color:'#92400e'}}>NT$ {balance.toLocaleString()}</span></div>}
+            </div>
 
-            <hr style={{border:'none',borderTop:'1.5px solid #f1f5f9',margin:'0 0 26px'}}/>
-
-            {/* LINE 已綁定 */}
             {profile && (
-              <div style={{display:'flex',alignItems:'center',gap:14,background:'#f8fafc',
-                borderRadius:14,padding:'12px 16px',marginBottom:26,border:'2px solid #f1f5f9'}}>
-                <img src={profile.pictureUrl} style={{width:44,height:44,borderRadius:'50%',border:'2px solid #e2e8f0'}}/>
-                <div>
-                  <p style={{fontSize:10,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',
-                    letterSpacing:'0.12em',marginBottom:2}}>LINE 帳號</p>
-                  <p style={{fontWeight:900,color:'#0f172a',fontSize:15}}>{profile.displayName}</p>
-                </div>
+              <div style={{display:'flex',alignItems:'center',gap:14,background:'#f8fafc',borderRadius:14,padding:'12px 16px',marginBottom:26,border:'2px solid #f1f5f9'}}>
+                {profile.pictureUrl && <img src={profile.pictureUrl} alt="LINE 頭像" style={{width:44,height:44,borderRadius:'50%',border:'2px solid #e2e8f0'}}/>}
+                <div><p style={{fontSize:10,fontWeight:900,color:'#94a3b8',marginBottom:2}}>LINE 帳號已驗證</p><p style={{fontWeight:900,color:'#0f172a',fontSize:15}}>{profile.displayName}</p></div>
               </div>
             )}
 
             <Field label="預約人姓名" hint="將用於行程出團名單">
-              <input required style={baseInput} value={form.customer_name}
-                onChange={e=>setForm({...form,customer_name:e.target.value})}
-                placeholder="請輸入真實姓名"
-                onFocus={focusOn} onBlur={focusOff}/>
+              <input required style={baseInput} value={form.customer_name} onChange={e=>setForm({...form,customer_name:e.target.value})} placeholder="請輸入真實姓名" onFocus={focusOn} onBlur={focusOff}/>
             </Field>
-
             <Field label="聯絡電話" hint="業務專員確認預約時使用">
-              <input required type="tel" style={baseInput} value={form.customer_phone}
-                onChange={e=>setForm({...form,customer_phone:e.target.value})}
-                placeholder="例如：0912-345-678"
-                onFocus={focusOn} onBlur={focusOff}/>
+              <input required type="tel" style={baseInput} value={form.customer_phone} onChange={e=>setForm({...form,customer_phone:e.target.value})} placeholder="例如：0912-345-678" onFocus={focusOn} onBlur={focusOff}/>
             </Field>
-
             <Field label="預約人數">
-              <input required type="number" min="1" max="50" style={baseInput} value={form.travelers}
-                onChange={e=>setForm({...form,travelers:e.target.value})}
-                onFocus={focusOn} onBlur={focusOff}/>
+              <input required type="number" min="1" max="50" style={baseInput} value={form.travelers} onChange={e=>setForm({...form,travelers:e.target.value})} onFocus={focusOn} onBlur={focusOff}/>
             </Field>
-
             <Field label="希望出發日期" hint="未確定可留空，由業務協助安排">
-              <input type="date" style={baseInput} value={form.travel_date}
-                onChange={e=>setForm({...form,travel_date:e.target.value})}
-                onFocus={focusOn} onBlur={focusOff}/>
+              <input type="date" style={baseInput} value={form.travel_date} onChange={e=>setForm({...form,travel_date:e.target.value})} onFocus={focusOn} onBlur={focusOff}/>
             </Field>
-
             <Field label="備註（選填）" hint="特殊飲食、住房需求等">
-              <textarea rows="3" style={{...baseInput,resize:'vertical',minHeight:80}}
-                value={form.note} onChange={e=>setForm({...form,note:e.target.value})}
-                placeholder="例如：素食、需要嬰兒床"
-                onFocus={focusOn} onBlur={focusOff}/>
+              <textarea rows="3" style={{...baseInput,resize:'vertical',minHeight:80}} value={form.note} onChange={e=>setForm({...form,note:e.target.value})} placeholder="例如：素食、需要嬰兒床" onFocus={focusOn} onBlur={focusOff}/>
             </Field>
 
-            {errMsg && (
-              <div style={{background:'#fef2f2',border:'2px solid #fecaca',borderRadius:14,
-                padding:'12px 18px',marginBottom:18,color:'#dc2626',fontSize:13,fontWeight:700}}>
-                ⚠️ {errMsg}
-              </div>
-            )}
+            {errMsg && <div style={{background:'#fef2f2',border:'2px solid #fecaca',borderRadius:14,padding:'12px 18px',marginBottom:18,color:'#dc2626',fontSize:13,fontWeight:700}}>⚠️ {errMsg}</div>}
 
-            <button type="submit" disabled={isSubmitting} style={{
-              width:'100%',border:'none',
-              background:isSubmitting?'#94a3b8':'linear-gradient(135deg,#10b981,#059669)',
-              color:'#fff',padding:'20px',borderRadius:16,fontSize:17,fontWeight:900,
-              fontFamily:'Noto Sans TC,sans-serif',
-              cursor:isSubmitting?'not-allowed':'pointer',
-              boxShadow:isSubmitting?'none':'0 12px 32px rgba(16,185,129,.28)',
-              letterSpacing:'0.04em',display:'flex',alignItems:'center',justifyContent:'center',gap:10
-            }}>
-              {isSubmitting
-                ? <><div className="spin" style={{width:20,height:20,border:'3px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>送出中…</>
-                : '前往付款 →'
-              }
+            <button type="submit" disabled={isSubmitting} style={{width:'100%',border:'none',background:isSubmitting?'#94a3b8':'linear-gradient(135deg,#10b981,#059669)',color:'#fff',padding:'20px',borderRadius:16,fontSize:17,fontWeight:900,cursor:isSubmitting?'not-allowed':'pointer',boxShadow:isSubmitting?'none':'0 12px 32px rgba(16,185,129,.28)',display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+              {isSubmitting ? <><div className="spin" style={{width:20,height:20,border:'3px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>送出中…</> : '建立預約並前往付款 →'}
             </button>
-
-            <p style={{textAlign:'center',color:'#cbd5e1',fontSize:11,fontWeight:600,marginTop:14}}>
-              點擊後將跳轉至藍新金流安全付款頁
-            </p>
+            <p style={{textAlign:'center',color:'#94a3b8',fontSize:11,fontWeight:600,marginTop:14}}>LINE 身分、業者、行程與訂單將進行一致性驗證</p>
           </form>
         </Shell>
       );
@@ -525,91 +318,31 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
-<!-- ★ JSX 編譯快取載入器 v2（修：拿掉 env preset、加 setItem 後驗證） -->
-<script>
-(function(){
-  const CACHE_KEY_PREFIX = 'tk-jsx-cache-v2:';   // ★ v2：bumped，舊 cache 自動失效
-  const BABEL_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js';
 
-  function hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
-
-  function loadScript(src){
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = src; s.onload = resolve; s.onerror = reject;
-      document.head.appendChild(s);
-    });
-  }
-
-  function execCode(code){ new Function(code)(); }
-
-  async function boot(){
-    const src = document.getElementById('app-source')?.textContent || '';
-    if (!src.trim()) { console.error('[jsx-loader] no #app-source'); return; }
-
-    const key = CACHE_KEY_PREFIX + hash(src);
-    console.log('[jsx-loader] cache key:', key, '| source len:', src.length);
-
-    // 1. 試讀快取
-    try {
-      const cached = localStorage.getItem(key);
-      if (cached) {
-        console.log('[jsx-loader] ✅ cache HIT, compiled len:', cached.length, '— skip babel');
-        execCode(cached);
-        return;
-      } else {
-        console.log('[jsx-loader] cache MISS（key 不存在）');
-      }
-    } catch(e) { console.warn('[jsx-loader] localStorage read failed', e); }
-
-    // 2. 沒快取 → 載 babel + 編譯
-    const t0 = performance.now();
-    try {
-      await loadScript(BABEL_CDN);
-      const t1 = performance.now();
-      console.log('[jsx-loader] babel loaded in', (t1-t0).toFixed(0), 'ms');
-
-      // ★ v2 修正：只用 react preset，不用 env（env 會 polyfill 整個 ES5，編譯產物爆增 3-4 倍）
-      const compiled = Babel.transform(src, { presets: ['react'] }).code;
-      const t2 = performance.now();
-      console.log('[jsx-loader] compiled in', (t2-t1).toFixed(0), 'ms, output len:', compiled.length);
-
-      // 3. 存快取，**並驗證**寫入是否成功
+  <script>
+  (function(){
+    const CACHE_KEY_PREFIX = 'tk-jsx-cache-v3:';
+    const BABEL_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js';
+    function hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(36); }
+    function loadScript(src){ return new Promise((resolve,reject)=>{ const s=document.createElement('script'); s.src=src; s.onload=resolve; s.onerror=reject; document.head.appendChild(s); }); }
+    function execCode(code){ new Function(code)(); }
+    async function boot(){
+      const src=document.getElementById('app-source')?.textContent||'';
+      if(!src.trim()) return;
+      const key=CACHE_KEY_PREFIX+hash(src);
+      try { const cached=localStorage.getItem(key); if(cached){ execCode(cached); return; } } catch(_) {}
       try {
-        localStorage.setItem(key, compiled);
-        const verify = localStorage.getItem(key);
-        if (verify === compiled) {
-          console.log('[jsx-loader] ✅ cache write OK，下次進站秒開');
-        } else {
-          console.warn('[jsx-loader] ⚠️ cache write mismatch (verify=' + (verify?verify.length:'null') + ' vs ' + compiled.length + ')');
-        }
-      } catch(e) {
-        console.warn('[jsx-loader] ⚠️ cache write FAILED:', e.name, e.message);
-        // localStorage 可能滿了 → 清掉本前綴所有舊 key 再試
-        try {
-          let cleared = 0;
-          for (let i=localStorage.length-1; i>=0; i--) {
-            const k = localStorage.key(i);
-            if (k && (k.startsWith('tk-jsx-cache-'))) { localStorage.removeItem(k); cleared++; }
-          }
-          console.log('[jsx-loader] cleared', cleared, 'old cache keys, retrying...');
-          localStorage.setItem(key, compiled);
-          console.log('[jsx-loader] ✅ cache write OK (retry)');
-        } catch(e2) { console.warn('[jsx-loader] ⚠️ retry also failed:', e2.message); }
+        await loadScript(BABEL_CDN);
+        const compiled=Babel.transform(src,{presets:['react']}).code;
+        try { localStorage.setItem(key,compiled); } catch(_) {}
+        execCode(compiled);
+      } catch(error) {
+        console.error('[jsx-loader] failed:',error);
+        document.getElementById('root').innerHTML='<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>載入失敗</h2><p>請重新整理頁面</p></div>';
       }
-
-      execCode(compiled);
-    } catch(e) {
-      console.error('[jsx-loader] babel load/compile failed:', e);
-      document.getElementById('root').innerHTML =
-        '<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>載入失敗</h2><p style="color:#888">請重新整理頁面，或清除瀏覽器快取</p></div>';
     }
-  }
-
-  if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined') boot();
-  else window.addEventListener('load', boot);
-})();
-</script>
-
+    if(typeof React!=='undefined'&&typeof ReactDOM!=='undefined') boot(); else window.addEventListener('load',boot);
+  })();
+  </script>
 </body>
 </html>
