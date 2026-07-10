@@ -60,8 +60,15 @@
       TENANT_PERMISSION_DENIED: '目前帳號缺少所需權限。',
       TENANT_NOT_FOUND: '找不到指定的業者平台。',
       ITINERARY_NOT_FOUND: '找不到此行程，可能已下架。',
-      INVITE_CODE_NOT_FOUND: '找不到此推薦碼。',
+      INVITE_CODE_NOT_FOUND: '找不到此推薦碼，請重新取得業務分享連結。',
+      DISTRIBUTOR_NOT_FOUND: '找不到此業務人員或該帳號已停用。',
       INVALID_TENANT_SLUG: '業者識別碼格式錯誤。',
+      INVALID_BOOKING_PAYLOAD: '預約資料不完整，請確認姓名、電話與行程。',
+      CUSTOMER_PHONE_TENANT_CONFLICT: '此電話已存在於另一個業者空間，暫時無法建立預約，請聯絡客服協助。',
+      ORDER_NOT_FOUND: '找不到此訂單。',
+      ORDER_CUSTOMER_MISMATCH: '此訂單不屬於目前登入的 LINE 帳號。',
+      PAYMENT_AMOUNT_INVALID: '付款金額不正確，請聯絡業務人員。',
+      TENANT_PAYMENT_CONFIGURATION_REQUIRED: '此業者的獨立金流尚未完成設定，訂單已建立，客服將協助確認付款方式。',
     };
     return map[code] || code;
   }
@@ -157,6 +164,22 @@
       return apiFetch(`/api/v2/invites/${encodeURIComponent(String(code || '').trim().toUpperCase())}`, {
         tenantSlug,
         public: true,
+      });
+    },
+
+    createBooking(data, tenantSlug) {
+      return apiFetch('/api/v2/bookings', {
+        tenantSlug,
+        method: 'POST',
+        body: data,
+      });
+    },
+
+    createPayment(orderId, leg = 'deposit', tenantSlug) {
+      return apiFetch('/api/v2/payments/create', {
+        tenantSlug,
+        method: 'POST',
+        body: { order_id: orderId, leg },
       });
     },
 
