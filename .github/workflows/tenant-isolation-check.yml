@@ -43,12 +43,14 @@ jobs:
           node --check lib/legacy-customer-compat-api.js
           node --check js/settlement-finance-client.js
 
-      - name: Run customer identity and legacy compatibility tests
-        run: |
-          node --test \
-            tests/tenant-booking-isolation.test.mjs \
-            tests/tenant-customer-identity.test.mjs \
-            tests/legacy-customer-compat.test.mjs
+      - name: Run booking isolation tests
+        run: node --test tests/tenant-booking-isolation.test.mjs
+
+      - name: Run customer identity tests
+        run: node --test tests/tenant-customer-identity.test.mjs
+
+      - name: Run legacy compatibility tests
+        run: node --test tests/legacy-customer-compat.test.mjs
 
       - name: Run existing tenant tests
         run: |
