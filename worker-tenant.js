@@ -6,6 +6,11 @@ import {
   isPublicTenantPaymentRequest,
   routeTenantPaymentApi,
 } from './lib/tenant-payment-api.js';
+import {
+  isTenantGatewayApiRequest,
+  isPublicTenantGatewayRequest,
+  routeTenantGatewayApi,
+} from './lib/tenant-gateway-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 
@@ -18,7 +23,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase3');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase4');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -43,7 +48,12 @@ function isPublicTenantRequest(request) {
 }
 
 async function authenticatedTenantRequest(request, env) {
-  if (isPublicTenantRequest(request) || isPublicTenantPaymentRequest(request)) return request;
+  if (
+    isPublicTenantRequest(request) ||
+    isPublicTenantPaymentRequest(request) ||
+    isPublicTenantGatewayRequest(request)
+  ) return request;
+
   const tenantSlug = requestedTenantSlug(request);
   const auth = await authenticateLineRequest(request, env, { tenantSlug });
   const headers = new Headers(request.headers);
@@ -66,6 +76,16 @@ export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
+    }
+
+    if (isTenantGatewayApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        const gatewayResponse = await routeTenantGatewayApi(securedRequest, env);
+        if (gatewayResponse) return withTenantHeaders(gatewayResponse);
+      } catch (error) {
+        return authErrorResponse(error);
+      }
     }
 
     if (isTenantPaymentApiRequest(request)) {
