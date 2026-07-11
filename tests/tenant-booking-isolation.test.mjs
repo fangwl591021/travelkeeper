@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { routeTenantBookingApi } from '../lib/tenant-booking-api.js';
+import {
+  customerIdentityId,
+  normalizeCustomerPhone,
+  routeTenantBookingApi,
+} from '../lib/tenant-booking-api.js';
 
 class FakeStatement {
   constructor(db, sql) {
@@ -29,7 +33,8 @@ class FakeDb {
   constructor() {
     this.runs = [];
     this.batches = [];
-    this.customerTenant = '';
+    this.existingCustomer = null;
+    this.globalCustomerTenant = '';
     this.order = null;
   }
 
@@ -83,14 +88,15 @@ class FakeDb {
       return null;
     }
 
-    if (sql.includes('FROM customers')) {
-      return this.customerTenant ? { tenant_slug: this.customerTenant } : null;
+    if (sql.includes('COALESCE(NULLIF(contact_phone')) {
+      return this.existingCustomer;
     }
 
-    if (sql.includes('FROM orders')) {
-      return this.order;
+    if (sql.includes('FROM customers') && sql.includes('WHERE customer_phone = ?')) {
+      return this.globalCustomerTenant ? { tenant_slug: this.globalCustomerTenant } : null;
     }
 
+    if (sql.includes('FROM orders')) return this.order;
     return null;
   }
 }
@@ -106,6 +112,19 @@ function bookingRequest(tenant, body, userUid = 'U-CUSTOMER') {
     body: JSON.stringify(body),
   });
 }
+
+test('phone normalization produces a stable tenant identity input', () => {
+  assert.equal(normalizeCustomerPhone('0912-000-000'), '0912000000');
+  assert.equal(normalizeCustomerPhone('+886 912 000 000'), '+886912000000');
+});
+
+test('the same phone receives different customer ids in different tenants', async () => {
+  const a = await customerIdentityId('tenant-a', '0912000000');
+  const b = await customerIdentityId('tenant-b', '0912000000');
+  assert.match(a, /^CUS[A-F0-9]{32}$/);
+  assert.notEqual(a, b);
+  assert.equal(a, await customerIdentityId('tenant-a', '0912-000-000'));
+});
 
 test('booking cannot use an itinerary from another tenant', async () => {
   const env = { DB: new FakeDb() };
@@ -125,7 +144,7 @@ test('booking cannot use an itinerary from another tenant', async () => {
   assert.equal(env.DB.batches.length, 0);
 });
 
-test('booking stores the authenticated LINE UID instead of a forged body UID', async () => {
+test('booking stores authenticated UID plus customer id and actual contact phone', async () => {
   const env = { DB: new FakeDb() };
   const response = await routeTenantBookingApi(
     bookingRequest('demo', {
@@ -133,7 +152,7 @@ test('booking stores the authenticated LINE UID instead of a forged body UID', a
       invite_code: 'SELLER1',
       customer_line_uid: 'U-FORGED',
       customer_name: 'Tony',
-      customer_phone: '0912000000',
+      customer_phone: '0912-000-000',
       travelers: 2,
     }, 'U-REAL'),
     env,
@@ -142,18 +161,21 @@ test('booking stores the authenticated LINE UID instead of a forged body UID', a
   const payload = await response.json();
   assert.equal(response.status, 201);
   assert.equal(payload.data.customer_line_uid, 'U-REAL');
-  assert.equal(payload.data.tenant_slug, 'demo');
+  assert.equal(payload.data.customer_phone, '0912000000');
+  assert.match(payload.data.customer_id, /^CUS[A-F0-9]{32}$/);
   assert.equal(payload.data.total_amount, 2000);
   assert.equal(payload.data.deposit_amount, 400);
 
-  const orderWrite = env.DB.batches[0][0];
-  assert.equal(orderWrite.args[7], 'U-REAL');
+  const [customerWrite, orderWrite] = env.DB.batches[0];
+  assert.match(customerWrite.sql, /customer_id/);
+  assert.equal(orderWrite.args[8], '0912000000');
+  assert.equal(orderWrite.args[9], 'U-REAL');
   assert.equal(orderWrite.args.at(-1), 'demo');
 });
 
-test('global phone key fails safely when the phone belongs to another tenant', async () => {
+test('a phone used as a legacy key by another tenant no longer blocks booking', async () => {
   const db = new FakeDb();
-  db.customerTenant = 'tenant-b';
+  db.globalCustomerTenant = 'tenant-b';
   const response = await routeTenantBookingApi(
     bookingRequest('demo', {
       itinerary_id: 'TOUR-DEMO',
@@ -165,9 +187,33 @@ test('global phone key fails safely when the phone belongs to another tenant', a
     { fetch: async () => new Response('{}') },
   );
   const payload = await response.json();
-  assert.equal(response.status, 409);
-  assert.equal(payload.error, 'CUSTOMER_PHONE_TENANT_CONFLICT');
-  assert.equal(db.batches.length, 0);
+  assert.equal(response.status, 201);
+  const orderWrite = db.batches[0][1];
+  assert.match(orderWrite.args[6], /^CUS[A-F0-9]{32}$/);
+  assert.equal(orderWrite.args[8], '0912000000');
+  assert.equal(payload.data.customer_phone, '0912000000');
+});
+
+test('an existing tenant customer keeps its relation key and customer id', async () => {
+  const db = new FakeDb();
+  db.existingCustomer = { customer_id: 'CUS-EXISTING', customer_key: 'LEGACY-KEY' };
+  const response = await routeTenantBookingApi(
+    bookingRequest('demo', {
+      itinerary_id: 'TOUR-DEMO',
+      invite_code: 'SELLER1',
+      customer_name: 'Tony',
+      customer_phone: '0912000000',
+    }),
+    { DB: db },
+    { fetch: async () => new Response('{}') },
+  );
+  const payload = await response.json();
+  assert.equal(response.status, 201);
+  const [customerWrite, orderWrite] = db.batches[0];
+  assert.match(customerWrite.sql, /UPDATE customers/);
+  assert.equal(orderWrite.args[6], 'LEGACY-KEY');
+  assert.equal(orderWrite.args[7], 'CUS-EXISTING');
+  assert.equal(payload.data.customer_id, 'CUS-EXISTING');
 });
 
 test('payment creation checks tenant and customer before calling legacy gateway', async () => {
