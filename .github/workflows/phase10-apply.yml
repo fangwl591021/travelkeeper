@@ -1,0 +1,40 @@
+name: Apply Phase 10 page migration
+
+on:
+  push:
+    branches:
+      - agent/tenant-isolation-phase1
+    paths:
+      - .github/phase10-apply.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/tenant-isolation-phase1
+          fetch-depth: 0
+
+      - name: Apply Phase 10 patches
+        run: python .github/phase10-apply.py
+
+      - name: Remove one-time patch files
+        run: rm -f .github/phase10-apply.py .github/workflows/phase10-apply.yml
+
+      - name: Commit patched pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Migrate dashboard and customer pages to tenant V2 auth"
+          git push origin HEAD:agent/tenant-isolation-phase1
