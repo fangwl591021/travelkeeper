@@ -99,6 +99,62 @@ CREATE TABLE IF NOT EXISTS platform_collection_batch_items (
 CREATE INDEX IF NOT EXISTS idx_platform_collection_batch_items_tenant
   ON platform_collection_batch_items(tenant_slug, batch_id);
 
+CREATE TRIGGER IF NOT EXISTS trg_platform_collection_payables_tenant_insert
+BEFORE INSERT ON platform_collection_payables
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM payment_attempts p
+  WHERE p.id = NEW.payment_attempt_id AND p.tenant_slug <> NEW.tenant_slug
+) OR EXISTS (
+  SELECT 1 FROM orders o
+  WHERE o.order_id = NEW.order_id AND o.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:platform_collection_payable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_platform_collection_payables_tenant_update
+BEFORE UPDATE OF tenant_slug, payment_attempt_id, order_id ON platform_collection_payables
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM payment_attempts p
+  WHERE p.id = NEW.payment_attempt_id AND p.tenant_slug <> NEW.tenant_slug
+) OR EXISTS (
+  SELECT 1 FROM orders o
+  WHERE o.order_id = NEW.order_id AND o.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:platform_collection_payable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_platform_collection_batch_items_tenant_insert
+BEFORE INSERT ON platform_collection_batch_items
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM platform_collection_batches b
+  WHERE b.id = NEW.batch_id AND b.tenant_slug <> NEW.tenant_slug
+) OR EXISTS (
+  SELECT 1 FROM platform_collection_payables p
+  WHERE p.id = NEW.payable_id AND p.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:platform_collection_batch_item');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_platform_collection_batch_items_tenant_update
+BEFORE UPDATE OF tenant_slug, batch_id, payable_id ON platform_collection_batch_items
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM platform_collection_batches b
+  WHERE b.id = NEW.batch_id AND b.tenant_slug <> NEW.tenant_slug
+) OR EXISTS (
+  SELECT 1 FROM platform_collection_payables p
+  WHERE p.id = NEW.payable_id AND p.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:platform_collection_batch_item');
+END;
+
 -- Existing platform-owned demo sales are retained by the platform and are not external payables.
 INSERT INTO platform_collection_settlement_rules (
   tenant_slug, beneficiary_type, gateway_fee_rate, gateway_fee_fixed,
