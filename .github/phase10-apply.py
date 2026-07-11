@@ -301,7 +301,7 @@ customer_replacement = """  const openCustomer = async (customer) => {
   // ── 推薦碼"""
 dashboard = sub_once(dashboard, customer_pattern, customer_replacement, 'dashboard customer orders')
 
-profile_pattern = r"  const saveSocialProfile = async \(\) => \{.*?\n  \};\n  const copyInviteLink"
+profile_pattern = r"  const saveSocialProfile = async \(\) => \{.*?\n  \};\n\n  const copyInviteLink"
 profile_replacement = """  const saveSocialProfile = async () => {
     if (!profile?.userId) return;
     setSocialSaving(true);
@@ -325,6 +325,7 @@ profile_replacement = """  const saveSocialProfile = async () => {
       setSocialSaving(false);
     }
   };
+
   const copyInviteLink"""
 dashboard = sub_once(dashboard, profile_pattern, profile_replacement, 'dashboard social profile')
 
