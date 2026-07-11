@@ -96,8 +96,7 @@ CREATE TABLE IF NOT EXISTS tenant_crm_records (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (tenant_slug) REFERENCES tenants(slug),
-  FOREIGN KEY (profile_id) REFERENCES tenant_crm_profiles(id),
-  FOREIGN KEY (thread_id) REFERENCES tenant_crm_threads(id)
+  FOREIGN KEY (profile_id) REFERENCES tenant_crm_profiles(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tenant_crm_records_profile
@@ -112,25 +111,33 @@ INSERT INTO tenant_crm_profiles (
   last_message_at, created_by, updated_by, created_at, updated_at
 )
 SELECT
-  customer_id,
-  tenant_slug,
-  customer_id,
-  customer_line_uid,
-  customer_name,
-  contact_phone,
-  owner_uid,
+  c.customer_id,
+  c.tenant_slug,
+  c.customer_id,
+  CASE
+    WHEN c.customer_line_uid <> '' AND c.customer_id = (
+      SELECT MIN(c2.customer_id)
+      FROM customers c2
+      WHERE c2.tenant_slug = c.tenant_slug
+        AND c2.customer_line_uid = c.customer_line_uid
+    ) THEN c.customer_line_uid
+    ELSE ''
+  END,
+  c.customer_name,
+  c.contact_phone,
+  c.owner_uid,
   'order',
-  CASE WHEN total_orders > 0 THEN 'closed' ELSE 'open' END,
-  CASE WHEN total_orders > 0 THEN 'won' ELSE 'new' END,
-  total_amount,
-  last_order_at,
+  CASE WHEN c.total_orders > 0 THEN 'closed' ELSE 'open' END,
+  CASE WHEN c.total_orders > 0 THEN 'won' ELSE 'new' END,
+  c.total_amount,
+  c.last_order_at,
   'migration-0109',
   'migration-0109',
-  created_at,
-  updated_at
-FROM customers
-WHERE customer_id <> ''
-  AND tenant_slug <> ''
+  c.created_at,
+  c.updated_at
+FROM customers c
+WHERE c.customer_id <> ''
+  AND c.tenant_slug <> ''
   AND 1
 ON CONFLICT(id) DO NOTHING;
 
