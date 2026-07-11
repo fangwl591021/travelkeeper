@@ -37,6 +37,7 @@ jobs:
           node --check lib/tenant-gateway-callback-api.js
           node --check lib/http-error-status.js
           node --check lib/platform-settlement-api.js
+          node --check lib/platform-settlement-customer-view-api.js
           node --check lib/settlement-finance-api.js
           node --check lib/settlement-payment-control-api.js
           node --check js/settlement-finance-client.js
