@@ -9,6 +9,7 @@
     PAYOUT_ACCOUNT_NOT_FOUND: '找不到此租戶的收款帳戶。',
     PAYOUT_ACCOUNT_NOT_CONFIGURED: '此租戶尚未完成收款帳戶設定。',
     PAYOUT_ACCOUNT_NOT_VERIFIED: '此收款帳戶尚未通過平台驗證。',
+    SETTLEMENT_PROOF_REQUIRED: '此租戶要求付款前必須上傳至少一份匯款憑證。',
     INVALID_PAYOUT_METHOD: '收款方式設定錯誤。',
     INVALID_BANK_ACCOUNT: '銀行代碼、戶名或帳號格式不正確。',
     INVALID_PAYOUT_ACCOUNT_STATUS: '收款帳戶驗證狀態不正確。',
@@ -168,6 +169,18 @@
     devUid,
     localDev,
     resolveWorkerUrl,
+
+    getPaymentControls(tenantSlug) {
+      return apiCall('/api/v2/platform-settlements/controls', { tenantSlug });
+    },
+
+    updatePaymentControls(data, tenantSlug) {
+      return apiCall('/api/v2/platform-settlements/controls', {
+        tenantSlug,
+        method: 'POST',
+        body: data || {},
+      });
+    },
 
     getPayoutAccount(tenantSlug) {
       return apiCall('/api/v2/settlement-finance/payout-account', { tenantSlug });
