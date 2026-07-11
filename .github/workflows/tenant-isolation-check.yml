@@ -42,12 +42,16 @@ jobs:
           node --check lib/settlement-payment-control-api.js
           node --check js/settlement-finance-client.js
 
-      - name: Run tenant isolation tests
+      - name: Run customer identity tests
+        run: |
+          node --test \
+            tests/tenant-booking-isolation.test.mjs \
+            tests/tenant-customer-identity.test.mjs
+
+      - name: Run existing tenant tests
         run: |
           node --test \
             tests/tenant-isolation.test.mjs \
-            tests/tenant-booking-isolation.test.mjs \
-            tests/tenant-customer-identity.test.mjs \
             tests/tenant-payment-modes.test.mjs \
             tests/tenant-gateway-secrets.test.mjs \
             tests/tenant-gateway-callback.test.mjs \
