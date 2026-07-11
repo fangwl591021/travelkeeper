@@ -27,9 +27,6 @@ jobs:
       - name: Apply Phase 10 patches
         run: python .github/phase10-apply.py
 
-      - name: Remove one-time patch files
-        run: rm -f .github/phase10-apply.py .github/workflows/phase10-apply.yml
-
       - name: Commit patched pages
         run: |
           git config user.name "github-actions[bot]"
