@@ -14,6 +14,15 @@ test('tenant LINE monitor API scopes threads and messages by tenant', async () =
   assert.doesNotMatch(source, /finance/);
 });
 
+test('LINE monitor and settings pages use local CSS without Tailwind CDN', async () => {
+  const monitor = await read('line-oa-monitor.html');
+  const settings = await read('line-channel-settings.html');
+  const css = await read('css/tenant-line-pages.css');
+  assert.match(monitor, /css\/tenant-line-pages\.css/);
+  assert.match(settings, /css\/tenant-line-pages\.css/);
+  assert.match(css, /\.thread-card/);
+  assert.doesNotMatch(monitor + settings, /cdn\.tailwindcss\.com|tailwindcss\.com/);
+});
 test('monitor page only uses tenant LINE and CRM clients', async () => {
   const page = await read('line-oa-monitor.html');
   const controller = await read('js/tenant-line-monitor-page.js');
@@ -25,6 +34,8 @@ test('monitor page only uses tenant LINE and CRM clients', async () => {
   assert.match(controller, /initLiffSession/);
   assert.doesNotMatch(page + controller, /\/api\/line-oa\//);
   assert.doesNotMatch(page + controller, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
+  assert.doesNotMatch(controller, /alert\(/);
+  assert.match(controller, /無法開啟聊天室/);
 });
 
 test('LINE settings page uses masked channel API and preserves local safety', async () => {

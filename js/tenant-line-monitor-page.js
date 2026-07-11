@@ -77,7 +77,12 @@
       const result = await api.getThreadMessages(id);
       renderThread(result.data);
     } catch (error) {
-      alert(page.friendlyError ? page.friendlyError(error) : error.message);
+      state.active = null;
+      renderThreads();
+      el('chat-name').textContent = '無法開啟聊天室';
+      el('chat-meta').textContent = '請確認權限或聊天室是否存在。';
+      el('messages').innerHTML = `<div class="error-card">${esc(page.friendlyError ? page.friendlyError(error) : error.message)}</div>`;
+      el('save').disabled = true;
     }
   }
 
