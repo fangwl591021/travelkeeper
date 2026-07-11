@@ -23,6 +23,10 @@ import {
   isSettlementFinanceApiRequest,
   routeSettlementFinanceApi,
 } from './lib/settlement-finance-api.js';
+import {
+  isSettlementPaymentControlApiRequest,
+  routeSettlementPaymentControlApi,
+} from './lib/settlement-payment-control-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 import { statusForError } from './lib/http-error-status.js';
@@ -36,7 +40,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase6');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase7');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -102,6 +106,17 @@ export default {
       try {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeSettlementFinanceApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    // Controls and the guarded paid transition must run before the legacy
+    // platform-settlement router so enabled safeguards cannot be bypassed.
+    if (isSettlementPaymentControlApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeSettlementPaymentControlApi(securedRequest, env));
       } catch (error) {
         return errorResponse(error);
       }
