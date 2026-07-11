@@ -198,7 +198,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
     try {
       const result = await tenantPage.getOrderStatus(orderId);
       if (!result.success) {
-        render(pageError(result.error));
+        render(pageError(tenantPage.friendlyError ? tenantPage.friendlyError({ code: result.error }) : result.error));
         return;
       }
       const data = result.data;
@@ -239,11 +239,14 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
         </div>`);
       }
     } catch (e) {
-      console.error(e);
-      if (attempts < MAX_ATTEMPTS) {
+      const code = String(e?.code || e?.message || '');
+      const hardStop = ['AUTH_REQUIRED', 'TENANT_ACCESS_DENIED', 'ORDER_CUSTOMER_MISMATCH', 'ORDER_NOT_FOUND'].includes(code);
+      if (hardStop) {
+        render(pageError(tenantPage.friendlyError ? tenantPage.friendlyError(e) : code));
+      } else if (attempts < MAX_ATTEMPTS) {
         setTimeout(poll, POLL_MS);
       } else {
-        render(pageError('網路連線異常'));
+        render(pageError(tenantPage.friendlyError ? tenantPage.friendlyError(e) : '網路連線異常'));
       }
     }
   }
@@ -253,7 +256,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       await tenantPage.initLiffSession({ fallbackLiffId: LIFF_ID, requireContext: false });
       poll();
     } catch (error) {
-      if (String(error?.message || '') !== 'LIFF_LOGIN_REQUIRED') render(pageError(error?.message || 'LINE 登入失敗'));
+      if (String(error?.message || '') !== 'LIFF_LOGIN_REQUIRED') render(pageError(tenantPage.friendlyError ? tenantPage.friendlyError(error) : (error?.message || 'LINE 登入失敗')));
     }
   })();
 })();

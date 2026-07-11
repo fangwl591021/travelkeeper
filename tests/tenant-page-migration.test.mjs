@@ -17,6 +17,8 @@ test('shared page client uses tenant Bearer APIs and normalizes legacy views', a
   const source = await read('js/tenant-page-client.js');
   assert.match(source, /initLiffSession/);
   assert.match(source, /\/api\/v2\/orders/);
+  assert.match(source, /\/api\/v2\/orders\/\$\{encodeURIComponent\(orderId\)\}/);
+  assert.doesNotMatch(source, /api\/orders\/status\?order_id/);
   assert.match(source, /\/api\/v2\/customers/);
   assert.match(source, /\/api\/v2\/tenant\/profile/);
   assert.match(source, /\/api\/v2\/distributors/);
@@ -68,6 +70,8 @@ test('customer payment pages require tenant LIFF authentication', async () => {
 
 test('model page uses tenant public itineraries and tenant staff APIs', async () => {
   const page = await read('model.html');
+  assert.match(page, /tenantPage\.initLiffSession/);
+  assert.match(page, /tenantPage\.localDev && tenantPage\.devUid/);
   assert.match(page, /tenantPage\.listPublicItineraries/);
   assert.match(page, /tenantPage\.listDistributors/);
   assert.match(page, /tenantPage\.updateProfile/);
@@ -78,7 +82,10 @@ test('tenant order, profile and distributor modules are tenant scoped', async ()
   const order = await read('lib/tenant-order-actions-api.js');
   const profile = await read('lib/tenant-profile-api.js');
   const distributors = await read('lib/tenant-distributor-api.js');
+  const tenantApi = await read('lib/tenant-api.js');
   assert.match(order, /WHERE tenant_slug = \? AND order_id = \?/);
+  assert.match(tenantApi, /WHERE tenant_slug = \? AND order_id = \?/);
+  assert.match(tenantApi, /customer_line_uid === context\.userUid/);
   assert.match(profile, /ON CONFLICT\(tenant_slug, user_uid\)/);
   assert.match(distributors, /WHERE m\.tenant_slug = \?/);
 });

@@ -234,6 +234,7 @@
     profileAliases,
     normalizeOrder,
     normalizeCustomer,
+    friendlyError: tenantApi.friendlyError,
 
     async listOrders(params = {}) {
       const query = new URLSearchParams(params);
@@ -253,7 +254,7 @@
     },
 
     async getOrderStatus(orderId) {
-      return apiCall(`/api/orders/status?order_id=${encodeURIComponent(orderId)}`);
+      return apiCall(`/api/v2/orders/${encodeURIComponent(orderId)}`);
     },
 
     async createPayment(orderId, leg = 'deposit') {

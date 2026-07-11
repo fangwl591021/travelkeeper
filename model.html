@@ -382,12 +382,18 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const tenantResult = await tenantPage.apiCall('/api/v2/tenant/public', { public: true });
-        await liff.init({ liffId: tenantResult.data?.liff_id || LIFF_ID, withLoginOnExternalBrowser: true });
-        if (liff.isLoggedIn()) {
-          const p = await liff.getProfile();
-          setLiffProfile(p);
-          await checkAuth(p.userId);
+        if (tenantPage.localDev && tenantPage.devUid) {
+          const session = await tenantPage.initLiffSession({ fallbackLiffId: LIFF_ID, requireContext: false });
+          setLiffProfile(session.profile);
+          await checkAuth(session.profile.userId);
+        } else if (window.liff) {
+          const tenantResult = await tenantPage.apiCall('/api/v2/tenant/public', { public: true });
+          await liff.init({ liffId: tenantResult.data?.liff_id || LIFF_ID, withLoginOnExternalBrowser: false });
+          if (liff.isLoggedIn()) {
+            const p = await liff.getProfile();
+            setLiffProfile(p);
+            await checkAuth(p.userId);
+          }
         }
       } catch(e) { console.error('LIFF', e); }
       await fetchData();

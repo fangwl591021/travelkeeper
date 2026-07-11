@@ -200,7 +200,10 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       }
       orderData = result.data;
     } catch (e) {
-      render(pageError('網路連線失敗', e.message, true));
+      const message = tenantPage.friendlyError ? tenantPage.friendlyError(e) : (e.message || '請稍後再試');
+      const code = String(e?.code || e?.message || '');
+      const title = ['TENANT_ACCESS_DENIED', 'ORDER_CUSTOMER_MISMATCH'].includes(code) ? '無權限存取' : '讀取失敗';
+      render(pageError(title, message, true));
       return;
     }
 
@@ -239,7 +242,8 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
         document.write(payResult.data.form_html);
         document.close();
       } catch (e) {
-        render(pageError('網路錯誤', e.message, true));
+        const message = tenantPage.friendlyError ? tenantPage.friendlyError(e) : (e.message || '請稍後再試');
+        render(pageError('建立付款失敗', message, true));
       }
     };
   }
