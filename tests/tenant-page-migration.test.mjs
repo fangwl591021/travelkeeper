@@ -4,15 +4,18 @@ import { readFile } from 'node:fs/promises';
 
 const read = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('Phase 11 Worker routes tenant page and CRM APIs before the generic V2 router', async () => {
+test('Phase 12 Worker routes tenant page, CRM and LINE APIs before the generic V2 router', async () => {
   const worker = await read('worker-tenant.js');
   assert.match(worker, /tenant-order-actions-api/);
   assert.match(worker, /tenant-profile-api/);
   assert.match(worker, /tenant-distributor-api/);
   assert.match(worker, /tenant-crm-api/);
+  assert.match(worker, /tenant-line-channel-api/);
+  assert.match(worker, /tenant-line-webhook-api/);
   assert.ok(worker.indexOf('isTenantOrderActionRequest(request)') < worker.indexOf('isTenantApiRequest(request)'));
   assert.ok(worker.indexOf('isTenantCrmApiRequest(request)') < worker.indexOf('isTenantApiRequest(request)'));
-  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase11'/);
+  assert.ok(worker.indexOf('isTenantLineWebhookRequest(request)') < worker.indexOf('isTenantLineChannelApiRequest(request)'));
+  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase12'/);
 });
 
 test('shared page client uses tenant Bearer APIs and normalizes legacy views', async () => {
