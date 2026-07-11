@@ -32,6 +32,18 @@ import {
   routeSettlementPaymentControlApi,
 } from './lib/settlement-payment-control-api.js';
 import {
+  isTenantOrderActionRequest,
+  routeTenantOrderAction,
+} from './lib/tenant-order-actions-api.js';
+import {
+  isTenantProfileApiRequest,
+  routeTenantProfileApi,
+} from './lib/tenant-profile-api.js';
+import {
+  isTenantDistributorApiRequest,
+  routeTenantDistributorApi,
+} from './lib/tenant-distributor-api.js';
+import {
   isLegacyCustomerCompatRequest,
   routeLegacyCustomerCompatApi,
 } from './lib/legacy-customer-compat-api.js';
@@ -48,7 +60,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase9');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase10');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -179,6 +191,33 @@ export default {
       try {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    if (isTenantOrderActionRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantOrderAction(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    if (isTenantProfileApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantProfileApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    if (isTenantDistributorApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantDistributorApi(securedRequest, env));
       } catch (error) {
         return errorResponse(error);
       }

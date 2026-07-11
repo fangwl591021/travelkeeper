@@ -6,6 +6,8 @@
   <title>補繳尾款 | 旅遊管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./js/tenant-api-client.js"></script>
+  <script src="./js/tenant-page-client.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Noto Sans TC', sans-serif; background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #f0fdfa 100%); }
@@ -28,6 +30,8 @@
 (function(){
 const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
   const LIFF_ID    = '2009367829-BDZCGti8';
+  const tenantPage = window.TravelKeeperTenantPage;
+  const tenantSlug = tenantPage.tenantSlug;
 
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order_id') || '';
@@ -170,16 +174,11 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       return;
     }
 
-    // 1. LIFF init + login
-    let profile;
+    // 1. 租戶 LIFF init + login
     try {
-      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-      if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: location.href });
-        return;  // login 會 redirect，這裡 return 即可
-      }
-      profile = await liff.getProfile();
+      await tenantPage.initLiffSession({ fallbackLiffId: LIFF_ID, requireContext: false });
     } catch (e) {
+      if (String(e?.message || '') === 'LIFF_LOGIN_REQUIRED') return;
       console.error('LIFF init/login failed:', e);
       render(pageError('LINE 登入失敗', e.message || '請使用 LINE 應用程式開啟此連結', true));
       return;
@@ -188,14 +187,11 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
     // 2. 拿訂單，帶 customer_line_uid 驗身份
     let orderData;
     try {
-      const res = await fetch(
-        `${WORKER_URL}/api/orders/status?order_id=${encodeURIComponent(orderId)}&customer_line_uid=${encodeURIComponent(profile.userId)}`
-      );
-      const result = await res.json();
+      const result = await tenantPage.getOrderStatus(orderId);
       if (!result.success) {
-        if (res.status === 403) {
+        if (result.status === 403) {
           render(pageError('無權限存取', '此訂單不屬於您的帳號。如有疑問，請聯絡業務專員'));
-        } else if (res.status === 404) {
+        } else if (result.status === 404) {
           render(pageError('找不到訂單', '請確認訂單編號正確'));
         } else {
           render(pageError('讀取失敗', result.error || '請稍後再試', true));
@@ -229,16 +225,7 @@ const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
       if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
 
       try {
-        const payRes = await fetch(`${WORKER_URL}/api/payment/create`, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({
-            order_id: orderId,
-            leg: 'balance',
-            customer_line_uid: profile.userId,  // ★ 身份驗證
-          }),
-        });
-        const payResult = await payRes.json();
+        const payResult = await tenantPage.createPayment(orderId, 'balance');
         if (!payResult.success) {
           render(pageError('建立付款失敗', payResult.error || '請稍後再試', true));
           return;

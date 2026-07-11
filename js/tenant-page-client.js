@@ -163,6 +163,28 @@
     };
   }
 
+  function normalizeDistributor(row = {}) {
+    const uid = row.uid || row.user_uid || row.userUid || '';
+    const displayName = row.displayName || row.display_name || row.name || '';
+    const inviteCode = row.inviteCode || row.invite_code || row.invitecode || '';
+    const canUpload = row.canUpload === true || row.canupload === 'Y' || row.role === 'editor';
+    return {
+      ...row,
+      uid,
+      user_uid: uid,
+      displayName,
+      display_name: displayName,
+      name: displayName,
+      inviteCode,
+      invite_code: inviteCode,
+      invitecode: inviteCode,
+      commission: Number(row.commission ?? row.commission_pct ?? 0),
+      commissionPct: Number(row.commissionPct ?? row.commission_pct ?? 0),
+      canUpload,
+      canupload: canUpload ? 'Y' : 'N',
+    };
+  }
+
   async function initLiffSession({ fallbackLiffId = '', requireContext = true } = {}) {
     const tenantResult = await apiCall('/api/v2/tenant/public', { public: true });
     const tenant = tenantResult.data || {};
@@ -246,6 +268,48 @@
         method: 'POST',
         body: { status },
       });
+    },
+
+    async listItineraries(params = {}) {
+      const query = new URLSearchParams({ scope: 'internal', ...params });
+      const response = await apiCall(`/api/v2/itineraries?${query.toString()}`);
+      return response.data || [];
+    },
+
+    async getProfile() {
+      const response = await apiCall('/api/v2/tenant/profile');
+      return profileAliases(response.data || {});
+    },
+
+    async updateProfile(data = {}) {
+      const response = await apiCall('/api/v2/tenant/profile', { method: 'POST', body: data });
+      return profileAliases(response.data || {});
+    },
+
+    async listDistributors() {
+      const response = await apiCall('/api/v2/distributors');
+      return (response.data || []).map(normalizeDistributor);
+    },
+
+    async updateDistributorStatus(userUid, status) {
+      const response = await apiCall(`/api/v2/distributors/${encodeURIComponent(userUid)}/status`, {
+        method: 'POST', body: { status },
+      });
+      return normalizeDistributor(response.data || {});
+    },
+
+    async updateDistributorUpload(userUid, canUpload) {
+      const response = await apiCall(`/api/v2/distributors/${encodeURIComponent(userUid)}/upload`, {
+        method: 'POST', body: { can_upload: !!canUpload },
+      });
+      return normalizeDistributor(response.data || {});
+    },
+
+    async markBalancePaid(orderId) {
+      const response = await apiCall(`/api/v2/orders/${encodeURIComponent(orderId)}/balance-paid`, {
+        method: 'POST', body: {},
+      });
+      return normalizeOrder(response.data || {});
     },
 
     async listPublicItineraries(limit = 100) {

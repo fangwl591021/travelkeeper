@@ -6,6 +6,8 @@
   <title>TravelKeeper 客戶 CRM</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./js/tenant-api-client.js"></script>
+  <script src="./js/tenant-page-client.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Noto Sans TC', sans-serif; background: #f4f7fb; }
@@ -208,6 +210,8 @@
   <script>
     const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
     const LIFF_ID = '2009367829-BDZCGti8';
+    const tenantPage = window.TravelKeeperTenantPage;
+    const tenantSlug = tenantPage.tenantSlug;
 
     const statusLabels = { open: '待回覆', pending: '處理中', closed: '已處理' };
     const riskLabels = { high: '高風險', medium: '中風險', low: '低風險' };
@@ -257,14 +261,13 @@
     }
 
     async function fetchJson(url, options, fallback = null) {
-      const res = await fetch(url, options);
-      let data = null;
-      try { data = await res.json(); } catch (_err) {}
-      if (!res.ok || (data && data.success === false)) {
+      try {
+        const parsed = new URL(url, WORKER_URL);
+        return await tenantPage.legacyApi(`${parsed.pathname}${parsed.search}`, options || {});
+      } catch (error) {
         if (fallback !== null) return fallback;
-        throw new Error(data?.error || `HTTP ${res.status}`);
+        throw error;
       }
-      return data ?? fallback;
     }
 
     function escapeHtml(value) {
@@ -379,12 +382,35 @@
       return customer;
     }
 
-    function mergeCustomers(lineThreads, orders, profiles = []) {
+    function normalizeTenantCustomer(row) {
+      return {
+        id: row.customer_id || `tenant:${row.customer_phone}`,
+        source: 'order',
+        lineThreadId: '',
+        profileId: row.customer_id || '',
+        name: row.customer_name || '訂單客戶',
+        pictureUrl: '',
+        userId: row.customer_line_uid || '',
+        phone: row.customer_phone || '',
+        email: row.email || '',
+        birthday: '', address: '', identityNote: '', preferenceNote: '', tabooNote: '', privacyConsent: '',
+        refUid: row.owner_uid || '', inviteCode: '', referralNote: '',
+        status: 'closed', risk: 'low', opportunityStage: Number(row.total_orders || 0) > 0 ? 'won' : 'new',
+        opportunityValue: Number(row.total_amount || 0), opportunityNote: '', summary: '', note: row.note || '',
+        tags: [], visitorRecords: [], latestRecord: null, lastMessageAt: row.last_order_at || '', orders: [],
+      };
+    }
+
+    function mergeCustomers(lineThreads, orders, profiles = [], tenantCustomers = []) {
       const map = new Map();
       const profileById = new Map();
       const profileByThread = new Map();
       const profileByUid = new Map();
       const profileByPhone = new Map();
+      tenantCustomers.forEach(row => {
+        const customer = normalizeTenantCustomer(row);
+        map.set(customer.id, customer);
+      });
       profiles.forEach(profileData => {
         if (profileData.id) profileById.set(profileData.id, profileData);
         if (profileData.threadId) profileByThread.set(profileData.threadId, profileData);
@@ -475,18 +501,24 @@
       els.loadButton.disabled = true;
       els.loadButton.classList.add('opacity-60', 'cursor-not-allowed');
       try {
-        els.loadState.textContent = '正在載入 LINE 客戶與訂單資料...';
-        const [crm, orderPayload, profilePayload] = await Promise.all([
-          fetchJson(`${WORKER_URL}/api/line-oa/crm?uid=${encodeURIComponent(profile.userId)}`),
-          fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, null, { data: [] }),
-          fetchJson(`${WORKER_URL}/api/line-oa/customer-profiles?uid=${encodeURIComponent(profile.userId)}`, null, { data: [] }),
+        els.loadState.textContent = '正在載入租戶客戶與訂單資料...';
+        const [tenantCustomers, orderRows] = await Promise.all([
+          tenantPage.listCustomers(),
+          tenantPage.listOrders(),
         ]);
-        const lineThreads = Array.isArray(crm.data) ? crm.data : [];
-        const orderRows = Array.isArray(orderPayload?.data) ? orderPayload.data : Array.isArray(orderPayload) ? orderPayload : [];
-        const profileRows = Array.isArray(profilePayload?.data) ? profilePayload.data : [];
-        customers = mergeCustomers(lineThreads, orderRows, profileRows);
+        let lineThreads = [];
+        let profileRows = [];
+        if (tenantSlug === 'demo') {
+          const [crmPayload, profilePayload] = await Promise.all([
+            fetchJson(`${WORKER_URL}/api/line-oa/crm?uid=${encodeURIComponent(profile.userId)}`, null, { data: [] }),
+            fetchJson(`${WORKER_URL}/api/line-oa/customer-profiles?uid=${encodeURIComponent(profile.userId)}`, null, { data: [] }),
+          ]);
+          lineThreads = Array.isArray(crmPayload?.data) ? crmPayload.data : [];
+          profileRows = Array.isArray(profilePayload?.data) ? profilePayload.data : [];
+        }
+        customers = mergeCustomers(lineThreads, orderRows, profileRows, tenantCustomers);
         applyFilters();
-        els.loadState.textContent = `已載入 ${customers.length} 筆客戶、${orderRows.length} 筆訂單`;
+        els.loadState.textContent = `已載入 ${customers.length} 筆客戶、${orderRows.length} 筆訂單｜租戶 ${tenantSlug}`;
         if (targetThreadId) {
           const found = customers.find(customer => customer.id === targetThreadId || customer.lineThreadId === targetThreadId);
           if (found) selectCustomer(found.id);
@@ -788,6 +820,7 @@
 
     async function saveCustomerProfile(customer) {
       if (!profile?.userId) throw new Error('尚未取得管理員身分');
+      if (tenantSlug !== 'demo') throw new Error('非 demo 租戶的 CRM 個資編輯將於下一階段啟用');
       if (!customer) throw new Error('請先選擇客戶');
       const button = document.getElementById('save-customer-profile');
       button.disabled = true;
@@ -875,17 +908,13 @@
     }
 
     async function init() {
-      if (location.protocol === 'file:' || ['127.0.0.1', 'localhost'].includes(location.hostname)) {
-        els.previewNote.hidden = false;
-        els.loadState.textContent = '本地預覽模式';
-        return;
-      }
-      await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-      if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: location.href });
-        return;
-      }
-      profile = await liff.getProfile();
+      const session = await tenantPage.initLiffSession({ fallbackLiffId: LIFF_ID, requireContext: true });
+      profile = session.profile;
+      const role = String(session.context?.role || '');
+      if (!['platform_admin', 'tenant_admin', 'support'].includes(role)) throw new Error('TENANT_ROLE_DENIED');
+      document.querySelectorAll('a[href="./dashboard.html"]').forEach(link => {
+        link.href = `./dashboard.html?tenant=${encodeURIComponent(tenantSlug)}`;
+      });
       await loadCrm();
     }
 
