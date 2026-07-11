@@ -47,8 +47,11 @@ jobs:
           node --check lib/tenant-crm-api.js
           node --check lib/tenant-line-channel-api.js
           node --check lib/tenant-line-webhook-api.js
+          node --check lib/tenant-line-monitor-api.js
           node --check js/tenant-page-client.js
           node --check js/tenant-crm-client.js
+          node --check js/tenant-line-client.js
+          node --check js/tenant-line-monitor-page.js
           node --check js/settlement-finance-client.js
 
       - name: Run booking isolation tests
@@ -68,6 +71,9 @@ jobs:
 
       - name: Run tenant LINE webhook tests
         run: node --test tests/tenant-line-webhook.test.mjs
+
+      - name: Run tenant LINE monitor tests
+        run: node --test tests/tenant-line-monitor.test.mjs
 
       - name: Run existing tenant tests
         run: |
