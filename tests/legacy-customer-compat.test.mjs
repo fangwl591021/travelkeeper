@@ -175,5 +175,5 @@ test('worker evaluates compatibility routes before legacy worker fallback', asyn
   assert.equal(compat >= 0, true);
   assert.equal(fallback >= 0, true);
   assert.equal(compat < fallback, true);
-  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase10'/);
+  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase11'/);
 });
