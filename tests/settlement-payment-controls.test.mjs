@@ -70,3 +70,15 @@ test('browser finance client exposes per-tenant control APIs', async () => {
   assert.match(source, /\/api\/v2\/platform-settlements\/controls/);
   assert.match(source, /SETTLEMENT_PROOF_REQUIRED/);
 });
+
+test('settlement report page exposes minimal payment control UI', async () => {
+  const page = await readFile(new URL('../settlements.html', import.meta.url), 'utf8');
+  assert.match(page, /financeApi\.getPaymentControls\(tenantSlug\)/);
+  assert.match(page, /financeApi\.updatePaymentControls/);
+  assert.match(page, /require_verified_account/);
+  assert.match(page, /require_payout_proof/);
+  assert.match(page, /state\.context\?\.role === 'platform_admin'/);
+  assert.doesNotMatch(page, /account_ciphertext/);
+  assert.doesNotMatch(page, /account_iv/);
+  assert.doesNotMatch(page, /storage_key/);
+});

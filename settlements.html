@@ -52,7 +52,9 @@
     tenant: null,
     context: null,
     report: null,
+    paymentControls: null,
     loading: true,
+    controlsSaving: false,
     error: '',
     from: '',
     to: '',
@@ -113,8 +115,12 @@
     state.error = '';
     render();
     try {
-      const response = await financeApi.getReport(tenantSlug, { from: state.from, to: state.to });
-      state.report = response.data;
+      const [reportResponse, controlsResponse] = await Promise.all([
+        financeApi.getReport(tenantSlug, { from: state.from, to: state.to }),
+        financeApi.getPaymentControls(tenantSlug),
+      ]);
+      state.report = reportResponse.data;
+      state.paymentControls = controlsResponse.data || {};
     } catch (error) {
       state.error = tenantApi.friendlyError(error);
     } finally {
@@ -185,6 +191,36 @@
     </section>`;
   }
 
+  function paymentControlsCard() {
+    const controls = state.paymentControls || {};
+    const canEdit = state.context?.role === 'platform_admin';
+    const disabled = !canEdit || state.controlsSaving;
+    const note = canEdit ? '僅平台總管理員可編輯' : '唯讀';
+    const checked = name => controls[name] ? 'checked' : '';
+    const disabledAttr = disabled ? 'disabled' : '';
+    return `<section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+        <div>
+          <p class="text-xs font-black text-slate-400 tracking-widest">PAYMENT CONTROLS</p>
+          <h2 class="text-xl font-black mt-1">結算付款管控</h2>
+          <p class="text-sm text-slate-500 mt-2">${escapeHtml(note)}</p>
+        </div>
+        <form id="payment-controls-form" class="w-full lg:max-w-xl space-y-3">
+          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 ${disabled ? 'bg-slate-50' : ''}">
+            <input name="require_verified_account" type="checkbox" value="1" ${checked('require_verified_account')} ${disabledAttr} class="mt-1 h-5 w-5 rounded border-slate-300">
+            <span><span class="block font-black">付款前必須完成收款帳戶驗證</span>
+            <span class="block text-xs text-slate-500 mt-1">租戶收款帳戶未驗證或未啟用時，不允許標記付款。</span></span>
+          </label>
+          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 ${disabled ? 'bg-slate-50' : ''}">
+            <input name="require_payout_proof" type="checkbox" value="1" ${checked('require_payout_proof')} ${disabledAttr} class="mt-1 h-5 w-5 rounded border-slate-300">
+            <span><span class="block font-black">付款前必須上傳付款憑證</span>
+            <span class="block text-xs text-slate-500 mt-1">結算批次必須至少有一筆有效的私有付款憑證。</span></span>
+          </label>
+          ${canEdit ? `<button ${state.controlsSaving ? 'disabled' : ''} class="w-full rounded-xl bg-slate-900 text-white py-3 font-black disabled:opacity-60">${state.controlsSaving ? '儲存中...' : '儲存管控設定'}</button>` : ''}
+        </form>
+      </div>
+    </section>`;
+  }
   function batchRows() {
     const batches = state.report?.batches || [];
     if (!batches.length) return '<div class="p-8 text-center text-slate-400 font-bold">目前沒有結算批次</div>';
@@ -245,6 +281,7 @@
         ${statCard('已完成撥款', money(summary.paid_amount), '已標記付款批次', 'bg-gradient-to-br from-emerald-600 to-teal-800')}
         ${statCard('待處理應付', money(summary.pending_amount), `暫留款 ${money(summary.reserve_amount)}`, 'bg-gradient-to-br from-amber-500 to-orange-700')}
       </section>
+      ${paymentControlsCard()}
       ${accountCard()}
       <section class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="p-6 border-b border-slate-200 flex items-center justify-between"><div>
@@ -357,7 +394,29 @@
     URL.revokeObjectURL(url);
   }
 
+  async function savePaymentControls(event) {
+    event.preventDefault();
+    if (state.context?.role !== 'platform_admin' || state.controlsSaving) return;
+    const form = event.currentTarget;
+    state.controlsSaving = true;
+    state.error = '';
+    render();
+    try {
+      const response = await financeApi.updatePaymentControls({
+        require_verified_account: form.elements.require_verified_account?.checked ? 1 : 0,
+        require_payout_proof: form.elements.require_payout_proof?.checked ? 1 : 0,
+      }, tenantSlug);
+      state.paymentControls = response.data || {};
+    } catch (error) {
+      state.error = tenantApi.friendlyError(error);
+    } finally {
+      state.controlsSaving = false;
+      render();
+    }
+  }
   function bindActions() {
+    const controlsForm = document.getElementById('payment-controls-form');
+    if (controlsForm) controlsForm.addEventListener('submit', savePaymentControls);
     app.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', async () => {
       const action = button.dataset.action;
       if (action === 'refresh') return loadReport();
