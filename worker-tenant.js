@@ -31,6 +31,10 @@ import {
   isSettlementPaymentControlApiRequest,
   routeSettlementPaymentControlApi,
 } from './lib/settlement-payment-control-api.js';
+import {
+  isLegacyCustomerCompatRequest,
+  routeLegacyCustomerCompatApi,
+} from './lib/legacy-customer-compat-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 import { statusForError } from './lib/http-error-status.js';
@@ -44,7 +48,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase8');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase9');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -104,6 +108,18 @@ export default {
     if (isTenantGatewayCallbackRequest(request)) {
       const callbackResponse = await routeTenantGatewayCallback(request, env);
       if (callbackResponse) return withTenantHeaders(callbackResponse);
+    }
+
+    // Non-demo legacy booking, customer, order and mother-export routes must
+    // use tenant-scoped customer_id/contact_phone handling before worker.js.
+    // Calls without an explicit non-demo tenant continue to the demo legacy flow.
+    if (isLegacyCustomerCompatRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeLegacyCustomerCompatApi(securedRequest, env, legacyWorker));
+      } catch (error) {
+        return errorResponse(error);
+      }
     }
 
     if (isSettlementFinanceApiRequest(request)) {
