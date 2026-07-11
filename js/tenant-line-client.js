@@ -28,6 +28,21 @@
       });
     },
 
+    async assignThread(threadId, data = {}) {
+      return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/assignment`, {
+        method: 'PATCH',
+        body: data,
+      });
+    },
+
+    async claimThread(threadId) {
+      return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/claim`, { method: 'POST' });
+    },
+
+    async markThreadRead(threadId) {
+      return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/read`, { method: 'POST' });
+    },
+
     async sendThreadMessage(threadId, data = {}) {
       return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/messages`, {
         method: 'POST',
