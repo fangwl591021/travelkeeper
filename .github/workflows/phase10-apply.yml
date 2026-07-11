@@ -4,14 +4,17 @@ on:
   push:
     branches:
       - agent/tenant-isolation-phase1
-    paths:
-      - .github/phase10-apply.py
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.repository == 'fangwl591021/travelkeeper'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
