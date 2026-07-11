@@ -20,6 +20,10 @@ import {
   routePlatformSettlementApi,
 } from './lib/platform-settlement-api.js';
 import {
+  isPlatformSettlementCustomerViewRequest,
+  routePlatformSettlementCustomerView,
+} from './lib/platform-settlement-customer-view-api.js';
+import {
   isSettlementFinanceApiRequest,
   routeSettlementFinanceApi,
 } from './lib/settlement-finance-api.js';
@@ -40,7 +44,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase7');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase8');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -117,6 +121,17 @@ export default {
       try {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeSettlementPaymentControlApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    // The customer-safe payable view must run before the older settlement
+    // router so internal relation keys never appear as contact phone numbers.
+    if (isPlatformSettlementCustomerViewRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routePlatformSettlementCustomerView(securedRequest, env));
       } catch (error) {
         return errorResponse(error);
       }
