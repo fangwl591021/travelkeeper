@@ -44,7 +44,10 @@ class CrmDb {
       const role = uid === 'U-ADMIN' ? 'tenant_admin' : uid === 'U-SALES' ? 'sales' : uid === 'U-FIN' ? 'finance' : '';
       return role ? { tenant_slug: 'partner-a', user_uid: uid, role, status: 'active', permissions_json: '[]' } : null;
     }
-    if (sql.includes('FROM tenant_crm_profiles') && sql.includes('id = ?')) {
+    if (sql.includes('FROM tenant_crm_profiles') && sql.includes('line_user_uid = ?')) {
+      return args.at(-1) === this.profile.line_user_uid ? { ...this.profile } : null;
+    }
+    if (sql.includes('FROM tenant_crm_profiles') && /\bid\s*=\s*\?/.test(sql)) {
       return args.at(-1) === this.profile.id ? { ...this.profile } : null;
     }
     if (sql.includes('FROM tenant_crm_profiles') && sql.includes('customer_id = ?')) {
@@ -164,6 +167,16 @@ test('sales cannot edit a CRM profile owned by another sales user', async () => 
   assert.equal(payload.error, 'CRM_PROFILE_ACCESS_DENIED');
 });
 
+
+test('same-tenant LINE-only profile creation returns a precise conflict', async () => {
+  const response = await routeTenantCrmApi(request('/api/v2/crm/profiles', 'U-ADMIN', {
+    method: 'POST',
+    body: { line_user_uid: 'U-CUSTOMER', display_name: 'Duplicate Line Customer' },
+  }), { DB: new CrmDb() });
+  const payload = await response.json();
+  assert.equal(response.status, 409);
+  assert.equal(payload.error, 'CRM_LINE_UID_CONFLICT');
+});
 test('CRM error codes map to precise HTTP status', () => {
   assert.equal(statusForError('CRM_PROFILE_ACCESS_DENIED'), 403);
   assert.equal(statusForError('CRM_PROFILE_NOT_FOUND'), 404);
