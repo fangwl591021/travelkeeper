@@ -44,6 +44,10 @@ import {
   routeTenantDistributorApi,
 } from './lib/tenant-distributor-api.js';
 import {
+  isTenantCrmApiRequest,
+  routeTenantCrmApi,
+} from './lib/tenant-crm-api.js';
+import {
   isLegacyCustomerCompatRequest,
   routeLegacyCustomerCompatApi,
 } from './lib/legacy-customer-compat-api.js';
@@ -60,7 +64,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase10');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase11');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -218,6 +222,18 @@ export default {
       try {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantDistributorApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
+    // Tenant CRM profiles, threads and records are always isolated before
+    // generic tenant or legacy routes. No non-demo CRM request falls back to
+    // the global LINE OA tables in worker.js.
+    if (isTenantCrmApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantCrmApi(securedRequest, env));
       } catch (error) {
         return errorResponse(error);
       }
