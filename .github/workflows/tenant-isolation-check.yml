@@ -34,6 +34,7 @@ jobs:
           node --check lib/tenant-payment-policy.js
           node --check lib/tenant-payment-api.js
           node --check lib/tenant-gateway-api.js
+          node --check lib/tenant-gateway-callback-api.js
 
       - name: Run tenant isolation tests
         run: |
