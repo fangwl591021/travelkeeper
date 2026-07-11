@@ -52,7 +52,7 @@ test('guarded paid route is evaluated before the generic settlement router', asy
   assert.equal(guardIndex >= 0, true);
   assert.equal(genericIndex >= 0, true);
   assert.equal(guardIndex < genericIndex, true);
-  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase9'/);
+  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase10'/);
 });
 
 test('control errors use conflict status instead of authentication status', () => {
