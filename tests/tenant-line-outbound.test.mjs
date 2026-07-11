@@ -216,3 +216,30 @@ test('Phase 14 source keeps outbound sending tenant scoped and does not store LI
   assert.doesNotMatch(api, new RegExp('console\\\\.(log|error|warn).*?(token|secret|Authorization|ciphertext|iv)', 'i'));
   assert.doesNotMatch(page, /replyToken|Reply Token|channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
 });
+
+test('Phase 16 outbound feature flag blocks LINE push without creating message rows', async () => {
+  const channel = await encryptedLineChannel('partner-a', 'TOKEN-PARTNER-A');
+  const db = new FakeD1(channel);
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response('{}', { status: 200 });
+  };
+  try {
+    const env = {
+      DB: db,
+      TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters',
+      TENANT_PAYMENT_KEY_VERSION: 'v1',
+      LINE_PUSH_API_URL: 'https://line-mock.local/push',
+      TENANT_LINE_OUTBOUND_ENABLED: '0',
+    };
+    const response = await routeTenantLineMonitorApi(request('U-SALES', { type: 'text', text: 'blocked', client_request_id: 'REQ-OFF' }), env);
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, 'TENANT_LINE_OUTBOUND_DISABLED');
+    assert.equal(calls.length, 0);
+    assert.equal(db.messages.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
