@@ -49,6 +49,11 @@ test('settlement eligibility adds the configured UTC hold period', () => {
   );
 });
 
+test('settlement promotion compares ISO timestamps through SQLite datetime', async () => {
+  const source = await readFile(new URL('../lib/platform-settlement-api.js', import.meta.url), 'utf8');
+  assert.match(source, /datetime\(eligible_at\) <= datetime\('now'\)/);
+});
+
 test('tenant API errors return precise HTTP status classes', () => {
   assert.equal(statusForError('AUTH_REQUIRED'), 401);
   assert.equal(statusForError('TENANT_ROLE_DENIED'), 403);
