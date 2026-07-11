@@ -19,6 +19,7 @@
           <a id="settings-link" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white">Channel 設定</a>
         </div>
         <input id="search" class="mt-4 w-full rounded-xl border border-slate-200 px-4 py-3" placeholder="搜尋姓名、UID、電話或標籤">
+        <select id="assignee-filter" class="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 hidden"><option value="">All agents</option><option value="__unassigned">Unassigned</option></select>
         <div class="mt-3 flex flex-wrap gap-2"><button data-view="all" class="active-filter rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">全部案件</button><button data-view="mine" class="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">我的案件</button><button data-view="unassigned" class="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">未指派</button><button data-view="unread" class="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">有未讀</button></div><div class="mt-2 flex flex-wrap gap-2"><button data-status="all" class="active-filter rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">全部狀態</button><button data-status="open" class="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">open</button><button data-status="pending" class="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">pending</button><button data-status="closed" class="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold">closed</button></div>
       </header>
       <section id="thread-list" class="scroll flex-1 space-y-2 p-3"></section>
@@ -40,7 +41,18 @@
       <h2 class="text-lg font-black">聊天室設定</h2>
       <label class="mt-4 block text-sm font-bold">狀態<select id="status" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="open">待回覆</option><option value="pending">處理中</option><option value="closed">已完成</option></select></label>
       <label class="mt-4 block text-sm font-bold">風險<select id="risk" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
-      <section id="assignment-panel" class="mt-4 rounded-xl border border-slate-200 p-3"><h3 class="text-sm font-black">客服指派</h3><p id="assignment-status" class="mt-1 text-sm text-slate-500">尚未選擇聊天室。</p><input id="assignee-uid" class="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="指派給 sales/editor UID"><div class="mt-2 grid grid-cols-2 gap-2"><button id="assign-thread" disabled class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-40">指派</button><button id="unassign-thread" disabled class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">解除</button></div><button id="claim-thread" disabled class="mt-2 w-full rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-40">接手</button><button id="mark-read" disabled class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">清除未讀</button></section><label class="mt-4 block text-sm font-bold">摘要<textarea id="summary" rows="4" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
+      <section id="assignment-panel" class="mt-4 rounded-xl border border-slate-200 p-3">
+        <h3 class="text-sm font-black">Agent assignment</h3>
+        <p id="assignment-status" class="mt-1 text-sm text-slate-500">No thread selected.</p>
+        <div id="admin-assignment-controls" class="mt-3 space-y-2">
+          <input id="agent-search" class="w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="Search agent name or role">
+          <select id="assignee-picker" class="w-full rounded-xl border border-slate-200 px-3 py-2" disabled><option value="">Loading agents...</option></select>
+          <p id="agent-list-status" class="text-sm text-slate-500">Agents are not loaded yet.</p>
+          <div class="grid grid-cols-2 gap-2"><button id="assign-thread" disabled class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-40">Assign</button><button id="unassign-thread" disabled class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">Unassign</button></div>
+        </div>
+        <button id="claim-thread" disabled class="mt-2 w-full rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-40">Claim</button>
+        <button id="mark-read" disabled class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">Mark read</button>
+      </section><label class="mt-4 block text-sm font-bold">摘要<textarea id="summary" rows="4" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
       <label class="mt-4 block text-sm font-bold">內部備註<textarea id="note" rows="5" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"></textarea></label>
       <label class="mt-4 block text-sm font-bold">標籤（逗號分隔）<input id="tags" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2"></label>
       <button id="save" disabled class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white disabled:opacity-40">儲存聊天室設定</button>

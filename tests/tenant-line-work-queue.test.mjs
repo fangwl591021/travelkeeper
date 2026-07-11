@@ -13,12 +13,23 @@ class QueueD1 {
   constructor() {
     this.tenants = new Set(['partner-a', 'demo']);
     this.memberships = [
+      { tenant_slug: 'platform', user_uid: 'U-PLATFORM', role: 'platform_admin', status: 'active', permissions_json: '["*"]' },
       { tenant_slug: 'partner-a', user_uid: 'U-ADMIN', role: 'tenant_admin', status: 'active', permissions_json: '[]' },
       { tenant_slug: 'partner-a', user_uid: 'U-SALES', role: 'sales', status: 'active', permissions_json: '[]' },
       { tenant_slug: 'partner-a', user_uid: 'U-EDITOR', role: 'editor', status: 'active', permissions_json: '[]' },
       { tenant_slug: 'partner-a', user_uid: 'U-FIN', role: 'finance', status: 'active', permissions_json: '[]' },
       { tenant_slug: 'partner-a', user_uid: 'U-MEMBER', role: 'member', status: 'active', permissions_json: '[]' },
+      { tenant_slug: 'partner-a', user_uid: 'U-INACTIVE', role: 'sales', status: 'inactive', permissions_json: '[]' },
+      { tenant_slug: 'partner-a', user_uid: '', role: 'sales', status: 'active', permissions_json: '[]' },
       { tenant_slug: 'demo', user_uid: 'U-DEMO-SALES', role: 'sales', status: 'active', permissions_json: '[]' },
+    ];
+    this.agentProfiles = [
+      { tenant_slug: 'partner-a', user_uid: 'U-SALES', display_name: 'Sales Agent' },
+      { tenant_slug: 'partner-a', user_uid: 'U-EDITOR', display_name: 'Editor Agent' },
+      { tenant_slug: 'partner-a', user_uid: 'U-FIN', display_name: 'Finance Agent' },
+      { tenant_slug: 'partner-a', user_uid: 'U-MEMBER', display_name: 'Member Agent' },
+      { tenant_slug: 'partner-a', user_uid: 'U-INACTIVE', display_name: 'Inactive Agent' },
+      { tenant_slug: 'demo', user_uid: 'U-DEMO-SALES', display_name: 'Demo Sales Agent' },
     ];
     this.profiles = [
       { id: 'P-SALES', tenant_slug: 'partner-a', owner_uid: 'U-SALES', display_name: 'Sales Customer', phone: '0900', picture_url: '' },
@@ -54,7 +65,7 @@ class QueueD1 {
 
   first(sql, args) {
     if (sql.includes('SELECT slug FROM tenants')) return this.tenants.has(args[0]) ? { slug: args[0] } : null;
-    if (sql.includes("role = 'platform_admin'")) return null;
+    if (sql.includes("role = 'platform_admin'")) return this.memberships.find(row => row.user_uid === args[0] && row.role === 'platform_admin' && row.status === 'active') || null;
     if (sql.includes('FROM tenant_memberships')) return this.memberships.find(row => row.tenant_slug === args[0] && row.user_uid === args[1] && row.status === 'active') || null;
     if (sql.includes('FROM tenant_crm_threads t')) {
       const thread = this.threads.find(row => row.tenant_slug === args[0] && row.id === args[1]);
@@ -64,6 +75,30 @@ class QueueD1 {
   }
 
   all(sql, args) {
+    if (sql.includes('FROM tenant_memberships m') && sql.includes('active_thread_count')) {
+      const tenantSlug = args[0];
+      let roleFilter = '';
+      let search = '';
+      for (const arg of args.slice(1, -1)) {
+        if (['sales', 'editor'].includes(arg)) roleFilter = arg;
+        if (typeof arg === 'string' && arg.startsWith('%')) search = arg.slice(1, -1).toLowerCase();
+      }
+      let rows = this.memberships.filter(row => row.tenant_slug === tenantSlug && row.status === 'active' && row.user_uid && ['sales', 'editor'].includes(row.role));
+      if (roleFilter) rows = rows.filter(row => row.role === roleFilter);
+      rows = rows.map(row => {
+        const profile = this.agentProfiles.find(item => item.tenant_slug === row.tenant_slug && item.user_uid === row.user_uid) || {};
+        const assigned = this.threads.filter(thread => thread.tenant_slug === row.tenant_slug && thread.assigned_to_uid === row.user_uid);
+        return {
+          uid: row.user_uid,
+          display_name: profile.display_name || 'Unnamed Agent',
+          role: row.role,
+          active_thread_count: assigned.filter(thread => thread.queue_status !== 'closed').length,
+          unread_thread_count: assigned.filter(thread => Number(thread.unread_count || 0) > 0).length,
+        };
+      });
+      if (search) rows = rows.filter(row => `${row.display_name} ${row.uid} ${row.role}`.toLowerCase().includes(search));
+      return rows.slice(0, Number(args.at(-1) || 50));
+    }
     if (sql.includes('FROM tenant_crm_threads t')) {
       let rows = this.threads.filter(row => row.tenant_slug === args[0]);
       if (sql.includes('t.unread_count > 0')) rows = rows.filter(row => row.unread_count > 0);
@@ -128,6 +163,29 @@ function req(method, path, uid, body, tenant = 'partner-a') {
   });
 }
 
+
+test('tenant admins list assignable LINE agents without leaking other roles or tenants', async () => {
+  const env = { DB: new QueueD1() };
+  env.DB.threads[1].unread_count = 2;
+  const adminResponse = await routeTenantLineMonitorApi(req('GET', '/api/v2/tenant/line-agents', 'U-ADMIN'), env);
+  assert.equal(adminResponse.status, 200);
+  const adminPayload = await adminResponse.json();
+  assert.deepEqual(adminPayload.data.map(row => row.uid).sort(), ['U-EDITOR', 'U-SALES']);
+  assert.ok(adminPayload.data.every(row => row.display_name && ['sales', 'editor'].includes(row.role)));
+  assert.ok(adminPayload.data.find(row => row.uid === 'U-EDITOR').unread_thread_count >= 1);
+  assert.equal(JSON.stringify(adminPayload).includes('U-FIN'), false);
+  assert.equal(JSON.stringify(adminPayload).includes('U-DEMO-SALES'), false);
+
+  const platformResponse = await routeTenantLineMonitorApi(req('GET', '/api/v2/tenant/line-agents', 'U-PLATFORM'), env);
+  assert.equal(platformResponse.status, 200);
+  const searchPayload = await (await routeTenantLineMonitorApi(new Request('https://worker.example/api/v2/tenant/line-agents?tenant=partner-a&search=editor&role=editor&limit=1', { method: 'GET', headers: { 'X-User-Uid': 'U-ADMIN', 'X-Tenant-Slug': 'partner-a' } }), env)).json();
+  assert.deepEqual(searchPayload.data.map(row => row.uid), ['U-EDITOR']);
+  assert.equal(searchPayload.data.length, 1);
+  assert.equal((await routeTenantLineMonitorApi(req('GET', '/api/v2/tenant/line-agents', 'U-FIN'), env)).status, 403);
+  assert.equal((await routeTenantLineMonitorApi(req('GET', '/api/v2/tenant/line-agents', 'U-MEMBER'), env)).status, 403);
+  assert.equal((await routeTenantLineMonitorApi(new Request('https://worker.example/api/v2/tenant/line-agents?tenant=partner-a', { method: 'GET', headers: { 'X-Tenant-Slug': 'partner-a' } }), env)).status, 401);
+});
+
 test('tenant admin can assign, reassign and unassign only tenant sales/editor members', async () => {
   const env = { DB: new QueueD1() };
   assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-SALES' }), env)).status, 200);
@@ -138,6 +196,9 @@ test('tenant admin can assign, reassign and unassign only tenant sales/editor me
   assert.equal(env.DB.threads[0].assigned_to_uid, '');
   assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-DEMO-SALES' }), env)).status, 404);
   assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-FIN' }), env)).status, 403);
+  assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-MEMBER' }), env)).status, 403);
+  assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-NOT-FOUND' }), env)).status, 404);
+  assert.equal(env.DB.threads[0].assigned_to_uid, '');
   assert.ok(env.DB.auditLogs.some(row => row.action === 'tenant.line.thread.assign'));
   assert.ok(env.DB.auditLogs.every(row => !JSON.stringify(row).match(/channel_access_token|Authorization|replyToken|secrets_iv/i)));
 });
@@ -177,14 +238,20 @@ test('Phase 15A source exposes work queue APIs and keeps owner separate from ass
   const client = await read('js/tenant-line-client.js');
   const page = await read('js/tenant-line-monitor-page.js');
   const migration = await read('migrations/0112_tenant_line_work_queue.sql');
+  assert.match(api, /listLineAgents/);
+  assert.match(api, /tenant_distributor_profiles/);
+  assert.match(api, /active_thread_count/);
   assert.match(api, /assigned_to_uid/);
   assert.match(api, /queue_status/);
   assert.match(api, /unread_count/);
   assert.match(api, /first_response_at/);
   assert.match(api, /COALESCE\(t\.assigned_to_uid, ''\) = ''|COALESCE\(assigned_to_uid, ''\) = ''/);
+  assert.match(client, /listLineAgents/);
   assert.match(client, /assignThread/);
   assert.match(client, /claimThread/);
   assert.match(client, /markThreadRead/);
+  assert.match(page, /assignee-picker/);
+  assert.match(page, /agentOptionText/);
   assert.match(page, /state\.view === 'mine'/);
   assert.doesNotMatch(api, /SET owner_uid =/);
   assert.match(migration, /assigned_to_uid/);

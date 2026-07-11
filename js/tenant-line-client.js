@@ -17,6 +17,11 @@
       return response;
     },
 
+    async listLineAgents(params = {}) {
+      const query = new URLSearchParams(params);
+      return api(`/api/v2/tenant/line-agents?${query.toString()}`);
+    },
+
     async getThreadMessages(threadId, limit = 200) {
       return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/messages?limit=${encodeURIComponent(limit)}`);
     },
