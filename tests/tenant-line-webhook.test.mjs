@@ -108,5 +108,5 @@ test('worker evaluates public LINE webhook before authenticated tenant routes', 
   assert.ok(webhook >= 0);
   assert.ok(authRoute > webhook);
   assert.ok(legacy > authRoute);
-  assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase12'/);
+  assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase13'/);
 });
