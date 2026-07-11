@@ -6,6 +6,7 @@ on:
       - agent/tenant-isolation-phase1
     paths:
       - .github/phase11-crm-apply.py
+      - .github/phase11-crm-trigger
   workflow_dispatch:
 
 permissions:
