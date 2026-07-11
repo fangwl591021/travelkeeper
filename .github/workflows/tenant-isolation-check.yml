@@ -38,6 +38,7 @@ jobs:
           node --check lib/http-error-status.js
           node --check lib/platform-settlement-api.js
           node --check lib/settlement-finance-api.js
+          node --check js/settlement-finance-client.js
 
       - name: Run tenant isolation tests
         run: |
