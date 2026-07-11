@@ -73,9 +73,19 @@ GET /api/v2/settlement-finance/report?from=YYYY-MM-DD&to=YYYY-MM-DD
 
 ## 報表頁
 
+正式或既有 Worker：
+
 ```text
 settlements.html?tenant={tenant_slug}
 ```
+
+本機 Worker 測試：
+
+```text
+settlements.html?tenant=partner-a&worker=http://127.0.0.1:8787
+```
+
+`worker` 查詢參數只接受 `localhost`、`127.0.0.1` 或 `[::1]`，其他外部網址會被忽略，避免把 LIFF Access Token 傳送到未受信任的主機。
 
 功能：
 
