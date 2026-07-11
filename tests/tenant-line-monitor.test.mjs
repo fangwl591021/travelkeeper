@@ -32,6 +32,10 @@ test('monitor page only uses tenant LINE and CRM clients', async () => {
   assert.match(controller, /getThreadMessages/);
   assert.match(controller, /updateThread/);
   assert.match(controller, /sendThreadMessage/);
+  assert.match(controller, /openSeq/);
+  assert.match(controller, /state\.sending/);
+  assert.match(controller, /activeThreadId/);
+  assert.match(controller, /error\.payload\?\.data\?\.message/);
   assert.match(controller, /initLiffSession/);
   assert.doesNotMatch(page + controller, /\/api\/line-oa\//);
   assert.doesNotMatch(page + controller, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
@@ -75,6 +79,7 @@ test('Phase 14 enables outbound LINE sending only through tenant V2 APIs', async
   assert.match(monitor, /LINE_PUSH_API_URL/);
   assert.match(client, /\/api\/v2\/line\/threads\/\$\{encodeURIComponent\(threadId\)\}\/messages/);
   assert.match(page, /reply-text/);
+  assert.match(page, /composer hidden/);
   assert.doesNotMatch(page + client, /\/api\/line-oa\//);
   assert.doesNotMatch(page + client, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
 });

@@ -4071,7 +4071,7 @@ async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = [
   `).bind(
     crypto.randomUUID(),
     threadId,
-    String(event?.replyToken || ''),
+    '',
     String(text || '').slice(0, 5000),
     JSON.stringify({
       kind: extra.kind || 'knowledge_auto_reply',
@@ -4574,7 +4574,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
       crypto.randomUUID(),
       threadId,
       String(event?.webhookEventId || ''),
-      String(event?.replyToken || ''),
+      '',
       messageType,
       String(source?.userId || source?.groupId || source?.roomId || ''),
       displayName,

@@ -195,6 +195,13 @@ test('LINE API failure keeps safe failed outbound record without credential leak
   }
 });
 
+test('legacy LINE replyToken is not persisted into D1 message rows', async () => {
+  const worker = await read('worker.js');
+  const backup = await read('workerbackup');
+  assert.doesNotMatch(worker, /String\(event\?\.replyToken \|\| ''\),\s*\r?\n\s*messageType/);
+  assert.doesNotMatch(worker, /String\(event\?\.replyToken \|\| ''\),\s*\r?\n\s*String\(text \|\| ''\)/);
+  assert.doesNotMatch(backup, /String\(event\?\.replyToken \|\| ''\),\s*\r?\n\s*messageType/);
+});
 test('Phase 14 source keeps outbound sending tenant scoped and does not store LINE credentials', async () => {
   const api = await read('lib/tenant-line-monitor-api.js');
   const migration = await read('migrations/0111_tenant_line_outbound_messages.sql');

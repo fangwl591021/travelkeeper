@@ -5,7 +5,7 @@
   if (!page || !api) throw new Error('Tenant page and LINE clients are required');
 
   const params = new URLSearchParams(location.search);
-  const state = { threads: [], active: null, status: 'all', search: '' };
+  const state = { threads: [], active: null, status: 'all', search: '', openSeq: 0, sending: new Map() };
   const el = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const fmt = value => value ? new Date(value).toLocaleString('zh-TW') : '';
@@ -15,6 +15,9 @@
     return q.toString();
   };
   const clientRequestId = () => `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+  function activeThreadId() { return state.active?.id || ''; }
+  function isSending(threadId = activeThreadId()) { return !!threadId && state.sending.has(threadId); }
 
   function renderThreads() {
     const box = el('thread-list');
@@ -37,14 +40,19 @@
   }
 
   function updateComposer(enabled, statusText = '') {
-    el('reply-text').disabled = !enabled;
-    el('send-message').disabled = !enabled || !el('reply-text').value.trim();
-    el('reply-status').textContent = statusText || (enabled ? '可送出人工客服回覆。' : '請先選擇聊天室。');
+    const composer = el('composer');
+    const threadId = activeThreadId();
+    const sending = isSending(threadId);
+    composer.classList.toggle('hidden', !enabled);
+    el('reply-text').disabled = !enabled || sending;
+    el('send-message').disabled = !enabled || sending || !el('reply-text').value.trim();
+    el('reply-status').textContent = statusText || (sending ? '送出中...' : (enabled ? '可送出人工客服回覆。' : '請先選擇聊天室。'));
   }
 
   function messageMeta(message) {
-    const parts = [message.message_type || message.event_type, fmt(message.created_at || message.event_timestamp)];
+    const parts = [message.message_type || message.event_type, fmt(message.sent_at || message.created_at || message.event_timestamp)];
     if (message.direction === 'outbound' && message.send_status) parts.push(message.send_status);
+    if (message.sent_by_role) parts.push(message.sent_by_role);
     if (message.retryable) parts.push('可重試');
     return parts.filter(Boolean).join('｜');
   }
@@ -89,10 +97,14 @@
   }
 
   async function openThread(id) {
+    const seq = ++state.openSeq;
+    updateComposer(false, '讀取中...');
     try {
       const result = await api.getThreadMessages(id);
+      if (seq !== state.openSeq) return;
       renderThread(result.data);
     } catch (error) {
+      if (seq !== state.openSeq) return;
       state.active = null;
       renderThreads();
       el('chat-name').textContent = '無法開啟聊天室';
@@ -106,7 +118,7 @@
   async function saveThread() {
     if (!state.active) return;
     el('save').disabled = true;
-    el('save-status').textContent = '儲存中…';
+    el('save-status').textContent = '儲存中...';
     try {
       const result = await api.updateThread(state.active.id, {
         status: el('status').value,
@@ -125,23 +137,33 @@
   }
 
   async function sendMessage() {
-    if (!state.active) return;
+    const threadId = activeThreadId();
+    if (!threadId || isSending(threadId) || el('send-message').disabled) return;
     const messageText = el('reply-text').value.trim();
-    if (!messageText) return;
-    el('send-message').disabled = true;
-    updateComposer(false, '送出中…');
+    if (!messageText) { updateComposer(true); return; }
+    const requestId = clientRequestId();
+    state.sending.set(threadId, requestId);
+    updateComposer(true, '送出中...');
     try {
-      const result = await api.sendThreadMessage(state.active.id, {
+      const result = await api.sendThreadMessage(threadId, {
         type: 'text',
         text: messageText,
-        client_request_id: clientRequestId(),
+        client_request_id: requestId,
       });
-      el('reply-text').value = '';
-      el('reply-status').textContent = result.duplicate ? '已忽略重複送出。' : '已送出。';
-      await openThread(result.data.thread.id);
+      state.sending.delete(threadId);
+      if (activeThreadId() === threadId) {
+        el('reply-text').value = '';
+        el('reply-status').textContent = result.duplicate ? '已忽略重複送出。' : '已送出。';
+        await openThread(threadId);
+      }
     } catch (error) {
-      el('reply-status').textContent = page.friendlyError ? page.friendlyError(error) : error.message;
-      updateComposer(true, el('reply-status').textContent);
+      state.sending.delete(threadId);
+      if (activeThreadId() === threadId) {
+        const message = page.friendlyError ? page.friendlyError(error) : error.message;
+        el('reply-status').textContent = message;
+        if (error.payload?.data?.message) await openThread(threadId);
+        updateComposer(true, message);
+      }
     }
   }
 
@@ -158,6 +180,7 @@
       if (params.get('thread')) await openThread(params.get('thread'));
     } catch (error) {
       el('thread-list').innerHTML = `<div class="error-card">${esc(page.friendlyError ? page.friendlyError(error) : error.message)}</div>`;
+      updateComposer(false, '無法載入聊天室。');
     }
   }
 

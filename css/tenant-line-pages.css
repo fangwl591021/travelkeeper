@@ -286,3 +286,5 @@ textarea:focus {
 .message-bubble.status-sent small {
   opacity: .72;
 }
+
+.hidden { display: none !important; }

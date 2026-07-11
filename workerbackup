@@ -1725,7 +1725,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
       crypto.randomUUID(),
       threadId,
       String(event?.webhookEventId || ''),
-      String(event?.replyToken || ''),
+      '',
       messageType,
       String(source?.userId || source?.groupId || source?.roomId || ''),
       displayName,
