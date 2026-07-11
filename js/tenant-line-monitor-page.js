@@ -1,4 +1,4 @@
-(function (global) {
+﻿(function (global) {
   'use strict';
   const page = global.TravelKeeperTenantPage;
   const api = global.TravelKeeperTenantLine;
@@ -14,6 +14,10 @@
     search: '',
     agentSearch: '',
     assigneeFilter: '',
+    slaStatus: 'all',
+    priorityFilter: 'all',
+    waitingOnly: false,
+    breachedOnly: false,
     role: '',
     userUid: '',
     openSeq: 0,
@@ -59,6 +63,22 @@
   function agentOptionText(agent) {
     return `${agent.display_name || '\u672a\u547d\u540d\u5ba2\u670d'}\uff5c${roleLabel(agent.role)}\uff5c\u9032\u884c\u4e2d ${Number(agent.active_thread_count || 0)}\uff5c\u672a\u8b80 ${Number(agent.unread_thread_count || 0)}`;
   }
+  function durationText(seconds) {
+    const value = Math.max(0, Number(seconds || 0));
+    const minutes = Math.floor(value / 60);
+    const hours = Math.floor(minutes / 60);
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${value}s`;
+  }
+  function slaLabel(thread) {
+    const status = thread?.sla_status || 'not_applicable';
+    if (status === 'breached') return `Breached ${durationText(thread.overdue_seconds)}`;
+    if (status === 'due_soon') return `Due soon ${durationText(thread.remaining_seconds)}`;
+    if (status === 'paused') return `Paused ${durationText(thread.remaining_seconds)}`;
+    if (status === 'waiting') return `Waiting ${durationText(thread.waiting_seconds)}`;
+    return 'No SLA';
+  }
   function renderThreads() {
     const box = el('thread-list');
     box.innerHTML = '';
@@ -73,7 +93,7 @@
       button.innerHTML = `
         <div class="thread-head"><strong>${esc(thread.display_name || thread.line_user_uid || '\u672a\u547d\u540d\u5ba2\u6236')}</strong><small>${esc(fmt(thread.last_message_at))}</small></div>
         <p>${esc(thread.last_message || '\u5c1a\u7121\u8a0a\u606f')}</p>
-        <div class="pills"><span>${esc(thread.queue_status || thread.status)}</span><span>${esc(thread.risk)}</span><span>${Number(thread.message_count || 0)} \u5247</span><span>\u672a\u8b80 ${Number(thread.unread_count || 0)}</span><span>${esc(assigneeText(thread))}</span></div>`;
+        <div class="pills"><span>${esc(thread.queue_status || thread.status)}</span><span>${esc(thread.priority || 'normal')}</span><span>${esc(slaLabel(thread))}</span><span>${Number(thread.message_count || 0)} \u5247</span><span>\u672a\u8b80 ${Number(thread.unread_count || 0)}</span><span>${esc(assigneeText(thread))}</span></div>`;
       button.addEventListener('click', () => openThread(thread.id));
       box.appendChild(button);
     });
@@ -161,10 +181,12 @@
   function renderThread(data) {
     state.active = data.thread;
     renderThreads();
-    el('chat-name').textContent = data.thread.display_name || data.thread.line_user_uid || '\u672a\u547d\u540d\u5ba2\u6236';
-    el('chat-meta').textContent = [data.thread.line_user_uid, data.thread.phone, data.thread.owner_uid ? `\u8ca0\u8cac\u4eba ${data.thread.owner_uid}` : ''].filter(Boolean).join('\uff5c');
+    el('chat-name').textContent = data.thread.display_name || data.thread.line_user_uid || 'Unnamed customer';
+    el('chat-meta').textContent = [data.thread.line_user_uid, data.thread.phone, data.thread.owner_uid ? 'Owner ' + data.thread.owner_uid : ''].filter(Boolean).join(' | ');
     el('status').value = data.thread.status || 'open';
     el('risk').value = data.thread.risk || 'low';
+    el('priority').value = data.thread.priority || 'normal';
+    el('sla-summary').innerHTML = `<strong>${esc(slaLabel(data.thread))}</strong><br>Waiting: ${esc(durationText(data.thread.waiting_seconds))}<br>Remaining: ${esc(durationText(data.thread.remaining_seconds))}<br>Overdue: ${esc(durationText(data.thread.overdue_seconds))}<br>Responses: ${Number(data.thread.response_count || 0)}<br>Total wait: ${esc(durationText(data.thread.total_customer_wait_seconds))}`;
     el('summary').value = data.thread.summary || '';
     el('note').value = data.thread.note || '';
     el('tags').value = (data.thread.tags || []).join(', ');
@@ -214,6 +236,10 @@
       if (state.view === 'unread') filters.unread_only = 'true';
       if (isAdmin() && state.assigneeFilter === '__unassigned') filters.unassigned = 'true';
       if (isAdmin() && state.assigneeFilter && state.assigneeFilter !== '__unassigned') filters.assigned_to_uid = state.assigneeFilter;
+      if (state.slaStatus && state.slaStatus !== 'all') filters.sla_status = state.slaStatus;
+      if (state.priorityFilter && state.priorityFilter !== 'all') filters.priority = state.priorityFilter;
+      if (state.waitingOnly) filters.waiting_only = 'true';
+      if (state.breachedOnly) filters.breached_only = 'true';
       const result = await api.listThreads(filters);
       state.threads = result.data || [];
       renderThreads();
@@ -243,8 +269,8 @@
       if (seq !== state.openSeq) return;
       state.active = null;
       renderThreads();
-      el('chat-name').textContent = '無法開啟聊天室';
-      el('chat-meta').textContent = '請確認權限或聊天室是否存在。';
+      el('chat-name').textContent = 'Unable to open thread';
+      el('chat-meta').textContent = 'Please try again or adjust filters.';
       el('messages').innerHTML = `<div class="error-card">${esc(page.friendlyError ? page.friendlyError(error) : error.message)}</div>`;
       el('save').disabled = true;
       updateAssignmentControls();
@@ -275,6 +301,19 @@
     }
   }
 
+
+  async function updatePriority() {
+    if (!state.active || !canOperateThread()) return;
+    const threadId = activeThreadId();
+    try {
+      const result = await api.updateThreadPriority(threadId, { priority: el('priority').value });
+      if (activeThreadId() === threadId) state.active = { ...state.active, ...result.data.thread };
+      await loadThreads();
+      if (activeThreadId() === threadId) updateAssignmentControls();
+    } catch (error) {
+      el('save-status').textContent = page.friendlyError ? page.friendlyError(error) : error.message;
+    }
+  }
   async function assignThread(value) {
     const threadId = activeThreadId();
     if (!threadId || !isAdmin() || isAssigning(threadId)) return;
@@ -400,6 +439,11 @@
     loadThreads();
   });
   el('assignee-picker').addEventListener('change', updateAssignmentActions);
+  el('sla-filter').addEventListener('change', event => { state.slaStatus = event.target.value; loadThreads(); });
+  el('priority-filter').addEventListener('change', event => { state.priorityFilter = event.target.value; loadThreads(); });
+  el('waiting-only').addEventListener('change', event => { state.waitingOnly = event.target.checked; loadThreads(); });
+  el('breached-only').addEventListener('change', event => { state.breachedOnly = event.target.checked; loadThreads(); });
+  el('priority').addEventListener('change', updatePriority);
   el('reply-text').addEventListener('input', () => updateComposer(canOperateThread()));
   el('reply-text').addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {

@@ -1,4 +1,4 @@
-(function (global) {
+﻿(function (global) {
   'use strict';
 
   const tenantPage = global.TravelKeeperTenantPage;
@@ -29,6 +29,24 @@
     async updateThread(threadId, data = {}) {
       return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}`, {
         method: 'POST',
+        body: data,
+      });
+    },
+
+    async updateThreadPriority(threadId, data = {}) {
+      return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/priority`, {
+        method: 'PATCH',
+        body: data,
+      });
+    },
+
+    async getSlaSettings() {
+      return api('/api/v2/tenant/line-sla-settings');
+    },
+
+    async saveSlaSettings(data = {}) {
+      return api('/api/v2/tenant/line-sla-settings', {
+        method: 'PATCH',
         body: data,
       });
     },

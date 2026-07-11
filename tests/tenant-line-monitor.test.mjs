@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
@@ -40,7 +40,7 @@ test('monitor page only uses tenant LINE and CRM clients', async () => {
   assert.doesNotMatch(page + controller, /\/api\/line-oa\//);
   assert.doesNotMatch(page + controller, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
   assert.doesNotMatch(controller, /alert\(/);
-  assert.match(controller, /無法開啟聊天室/);
+  assert.match(controller, /Unable to open thread/);
 });
 
 test('LINE settings page uses masked channel API and preserves local safety', async () => {
@@ -82,4 +82,46 @@ test('Phase 14 enables outbound LINE sending only through tenant V2 APIs', async
   assert.match(page, /composer hidden/);
   assert.doesNotMatch(page + client, /\/api\/line-oa\//);
   assert.doesNotMatch(page + client, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
+});
+
+test('Phase 15B exposes SLA settings, priority, filters, and safe audits', async () => {
+  const monitor = await read('lib/tenant-line-monitor-api.js');
+  const webhook = await read('lib/tenant-line-webhook-api.js');
+  const migration = await read('migrations/0113_tenant_line_sla.sql');
+  assert.match(migration, /tenant_line_sla_settings/);
+  assert.match(migration, /priority TEXT NOT NULL DEFAULT 'normal'/);
+  assert.match(migration, /waiting_since TEXT NOT NULL DEFAULT ''/);
+  assert.match(migration, /sla_due_at TEXT NOT NULL DEFAULT ''/);
+  assert.match(migration, /response_count INTEGER NOT NULL DEFAULT 0/);
+  assert.match(migration, /sla_breached_at TEXT NOT NULL DEFAULT ''/);
+  assert.match(monitor, /\/api\/v2\/tenant\/line-sla-settings/);
+  assert.match(monitor, /tenant\.line\.sla_settings\.update/);
+  assert.match(monitor, /tenant\.line\.thread\.priority_change/);
+  assert.match(monitor, /sla_status/);
+  assert.match(monitor, /breached_only/);
+  assert.match(monitor, /waiting_only/);
+  assert.match(monitor, /priorityFilter/);
+  assert.match(monitor, /closeWaitingCycle\(thread/);
+  assert.match(monitor, /response_count = response_count \+ 1/);
+  assert.match(webhook, /startWaitingCycle/);
+  assert.match(webhook, /tenant\.line\.sla\.waiting_start/);
+});
+
+test('Phase 15B monitor UI renders SLA filters, summary, and priority controls without credentials', async () => {
+  const page = await read('line-oa-monitor.html');
+  const controller = await read('js/tenant-line-monitor-page.js');
+  const client = await read('js/tenant-line-client.js');
+  assert.match(page, /sla-filter/);
+  assert.match(page, /priority-filter/);
+  assert.match(page, /waiting-only/);
+  assert.match(page, /breached-only/);
+  assert.match(page, /sla-summary/);
+  assert.match(page, /id="priority"/);
+  assert.match(controller, /slaLabel/);
+  assert.match(controller, /durationText/);
+  assert.match(controller, /updateThreadPriority/);
+  assert.match(controller, /sla_status/);
+  assert.match(client, /\/api\/v2\/tenant\/line-sla-settings/);
+  assert.match(client, /\/priority/);
+  assert.doesNotMatch(page + controller + client, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv|ciphertext/i);
 });

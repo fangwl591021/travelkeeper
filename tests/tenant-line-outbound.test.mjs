@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { webcrypto } from 'node:crypto';
@@ -154,7 +154,7 @@ test('outbound message API uses tenant token, records sent message, and is idemp
     assert.deepEqual(calls[0].body, { to: 'U-LINE-RECIPIENT', messages: [{ type: 'text', text: 'hello' }] });
     assert.equal(db.messages[0].send_status, 'sent');
     assert.equal(db.messages[0].reply_token_present, undefined);
-    assert.equal(db.auditLogs.length, 1);
+    assert.equal(db.auditLogs.length, 2);
     const payloadText = await first.text();
     assert.equal(payloadText.includes('TOKEN-PARTNER-A'), false);
 
