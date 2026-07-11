@@ -93,6 +93,15 @@
       INVALID_HASH_KEY_LENGTH: '藍新 Hash Key 必須為 32 個字元。',
       INVALID_HASH_IV_LENGTH: '藍新 Hash IV 必須為 16 個字元。',
       INVALID_GATEWAY_URL: '金流網址必須是有效的 HTTPS 網址。',
+      INVALID_SETTLEMENT_RULE: '平台代收結算規則格式錯誤。',
+      INVALID_SETTLEMENT_STATUS: '結算狀態不正確。',
+      SETTLEMENT_BATCH_EMPTY: '目前沒有可建立結算批次的應付款。',
+      SETTLEMENT_PAYABLE_ALREADY_BATCHED: '部分應付款已被其他結算批次使用。',
+      SETTLEMENT_MINIMUM_NOT_REACHED: '本次應付款尚未達到最低結算金額。',
+      SETTLEMENT_BATCH_NOT_FOUND: '找不到此結算批次。',
+      SETTLEMENT_BATCH_ALREADY_APPROVED: '此結算批次已核准。',
+      SETTLEMENT_BATCH_ALREADY_PAID: '此結算批次已付款。',
+      PAYOUT_REFERENCE_REQUIRED: '標記付款時必須填寫匯款或付款憑證編號。',
     };
     return map[code] || code;
   }
@@ -191,6 +200,60 @@
         tenantSlug,
         method: 'POST',
         body: data,
+      });
+    },
+
+    getPlatformSettlementRule(tenantSlug) {
+      return apiFetch('/api/v2/platform-settlements/rule', { tenantSlug });
+    },
+
+    updatePlatformSettlementRule(data, tenantSlug) {
+      return apiFetch('/api/v2/platform-settlements/rule', {
+        tenantSlug,
+        method: 'POST',
+        body: data,
+      });
+    },
+
+    syncPlatformSettlementPayables(tenantSlug, limit = 500) {
+      return apiFetch('/api/v2/platform-settlements/sync', {
+        tenantSlug,
+        method: 'POST',
+        body: { limit },
+      });
+    },
+
+    listPlatformSettlementPayables(tenantSlug, params = {}) {
+      const query = new URLSearchParams(params);
+      return apiFetch(`/api/v2/platform-settlements/payables?${query.toString()}`, { tenantSlug });
+    },
+
+    listPlatformSettlementBatches(tenantSlug, params = {}) {
+      const query = new URLSearchParams(params);
+      return apiFetch(`/api/v2/platform-settlements/batches?${query.toString()}`, { tenantSlug });
+    },
+
+    createPlatformSettlementBatch(data, tenantSlug) {
+      return apiFetch('/api/v2/platform-settlements/batches', {
+        tenantSlug,
+        method: 'POST',
+        body: data || {},
+      });
+    },
+
+    approvePlatformSettlementBatch(batchId, tenantSlug) {
+      return apiFetch(`/api/v2/platform-settlements/batches/${encodeURIComponent(batchId)}/approve`, {
+        tenantSlug,
+        method: 'POST',
+        body: {},
+      });
+    },
+
+    markPlatformSettlementBatchPaid(batchId, payoutReference, tenantSlug) {
+      return apiFetch(`/api/v2/platform-settlements/batches/${encodeURIComponent(batchId)}/paid`, {
+        tenantSlug,
+        method: 'POST',
+        body: { payout_reference: payoutReference },
       });
     },
 
