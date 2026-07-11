@@ -37,6 +37,7 @@ jobs:
           node --check lib/tenant-gateway-callback-api.js
           node --check lib/http-error-status.js
           node --check lib/platform-settlement-api.js
+          node --check lib/settlement-finance-api.js
 
       - name: Run tenant isolation tests
         run: |
@@ -46,4 +47,5 @@ jobs:
             tests/tenant-payment-modes.test.mjs \
             tests/tenant-gateway-secrets.test.mjs \
             tests/tenant-gateway-callback.test.mjs \
-            tests/platform-settlement.test.mjs
+            tests/platform-settlement.test.mjs \
+            tests/settlement-finance.test.mjs
