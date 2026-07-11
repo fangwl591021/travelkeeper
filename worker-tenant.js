@@ -19,6 +19,10 @@ import {
   isPlatformSettlementApiRequest,
   routePlatformSettlementApi,
 } from './lib/platform-settlement-api.js';
+import {
+  isSettlementFinanceApiRequest,
+  routeSettlementFinanceApi,
+} from './lib/settlement-finance-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 import { statusForError } from './lib/http-error-status.js';
@@ -32,7 +36,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase5');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase6');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -92,6 +96,15 @@ export default {
     if (isTenantGatewayCallbackRequest(request)) {
       const callbackResponse = await routeTenantGatewayCallback(request, env);
       if (callbackResponse) return withTenantHeaders(callbackResponse);
+    }
+
+    if (isSettlementFinanceApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeSettlementFinanceApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
     }
 
     if (isPlatformSettlementApiRequest(request)) {
