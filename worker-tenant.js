@@ -15,50 +15,18 @@ import {
   isTenantGatewayCallbackRequest,
   routeTenantGatewayCallback,
 } from './lib/tenant-gateway-callback-api.js';
-import {
-  isPlatformSettlementApiRequest,
-  routePlatformSettlementApi,
-} from './lib/platform-settlement-api.js';
-import {
-  isPlatformSettlementCustomerViewRequest,
-  routePlatformSettlementCustomerView,
-} from './lib/platform-settlement-customer-view-api.js';
-import {
-  isSettlementFinanceApiRequest,
-  routeSettlementFinanceApi,
-} from './lib/settlement-finance-api.js';
-import {
-  isSettlementPaymentControlApiRequest,
-  routeSettlementPaymentControlApi,
-} from './lib/settlement-payment-control-api.js';
-import {
-  isTenantOrderActionRequest,
-  routeTenantOrderAction,
-} from './lib/tenant-order-actions-api.js';
-import {
-  isTenantProfileApiRequest,
-  routeTenantProfileApi,
-} from './lib/tenant-profile-api.js';
-import {
-  isTenantDistributorApiRequest,
-  routeTenantDistributorApi,
-} from './lib/tenant-distributor-api.js';
-import {
-  isTenantCrmApiRequest,
-  routeTenantCrmApi,
-} from './lib/tenant-crm-api.js';
-import {
-  isTenantLineChannelApiRequest,
-  routeTenantLineChannelApi,
-} from './lib/tenant-line-channel-api.js';
-import {
-  isTenantLineWebhookRequest,
-  routeTenantLineWebhook,
-} from './lib/tenant-line-webhook-api.js';
-import {
-  isLegacyCustomerCompatRequest,
-  routeLegacyCustomerCompatApi,
-} from './lib/legacy-customer-compat-api.js';
+import { isPlatformSettlementApiRequest, routePlatformSettlementApi } from './lib/platform-settlement-api.js';
+import { isPlatformSettlementCustomerViewRequest, routePlatformSettlementCustomerView } from './lib/platform-settlement-customer-view-api.js';
+import { isSettlementFinanceApiRequest, routeSettlementFinanceApi } from './lib/settlement-finance-api.js';
+import { isSettlementPaymentControlApiRequest, routeSettlementPaymentControlApi } from './lib/settlement-payment-control-api.js';
+import { isTenantOrderActionRequest, routeTenantOrderAction } from './lib/tenant-order-actions-api.js';
+import { isTenantProfileApiRequest, routeTenantProfileApi } from './lib/tenant-profile-api.js';
+import { isTenantDistributorApiRequest, routeTenantDistributorApi } from './lib/tenant-distributor-api.js';
+import { isTenantCrmApiRequest, routeTenantCrmApi } from './lib/tenant-crm-api.js';
+import { isTenantLineChannelApiRequest, routeTenantLineChannelApi } from './lib/tenant-line-channel-api.js';
+import { isTenantLineWebhookRequest, routeTenantLineWebhook } from './lib/tenant-line-webhook-api.js';
+import { isTenantLineMonitorApiRequest, routeTenantLineMonitorApi } from './lib/tenant-line-monitor-api.js';
+import { isLegacyCustomerCompatRequest, routeLegacyCustomerCompatApi } from './lib/legacy-customer-compat-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 import { statusForError } from './lib/http-error-status.js';
@@ -72,15 +40,9 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase12');
-  Object.entries(CORS).forEach(([key, value]) => {
-    if (!headers.has(key)) headers.set(key, value);
-  });
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase13');
+  Object.entries(CORS).forEach(([key, value]) => { if (!headers.has(key)) headers.set(key, value); });
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function isPublicTenantRequest(request) {
@@ -96,11 +58,7 @@ function isPublicTenantRequest(request) {
 }
 
 async function authenticatedTenantRequest(request, env) {
-  if (
-    isPublicTenantRequest(request) ||
-    isPublicTenantPaymentRequest(request) ||
-    isPublicTenantGatewayRequest(request)
-  ) return request;
+  if (isPublicTenantRequest(request) || isPublicTenantPaymentRequest(request) || isPublicTenantGatewayRequest(request)) return request;
   const tenantSlug = requestedTenantSlug(request);
   const auth = await authenticateLineRequest(request, env, { tenantSlug });
   const headers = new Headers(request.headers);
@@ -118,124 +76,52 @@ function errorResponse(error) {
   }));
 }
 
+async function securedRoute(request, env, router) {
+  const securedRequest = await authenticatedTenantRequest(request, env);
+  return withTenantHeaders(await router(securedRequest, env));
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
     if (isTenantGatewayCallbackRequest(request)) {
-      const callbackResponse = await routeTenantGatewayCallback(request, env);
-      if (callbackResponse) return withTenantHeaders(callbackResponse);
+      const response = await routeTenantGatewayCallback(request, env);
+      if (response) return withTenantHeaders(response);
     }
-
-    // LINE webhooks are public server-to-server calls. The tenant comes only
-    // from the URL and the raw request body is authenticated with that tenant's
-    // encrypted Channel Secret before any event is accepted.
     if (isTenantLineWebhookRequest(request)) {
       const response = await routeTenantLineWebhook(request, env);
       if (response) return withTenantHeaders(response);
     }
 
-    if (isLegacyCustomerCompatRequest(request)) {
-      try {
+    try {
+      if (isLegacyCustomerCompatRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeLegacyCustomerCompatApi(securedRequest, env, legacyWorker));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isSettlementFinanceApiRequest(request)) {
-      try {
+      }
+      if (isSettlementFinanceApiRequest(request)) return securedRoute(request, env, routeSettlementFinanceApi);
+      if (isSettlementPaymentControlApiRequest(request)) return securedRoute(request, env, routeSettlementPaymentControlApi);
+      if (isPlatformSettlementCustomerViewRequest(request)) return securedRoute(request, env, routePlatformSettlementCustomerView);
+      if (isPlatformSettlementApiRequest(request)) return securedRoute(request, env, routePlatformSettlementApi);
+      if (isTenantGatewayApiRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeSettlementFinanceApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isSettlementPaymentControlApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeSettlementPaymentControlApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isPlatformSettlementCustomerViewRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routePlatformSettlementCustomerView(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isPlatformSettlementApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routePlatformSettlementApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantGatewayApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        const gatewayResponse = await routeTenantGatewayApi(securedRequest, env);
-        if (gatewayResponse) return withTenantHeaders(gatewayResponse);
-        if (isTenantPaymentApiRequest(request)) {
-          return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
-        }
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantPaymentApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantOrderActionRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantOrderAction(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantProfileApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantProfileApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantDistributorApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantDistributorApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantLineChannelApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantLineChannelApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantCrmApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantCrmApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantBookingApiRequest(request)) {
-      try {
+        const response = await routeTenantGatewayApi(securedRequest, env);
+        if (response) return withTenantHeaders(response);
+        if (isTenantPaymentApiRequest(request)) return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
+      }
+      if (isTenantPaymentApiRequest(request)) return securedRoute(request, env, routeTenantPaymentApi);
+      if (isTenantOrderActionRequest(request)) return securedRoute(request, env, routeTenantOrderAction);
+      if (isTenantProfileApiRequest(request)) return securedRoute(request, env, routeTenantProfileApi);
+      if (isTenantDistributorApiRequest(request)) return securedRoute(request, env, routeTenantDistributorApi);
+      if (isTenantLineChannelApiRequest(request)) return securedRoute(request, env, routeTenantLineChannelApi);
+      if (isTenantLineMonitorApiRequest(request)) return securedRoute(request, env, routeTenantLineMonitorApi);
+      if (isTenantCrmApiRequest(request)) return securedRoute(request, env, routeTenantCrmApi);
+      if (isTenantBookingApiRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantBookingApi(securedRequest, env, legacyWorker));
-      } catch (error) { return errorResponse(error); }
-    }
-
-    if (isTenantApiRequest(request)) {
-      try {
-        const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantApi(securedRequest, env));
-      } catch (error) { return errorResponse(error); }
-    }
+      }
+      if (isTenantApiRequest(request)) return securedRoute(request, env, routeTenantApi);
+    } catch (error) { return errorResponse(error); }
 
     return withTenantHeaders(await legacyWorker.fetch(request, env, ctx));
   },
