@@ -31,6 +31,9 @@ class Statement {
 }
 
 class CompatDb {
+  constructor() {
+    this.lastAllArgs = null;
+  }
   prepare(sql) {
     return new Statement(this, sql);
   }
@@ -62,21 +65,45 @@ class CompatDb {
     return null;
   }
   async all(sql, args) {
-    if (sql.includes('FROM customers')) return { results: [] };
+    this.lastAllArgs = args;
+    if (sql.includes('FROM customers')) return { results: [{
+      tenant_slug: 'partner-a', customer_id: 'CUS-PARTNER-1', customer_phone: 'CUSREL-PARTNER-1', contact_phone: '0912888777',
+      customer_name: 'Partner Customer', customer_line_uid: 'U-CUSTOMER', owner_uid: 'U-SALES', total_orders: 1,
+    }] };
     if (sql.includes('FROM orders')) return { results: [] };
     return { results: [] };
   }
 }
 
 test('only explicit non-demo legacy requests enter the compatibility layer', () => {
+  assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/orders/create', { method: 'POST' })), false);
   assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/orders/create?a=demo', { method: 'POST' })), false);
+  assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/orders/status?tenant=demo&order_id=ORD1', { method: 'GET' })), true);
   assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/orders/create?a=partner-a', { method: 'POST' })), true);
   assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/my/customers', {
     headers: { Referer: 'https://example.com/dashboard.html?tenant=partner-a' },
   })), true);
+  assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/my/customers', {
+    headers: { Referer: 'https://example.com/dashboard.html?tenant=demo' },
+  })), false);
+  assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/my/customers', {
+    headers: { Referer: 'https://example.com/dashboard.html?tenant=../bad' },
+  })), false);
+  assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/mother/export-customer?tenant=demo', { method: 'POST' })), false);
   assert.equal(isLegacyCustomerCompatRequest(new Request('https://worker.example/api/mother/export-customer?tenant=partner-a', { method: 'POST' })), true);
 });
 
+
+test('legacy admin customer list does not self-filter when uid is the caller', async () => {
+  const db = new CompatDb();
+  const response = await routeLegacyCustomerCompatApi(new Request('https://worker.example/api/my/customers?tenant=partner-a&uid=U-ADMIN', {
+    headers: { 'X-Tenant-Slug': 'partner-a', 'X-User-Uid': 'U-ADMIN' },
+  }), { DB: db }, null);
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.length, 1);
+  assert.deepEqual(db.lastAllArgs, ['partner-a']);
+});
 test('legacy views display contact phone while retaining a separate relation key', () => {
   const customer = toLegacyCustomerView({
     customer_id: 'CUS1', customer_phone: 'CUSREL1', contact_phone: '0912000000', total_orders: 2,
