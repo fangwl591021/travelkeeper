@@ -29,6 +29,37 @@
     return financeErrors[code] || originalFriendlyError(error);
   };
 
+  function resolveWorkerUrl() {
+    const trustedGlobal = String(global.TRAVELKEEPER_WORKER_URL || '').trim();
+    if (trustedGlobal) return trustedGlobal;
+    const candidate = new URLSearchParams(global.location?.search || '').get('worker') || '';
+    if (!candidate) return tenantApi.DEFAULT_WORKER_URL;
+    try {
+      const url = new URL(candidate);
+      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+      if (!localHosts.has(url.hostname)) return tenantApi.DEFAULT_WORKER_URL;
+      if (!['http:', 'https:'].includes(url.protocol)) return tenantApi.DEFAULT_WORKER_URL;
+      return url.origin;
+    } catch (_) {
+      return tenantApi.DEFAULT_WORKER_URL;
+    }
+  }
+
+  const workerUrl = resolveWorkerUrl();
+
+  // The settlement page loads this client before requesting tenant context.
+  // Override only these two calls so local testing never touches the production Worker.
+  tenantApi.getPublicTenant = function getPublicTenantForSettlement(tenantSlug) {
+    return tenantApi.apiFetch('/api/v2/tenant/public', {
+      tenantSlug,
+      public: true,
+      workerUrl,
+    });
+  };
+  tenantApi.getContext = function getContextForSettlement(tenantSlug) {
+    return tenantApi.apiFetch('/api/v2/tenant/context', { tenantSlug, workerUrl });
+  };
+
   function queryString(params = {}) {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => {
@@ -42,7 +73,7 @@
     return tenantApi.getLiffAccessToken();
   }
 
-  async function fetchProofBlob(proofId, tenantSlug, workerUrl = tenantApi.DEFAULT_WORKER_URL) {
+  async function fetchProofBlob(proofId, tenantSlug, explicitWorkerUrl = workerUrl) {
     const tenant = tenantApi.normalizeTenantSlug(tenantSlug);
     const accessToken = token();
     if (!accessToken) {
@@ -52,7 +83,7 @@
     }
     const url = new URL(
       `/api/v2/settlement-finance/proofs/${encodeURIComponent(proofId)}/file`,
-      workerUrl.endsWith('/') ? workerUrl : `${workerUrl}/`,
+      explicitWorkerUrl.endsWith('/') ? explicitWorkerUrl : `${explicitWorkerUrl}/`,
     );
     url.searchParams.set('tenant', tenant);
     const response = await fetch(url.toString(), {
@@ -79,13 +110,17 @@
   }
 
   const client = {
+    workerUrl,
+    resolveWorkerUrl,
+
     getPayoutAccount(tenantSlug) {
-      return tenantApi.apiFetch('/api/v2/settlement-finance/payout-account', { tenantSlug });
+      return tenantApi.apiFetch('/api/v2/settlement-finance/payout-account', { tenantSlug, workerUrl });
     },
 
     updatePayoutAccount(data, tenantSlug) {
       return tenantApi.apiFetch('/api/v2/settlement-finance/payout-account', {
         tenantSlug,
+        workerUrl,
         method: 'POST',
         body: data || {},
       });
@@ -94,6 +129,7 @@
     verifyPayoutAccount(status, note, tenantSlug) {
       return tenantApi.apiFetch('/api/v2/settlement-finance/payout-account/verify', {
         tenantSlug,
+        workerUrl,
         method: 'POST',
         body: { verification_status: status, verification_note: note || '' },
       });
@@ -102,33 +138,37 @@
     revealPayoutAccount(reason, tenantSlug) {
       return tenantApi.apiFetch('/api/v2/settlement-finance/payout-account/reveal', {
         tenantSlug,
+        workerUrl,
         method: 'POST',
         body: { reason },
       });
     },
 
     getReport(tenantSlug, params = {}) {
-      return tenantApi.apiFetch(`/api/v2/settlement-finance/report${queryString(params)}`, { tenantSlug });
+      return tenantApi.apiFetch(`/api/v2/settlement-finance/report${queryString(params)}`, {
+        tenantSlug,
+        workerUrl,
+      });
     },
 
     listProofs(batchId, tenantSlug) {
       return tenantApi.apiFetch(
         `/api/v2/settlement-finance/batches/${encodeURIComponent(batchId)}/proofs`,
-        { tenantSlug },
+        { tenantSlug, workerUrl },
       );
     },
 
     uploadProof(batchId, data, tenantSlug) {
       return tenantApi.apiFetch(
         `/api/v2/settlement-finance/batches/${encodeURIComponent(batchId)}/proofs`,
-        { tenantSlug, method: 'POST', body: data || {} },
+        { tenantSlug, workerUrl, method: 'POST', body: data || {} },
       );
     },
 
     deleteProof(proofId, tenantSlug) {
       return tenantApi.apiFetch(
         `/api/v2/settlement-finance/proofs/${encodeURIComponent(proofId)}`,
-        { tenantSlug, method: 'DELETE' },
+        { tenantSlug, workerUrl, method: 'DELETE' },
       );
     },
 
