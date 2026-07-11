@@ -27,6 +27,9 @@ jobs:
       - name: Apply Phase 10 patches
         run: python .github/phase10-apply.py
 
+      - name: Keep workflow changes for connector update
+        run: git checkout -- .github/workflows/tenant-isolation-check.yml
+
       - name: Commit patched pages
         run: |
           git config user.name "github-actions[bot]"
