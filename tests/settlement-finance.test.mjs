@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 import {
   maskBankAccount,
   settlementProofStorageKey,
@@ -62,4 +63,8 @@ test('settlement report page uses tenant authentication and never embeds account
   assert.match(page, /financeApi\.fetchProofBlob/);
   assert.doesNotMatch(page, /account_ciphertext/);
   assert.doesNotMatch(page, /account_iv/);
+
+  const inlineScripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
+  assert.equal(inlineScripts.length > 0, true);
+  for (const script of inlineScripts) new vm.Script(script);
 });
