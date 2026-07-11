@@ -49,5 +49,5 @@ test('customer-safe settlement route runs before the legacy settlement router', 
   const legacyIndex = source.indexOf('isPlatformSettlementApiRequest(request)');
   assert.ok(safeIndex >= 0);
   assert.ok(legacyIndex > safeIndex);
-  assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase8'/);
+  assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase9'/);
 });
