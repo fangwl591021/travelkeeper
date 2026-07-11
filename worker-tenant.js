@@ -15,8 +15,13 @@ import {
   isTenantGatewayCallbackRequest,
   routeTenantGatewayCallback,
 } from './lib/tenant-gateway-callback-api.js';
+import {
+  isPlatformSettlementApiRequest,
+  routePlatformSettlementApi,
+} from './lib/platform-settlement-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
+import { statusForError } from './lib/http-error-status.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +32,7 @@ const CORS = {
 
 function withTenantHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase4');
+  headers.set('X-TravelKeeper-Tenant-Isolation', 'phase5');
   Object.entries(CORS).forEach(([key, value]) => {
     if (!headers.has(key)) headers.set(key, value);
   });
@@ -67,11 +72,10 @@ async function authenticatedTenantRequest(request, env) {
   return new Request(request, { headers });
 }
 
-function authErrorResponse(error) {
+function errorResponse(error) {
   const code = String(error?.message || error || 'AUTH_REQUIRED');
-  const status = code === 'LINE_ACCESS_TOKEN_CHANNEL_MISMATCH' ? 403 : 401;
   return withTenantHeaders(new Response(JSON.stringify({ success: false, error: code }), {
-    status,
+    status: statusForError(code, 400),
     headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' },
   }));
 }
@@ -90,6 +94,15 @@ export default {
       if (callbackResponse) return withTenantHeaders(callbackResponse);
     }
 
+    if (isPlatformSettlementApiRequest(request)) {
+      try {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routePlatformSettlementApi(securedRequest, env));
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+
     if (isTenantGatewayApiRequest(request)) {
       try {
         const securedRequest = await authenticatedTenantRequest(request, env);
@@ -99,7 +112,7 @@ export default {
           return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
         }
       } catch (error) {
-        return authErrorResponse(error);
+        return errorResponse(error);
       }
     }
 
@@ -108,7 +121,7 @@ export default {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
       } catch (error) {
-        return authErrorResponse(error);
+        return errorResponse(error);
       }
     }
 
@@ -117,7 +130,7 @@ export default {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantBookingApi(securedRequest, env, legacyWorker));
       } catch (error) {
-        return authErrorResponse(error);
+        return errorResponse(error);
       }
     }
 
@@ -126,7 +139,7 @@ export default {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantApi(securedRequest, env));
       } catch (error) {
-        return authErrorResponse(error);
+        return errorResponse(error);
       }
     }
 
