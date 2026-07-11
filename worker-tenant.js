@@ -11,6 +11,10 @@ import {
   isPublicTenantGatewayRequest,
   routeTenantGatewayApi,
 } from './lib/tenant-gateway-api.js';
+import {
+  isTenantGatewayCallbackRequest,
+  routeTenantGatewayCallback,
+} from './lib/tenant-gateway-callback-api.js';
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 
@@ -76,6 +80,14 @@ export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
+    }
+
+    // Gateway callbacks are public server-to-server requests. Process these
+    // before current policy checks so an in-flight payment remains durable
+    // even if an admin disables or changes the collection mode afterwards.
+    if (isTenantGatewayCallbackRequest(request)) {
+      const callbackResponse = await routeTenantGatewayCallback(request, env);
+      if (callbackResponse) return withTenantHeaders(callbackResponse);
     }
 
     if (isTenantGatewayApiRequest(request)) {
