@@ -27,7 +27,13 @@
     <section class="chat flex min-h-0 flex-col bg-slate-100">
       <header class="flex items-center justify-between gap-4 border-b border-slate-200 bg-white p-5"><div><h2 id="chat-name" class="text-xl font-black">請選擇聊天室</h2><p id="chat-meta" class="mt-1 text-sm text-slate-500">訊息只讀取目前租戶。</p></div><div class="flex gap-2"><a id="crm-link" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold">客戶 CRM</a><a id="dashboard-link" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold">回後台</a></div></header>
       <section id="messages" class="scroll flex-1 space-y-3 p-5"><div class="empty-card">選擇左側聊天室查看訊息。</div></section>
-      <footer class="border-t border-slate-200 bg-white p-4"><div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Phase 13 為監看與管理模式，尚未開放直接推送 LINE 回覆。</div></footer>
+            <footer class="composer border-t border-slate-200 bg-white p-4">
+        <textarea id="reply-text" rows="3" class="w-full rounded-xl border border-slate-200 px-4 py-3" placeholder="輸入 LINE 回覆內容，Enter 送出，Shift+Enter 換行" disabled></textarea>
+        <div class="mt-3 flex items-center justify-between gap-3">
+          <p id="reply-status" class="text-sm text-slate-500">請先選擇聊天室。</p>
+          <button id="send-message" disabled class="rounded-xl bg-emerald-600 px-5 py-3 font-black text-white disabled:opacity-40">送出</button>
+        </div>
+      </footer>
     </section>
 
     <aside class="detail scroll border-l border-slate-200 p-5">

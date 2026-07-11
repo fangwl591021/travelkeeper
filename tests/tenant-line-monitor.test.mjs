@@ -31,6 +31,7 @@ test('monitor page only uses tenant LINE and CRM clients', async () => {
   assert.match(controller, /listThreads/);
   assert.match(controller, /getThreadMessages/);
   assert.match(controller, /updateThread/);
+  assert.match(controller, /sendThreadMessage/);
   assert.match(controller, /initLiffSession/);
   assert.doesNotMatch(page + controller, /\/api\/line-oa\//);
   assert.doesNotMatch(page + controller, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
@@ -66,9 +67,14 @@ test('secured tenant routes return JSON status errors instead of Worker 500s', a
   assert.match(source, /async function securedRoute\(request, env, router\)/);
   assert.match(source, /catch \(error\) \{\s*return errorResponse\(error\);\s*\}/s);
 });
-test('Phase 13 does not enable outbound LINE sending', async () => {
+test('Phase 14 enables outbound LINE sending only through tenant V2 APIs', async () => {
   const monitor = await read('lib/tenant-line-monitor-api.js');
   const page = await read('line-oa-monitor.html');
-  assert.doesNotMatch(monitor, /api\.line\.me\/v2\/bot\/message\/push/);
-  assert.match(page, /尚未開放直接推送 LINE 回覆/);
+  const client = await read('js/tenant-line-client.js');
+  assert.match(monitor, /loadTenantLineSecrets\(env, ctx\.tenantSlug\)/);
+  assert.match(monitor, /LINE_PUSH_API_URL/);
+  assert.match(client, /\/api\/v2\/line\/threads\/\$\{encodeURIComponent\(threadId\)\}\/messages/);
+  assert.match(page, /reply-text/);
+  assert.doesNotMatch(page + client, /\/api\/line-oa\//);
+  assert.doesNotMatch(page + client, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv/i);
 });

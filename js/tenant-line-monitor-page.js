@@ -14,6 +14,7 @@
     ['tenant', 'worker', 'dev_uid'].forEach(key => { if (params.get(key)) q.set(key, params.get(key)); });
     return q.toString();
   };
+  const clientRequestId = () => `line-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
   function renderThreads() {
     const box = el('thread-list');
@@ -35,6 +36,19 @@
     });
   }
 
+  function updateComposer(enabled, statusText = '') {
+    el('reply-text').disabled = !enabled;
+    el('send-message').disabled = !enabled || !el('reply-text').value.trim();
+    el('reply-status').textContent = statusText || (enabled ? '可送出人工客服回覆。' : '請先選擇聊天室。');
+  }
+
+  function messageMeta(message) {
+    const parts = [message.message_type || message.event_type, fmt(message.created_at || message.event_timestamp)];
+    if (message.direction === 'outbound' && message.send_status) parts.push(message.send_status);
+    if (message.retryable) parts.push('可重試');
+    return parts.filter(Boolean).join('｜');
+  }
+
   function renderThread(data) {
     state.active = data.thread;
     renderThreads();
@@ -46,6 +60,7 @@
     el('note').value = data.thread.note || '';
     el('tags').value = (data.thread.tags || []).join(', ');
     el('save').disabled = false;
+    updateComposer(true);
 
     const box = el('messages');
     box.innerHTML = '';
@@ -56,7 +71,8 @@
     data.messages.forEach(message => {
       const row = document.createElement('div');
       row.className = `message-row ${message.direction === 'outbound' ? 'outbound' : ''}`;
-      row.innerHTML = `<div class="message-bubble"><p>${esc(message.content || `[${message.event_type || message.message_type || 'event'}]`)}</p><small>${esc(message.message_type || message.event_type)}｜${esc(fmt(message.created_at || message.event_timestamp))}${message.redelivery ? '｜redelivery' : ''}</small></div>`;
+      const statusClass = message.direction === 'outbound' && message.send_status ? ` status-${message.send_status}` : '';
+      row.innerHTML = `<div class="message-bubble${statusClass}"><p>${esc(message.content || message.text_content || `[${message.event_type || message.message_type || 'event'}]`)}</p><small>${esc(messageMeta(message))}${message.error_message_safe ? `｜${esc(message.error_message_safe)}` : ''}</small></div>`;
       box.appendChild(row);
     });
     box.scrollTop = box.scrollHeight;
@@ -83,6 +99,7 @@
       el('chat-meta').textContent = '請確認權限或聊天室是否存在。';
       el('messages').innerHTML = `<div class="error-card">${esc(page.friendlyError ? page.friendlyError(error) : error.message)}</div>`;
       el('save').disabled = true;
+      updateComposer(false, '無法在目前聊天室送出訊息。');
     }
   }
 
@@ -107,6 +124,27 @@
     }
   }
 
+  async function sendMessage() {
+    if (!state.active) return;
+    const messageText = el('reply-text').value.trim();
+    if (!messageText) return;
+    el('send-message').disabled = true;
+    updateComposer(false, '送出中…');
+    try {
+      const result = await api.sendThreadMessage(state.active.id, {
+        type: 'text',
+        text: messageText,
+        client_request_id: clientRequestId(),
+      });
+      el('reply-text').value = '';
+      el('reply-status').textContent = result.duplicate ? '已忽略重複送出。' : '已送出。';
+      await openThread(result.data.thread.id);
+    } catch (error) {
+      el('reply-status').textContent = page.friendlyError ? page.friendlyError(error) : error.message;
+      updateComposer(true, el('reply-status').textContent);
+    }
+  }
+
   async function init() {
     try {
       const session = await page.initLiffSession({ fallbackLiffId: '2009367829-BDZCGti8', requireContext: true });
@@ -115,6 +153,7 @@
       el('settings-link').href = `line-channel-settings.html?${query}`;
       el('crm-link').href = `crm.html?${query}`;
       el('dashboard-link').href = `dashboard.html?${query}`;
+      updateComposer(false);
       await loadThreads();
       if (params.get('thread')) await openThread(params.get('thread'));
     } catch (error) {
@@ -128,6 +167,13 @@
     state.search = event.target.value;
     searchTimer = setTimeout(loadThreads, 250);
   });
+  el('reply-text').addEventListener('input', () => updateComposer(!!state.active));
+  el('reply-text').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
   document.querySelectorAll('[data-status]').forEach(button => {
     button.addEventListener('click', () => {
       state.status = button.dataset.status;
@@ -135,6 +181,7 @@
       loadThreads();
     });
   });
+  el('send-message').addEventListener('click', sendMessage);
   el('save').addEventListener('click', saveThread);
   init();
 })(window);

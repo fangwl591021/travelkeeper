@@ -269,3 +269,20 @@ textarea:focus {
     min-height: 70vh;
   }
 }
+.composer textarea:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.message-bubble.status-pending {
+  opacity: .78;
+}
+
+.message-bubble.status-failed {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.message-bubble.status-sent small {
+  opacity: .72;
+}

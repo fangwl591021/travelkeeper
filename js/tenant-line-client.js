@@ -28,6 +28,12 @@
       });
     },
 
+    async sendThreadMessage(threadId, data = {}) {
+      return api(`/api/v2/line/threads/${encodeURIComponent(threadId)}/messages`, {
+        method: 'POST',
+        body: data,
+      });
+    },
     async getChannel() {
       return api('/api/v2/line/channel');
     },
