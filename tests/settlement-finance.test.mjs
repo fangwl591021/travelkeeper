@@ -56,6 +56,14 @@ test('finance API keeps proof files in authenticated R2 routes', async () => {
   assert.match(source, /payout_account\.reveal/);
 });
 
+test('settlement browser local mode is restricted to localhost workers', async () => {
+  const source = await readFile(new URL('../js/settlement-finance-client.js', import.meta.url), 'utf8');
+  assert.match(source, /new Set\(\['localhost', '127\.0\.0\.1', '\[::1\]'\]\)/);
+  assert.match(source, /localDev && devUid/);
+  assert.match(source, /ALLOW_LEGACY_UID_AUTH=1/);
+  assert.doesNotMatch(source, /dev_uid.*tenantApi\.DEFAULT_WORKER_URL/s);
+});
+
 test('settlement report page uses tenant authentication and never embeds account secrets', async () => {
   const page = await readFile(new URL('../settlements.html', import.meta.url), 'utf8');
   assert.match(page, /tenantApi\.getContext\(tenantSlug\)/);
