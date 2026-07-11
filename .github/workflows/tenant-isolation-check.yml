@@ -42,4 +42,5 @@ jobs:
             tests/tenant-isolation.test.mjs \
             tests/tenant-booking-isolation.test.mjs \
             tests/tenant-payment-modes.test.mjs \
-            tests/tenant-gateway-secrets.test.mjs
+            tests/tenant-gateway-secrets.test.mjs \
+            tests/tenant-gateway-callback.test.mjs
