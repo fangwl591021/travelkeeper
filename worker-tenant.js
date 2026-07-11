@@ -95,6 +95,9 @@ export default {
         const securedRequest = await authenticatedTenantRequest(request, env);
         const gatewayResponse = await routeTenantGatewayApi(securedRequest, env);
         if (gatewayResponse) return withTenantHeaders(gatewayResponse);
+        if (isTenantPaymentApiRequest(request)) {
+          return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
+        }
       } catch (error) {
         return authErrorResponse(error);
       }
