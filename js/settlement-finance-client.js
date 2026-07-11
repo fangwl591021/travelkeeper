@@ -4,6 +4,31 @@
   const tenantApi = global.TravelKeeperTenantApi;
   if (!tenantApi) throw new Error('TravelKeeperTenantApi is required before settlement-finance-client.js');
 
+  const originalFriendlyError = tenantApi.friendlyError.bind(tenantApi);
+  const financeErrors = {
+    PAYOUT_ACCOUNT_NOT_FOUND: '找不到此租戶的收款帳戶。',
+    PAYOUT_ACCOUNT_NOT_CONFIGURED: '此租戶尚未完成收款帳戶設定。',
+    PAYOUT_ACCOUNT_NOT_VERIFIED: '此收款帳戶尚未通過平台驗證。',
+    INVALID_PAYOUT_METHOD: '收款方式設定錯誤。',
+    INVALID_BANK_ACCOUNT: '銀行代碼、戶名或帳號格式不正確。',
+    INVALID_PAYOUT_ACCOUNT_STATUS: '收款帳戶驗證狀態不正確。',
+    PAYOUT_ACCOUNT_REVEAL_REASON_REQUIRED: '查看完整帳號前必須填寫合理原因。',
+    PAYOUT_ACCOUNT_DECRYPT_FAILED: '無法解密此收款帳戶，請聯絡平台管理員。',
+    SETTLEMENT_BATCH_NOT_FOUND: '找不到此結算批次。',
+    PROOF_NOT_FOUND: '找不到此匯款憑證，或憑證已刪除。',
+    INVALID_PROOF_FILE: '憑證檔案內容無效。',
+    INVALID_PROOF_FILE_TYPE: '憑證僅支援 PDF、JPG、PNG 或 WebP。',
+    INVALID_PROOF_TYPE: '憑證分類不正確。',
+    PROOF_FILE_TOO_LARGE: '憑證檔案不可超過 8MB。',
+    INVALID_REPORT_DATE: '報表日期格式不正確。',
+    R2_REQUIRED: '私有附件儲存服務尚未設定。',
+  };
+
+  tenantApi.friendlyError = function settlementFriendlyError(error) {
+    const code = String(error?.code || error?.message || '');
+    return financeErrors[code] || originalFriendlyError(error);
+  };
+
   function queryString(params = {}) {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => {
