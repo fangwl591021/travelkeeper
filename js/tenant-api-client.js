@@ -71,6 +71,7 @@
       ORDER_NOT_FOUND: '找不到此訂單。',
       ORDER_CUSTOMER_MISMATCH: '此訂單不屬於目前登入的 LINE 帳號。',
       PAYMENT_AMOUNT_INVALID: '付款金額不正確，請聯絡業務人員。',
+      PAYMENT_AMOUNT_MISMATCH: '金流回傳金額與訂單不符，請聯絡平台管理員。',
       PAYMENT_ALREADY_COMPLETED: '此筆款項已完成付款。',
       TENANT_PAYMENT_CONFIGURATION_REQUIRED: '此業者目前採人工收款或金流尚未完成設定，訂單已建立，客服將協助確認付款方式。',
       PLATFORM_PAYMENT_DISABLED: '平台代收目前未啟用，訂單已建立，客服將協助確認付款方式。',
@@ -79,6 +80,19 @@
       PLATFORM_COLLECTION_APPROVAL_REQUIRED: '平台代收必須由平台總管理員核准。',
       PAYMENT_PROVIDER_REQUIRED: '選擇自有金流時必須指定金流服務商。',
       INVALID_COLLECTION_MODE: '收款模式設定錯誤。',
+      TENANT_GATEWAY_POLICY_MISMATCH: '請先將此租戶的收款模式設定為自有金流。',
+      TENANT_GATEWAY_PROVIDER_UNSUPPORTED: '目前自有金流只支援藍新金流。',
+      TENANT_GATEWAY_NOT_CONFIGURED: '自有金流參數尚未完成設定。',
+      TENANT_GATEWAY_DISABLED: '此租戶的自有金流目前未啟用。',
+      TENANT_PAYMENT_MASTER_KEY_MISSING: '平台尚未設定租戶金流加密主密鑰。',
+      TENANT_PAYMENT_MASTER_KEY_WEAK: '租戶金流加密主密鑰長度不足。',
+      TENANT_PAYMENT_KEY_VERSION_MISMATCH: '找不到此金流密文對應的加密金鑰版本。',
+      TENANT_GATEWAY_SECRET_INVALID: 'Hash Key 與 Hash IV 必須同時提供。',
+      TENANT_GATEWAY_SECRET_DECRYPT_FAILED: '無法解密此租戶的金流參數。',
+      INVALID_MERCHANT_ID: '請輸入有效的藍新 Merchant ID。',
+      INVALID_HASH_KEY_LENGTH: '藍新 Hash Key 必須為 32 個字元。',
+      INVALID_HASH_IV_LENGTH: '藍新 Hash IV 必須為 16 個字元。',
+      INVALID_GATEWAY_URL: '金流網址必須是有效的 HTTPS 網址。',
     };
     return map[code] || code;
   }
@@ -162,6 +176,18 @@
 
     updatePaymentPolicy(data, tenantSlug) {
       return apiFetch('/api/v2/tenant/payment-policy', {
+        tenantSlug,
+        method: 'POST',
+        body: data,
+      });
+    },
+
+    getPaymentGateway(tenantSlug) {
+      return apiFetch('/api/v2/tenant/payment-gateway', { tenantSlug });
+    },
+
+    updatePaymentGateway(data, tenantSlug) {
+      return apiFetch('/api/v2/tenant/payment-gateway', {
         tenantSlug,
         method: 'POST',
         body: data,
