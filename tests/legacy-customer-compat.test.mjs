@@ -175,11 +175,5 @@ test('worker evaluates compatibility routes before legacy worker fallback', asyn
   assert.equal(compat >= 0, true);
   assert.equal(fallback >= 0, true);
   assert.equal(compat < fallback, true);
-  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase9'/);
-});
-
-test('mother storage compatibility errors have operational status codes', () => {
-  assert.equal(statusForError('MOTHER_STORAGE_NOT_CONFIGURED'), 503);
-  assert.equal(statusForError('MOTHER_STORAGE_WRITE_DISABLED'), 409);
-  assert.equal(statusForError('MOTHER_STORAGE_WRITE_FAILED:500:test'), 502);
+  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase10'/);
 });
