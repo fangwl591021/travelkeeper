@@ -41,6 +41,10 @@ jobs:
           node --check lib/settlement-finance-api.js
           node --check lib/settlement-payment-control-api.js
           node --check lib/legacy-customer-compat-api.js
+          node --check lib/tenant-order-actions-api.js
+          node --check lib/tenant-profile-api.js
+          node --check lib/tenant-distributor-api.js
+          node --check js/tenant-page-client.js
           node --check js/settlement-finance-client.js
 
       - name: Run booking isolation tests
@@ -51,6 +55,9 @@ jobs:
 
       - name: Run legacy compatibility tests
         run: node --test tests/legacy-customer-compat.test.mjs
+
+      - name: Run Phase 10 page migration tests
+        run: node --test tests/tenant-page-migration.test.mjs
 
       - name: Run existing tenant tests
         run: |
