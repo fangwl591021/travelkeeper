@@ -46,6 +46,11 @@ test('LINE channel secrets use tenant-bound AES-GCM and do not store plaintext',
   }), /TENANT_GATEWAY_SECRET_DECRYPT_FAILED/);
 });
 
+test('LINE channel secret rotation can overwrite undecryptable existing ciphertext', async () => {
+  const source = await read('lib/tenant-line-channel-api.js');
+  assert.match(source, /const needsExistingSecret = !channelSecret \|\| !accessToken/);
+  assert.match(source, /needsExistingSecret && existing\?\.secrets_ciphertext/);
+});
 test('LINE webhook uses HMAC SHA-256 base64 over the exact raw body', async () => {
   const body = JSON.stringify({ destination: 'UDEST', events: [{ type: 'message' }] });
   const signature = await lineSignature(body, 'channel-secret');

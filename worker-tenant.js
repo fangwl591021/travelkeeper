@@ -77,8 +77,12 @@ function errorResponse(error) {
 }
 
 async function securedRoute(request, env, router) {
-  const securedRequest = await authenticatedTenantRequest(request, env);
-  return withTenantHeaders(await router(securedRequest, env));
+  try {
+    const securedRequest = await authenticatedTenantRequest(request, env);
+    return withTenantHeaders(await router(securedRequest, env));
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 export default {

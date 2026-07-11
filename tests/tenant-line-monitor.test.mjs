@@ -50,6 +50,11 @@ test('worker routes LINE monitor before CRM and generic APIs', async () => {
   assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase13'/);
 });
 
+test('secured tenant routes return JSON status errors instead of Worker 500s', async () => {
+  const source = await read('worker-tenant.js');
+  assert.match(source, /async function securedRoute\(request, env, router\)/);
+  assert.match(source, /catch \(error\) \{\s*return errorResponse\(error\);\s*\}/s);
+});
 test('Phase 13 does not enable outbound LINE sending', async () => {
   const monitor = await read('lib/tenant-line-monitor-api.js');
   const page = await read('line-oa-monitor.html');
