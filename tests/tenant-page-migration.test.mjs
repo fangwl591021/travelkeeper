@@ -4,13 +4,15 @@ import { readFile } from 'node:fs/promises';
 
 const read = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('Phase 10 Worker routes tenant page APIs before the generic V2 router', async () => {
+test('Phase 11 Worker routes tenant page and CRM APIs before the generic V2 router', async () => {
   const worker = await read('worker-tenant.js');
   assert.match(worker, /tenant-order-actions-api/);
   assert.match(worker, /tenant-profile-api/);
   assert.match(worker, /tenant-distributor-api/);
+  assert.match(worker, /tenant-crm-api/);
   assert.ok(worker.indexOf('isTenantOrderActionRequest(request)') < worker.indexOf('isTenantApiRequest(request)'));
-  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase10'/);
+  assert.ok(worker.indexOf('isTenantCrmApiRequest(request)') < worker.indexOf('isTenantApiRequest(request)'));
+  assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase11'/);
 });
 
 test('shared page client uses tenant Bearer APIs and normalizes legacy views', async () => {
@@ -47,12 +49,27 @@ test('old admin page redirects to the canonical tenant dashboard', async () => {
   assert.doesNotMatch(page, /action=getAllOrders/);
 });
 
-test('CRM combines tenant customer/order APIs and keeps global LINE CRM demo-only', async () => {
+test('CRM page uses the unified tenant CRM client for every tenant', async () => {
   const page = await read('crm.html');
-  assert.match(page, /tenantPage\.listCustomers/);
-  assert.match(page, /tenantPage\.listOrders/);
-  assert.match(page, /tenantSlug === 'demo'/);
+  assert.match(page, /tenant-crm-client\.js/);
+  assert.match(page, /TravelKeeperTenantCrm/);
+  assert.match(page, /crmApi\.load\(\)/);
+  assert.match(page, /crmApi\.saveProfile/);
+  assert.match(page, /crmApi\.saveRecord/);
+  assert.match(page, /crmApi\.deleteRecord/);
   assert.match(page, /tenantPage\.initLiffSession/);
+  assert.doesNotMatch(page, /\/api\/line-oa\/crm/);
+  assert.doesNotMatch(page, /\/api\/line-oa\/customer-profiles/);
+  assert.doesNotMatch(page, /tenantSlug === 'demo'/);
+});
+
+test('tenant CRM browser client only calls V2 tenant CRM paths', async () => {
+  const source = await read('js/tenant-crm-client.js');
+  assert.match(source, /\/api\/v2\/crm/);
+  assert.match(source, /\/api\/v2\/crm\/profiles/);
+  assert.match(source, /\/api\/v2\/crm\/threads/);
+  assert.match(source, /\/api\/v2\/crm\/records/);
+  assert.doesNotMatch(source, /api\/line-oa/);
 });
 
 test('customer payment pages require tenant LIFF authentication', async () => {
@@ -78,14 +95,17 @@ test('model page uses tenant public itineraries and tenant staff APIs', async ()
   assert.match(page, /tenant=\$\{encodeURIComponent\(tenantSlug\)\}/);
 });
 
-test('tenant order, profile and distributor modules are tenant scoped', async () => {
+test('tenant order, profile, distributor and CRM modules are tenant scoped', async () => {
   const order = await read('lib/tenant-order-actions-api.js');
   const profile = await read('lib/tenant-profile-api.js');
   const distributors = await read('lib/tenant-distributor-api.js');
+  const crm = await read('lib/tenant-crm-api.js');
   const tenantApi = await read('lib/tenant-api.js');
   assert.match(order, /WHERE tenant_slug = \? AND order_id = \?/);
   assert.match(tenantApi, /WHERE tenant_slug = \? AND order_id = \?/);
   assert.match(tenantApi, /customer_line_uid === context\.userUid/);
   assert.match(profile, /ON CONFLICT\(tenant_slug, user_uid\)/);
   assert.match(distributors, /WHERE m\.tenant_slug = \?/);
+  assert.match(crm, /WHERE c\.tenant_slug = \?/);
+  assert.match(crm, /WHERE r\.tenant_slug = \?/);
 });
