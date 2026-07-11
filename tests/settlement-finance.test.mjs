@@ -56,6 +56,13 @@ test('finance API keeps proof files in authenticated R2 routes', async () => {
   assert.match(source, /payout_account\.reveal/);
 });
 
+
+test('finance API writes reveal audit events to the tenant-scoped audit log', async () => {
+  const source = await readFile(new URL('../lib/settlement-finance-api.js', import.meta.url), 'utf8');
+  assert.match(source, /INSERT INTO audit_logs/);
+  assert.match(source, /payout_account\.reveal/);
+  assert.doesNotMatch(source, /INSERT INTO tenant_audit_logs/);
+});
 test('settlement browser local mode is restricted to localhost workers', async () => {
   const source = await readFile(new URL('../js/settlement-finance-client.js', import.meta.url), 'utf8');
   assert.match(source, /new Set\(\['localhost', '127\.0\.0\.1', '\[::1\]'\]\)/);
@@ -75,4 +82,11 @@ test('settlement report page uses tenant authentication and never embeds account
   const inlineScripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
   assert.equal(inlineScripts.length > 0, true);
   for (const script of inlineScripts) new vm.Script(script);
+});
+
+test('dashboard exposes settlement reports only to admin users with tenant context', async () => {
+  const dashboard = await readFile(new URL('../dashboard.html', import.meta.url), 'utf8');
+  assert.match(dashboard, /id:'settlements'/);
+  assert.match(dashboard, /href:`settlements\.html\?tenant=\$\{encodeURIComponent/);
+  assert.match(dashboard, /show: isAdmin/);
 });

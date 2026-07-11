@@ -1444,6 +1444,8 @@ function buildMenu({ isAdmin, canUpload, badges }) {
       href:'wego-internal.html' },
     { id:'internal-accounting', icon:'🔍', label:'查帳', show: isAdmin,
       href:'internal-accounting.html' },
+    { id:'settlements', icon:'🏦', label:'結算報表', show: isAdmin,
+      href:`settlements.html?tenant=${encodeURIComponent(new URLSearchParams(location.search).get('tenant') || 'demo')}` },
     { id:'commission',   icon:'💰', label: isAdmin ? '佣金結算' : '我的佣金', show:true,
       badge: badges.payableCount },
     { id:'customers',    icon:'👤', label:'我的客戶',   show: !isAdmin },
