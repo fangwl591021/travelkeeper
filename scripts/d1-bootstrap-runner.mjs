@@ -26,13 +26,10 @@ export function createLedgerSchema(db) {
     "error_message TEXT NOT NULL DEFAULT ''," +
     "applied_statement_count INTEGER NOT NULL DEFAULT 0," +
     "completed_at TEXT NOT NULL DEFAULT ''," +
-<<<<<<< HEAD
-=======
     "failure_statement_index INTEGER NOT NULL DEFAULT -1," +
     "failure_statement_type TEXT NOT NULL DEFAULT ''," +
     "failure_statement_checksum TEXT NOT NULL DEFAULT ''," +
     "failure_error_safe TEXT NOT NULL DEFAULT ''," +
->>>>>>> db5f466 (Complete remote D1 bootstrap ledger proof)
     "created_at TEXT NOT NULL DEFAULT (datetime('now'))" +
     ")"
   );
@@ -73,15 +70,10 @@ function insertLedger(db, row) {
     "INSERT INTO " + LEDGER_TABLE + " (" +
     "entry_type, baseline_version, migration_version, migration_start, migration_end, " +
     "bootstrap_checksum, manifest_checksum, migration_checksum, source_commit, schema_checksum, status, " +
-<<<<<<< HEAD
-    "statement_index, error_type, error_message" +
-    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-=======
     "migration_first, migration_last, migration_count, statement_count, applied_statement_count, " +
     "statement_index, error_type, error_message, failure_statement_index, failure_statement_type, " +
     "failure_statement_checksum, failure_error_safe" +
     ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
->>>>>>> db5f466 (Complete remote D1 bootstrap ledger proof)
   ).run(
     row.entry_type,
     row.baseline_version,
