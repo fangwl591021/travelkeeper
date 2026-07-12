@@ -30,6 +30,7 @@ import { isLegacyCustomerCompatRequest, routeLegacyCustomerCompatApi } from './l
 import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 import { statusForError } from './lib/http-error-status.js';
+import { isLineShadowEndpointRequest, mirrorVerifiedWebhookRequest, routeLineShadowEndpoint } from './lib/line-shadow-mirror.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -104,8 +105,16 @@ export default {
       const response = await routeTenantGatewayCallback(request, env);
       if (response) return withTenantHeaders(response, request, env);
     }
+    if (isLineShadowEndpointRequest(request)) {
+      const response = await routeLineShadowEndpoint(request, env);
+      if (response) return withTenantHeaders(response, request, env);
+    }
     if (isTenantLineWebhookRequest(request)) {
+      const mirrorRequest = request.clone();
       const response = await routeTenantLineWebhook(request, env);
+      if (response?.ok && typeof ctx?.waitUntil === 'function') {
+        ctx.waitUntil(mirrorVerifiedWebhookRequest(mirrorRequest, env).catch(() => ({ mirrored: 0, failed: 1 })));
+      }
       if (response) return withTenantHeaders(response, request, env);
     }
 
