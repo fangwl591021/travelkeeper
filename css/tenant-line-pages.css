@@ -288,3 +288,6 @@ textarea:focus {
 }
 
 .hidden { display: none !important; }
+
+.staging-badge { display: inline-flex; margin-left: 6px; padding: 2px 6px; border-radius: 4px; background: #b91c1c; color: #fff; font-size: 11px; font-weight: 900; letter-spacing: 0; vertical-align: middle; }
+.staging-badge.hidden, .staging-badge[hidden] { display: none; }

@@ -69,7 +69,7 @@ test('worker routes LINE monitor before CRM and generic APIs', async () => {
 test('secured tenant routes return JSON status errors instead of Worker 500s', async () => {
   const source = await read('worker-tenant.js');
   assert.match(source, /async function securedRoute\(request, env, router\)/);
-  assert.match(source, /catch \(error\) \{\s*return errorResponse\(error\);\s*\}/s);
+  assert.match(source, /catch \(error\) \{\s*return errorResponse\(error, request, env\);\s*\}/s);
 });
 test('Phase 14 enables outbound LINE sending only through tenant V2 APIs', async () => {
   const monitor = await read('lib/tenant-line-monitor-api.js');

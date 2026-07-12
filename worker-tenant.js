@@ -38,10 +38,20 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-function withTenantHeaders(response) {
+function corsHeaders(request, env) {
+  const headers = { ...CORS };
+  if (String(env?.APP_ENV || '').toLowerCase() === 'staging') {
+    const allowed = String(env?.STAGING_ALLOWED_ORIGIN || '').trim();
+    headers['Access-Control-Allow-Origin'] = allowed && !allowed.includes('<') ? allowed : 'null';
+  }
+  return headers;
+}
+
+function withTenantHeaders(response, request = null, env = null) {
   const headers = new Headers(response.headers);
   headers.set('X-TravelKeeper-Tenant-Isolation', 'phase13');
-  Object.entries(CORS).forEach(([key, value]) => { if (!headers.has(key)) headers.set(key, value); });
+  if (String(env?.APP_ENV || '').toLowerCase() === 'staging') headers.set('X-TravelKeeper-Environment', 'staging');
+  Object.entries(corsHeaders(request, env)).forEach(([key, value]) => { if (!headers.has(key)) headers.set(key, value); });
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -68,40 +78,40 @@ async function authenticatedTenantRequest(request, env) {
   return new Request(request, { headers });
 }
 
-function errorResponse(error) {
+function errorResponse(error, request = null, env = null) {
   const code = String(error?.message || error || 'AUTH_REQUIRED');
   return withTenantHeaders(new Response(JSON.stringify({ success: false, error: code }), {
     status: statusForError(code, 400),
     headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Cache-Control': 'no-store' },
-  }));
+  }), request, env);
 }
 
 async function securedRoute(request, env, router) {
   try {
     const securedRequest = await authenticatedTenantRequest(request, env);
-    return withTenantHeaders(await router(securedRequest, env));
+    return withTenantHeaders(await router(securedRequest, env), request, env);
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request, env);
   }
 }
 
 export default {
   async fetch(request, env, ctx) {
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request, env) });
 
     if (isTenantGatewayCallbackRequest(request)) {
       const response = await routeTenantGatewayCallback(request, env);
-      if (response) return withTenantHeaders(response);
+      if (response) return withTenantHeaders(response, request, env);
     }
     if (isTenantLineWebhookRequest(request)) {
       const response = await routeTenantLineWebhook(request, env);
-      if (response) return withTenantHeaders(response);
+      if (response) return withTenantHeaders(response, request, env);
     }
 
     try {
       if (isLegacyCustomerCompatRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeLegacyCustomerCompatApi(securedRequest, env, legacyWorker));
+        return withTenantHeaders(await routeLegacyCustomerCompatApi(securedRequest, env, legacyWorker), request, env);
       }
       if (isSettlementFinanceApiRequest(request)) return securedRoute(request, env, routeSettlementFinanceApi);
       if (isSettlementPaymentControlApiRequest(request)) return securedRoute(request, env, routeSettlementPaymentControlApi);
@@ -110,8 +120,8 @@ export default {
       if (isTenantGatewayApiRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
         const response = await routeTenantGatewayApi(securedRequest, env);
-        if (response) return withTenantHeaders(response);
-        if (isTenantPaymentApiRequest(request)) return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env));
+        if (response) return withTenantHeaders(response, request, env);
+        if (isTenantPaymentApiRequest(request)) return withTenantHeaders(await routeTenantPaymentApi(securedRequest, env), request, env);
       }
       if (isTenantPaymentApiRequest(request)) return securedRoute(request, env, routeTenantPaymentApi);
       if (isTenantOrderActionRequest(request)) return securedRoute(request, env, routeTenantOrderAction);
@@ -122,11 +132,11 @@ export default {
       if (isTenantCrmApiRequest(request)) return securedRoute(request, env, routeTenantCrmApi);
       if (isTenantBookingApiRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
-        return withTenantHeaders(await routeTenantBookingApi(securedRequest, env, legacyWorker));
+        return withTenantHeaders(await routeTenantBookingApi(securedRequest, env, legacyWorker), request, env);
       }
       if (isTenantApiRequest(request)) return securedRoute(request, env, routeTenantApi);
-    } catch (error) { return errorResponse(error); }
+    } catch (error) { return errorResponse(error, request, env); }
 
-    return withTenantHeaders(await legacyWorker.fetch(request, env, ctx));
+    return withTenantHeaders(await legacyWorker.fetch(request, env, ctx), request, env);
   },
 };

@@ -401,7 +401,17 @@
     }
   }
 
+  function renderEnvironmentBadge() {
+    const badge = el('staging-badge');
+    if (!badge) return;
+    const explicit = ['staging', 'true', '1'].includes(String(params.get('app_env') || params.get('env') || '').toLowerCase());
+    const stagingHost = /(^|[.-])staging([.-]|$)/i.test(location.hostname) || /travelkeeper-staging/i.test(location.hostname);
+    const show = explicit || stagingHost;
+    badge.hidden = !show;
+    badge.classList.toggle('hidden', !show);
+  }
   async function init() {
+    renderEnvironmentBadge();
     try {
       const session = await page.initLiffSession({ fallbackLiffId: '2009367829-BDZCGti8', requireContext: true });
       state.role = session.context?.role || '';

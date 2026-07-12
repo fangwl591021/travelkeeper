@@ -29,11 +29,11 @@ const requiredThreadColumns = [
   'sla_breached_at',
 ];
 const requiredSecrets = [
-  'LINE channel secret per tenant',
-  'LINE channel access token per tenant',
-  'TENANT_PAYMENT_MASTER_KEY',
-  'TENANT_PAYMENT_KEY_VERSION',
-  'auth/session secret used by LINE LIFF auth',
+  'TENANT_CREDENTIAL_MASTER_KEY',
+  'TENANT_PAYMENT_MASTER_KEY compatibility secret if still used by current code',
+  'SESSION_SECRET or current auth/session secret used by LINE LIFF auth',
+  'test LINE OA Channel Secret',
+  'test LINE OA Access Token',
 ];
 const featureFlags = [
   'TENANT_LINE_MONITOR_ENABLED',
@@ -42,17 +42,10 @@ const featureFlags = [
   'TENANT_LINE_SLA_ENABLED',
 ];
 
-function read(rel) {
-  return readFileSync(path.join(root, rel), 'utf8');
-}
-
-function status(name, ok, detail = '') {
-  return { name, ok: Boolean(ok), detail };
-}
-
-function quotePowerShellArg(value) {
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
+function read(rel) { return readFileSync(path.join(root, rel), 'utf8'); }
+function status(name, ok, detail = '') { return { name, ok: Boolean(ok), detail }; }
+function firstMatch(text, regex) { return regex.exec(text)?.[1] || ''; }
+function quotePowerShellArg(value) { return `'${String(value).replace(/'/g, "''")}'`; }
 
 function run(command, args) {
   if (args.includes('--remote')) throw new Error('Remote D1 access is blocked by Phase 16 readiness check');
@@ -80,23 +73,10 @@ function wranglerResults(output) {
   if (start < 0) return [];
   try { return JSON.parse(String(output).slice(start))?.[0]?.results || []; } catch (_) { return []; }
 }
-
-function redactName(name) {
-  return /(secret|token|authorization|replytoken|ciphertext|\biv\b)/i.test(String(name || '')) ? '[redacted-column]' : name;
-}
-
-function countFromOutput(output) {
-  return Number(wranglerResults(output)?.[0]?.count ?? 0);
-}
-function tableInfo(table) {
-  const result = wranglerSql(`PRAGMA table_info(${table})`);
-  return result.ok ? result.stdout : result.stderr;
-}
-
-function rowCount(table) {
-  const result = wranglerSql(`SELECT COUNT(*) AS count FROM ${table}`);
-  return result.ok ? result.stdout : result.stderr;
-}
+function redactName(name) { return /(secret|token|authorization|replytoken|ciphertext|\biv\b)/i.test(String(name || '')) ? '[redacted-column]' : name; }
+function countFromOutput(output) { return Number(wranglerResults(output)?.[0]?.count ?? 0); }
+function tableInfo(table) { const result = wranglerSql(`PRAGMA table_info(${table})`); return result.ok ? result.stdout : result.stderr; }
+function rowCount(table) { const result = wranglerSql(`SELECT COUNT(*) AS count FROM ${table}`); return result.ok ? result.stdout : result.stderr; }
 
 const checks = [];
 const warnings = [];
@@ -104,24 +84,33 @@ const blockers = [];
 const wrangler = existsSync(path.join(root, 'wrangler.toml')) ? read('wrangler.toml') : '';
 const wranglerExample = existsSync(path.join(root, 'wrangler.example.toml')) ? read('wrangler.example.toml') : '';
 const migrationsDir = path.join(root, 'migrations');
-const migrations = existsSync(migrationsDir)
-  ? readdirSync(migrationsDir).filter(file => /^\d+_.*\.sql$/.test(file)).sort()
-  : [];
+const migrations = existsSync(migrationsDir) ? readdirSync(migrationsDir).filter(file => /^\d+_.*\.sql$/.test(file)).sort() : [];
 const phaseMigrations = migrations.filter(file => /^01(0\d|1[0-3])_/.test(file));
+const hasStagingEnv = /\[env\.staging\]/.test(wrangler);
+const stagingBlock = hasStagingEnv ? wrangler.slice(wrangler.indexOf('[env.staging]')) : '';
+const productionD1Id = firstMatch(wrangler, /database_id\s*=\s*"([^"]+)"/);
+const stagingD1Id = firstMatch(wrangler, /\[\[env\.staging\.d1_databases\]\][\s\S]*?database_id\s*=\s*"([^"]+)"/);
 
 checks.push(status('worker entrypoint is worker-tenant.js', /main\s*=\s*"worker-tenant\.js"/.test(wrangler)));
+checks.push(status('production D1 binding remains DB/travelkeeper', /\[\[d1_databases\]\][\s\S]*?binding\s*=\s*"DB"[\s\S]*?database_name\s*=\s*"travelkeeper"[\s\S]*?database_id\s*=\s*"184f9dff-18fe-401f-9374-098ed7b0eb38"/.test(wrangler)));
 checks.push(status('D1 binding has migrations_dir', /migrations_dir\s*=\s*"migrations"/.test(wrangler)));
 checks.push(status('latest Phase 15B migration exists', migrations.includes('0113_tenant_line_sla.sql')));
 checks.push(status('Phase 13-15B migration range present', ['0109_tenant_crm.sql', '0110_tenant_line_channels.sql', '0111_tenant_line_outbound_messages.sql', '0112_tenant_line_work_queue.sql', '0113_tenant_line_sla.sql'].every(file => migrations.includes(file))));
-checks.push(status('no staging env is currently configured in wrangler.toml', !/\[env\.staging\]/.test(wrangler), 'NO-GO until a distinct staging env and D1 id are configured'));
 checks.push(status('wrangler.example.toml keeps placeholder D1 id', /REPLACE_WITH_DATABASE_ID/.test(wranglerExample)));
+checks.push(status('staging env is configured in wrangler.toml', hasStagingEnv, 'NO-GO until [env.staging] is configured'));
+checks.push(status('staging Worker name is travelkeeper-staging', /\[env\.staging\][\s\S]*?name\s*=\s*"travelkeeper-staging"/.test(wrangler)));
+checks.push(status('staging D1 database name is travelkeeper-staging', /\[\[env\.staging\.d1_databases\]\][\s\S]*?database_name\s*=\s*"travelkeeper-staging"/.test(wrangler)));
+checks.push(status('staging D1 id is distinct from production', !!stagingD1Id && stagingD1Id !== productionD1Id && !/REPLACE_WITH/.test(stagingD1Id), stagingD1Id ? 'placeholder or distinct id required before remote deploy' : 'missing staging database_id'));
+checks.push(status('staging APP_ENV is explicit', /APP_ENV\s*=\s*"staging"/.test(stagingBlock)));
+checks.push(status('staging starts with monitor-only rollout flags', /TENANT_LINE_MONITOR_ENABLED\s*=\s*"1"/.test(stagingBlock) && /TENANT_LINE_QUEUE_ENABLED\s*=\s*"0"/.test(stagingBlock) && /TENANT_LINE_SLA_ENABLED\s*=\s*"0"/.test(stagingBlock) && /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/.test(stagingBlock)));
+checks.push(status('staging allowed origin is explicit and not wildcard', /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\//.test(stagingBlock) && !/STAGING_ALLOWED_ORIGIN\s*=\s*"\*"/.test(stagingBlock)));
+checks.push(status('staging LINE push uses mock until test OA is confirmed', /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\//.test(stagingBlock)));
 
-const d1Ids = [...wrangler.matchAll(/database_id\s*=\s*"([^"]+)"/g)].map(match => match[1]);
-const uniqueD1Ids = new Set(d1Ids);
-if (/\[env\.staging\]/.test(wrangler) && uniqueD1Ids.size < d1Ids.length) {
-  blockers.push('staging D1 database_id must not reuse another environment id');
-}
-if (!/\[env\.staging\]/.test(wrangler)) warnings.push('wrangler.toml has no [env.staging]; staging deployment is not ready yet.');
+if (!hasStagingEnv) blockers.push('wrangler.toml has no [env.staging]; staging deployment is not ready yet.');
+if (!stagingD1Id || /REPLACE_WITH/.test(stagingD1Id)) blockers.push('staging D1 database_id must be replaced after human-confirmed D1 creation.');
+if (stagingD1Id && stagingD1Id === productionD1Id) blockers.push('staging D1 database_id must not reuse production database_id.');
+blockers.push('staging secrets must be set with Wrangler after human confirmation; values were not read.');
+blockers.push('test LINE OA channel has not been confirmed in this checkout.');
 
 for (const file of phaseMigrations) {
   const sql = read(path.join('migrations', file));
@@ -130,7 +119,6 @@ for (const file of phaseMigrations) {
 
 const migrationList = run('npx.cmd', ['wrangler', 'd1', 'migrations', 'list', 'travelkeeper', ...localOnly]);
 checks.push(status('local D1 migration list command completed', migrationList.ok, migrationList.ok ? '' : migrationList.stderr));
-
 const schema = wranglerSql("SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name");
 checks.push(status('local D1 schema inventory query completed', schema.ok, schema.ok ? '' : schema.stderr));
 
@@ -140,16 +128,10 @@ for (const table of requiredTables) {
   const info = tableInfo(table);
   rawTableInfo[table] = info;
   const countOutput = rowCount(table);
-  tableResults[table] = {
-    columns: wranglerResults(info).map(row => redactName(row.name)),
-    row_count: countFromOutput(countOutput),
-  };
+  tableResults[table] = { columns: wranglerResults(info).map(row => redactName(row.name)), row_count: countFromOutput(countOutput) };
   checks.push(status(`local D1 table exists: ${table}`, !/no such table/i.test(info) && info.length > 0, /no such table/i.test(info) || !info.length ? 'missing-or-empty-output' : ''));
 }
-for (const column of requiredThreadColumns) {
-  checks.push(status(`tenant_crm_threads column: ${column}`, rawTableInfo.tenant_crm_threads.includes(column)));
-}
-
+for (const column of requiredThreadColumns) checks.push(status(`tenant_crm_threads column: ${column}`, rawTableInfo.tenant_crm_threads.includes(column)));
 const integrity = wranglerSql('PRAGMA foreign_key_check');
 const integrityRows = wranglerResults(integrity.stdout);
 checks.push(status('local D1 foreign_key_check command completed', integrity.ok && integrityRows.length === 0, integrity.ok ? `rows=${integrityRows.length}` : integrity.stderr));
@@ -159,10 +141,12 @@ const report = {
   mode: 'local-read-only',
   remote_d1_touched: false,
   production_secrets_read: false,
-  worker_entrypoint: /main\s*=\s*"([^"]+)"/.exec(wrangler)?.[1] || '',
-  default_d1_database_name: /database_name\s*=\s*"([^"]+)"/.exec(wrangler)?.[1] || '',
-  default_d1_database_id_present: d1Ids.length > 0,
-  staging_env_present: /\[env\.staging\]/.test(wrangler),
+  worker_entrypoint: firstMatch(wrangler, /main\s*=\s*"([^"]+)"/),
+  default_d1_database_name: firstMatch(wrangler, /database_name\s*=\s*"([^"]+)"/),
+  default_d1_database_id_present: Boolean(productionD1Id),
+  staging_env_present: hasStagingEnv,
+  staging_d1_database_name: firstMatch(wrangler, /\[\[env\.staging\.d1_databases\]\][\s\S]*?database_name\s*=\s*"([^"]+)"/),
+  staging_d1_database_id_status: stagingD1Id && !/REPLACE_WITH/.test(stagingD1Id) ? 'configured' : 'placeholder',
   required_secrets: requiredSecrets.map(name => ({ name, value_read: false, status: 'presence-only-check-required-in-staging' })),
   feature_flags: featureFlags,
   migration_count: migrations.length,
@@ -171,9 +155,8 @@ const report = {
   warnings,
   blockers,
   table_results: tableResults,
-  go_no_go: blockers.length || !/\[env\.staging\]/.test(wrangler) ? 'NO-GO' : 'GO',
+  go_no_go: blockers.length ? 'NO-GO' : 'GO',
 };
 
 console.log(JSON.stringify(report, null, 2));
-
 if (strict && report.go_no_go !== 'GO') process.exit(1);

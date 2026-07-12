@@ -63,9 +63,58 @@ test('Phase 16 feature flags are wired into LINE monitor, outbound, queue, and S
   assert.doesNotMatch(webhook, /if \(slaStart\)[\s\S]*?const slaStart/);
 });
 
-test('Phase 16 wrangler config assessment documents missing staging env instead of reusing production', async () => {
+test('Phase 16 wrangler config assessment keeps staging NO-GO until resources are confirmed', async () => {
   const wrangler = await read('wrangler.toml');
   const doc = await read('docs/phase16-staging-readiness.md');
-  assert.doesNotMatch(wrangler, /\[env\.staging\]/);
-  assert.match(doc, /NO-GO.*staging environment resources and secrets are not configured/is);
+  assert.match(wrangler, /\[env\.staging\]/);
+  assert.match(wrangler, /REPLACE_WITH_STAGING_D1_DATABASE_ID/);
+  assert.match(doc, /NO-GO/is);
+});
+
+test('Phase 16.1 wrangler staging env is separated and remains fail-closed until D1 id is confirmed', async () => {
+  const wrangler = await read('wrangler.toml');
+  assert.match(wrangler, /\[env\.staging\]/);
+  assert.match(wrangler, /name\s*=\s*"travelkeeper-staging"/);
+  assert.match(wrangler, /\[env\.staging\.vars\]/);
+  assert.match(wrangler, /APP_ENV\s*=\s*"staging"/);
+  assert.match(wrangler, /TENANT_LINE_MONITOR_ENABLED\s*=\s*"1"/);
+  assert.match(wrangler, /TENANT_LINE_QUEUE_ENABLED\s*=\s*"0"/);
+  assert.match(wrangler, /TENANT_LINE_SLA_ENABLED\s*=\s*"0"/);
+  assert.match(wrangler, /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/);
+  assert.match(wrangler, /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\/v2\/bot\/message\/push"/);
+  assert.match(wrangler, /\[\[env\.staging\.d1_databases\]\]/);
+  assert.match(wrangler, /database_name\s*=\s*"travelkeeper-staging"/);
+  assert.match(wrangler, /database_id\s*=\s*"REPLACE_WITH_STAGING_D1_DATABASE_ID"/);
+  assert.match(wrangler, /database_id\s*=\s*"184f9dff-18fe-401f-9374-098ed7b0eb38"/);
+  const prodIdIndex = wrangler.indexOf('184f9dff-18fe-401f-9374-098ed7b0eb38');
+  const stagingIndex = wrangler.indexOf('[[env.staging.d1_databases]]');
+  assert.ok(prodIdIndex >= 0 && stagingIndex > prodIdIndex);
+  assert.equal(wrangler.slice(stagingIndex).includes('184f9dff-18fe-401f-9374-098ed7b0eb38'), false);
+});
+
+test('Phase 16.1 readiness script treats placeholder staging resources as NO-GO', async () => {
+  const script = await read('scripts/staging-migration-check.mjs');
+  assert.match(script, /staging D1 database_id must be replaced/);
+  assert.match(script, /test LINE OA channel has not been confirmed/);
+  assert.match(script, /staging secrets must be set/);
+  assert.match(script, /staging_d1_database_id_status/);
+  assert.match(script, /production D1 binding remains DB\/travelkeeper/);
+  assert.match(script, /Remote D1 access is blocked/);
+});
+
+test('Phase 16.1 staging UI and Worker responses mark staging without exposing credentials', async () => {
+  const page = await read('line-oa-monitor.html');
+  const controller = await read('js/tenant-line-monitor-page.js');
+  const css = await read('css/tenant-line-pages.css');
+  const worker = await read('worker-tenant.js');
+  assert.match(page, /id="staging-badge"/);
+  assert.match(page, />STAGING<\/span>/);
+  assert.match(controller, /renderEnvironmentBadge/);
+  assert.match(controller, /app_env/);
+  assert.match(controller, /travelkeeper-staging/);
+  assert.match(css, /\.staging-badge/);
+  assert.match(worker, /STAGING_ALLOWED_ORIGIN/);
+  assert.match(worker, /X-TravelKeeper-Environment/);
+  assert.match(worker, /Access-Control-Allow-Origin'\] = allowed/);
+  assert.doesNotMatch(page + controller + worker, /channel_secret\s*[:=]\s*['"]|channel_access_token\s*[:=]\s*['"]|Authorization:\s*Bearer\s+\S+/i);
 });
