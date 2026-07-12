@@ -73,16 +73,13 @@ npx wrangler d1 create travelkeeper-staging # completed in Phase 16.2
 database_id = "e055e868-1a4f-4fdd-8e8f-f24594e52079"
 ```
 
-3. Set staging secrets, values entered interactively and never logged:
+3. Set staging Worker-level secret after the staging Worker exists, value entered interactively or through secure stdin and never logged:
 
 ```powershell
-npx wrangler secret put TENANT_CREDENTIAL_MASTER_KEY --env staging
-npx wrangler secret put SESSION_SECRET --env staging
 npx wrangler secret put TENANT_PAYMENT_MASTER_KEY --env staging
-npx wrangler secret put TENANT_PAYMENT_KEY_VERSION --env staging
 ```
 
-LINE test OA credentials should be stored in the staging D1 tenant channel row through the existing encrypted tenant LINE channel API, not in `wrangler.toml`.
+`TENANT_PAYMENT_KEY_VERSION` is version metadata and can remain a staging var unless rotation requires secret-only handling. Current Worker code does not reference `TENANT_CREDENTIAL_MASTER_KEY` or `SESSION_SECRET`; do not set them for staging until code starts using them. LINE test OA credentials should be stored in the staging D1 tenant channel row through the existing encrypted tenant LINE channel API, not in `wrangler.toml` and not as global Worker secrets.
 
 4. Staging migration inventory before apply:
 
@@ -118,14 +115,14 @@ https://<confirmed-travelkeeper-staging-host>/api/v2/line/webhook/{tenant_slug}
 
 ## Secrets Checklist
 
-Presence only, never values:
+Presence/status only, never values:
 
-- `TENANT_CREDENTIAL_MASTER_KEY`
-- `SESSION_SECRET` or the current auth/session secret used by this Worker
-- `TENANT_PAYMENT_MASTER_KEY` while current tenant encryption code still uses it
-- `TENANT_PAYMENT_KEY_VERSION`
-- Test LINE OA Channel Secret, encrypted in staging D1 tenant channel config
-- Test LINE OA Access Token, encrypted in staging D1 tenant channel config
+- `TENANT_PAYMENT_MASTER_KEY`: Worker-level secret used by current tenant gateway and tenant LINE credential encryption.
+- `TENANT_PAYMENT_KEY_VERSION`: key-version metadata, currently defaults to `v1` if absent.
+- `TENANT_CREDENTIAL_MASTER_KEY`: checked in Phase 16.3; not referenced by current Worker code.
+- `SESSION_SECRET`: checked in Phase 16.3; not referenced by current Worker code.
+- Test LINE OA Channel Secret: encrypted in staging D1 `tenant_line_channels` through the tenant channel API.
+- Test LINE OA Access Token: encrypted in staging D1 `tenant_line_channels` through the tenant channel API.
 
 ## LINE Test OA Plan
 
@@ -183,3 +180,15 @@ GO requires:
 - Staging migrations applied to `travelkeeper-staging` only.
 - Feature rollout smoke tests pass in order.
 - No credential values in UI, logs, D1 audit rows, or Git.
+
+## Phase 16.3 Remote Precheck
+
+- Cloudflare account confirmed: `Fangwl591021@gmail.com's Account` / `8058cf61f0cd44c4edd78080b193033a`.
+- Production D1 confirmed: `travelkeeper` / `184f9dff-18fe-401f-9374-098ed7b0eb38`.
+- Staging D1 confirmed: `travelkeeper-staging` / `e055e868-1a4f-4fdd-8e8f-f24594e52079`.
+- Staging D1 remote schema inventory before migration shows only Cloudflare internal `_cf_KV`; app migrations are pending.
+- `PRAGMA foreign_key_check` on staging D1 returned no rows.
+- `PRAGMA integrity_check` on staging D1 was blocked by Cloudflare D1 with `SQLITE_AUTH`.
+- `npx wrangler d1 migrations list DB --env staging --remote` shows all 34 migrations pending.
+- `travelkeeper-staging` Worker is not deployed yet; Wrangler cannot list or set Worker secrets for that Worker until it exists.
+- No remote migration, Worker deploy, LINE API call, webhook setting, production D1 operation, or production secret change was performed.

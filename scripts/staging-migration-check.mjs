@@ -29,11 +29,18 @@ const requiredThreadColumns = [
   'sla_breached_at',
 ];
 const requiredSecrets = [
-  'TENANT_CREDENTIAL_MASTER_KEY',
-  'TENANT_PAYMENT_MASTER_KEY compatibility secret if still used by current code',
-  'SESSION_SECRET or current auth/session secret used by LINE LIFF auth',
-  'test LINE OA Channel Secret',
-  'test LINE OA Access Token',
+  'TENANT_PAYMENT_MASTER_KEY',
+];
+const requiredVars = [
+  'TENANT_PAYMENT_KEY_VERSION',
+];
+const tenantLineCredentialStores = [
+  'tenant_line_channels.channel_secret encrypted via tenant LINE channel API',
+  'tenant_line_channels.channel_access_token encrypted via tenant LINE channel API',
+];
+const checkedButUnusedSecrets = [
+  'TENANT_CREDENTIAL_MASTER_KEY not referenced by current Worker code',
+  'SESSION_SECRET not referenced by current Worker code',
 ];
 const featureFlags = [
   'TENANT_LINE_MONITOR_ENABLED',
@@ -147,7 +154,10 @@ const report = {
   staging_env_present: hasStagingEnv,
   staging_d1_database_name: firstMatch(wrangler, /\[\[env\.staging\.d1_databases\]\][\s\S]*?database_name\s*=\s*"([^"]+)"/),
   staging_d1_database_id_status: stagingD1Id && !/REPLACE_WITH/.test(stagingD1Id) ? 'configured' : 'placeholder',
-  required_secrets: requiredSecrets.map(name => ({ name, value_read: false, status: 'presence-only-check-required-in-staging' })),
+  required_worker_secrets: requiredSecrets.map(name => ({ name, value_read: false, status: 'presence-only-check-required-in-staging-worker' })),
+  required_worker_vars: requiredVars.map(name => ({ name, value_read: false, status: 'presence-only-check-required-in-staging-worker' })),
+  tenant_line_credentials: tenantLineCredentialStores.map(name => ({ name, value_read: false, status: 'stored-encrypted-in-d1-not-worker-secret' })),
+  checked_but_unused_worker_secrets: checkedButUnusedSecrets,
   feature_flags: featureFlags,
   migration_count: migrations.length,
   phase_migrations: phaseMigrations,
