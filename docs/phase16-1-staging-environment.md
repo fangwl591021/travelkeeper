@@ -388,3 +388,14 @@ local prototype 已完成 canonical direct install、generated bootstrap install
 project-owned ledger 不修改 Cloudflare internal d1_migrations。bootstrap 只有全數成功才寫入 completed；失敗只留下 started/failed，不自動 destructive rollback。
 
 目前不建立 travelkeeper-staging-v2，不執行 remote bootstrap，不部署 Worker，不設定 secrets，不呼叫 LINE API。必須先完成 remote ledger 可追蹤性與失敗恢復 proof，整體 rollout 維持 NO-GO。
+
+## Phase 16.4A.4 Remote Proof
+
+- Remote target: travelkeeper-staging-v2 / 184b543d-100c-4f02-84bd-2d5edd1efe10
+- Bootstrap: 301 statements applied; canonical schema equivalence passed.
+- Final application schema: 45 tables, 130 indexes, 40 foreign keys, 23 unique constraints, 26 triggers.
+- Remote tenant mismatch proof: 26/26 insert/update cases rejected by the expected trigger with safe error output. Synthetic proof rows were removed; business tables remain empty except the canonical migration-created demo tenant.
+- Project-owned ledger: baseline 0001-0114, migration_count 35, statement_count 301, applied_statement_count 301, bootstrap/manifest/schema checksums and source commit recorded, status completed. Completion used a checksum- and statement-count-guarded single-row update.
+- Duplicate bootstrap after completion failed closed with duplicate schema error; ledger remained completed and no data changed.
+- Cloudflare D1 PRAGMA integrity_check returned SQLITE_AUTH; foreign_key_check returned no rows and normalized schema export equivalence passed.
+- No production D1, old staging D1, Worker deploy, secrets, webhook, LINE API, or Cloudflare internal d1_migrations operation was performed.

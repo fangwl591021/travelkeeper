@@ -12,6 +12,7 @@ export function createLedgerSchema(db) {
     "migration_start TEXT NOT NULL DEFAULT ''," +
     "migration_end TEXT NOT NULL DEFAULT ''," +
     "bootstrap_checksum TEXT NOT NULL DEFAULT ''," +
+    "manifest_checksum TEXT NOT NULL DEFAULT ''," +
     "migration_checksum TEXT NOT NULL DEFAULT ''," +
     "source_commit TEXT NOT NULL," +
     "schema_checksum TEXT NOT NULL," +
@@ -19,6 +20,8 @@ export function createLedgerSchema(db) {
     "statement_index INTEGER NOT NULL DEFAULT -1," +
     "error_type TEXT NOT NULL DEFAULT ''," +
     "error_message TEXT NOT NULL DEFAULT ''," +
+    "applied_statement_count INTEGER NOT NULL DEFAULT 0," +
+    "completed_at TEXT NOT NULL DEFAULT ''," +
     "created_at TEXT NOT NULL DEFAULT (datetime('now'))" +
     ")"
   );
@@ -58,9 +61,9 @@ function insertLedger(db, row) {
   db.prepare(
     "INSERT INTO " + LEDGER_TABLE + " (" +
     "entry_type, baseline_version, migration_version, migration_start, migration_end, " +
-    "bootstrap_checksum, migration_checksum, source_commit, schema_checksum, status, " +
+    "bootstrap_checksum, manifest_checksum, migration_checksum, source_commit, schema_checksum, status, " +
     "statement_index, error_type, error_message" +
-    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     row.entry_type,
     row.baseline_version,
@@ -68,6 +71,7 @@ function insertLedger(db, row) {
     row.migration_start || '',
     row.migration_end || '',
     row.bootstrap_checksum || '',
+    row.manifest_checksum || '',
     row.migration_checksum || '',
     row.source_commit,
     row.schema_checksum,
@@ -88,6 +92,7 @@ export function installBootstrap(db, { bootstrapSql, manifest }) {
     migration_start: manifest.migration_start,
     migration_end: manifest.migration_end,
     bootstrap_checksum: manifest.bootstrap_checksum,
+    manifest_checksum: manifest.manifest_checksum,
     source_commit: manifest.source_commit,
     schema_checksum: manifest.schema_checksum,
     status: 'started',
@@ -104,6 +109,7 @@ export function installBootstrap(db, { bootstrapSql, manifest }) {
         migration_start: manifest.migration_start,
         migration_end: manifest.migration_end,
         bootstrap_checksum: manifest.bootstrap_checksum,
+        manifest_checksum: manifest.manifest_checksum,
         source_commit: manifest.source_commit,
         schema_checksum: manifest.schema_checksum,
         status: 'failed',
@@ -115,16 +121,15 @@ export function installBootstrap(db, { bootstrapSql, manifest }) {
     }
   }
 
-  insertLedger(db, {
-    entry_type: 'baseline',
-    baseline_version: manifest.baseline_version,
-    migration_start: manifest.migration_start,
-    migration_end: manifest.migration_end,
-    bootstrap_checksum: manifest.bootstrap_checksum,
-    source_commit: manifest.source_commit,
-    schema_checksum: manifest.schema_checksum,
-    status: 'completed',
-  });
+  const completed = db.prepare(
+    "UPDATE " + LEDGER_TABLE + " SET status = 'completed', completed_at = datetime('now'), applied_statement_count = ? " +
+    "WHERE entry_type = 'baseline' AND baseline_version = ? AND status = 'started' " +
+    "AND bootstrap_checksum = ? AND manifest_checksum = ? AND schema_checksum = ?"
+  ).run(
+    statements.length, manifest.baseline_version, manifest.bootstrap_checksum,
+    manifest.manifest_checksum, manifest.schema_checksum,
+  );
+  if (completed.changes !== 1) throw new Error('baseline ledger completion requires exactly one matching started row');
   return { completed: true, statementCount: statements.length };
 }
 

@@ -73,11 +73,14 @@ test('bootstrap install matches canonical schema and writes completed project le
   const result = installBootstrap(db, artifact);
   assert.deepEqual(result, { completed: true, statementCount: 301 });
   assert.equal(compareSchemaSnapshots(artifact.schema, snapshotSqliteDatabase(db)).equal, true);
-  const ledger = db.prepare("SELECT entry_type, status, baseline_version, migration_start, migration_end, bootstrap_checksum, schema_checksum FROM " + LEDGER_TABLE + " WHERE status = 'completed'").all();
+  const ledger = db.prepare("SELECT entry_type, status, baseline_version, migration_start, migration_end, bootstrap_checksum, manifest_checksum, schema_checksum, applied_statement_count, completed_at FROM " + LEDGER_TABLE + " WHERE status = 'completed'").all();
   assert.equal(ledger.length, 1);
   assert.equal(ledger[0].baseline_version, '0001-0114');
   assert.equal(ledger[0].migration_start, '0001_initial_schema.sql');
   assert.equal(ledger[0].migration_end, '0114_d1_tenant_integrity_compat.sql');
+  assert.equal(ledger[0].manifest_checksum, artifact.manifest.manifest_checksum);
+  assert.equal(ledger[0].applied_statement_count, 301);
+  assert.notEqual(ledger[0].completed_at, '');
 });
 
 test('bootstrap and canonical clean schemas are equivalent', () => {

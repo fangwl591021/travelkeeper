@@ -152,3 +152,14 @@ bootstrap runner 的安全條件：
 - immutable/checksum drift tests：通過
 
 整體 rollout 仍為 NO-GO，因為 remote schema equivalence 與 trusted remote ledger 尚未證明。
+
+## Phase 16.4A.4 Remote Proof
+
+- Remote target: travelkeeper-staging-v2 / 184b543d-100c-4f02-84bd-2d5edd1efe10
+- Bootstrap: 301 statements applied; canonical schema equivalence passed.
+- Final application schema: 45 tables, 130 indexes, 40 foreign keys, 23 unique constraints, 26 triggers.
+- Remote tenant mismatch proof: 26/26 insert/update cases rejected by the expected trigger with safe error output. Synthetic proof rows were removed; business tables remain empty except the canonical migration-created demo tenant.
+- Project-owned ledger: baseline 0001-0114, migration_count 35, statement_count 301, applied_statement_count 301, bootstrap/manifest/schema checksums and source commit recorded, status completed. Completion used a checksum- and statement-count-guarded single-row update.
+- Duplicate bootstrap after completion failed closed with duplicate schema error; ledger remained completed and no data changed.
+- Cloudflare D1 PRAGMA integrity_check returned SQLITE_AUTH; foreign_key_check returned no rows and normalized schema export equivalence passed.
+- No production D1, old staging D1, Worker deploy, secrets, webhook, LINE API, or Cloudflare internal d1_migrations operation was performed.
