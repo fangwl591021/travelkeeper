@@ -32,8 +32,12 @@ INSERT INTO tenant_memberships (tenant_slug, user_uid, role, status, created_at,
 SELECT
   COALESCE(NULLIF(agency_slug, ''), 'demo'),
   uid,
-  IIF(can_upload = 1, 'editor', 'sales'),
-  IIF(lower(status) IN ('approved', 'active'), 'active', IIF(lower(status) = 'suspended', 'suspended', 'invited')),
+  CASE WHEN can_upload = 1 THEN 'editor' ELSE 'sales' END,
+  CASE
+    WHEN lower(status) IN ('approved', 'active') THEN 'active'
+    WHEN lower(status) = 'suspended' THEN 'suspended'
+    ELSE 'invited'
+  END,
   COALESCE(NULLIF(created_at, ''), datetime('now')),
   COALESCE(NULLIF(updated_at, ''), datetime('now'))
 FROM distributors
@@ -103,3 +107,48 @@ CREATE INDEX IF NOT EXISTS idx_payout_batches_tenant_created
   ON payout_batches(tenant_slug, created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created
   ON audit_logs(tenant_slug, created_at);
+
+-- Prevent newly written cross-tenant relationships.
+CREATE TRIGGER IF NOT EXISTS trg_orders_tenant_itinerary_insert
+BEFORE INSERT ON orders
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM itineraries i
+  WHERE i.id = NEW.itinerary_id AND i.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:order_itinerary');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_orders_tenant_itinerary_update
+BEFORE UPDATE OF tenant_slug, itinerary_id ON orders
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM itineraries i
+  WHERE i.id = NEW.itinerary_id AND i.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:order_itinerary');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payments_tenant_order_insert
+BEFORE INSERT ON payment_attempts
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM orders o
+  WHERE o.order_id = NEW.order_id AND o.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:payment_order');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payments_tenant_order_update
+BEFORE UPDATE OF tenant_slug, order_id ON payment_attempts
+FOR EACH ROW
+WHEN EXISTS (
+  SELECT 1 FROM orders o
+  WHERE o.order_id = NEW.order_id AND o.tenant_slug <> NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:payment_order');
+END;

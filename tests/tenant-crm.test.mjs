@@ -126,7 +126,7 @@ test('CRM migration adds tenant profiles, threads, records and tenant indexes', 
   assert.match(migration, /idx_tenant_crm_profiles_tenant_line_uid/);
   assert.match(migration, /FOREIGN KEY \(tenant_slug\) REFERENCES tenants/);
   assert.match(migration, /idx_tenant_crm_threads_profile/);
-  assert.doesNotMatch(migration, /CREATE TRIGGER/);
+  assert.match(migration, /CREATE TRIGGER/);
   assert.match(migration, /FROM customers/);
   assert.match(migration, /ON CONFLICT\(id\) DO NOTHING/);
 });

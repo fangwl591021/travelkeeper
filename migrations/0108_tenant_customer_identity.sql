@@ -47,5 +47,32 @@ CREATE INDEX IF NOT EXISTS idx_orders_tenant_customer_id
 CREATE INDEX IF NOT EXISTS idx_orders_tenant_contact_phone
   ON orders(tenant_slug, contact_phone, created_at);
 
--- New V2 order/customer tenant matching is enforced by the Worker before write.
--- Existing legacy rows with an empty customer_id remain readable.
+-- New V2 orders must point at the same tenant customer and the same legacy
+-- relation key. Existing legacy rows with an empty customer_id remain readable.
+CREATE TRIGGER IF NOT EXISTS trg_orders_tenant_customer_insert
+BEFORE INSERT ON orders
+FOR EACH ROW
+WHEN NEW.customer_id <> '' AND NOT EXISTS (
+  SELECT 1
+  FROM customers c
+  WHERE c.tenant_slug = NEW.tenant_slug
+    AND c.customer_id = NEW.customer_id
+    AND c.customer_phone = NEW.customer_phone
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:order_customer');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_orders_tenant_customer_update
+BEFORE UPDATE OF tenant_slug, customer_id, customer_phone ON orders
+FOR EACH ROW
+WHEN NEW.customer_id <> '' AND NOT EXISTS (
+  SELECT 1
+  FROM customers c
+  WHERE c.tenant_slug = NEW.tenant_slug
+    AND c.customer_id = NEW.customer_id
+    AND c.customer_phone = NEW.customer_phone
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH:order_customer');
+END;

@@ -16,7 +16,7 @@ test('customer identity migration keeps legacy relations and adds tenant uniquen
   assert.match(migration, /ALTER TABLE orders ADD COLUMN customer_id/);
   assert.match(migration, /ALTER TABLE orders ADD COLUMN contact_phone/);
   assert.match(migration, /idx_orders_tenant_customer_id/);
-  assert.doesNotMatch(migration, /CREATE TRIGGER/);
+  assert.match(migration, /CREATE TRIGGER/);
 });
 
 test('booking no longer rejects a phone because another tenant used the legacy key', async () => {

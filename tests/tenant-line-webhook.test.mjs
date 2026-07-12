@@ -95,7 +95,7 @@ test('migration enforces message and webhook tenant uniqueness', async () => {
   assert.match(migration, /UNIQUE INDEX IF NOT EXISTS idx_tenant_crm_messages_fingerprint/);
   assert.match(migration, /FOREIGN KEY \(profile_id\) REFERENCES tenant_crm_profiles\(id\)/);
   assert.match(migration, /FOREIGN KEY \(thread_id\) REFERENCES tenant_crm_threads\(id\)/);
-  assert.doesNotMatch(migration, /CREATE TRIGGER/);
+  assert.match(migration, /CREATE TRIGGER/);
 });
 
 test('LINE webhook and channel errors use precise HTTP status', () => {

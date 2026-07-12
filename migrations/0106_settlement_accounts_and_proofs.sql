@@ -59,3 +59,29 @@ ALTER TABLE platform_collection_batches ADD COLUMN payout_bank_code TEXT NOT NUL
 ALTER TABLE platform_collection_batches ADD COLUMN payout_bank_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE platform_collection_batches ADD COLUMN payout_account_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE platform_collection_batches ADD COLUMN payout_account_last4 TEXT NOT NULL DEFAULT '';
+
+CREATE TRIGGER IF NOT EXISTS trg_settlement_proof_tenant_insert
+BEFORE INSERT ON platform_collection_batch_proofs
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM platform_collection_batches b
+  WHERE b.id = NEW.batch_id
+    AND b.tenant_slug = NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH: settlement proof batch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_settlement_proof_tenant_update
+BEFORE UPDATE OF tenant_slug, batch_id ON platform_collection_batch_proofs
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM platform_collection_batches b
+  WHERE b.id = NEW.batch_id
+    AND b.tenant_slug = NEW.tenant_slug
+)
+BEGIN
+  SELECT RAISE(ABORT, 'TENANT_MISMATCH: settlement proof batch');
+END;

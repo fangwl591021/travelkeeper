@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const strict = process.argv.includes('--strict');
+const immutableBaselineCommit = '6bafde8a6ca6a4e29363e4f706d9d300e42882eb';
 const localOnly = ['--local'];
 const requiredTables = [
   'tenant_line_channels',
@@ -92,7 +93,9 @@ const wrangler = existsSync(path.join(root, 'wrangler.toml')) ? read('wrangler.t
 const wranglerExample = existsSync(path.join(root, 'wrangler.example.toml')) ? read('wrangler.example.toml') : '';
 const migrationsDir = path.join(root, 'migrations');
 const migrations = existsSync(migrationsDir) ? readdirSync(migrationsDir).filter(file => /^\d+_.*\.sql$/.test(file)).sort() : [];
-const phaseMigrations = migrations.filter(file => /^01(0\d|1[0-3])_/.test(file));
+const historicalMigrations = migrations.filter(file => Number(file.slice(0, 4)) <= 113);
+const phaseMigrations = migrations.filter(file => /^01(0\\d|1[0-3])_/.test(file));
+const forwardFixMigration = '0114_d1_tenant_integrity_compat.sql';
 const hasStagingEnv = /\[env\.staging\]/.test(wrangler);
 const stagingBlock = hasStagingEnv ? wrangler.slice(wrangler.indexOf('[env.staging]')) : '';
 const productionD1Id = firstMatch(wrangler, /database_id\s*=\s*"([^"]+)"/);
@@ -102,7 +105,10 @@ checks.push(status('worker entrypoint is worker-tenant.js', /main\s*=\s*"worker-
 checks.push(status('production D1 binding remains DB/travelkeeper', /\[\[d1_databases\]\][\s\S]*?binding\s*=\s*"DB"[\s\S]*?database_name\s*=\s*"travelkeeper"[\s\S]*?database_id\s*=\s*"184f9dff-18fe-401f-9374-098ed7b0eb38"/.test(wrangler)));
 checks.push(status('D1 binding has migrations_dir', /migrations_dir\s*=\s*"migrations"/.test(wrangler)));
 checks.push(status('latest Phase 15B migration exists', migrations.includes('0113_tenant_line_sla.sql')));
+checks.push(status('D1 tenant integrity forward-fix exists', migrations.includes(forwardFixMigration)));
 checks.push(status('Phase 13-15B migration range present', ['0109_tenant_crm.sql', '0110_tenant_line_channels.sql', '0111_tenant_line_outbound_messages.sql', '0112_tenant_line_work_queue.sql', '0113_tenant_line_sla.sql'].every(file => migrations.includes(file))));
+const immutableCheck = run('git', ['diff', '--quiet', immutableBaselineCommit, '--', ...historicalMigrations.map(file => path.join('migrations', file))]);
+checks.push(status('historical migrations match immutable Phase 16.3 baseline', immutableCheck.ok, immutableCheck.ok ? immutableBaselineCommit : immutableCheck.stderr || immutableCheck.stdout));
 checks.push(status('wrangler.example.toml keeps placeholder D1 id', /REPLACE_WITH_DATABASE_ID/.test(wranglerExample)));
 checks.push(status('staging env is configured in wrangler.toml', hasStagingEnv, 'NO-GO until [env.staging] is configured'));
 checks.push(status('staging Worker name is travelkeeper-staging', /\[env\.staging\][\s\S]*?name\s*=\s*"travelkeeper-staging"/.test(wrangler)));
@@ -160,6 +166,9 @@ const report = {
   checked_but_unused_worker_secrets: checkedButUnusedSecrets,
   feature_flags: featureFlags,
   migration_count: migrations.length,
+  immutable_baseline_commit: immutableBaselineCommit,
+  immutable_historical_migration_count: historicalMigrations.length,
+  forward_fix_migration: forwardFixMigration,
   phase_migrations: phaseMigrations,
   checks,
   warnings,

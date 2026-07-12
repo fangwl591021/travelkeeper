@@ -251,3 +251,42 @@ Integrity:
 Next step:
 
 - Phase 16.4B / 16.5 should perform staging Worker bootstrap deployment only after explicit approval of staging Worker target, staging secrets, and LINE Test OA. Do not enable outbound until monitor, queue, and SLA smoke tests pass in order.
+
+## Phase 16.4A.1 Migration Immutability and D1 Compatibility Fix
+
+Date: 2026-07-12
+
+Scope restrictions held:
+
+- No production D1 migration or write was performed.
+- No staging D1 delete, create, remote migration, Worker deploy, secret write, LINE API call, or webhook change was performed.
+- Production migration state was read-only checked and showed 0100 through 0113 pending; no production migration content was applied.
+
+Historical migration drift:
+
+- Phase 16.4A modified 10 historical files: 0100, 0101, 0102, 0103, 0104, 0106, 0108, 0109, 0110, and 0112.
+- The changes removed cross-table CREATE TRIGGER blocks and replaced selected CASE expressions with IIF(...) to work around Wrangler/D1 remote migration parsing.
+- The removed triggers protected order/itinerary, payment/order, payout batch/order, gateway policy, settlement payable/batch, settlement proof/batch, order/customer, CRM profile/customer, CRM thread/profile, CRM record/profile/thread, and CRM message/profile/thread tenant consistency.
+- All 10 historical files were restored byte-for-byte to the Phase 16.3 baseline commit 6bafde8a6ca6a4e29363e4f706d9d300e42882eb.
+- scripts/staging-migration-check.mjs now checks the historical migration set against this immutable baseline.
+
+Forward-fix:
+
+- Added migrations/0114_d1_tenant_integrity_compat.sql.
+- 0114 does not rebuild tables or add cross-table trigger SQL that the Wrangler/D1 migration splitter cannot reliably apply.
+- 0114 adds tenant-scoped unique indexes for existing parent and CRM/settlement identifiers.
+- Cross-table tenant consistency is enforced by trusted tenant context, tenant-scoped parent lookup, conditional writes, authorization, and application transactions. The residual risk is that a direct SQL writer bypassing the Worker/API can still bypass cross-table application validation until a D1-compatible composite-FK design is approved.
+
+Local validation:
+
+- Clean install: isolated local D1 applied 0001 through 0114, 35 migrations total; required tables and 0114 indexes were present.
+- Upgrade install: isolated local D1 applied 0001 through 0113, inserted 3 clearly marked synthetic CRM rows, then applied 0114; profiles, threads, and messages remained at 1 row each and 0114 indexes were present.
+- PRAGMA foreign_key_check returned no rows in the upgrade install.
+- PRAGMA integrity_check is blocked by the local Cloudflare D1 emulator with SQLITE_AUTH; this is recorded as a tool limitation.
+- The temporary local persistence directories used for these checks are untracked and must be removed before commit.
+
+Production go/no-go:
+
+- NO-GO for production migration. Production remains untouched, and staging travelkeeper-staging currently contains the previously applied drifted 34-migration history.
+- Because staging has no business data, the safer recovery is a human-approved new travelkeeper-staging-v2 D1, followed by clean migration validation. Do not delete travelkeeper-staging or create travelkeeper-staging-v2 in this phase.
+- Before any production migration, obtain a D1-compatible migration execution plan, repeat clean/upgrade validation, and confirm the application-layer cross-tenant negative tests.

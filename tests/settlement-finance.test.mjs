@@ -44,7 +44,7 @@ test('migration stores encrypted accounts and enforces proof tenant matching', a
   assert.match(migration, /account_iv TEXT NOT NULL/);
   assert.doesNotMatch(migration, /account_number TEXT/);
   assert.match(migration, /FOREIGN KEY \(batch_id\) REFERENCES platform_collection_batches\(id\) ON DELETE CASCADE/);
-  assert.doesNotMatch(migration, /CREATE TRIGGER/);
+  assert.match(migration, /CREATE TRIGGER/);
   assert.match(migration, /payout_account_last4/);
 });
 
