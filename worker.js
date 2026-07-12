@@ -4,7 +4,7 @@
 // ?垢?芷?????API ?踹???券鞈?
 // ============================================================
 
-import { mirrorVerifiedWebhookPayload } from './lib/line-shadow-mirror.js';
+import { mirrorVerifiedWebhookPayload, shadowObservation } from './lib/line-shadow-mirror.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -3670,6 +3670,7 @@ async function handleLineWebhookGateway(request, env, ctx) {
   }
   const valid = await verifyLineSignature(rawBody, signature, env.LINE_CHANNEL_SECRET);
   if (!valid) {
+    console.log(JSON.stringify(shadowObservation({ events: [] }, env, 'legacy', false)));
     return new Response('Invalid Signature', { status: 403, headers: CORS });
   }
 
@@ -3680,7 +3681,9 @@ async function handleLineWebhookGateway(request, env, ctx) {
     return json({ success: false, error: 'Invalid JSON body' }, 400);
   }
 
-  ctx.waitUntil((async () => {
+  const observation = shadowObservation(payload, env, 'legacy');
+  console.log(JSON.stringify(observation));
+  const backgroundWork = (async () => {
     try { await mirrorVerifiedWebhookPayload(payload, env); } catch (_) {}
     try {
       await storeLineWebhookEvents(env, payload);
@@ -3704,7 +3707,12 @@ async function handleLineWebhookGateway(request, env, ctx) {
     } catch (err) {
       console.error('line webhook background processing failed:', err.message);
     }
-  })());
+  })();
+  if (typeof ctx?.waitUntil === 'function') {
+    ctx.waitUntil(backgroundWork);
+  } else {
+    backgroundWork.catch(() => {});
+  }
 
   return json({
     success: true,

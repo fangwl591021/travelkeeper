@@ -15,6 +15,7 @@ import {
   routeLineShadowEndpoint,
   safeShadowEvent,
   shadowConfig,
+  shadowObservation,
   signShadowPayload,
   verifyShadowPayload,
 } from '../lib/line-shadow-mirror.js';
@@ -195,6 +196,32 @@ test('legacy production /line-webhook mirrors only after signature verification'
   const source = await read('worker.js');
   assert.match(source, /mirrorVerifiedWebhookPayload/);
   assert.ok(source.indexOf('const valid = await verifyLineSignature') < source.indexOf('mirrorVerifiedWebhookPayload(payload, env)'));
+});
+
+test('legacy observation is safe, exact-match based, and does not expose sensitive fields', () => {
+  const observation = shadowObservation({ events: [event(), { ...event(), type: 'message', source: { type: 'user', userId: 'U-OTHER' } }] }, env, 'legacy');
+  assert.equal(observation.route, 'legacy');
+  assert.equal(observation.signature_valid, true);
+  assert.equal(shadowObservation({ events: [] }, env, 'legacy', false).signature_valid, false);
+  assert.equal(observation.event_count, 2);
+  assert.equal(observation.allowlist_matched, true);
+  assert.equal(observation.shadow_scheduled, true);
+  assert.match(observation.correlation_id, /^[0-9a-f-]{36}$/);
+  assert.doesNotMatch(JSON.stringify(observation), /U-TEST-001|replyToken|channel_secret|channel_access_token|Authorization|ciphertext|iv|SHADOW-PHASE/i);
+});
+
+test('legacy handler safely handles missing execution context', async () => {
+  const source = await read('worker.js');
+  assert.match(source, /typeof ctx\?\.waitUntil === 'function'/);
+  assert.match(source, /backgroundWork\.catch\(\(\) => \{\}\)/);
+});
+
+test('legacy and tenant-v2 use distinct route markers for mirror diagnostics', async () => {
+  const tenantWorker = await read('worker-tenant.js');
+  const legacyWorker = await read('worker.js');
+  assert.match(legacyWorker, /shadowObservation\(payload, env, 'legacy'\)/);
+  assert.match(tenantWorker, /mirrorVerifiedWebhookRequest/);
+  assert.doesNotMatch(tenantWorker, /shadowObservation\(payload, env, 'legacy'\)/);
 });
 
 test('shadow endpoint remains monitor-only by configuration', async () => {
