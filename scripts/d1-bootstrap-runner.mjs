@@ -16,12 +16,23 @@ export function createLedgerSchema(db) {
     "migration_checksum TEXT NOT NULL DEFAULT ''," +
     "source_commit TEXT NOT NULL," +
     "schema_checksum TEXT NOT NULL," +
+    "migration_first TEXT NOT NULL DEFAULT ''," +
+    "migration_last TEXT NOT NULL DEFAULT ''," +
+    "migration_count INTEGER NOT NULL DEFAULT 0," +
+    "statement_count INTEGER NOT NULL DEFAULT 0," +
     "status TEXT NOT NULL CHECK (status IN ('started','completed','failed'))," +
     "statement_index INTEGER NOT NULL DEFAULT -1," +
     "error_type TEXT NOT NULL DEFAULT ''," +
     "error_message TEXT NOT NULL DEFAULT ''," +
     "applied_statement_count INTEGER NOT NULL DEFAULT 0," +
     "completed_at TEXT NOT NULL DEFAULT ''," +
+<<<<<<< HEAD
+=======
+    "failure_statement_index INTEGER NOT NULL DEFAULT -1," +
+    "failure_statement_type TEXT NOT NULL DEFAULT ''," +
+    "failure_statement_checksum TEXT NOT NULL DEFAULT ''," +
+    "failure_error_safe TEXT NOT NULL DEFAULT ''," +
+>>>>>>> db5f466 (Complete remote D1 bootstrap ledger proof)
     "created_at TEXT NOT NULL DEFAULT (datetime('now'))" +
     ")"
   );
@@ -62,8 +73,15 @@ function insertLedger(db, row) {
     "INSERT INTO " + LEDGER_TABLE + " (" +
     "entry_type, baseline_version, migration_version, migration_start, migration_end, " +
     "bootstrap_checksum, manifest_checksum, migration_checksum, source_commit, schema_checksum, status, " +
+<<<<<<< HEAD
     "statement_index, error_type, error_message" +
     ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+=======
+    "migration_first, migration_last, migration_count, statement_count, applied_statement_count, " +
+    "statement_index, error_type, error_message, failure_statement_index, failure_statement_type, " +
+    "failure_statement_checksum, failure_error_safe" +
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+>>>>>>> db5f466 (Complete remote D1 bootstrap ledger proof)
   ).run(
     row.entry_type,
     row.baseline_version,
@@ -76,9 +94,18 @@ function insertLedger(db, row) {
     row.source_commit,
     row.schema_checksum,
     row.status,
+    row.migration_first || '',
+    row.migration_last || '',
+    row.migration_count ?? 0,
+    row.statement_count ?? 0,
+    row.applied_statement_count ?? 0,
     row.statement_index ?? -1,
     row.error_type || '',
     row.error_message || '',
+    row.failure_statement_index ?? -1,
+    row.failure_statement_type || '',
+    row.failure_statement_checksum || '',
+    row.failure_error_safe || '',
   );
 }
 
@@ -95,6 +122,10 @@ export function installBootstrap(db, { bootstrapSql, manifest }) {
     manifest_checksum: manifest.manifest_checksum,
     source_commit: manifest.source_commit,
     schema_checksum: manifest.schema_checksum,
+    migration_first: manifest.migration_start,
+    migration_last: manifest.migration_end,
+    migration_count: manifest.migration_count,
+    statement_count: manifest.statement_count,
     status: 'started',
   });
 
@@ -112,6 +143,15 @@ export function installBootstrap(db, { bootstrapSql, manifest }) {
         manifest_checksum: manifest.manifest_checksum,
         source_commit: manifest.source_commit,
         schema_checksum: manifest.schema_checksum,
+        migration_first: manifest.migration_start,
+        migration_last: manifest.migration_end,
+        migration_count: manifest.migration_count,
+        statement_count: manifest.statement_count,
+        applied_statement_count: index,
+        failure_statement_index: index,
+        failure_statement_type: statement.type,
+        failure_statement_checksum: statement.checksum,
+        failure_error_safe: String(error.message || error).slice(0, 500),
         status: 'failed',
         statement_index: index,
         error_type: statement.type,
