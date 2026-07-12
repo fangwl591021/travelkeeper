@@ -399,3 +399,12 @@ project-owned ledger 不修改 Cloudflare internal d1_migrations。bootstrap 只
 - Duplicate bootstrap after completion failed closed with duplicate schema error; ledger remained completed and no data changed.
 - Cloudflare D1 PRAGMA integrity_check returned SQLITE_AUTH; foreign_key_check returned no rows and normalized schema export equivalence passed.
 - No production D1, old staging D1, Worker deploy, secrets, webhook, LINE API, or Cloudflare internal d1_migrations operation was performed.
+
+## Phase 16.4B-1 Staging-v2 Binding Preparation
+
+- [env.staging] now binds travelkeeper-staging-v2 with database id 184b543d-100c-4f02-84bd-2d5edd1efe10; the production binding remains travelkeeper / 184f9dff-18fe-401f-9374-098ed7b0eb38.
+- Initial rollout flags are monitor-only: TENANT_LINE_MONITOR_ENABLED=1; queue, SLA, and outbound remain 0.
+- STAGING_ALLOWED_ORIGIN remains a placeholder and is intentionally fail-closed until the actual staging host is approved.
+- LINE_PUSH_API_URL remains the non-routable mock endpoint; no real LINE API is configured.
+- staging-v2 bootstrap and project-owned ledger are completed; no staging secrets are configured and no LINE Test OA is connected.
+- Next step: first staging Worker deployment after explicit target, host, secrets, and Test OA confirmation.

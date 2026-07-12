@@ -37,6 +37,6 @@ LINE_PUSH_API_URL = "https://line-push-mock.invalid/v2/bot/message/push"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "travelkeeper-staging"
-database_id = "e055e868-1a4f-4fdd-8e8f-f24594e52079"
+database_name = "travelkeeper-staging-v2"
+database_id = "184b543d-100c-4f02-84bd-2d5edd1efe10"
 migrations_dir = "migrations"

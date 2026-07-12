@@ -67,7 +67,7 @@ test('Phase 16 wrangler config assessment keeps staging NO-GO until secrets and 
   const wrangler = await read('wrangler.toml');
   const doc = await read('docs/phase16-staging-readiness.md');
   assert.match(wrangler, /\[env\.staging\]/);
-  assert.match(wrangler, /database_id\s*=\s*"e055e868-1a4f-4fdd-8e8f-f24594e52079"/);
+  assert.match(wrangler, /database_id\s*=\s*"184b543d-100c-4f02-84bd-2d5edd1efe10"/);
   assert.match(doc, /NO-GO/is);
 });
 
@@ -83,8 +83,8 @@ test('Phase 16.2 wrangler staging env is separated with an independent D1 id and
   assert.match(wrangler, /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/);
   assert.match(wrangler, /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\/v2\/bot\/message\/push"/);
   assert.match(wrangler, /\[\[env\.staging\.d1_databases\]\]/);
-  assert.match(wrangler, /database_name\s*=\s*"travelkeeper-staging"/);
-  assert.match(wrangler, /database_id\s*=\s*"e055e868-1a4f-4fdd-8e8f-f24594e52079"/);
+  assert.match(wrangler, /database_name\s*=\s*"travelkeeper-staging-v2"/);
+  assert.match(wrangler, /database_id\s*=\s*"184b543d-100c-4f02-84bd-2d5edd1efe10"/);
   assert.match(wrangler, /database_id\s*=\s*"184f9dff-18fe-401f-9374-098ed7b0eb38"/);
   const prodIdIndex = wrangler.indexOf('184f9dff-18fe-401f-9374-098ed7b0eb38');
   const stagingIndex = wrangler.indexOf('[[env.staging.d1_databases]]');
@@ -116,4 +116,18 @@ test('Phase 16.1 staging UI and Worker responses mark staging without exposing c
   assert.match(worker, /X-TravelKeeper-Environment/);
   assert.match(worker, /Access-Control-Allow-Origin'\] = allowed/);
   assert.doesNotMatch(page + controller + worker, /channel_secret\s*[:=]\s*['"]|channel_access_token\s*[:=]\s*['"]|Authorization:\s*Bearer\s+\S+/i);
+});
+test('Phase 16.4B-1 staging-v2 isolation and first-deploy fail-closed settings', async () => {
+  const wrangler = await read('wrangler.toml');
+  const start = wrangler.indexOf('[[env.staging.d1_databases]]');
+  assert.ok(start >= 0);
+  const staging = wrangler.slice(start);
+  assert.match(staging, /database_name\s*=\s*"travelkeeper-staging-v2"/);
+  assert.match(staging, /database_id\s*=\s*"184b543d-100c-4f02-84bd-2d5edd1efe10"/);
+  assert.doesNotMatch(staging, /184f9dff-18fe-401f-9374-098ed7b0eb38/);
+  assert.match(wrangler, /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/);
+  assert.match(wrangler, /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\//);
+  assert.match(wrangler, /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\/travelkeeper-staging\.<replace-with-workers-subdomain>\.workers\.dev"/);
+  const script = await read('scripts/staging-migration-check.mjs');
+  assert.match(script, /staging allowed origin is still a placeholder/);
 });

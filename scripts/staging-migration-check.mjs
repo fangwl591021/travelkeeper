@@ -112,16 +112,17 @@ checks.push(status('historical migrations match immutable Phase 16.3 baseline', 
 checks.push(status('wrangler.example.toml keeps placeholder D1 id', /REPLACE_WITH_DATABASE_ID/.test(wranglerExample)));
 checks.push(status('staging env is configured in wrangler.toml', hasStagingEnv, 'NO-GO until [env.staging] is configured'));
 checks.push(status('staging Worker name is travelkeeper-staging', /\[env\.staging\][\s\S]*?name\s*=\s*"travelkeeper-staging"/.test(wrangler)));
-checks.push(status('staging D1 database name is travelkeeper-staging', /\[\[env\.staging\.d1_databases\]\][\s\S]*?database_name\s*=\s*"travelkeeper-staging"/.test(wrangler)));
+checks.push(status('staging D1 database name is travelkeeper-staging-v2', /\[\[env\.staging\.d1_databases\]\][\s\S]*?database_name\s*=\s*"travelkeeper-staging-v2"/.test(wrangler)));
 checks.push(status('staging D1 id is distinct from production', !!stagingD1Id && stagingD1Id !== productionD1Id && !/REPLACE_WITH/.test(stagingD1Id), stagingD1Id ? 'placeholder or distinct id required before remote deploy' : 'missing staging database_id'));
 checks.push(status('staging APP_ENV is explicit', /APP_ENV\s*=\s*"staging"/.test(stagingBlock)));
 checks.push(status('staging starts with monitor-only rollout flags', /TENANT_LINE_MONITOR_ENABLED\s*=\s*"1"/.test(stagingBlock) && /TENANT_LINE_QUEUE_ENABLED\s*=\s*"0"/.test(stagingBlock) && /TENANT_LINE_SLA_ENABLED\s*=\s*"0"/.test(stagingBlock) && /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/.test(stagingBlock)));
-checks.push(status('staging allowed origin is explicit and not wildcard', /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\//.test(stagingBlock) && !/STAGING_ALLOWED_ORIGIN\s*=\s*"\*"/.test(stagingBlock)));
+checks.push(status('staging allowed origin is explicit and not wildcard', /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\//.test(stagingBlock) && !/STAGING_ALLOWED_ORIGIN\s*=\s*"\*"/.test(stagingBlock) && !/<replace-with|replace-with-workers-subdomain>/i.test(stagingBlock)));
 checks.push(status('staging LINE push uses mock until test OA is confirmed', /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\//.test(stagingBlock)));
 
 if (!hasStagingEnv) blockers.push('wrangler.toml has no [env.staging]; staging deployment is not ready yet.');
 if (!stagingD1Id || /REPLACE_WITH/.test(stagingD1Id)) blockers.push('staging D1 database_id must be replaced after human-confirmed D1 creation.');
 if (stagingD1Id && stagingD1Id === productionD1Id) blockers.push('staging D1 database_id must not reuse production database_id.');
+if (/<replace-with|replace-with-workers-subdomain>/i.test(stagingBlock)) blockers.push('staging allowed origin is still a placeholder; CORS remains fail-closed until the staging host is confirmed.');
 blockers.push('staging secrets must be set with Wrangler after human confirmation; values were not read.');
 blockers.push('test LINE OA channel has not been confirmed in this checkout.');
 
