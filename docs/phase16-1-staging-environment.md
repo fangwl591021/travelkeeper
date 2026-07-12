@@ -376,3 +376,15 @@ GO/NO-GO:
 - Tooling and local canonical validation: GO.
 - Current staging remote schema equivalence: NO-GO.
 - staging-v2 creation: NOT AUTHORIZED in this phase; wait for a human-approved baseline plan.
+
+## Phase 16.4A.3 Canonical Remote Bootstrap Baseline
+
+本階段新增 scripts/d1-bootstrap-generator.mjs、scripts/d1-bootstrap-runner.mjs 與 scripts/d1-schema-equivalence.mjs，並產生 artifacts/d1-bootstrap/bootstrap.sql、manifest.json、schema.json。
+
+baseline 固定為 0001-0114，共 35 migrations、301 statements、26 triggers。生成內容只來自 canonical migrations；statement checksum、bootstrap checksum、manifest checksum 與 schema checksum 均可 deterministic 重算。
+
+local prototype 已完成 canonical direct install、generated bootstrap install、bootstrap + 0115 forward prototype、schema equivalence、empty DB gate、failure diagnostics、project-owned ledger 與 26-trigger cross-tenant negative tests。
+
+project-owned ledger 不修改 Cloudflare internal d1_migrations。bootstrap 只有全數成功才寫入 completed；失敗只留下 started/failed，不自動 destructive rollback。
+
+目前不建立 travelkeeper-staging-v2，不執行 remote bootstrap，不部署 Worker，不設定 secrets，不呼叫 LINE API。必須先完成 remote ledger 可追蹤性與失敗恢復 proof，整體 rollout 維持 NO-GO。
