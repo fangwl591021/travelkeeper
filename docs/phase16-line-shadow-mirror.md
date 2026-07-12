@@ -55,3 +55,12 @@ After testing, remove only synthetic `staging-line-shadow` rows from staging thr
 This phase implements code, tests, and documentation only. Shadow is disabled, no production secret is configured, no production Worker is deployed, no LINE API is called, no webhook URL is changed, and no staging remote D1 write is performed.
 
 Current result: `NO-GO` for production shadow deploy until the exact UID, consent, secret configuration, and production deployment are separately approved.
+## Phase 16.5.1 Controlled Deployment Result
+
+- Approved UID: `U80c1943acc10ab3079267d50691ba1f2`; consent was confirmed and the retention limit was immediate cleanup, maximum seven days.
+- The production LINE OA webhook URL was not changed. Repository and deployed route inspection identified the active legacy path as `/line-webhook`; the mirror was attached only after its existing signature and JSON validation succeeded.
+- Staging deployment version: `68e7a1e4-afc1-4da2-b8e4-403ab38cf481`. Production deployment version before emergency disable: `bf8447af-2e33-4533-96b8-05fec4528bde`.
+- The first real event attempt occurred before the legacy route integration and produced zero staging rows. After the legacy integration deployment, a further reported event still produced zero staging rows; production `/line-webhook` unsigned probe returned `403`, but no signed event evidence was available in this checkout.
+- Emergency disable was applied to both environments. Final production deployment version: `7b29c45b-7165-486b-87b1-ec9ebb263d25`; final staging deployment version: `0f01f873-6ffc-4cbc-bbda-ac9f1fb8e841`. After propagation, staging shadow endpoint returned `404`.
+- Staging-v2 remained empty: `profiles=0`, `threads=0`, `messages=0`, `customers=0`, `orders=0`; ledger remained completed and `foreign_key_check` returned no rows.
+- Result: `NO-GO`. Do not enable Queue, SLA, or Outbound. Before any retry, confirm the actual LINE Developers webhook target and obtain signed delivery evidence without changing the webhook URL.

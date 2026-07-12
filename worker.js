@@ -4,6 +4,8 @@
 // ?垢?芷?????API ?踹???券鞈?
 // ============================================================
 
+import { mirrorVerifiedWebhookPayload } from './lib/line-shadow-mirror.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -3679,6 +3681,7 @@ async function handleLineWebhookGateway(request, env, ctx) {
   }
 
   ctx.waitUntil((async () => {
+    try { await mirrorVerifiedWebhookPayload(payload, env); } catch (_) {}
     try {
       await storeLineWebhookEvents(env, payload);
     } catch (err) {

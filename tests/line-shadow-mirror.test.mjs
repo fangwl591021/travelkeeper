@@ -191,6 +191,12 @@ test('worker schedules mirror only after successful production webhook response'
   assert.match(source, /line-shadow-mirror\.js/);
 });
 
+test('legacy production /line-webhook mirrors only after signature verification', async () => {
+  const source = await read('worker.js');
+  assert.match(source, /mirrorVerifiedWebhookPayload/);
+  assert.ok(source.indexOf('const valid = await verifyLineSignature') < source.indexOf('mirrorVerifiedWebhookPayload(payload, env)'));
+});
+
 test('shadow endpoint remains monitor-only by configuration', async () => {
   const wrangler = await read('wrangler.toml');
   assert.match(wrangler, /TENANT_LINE_QUEUE_ENABLED\s*=\s*"0"/);
