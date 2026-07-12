@@ -7,11 +7,7 @@ ALTER TABLE tenant_crm_threads ADD COLUMN first_response_at TEXT NOT NULL DEFAUL
 ALTER TABLE tenant_crm_threads ADD COLUMN closed_at TEXT NOT NULL DEFAULT '';
 
 UPDATE tenant_crm_threads
-SET queue_status = CASE
-  WHEN status = 'closed' THEN 'closed'
-  WHEN COALESCE(assigned_to_uid, '') = '' THEN 'unassigned'
-  ELSE status
-END
+SET queue_status = IIF(status = 'closed', 'closed', IIF(COALESCE(assigned_to_uid, '') = '', 'unassigned', status))
 WHERE queue_status = 'unassigned';
 
 CREATE INDEX IF NOT EXISTS idx_tenant_crm_threads_queue

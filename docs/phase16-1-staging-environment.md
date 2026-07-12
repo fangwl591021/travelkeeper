@@ -192,3 +192,62 @@ GO requires:
 - `npx wrangler d1 migrations list DB --env staging --remote` shows all 34 migrations pending.
 - `travelkeeper-staging` Worker is not deployed yet; Wrangler cannot list or set Worker secrets for that Worker until it exists.
 - No remote migration, Worker deploy, LINE API call, webhook setting, production D1 operation, or production secret change was performed.
+
+## Phase 16.4A Remote Staging Migration
+
+Date: 2026-07-12
+
+Target confirmed before write:
+
+- Cloudflare account: `Fangwl591021@gmail.com's Account` / `8058cf61f0cd44c4edd78080b193033a`.
+- Production D1 was identified only through read-only inventory: `travelkeeper` / `184f9dff-18fe-401f-9374-098ed7b0eb38`.
+- Staging D1 migration target: `travelkeeper-staging` / `e055e868-1a4f-4fdd-8e8f-f24594e52079`.
+- `[env.staging]` references only the staging D1 id.
+- No Worker deploy, Worker secret write, LINE API call, LINE webhook change, seed import, or production D1 command was performed.
+
+Pre-migration inventory:
+
+- Staging D1 contained Cloudflare internal `_cf_KV`, `d1_migrations`, and `sqlite_sequence` only before app migrations.
+- `PRAGMA foreign_key_check` returned no rows.
+- `PRAGMA integrity_check` was blocked by D1 remote with `SQLITE_AUTH`.
+- `npx wrangler d1 migrations list DB --env staging --remote` initially showed 34 pending migrations.
+
+Migration execution:
+
+- `npx wrangler d1 migrations apply travelkeeper-staging --env staging --remote` first applied `0001` through `0020`; `0100` through `0113` remained pending.
+- Applying `0100` through `0113` initially failed with D1 remote `incomplete input` on `CREATE TRIGGER` migration statements.
+- Phase 16.4A changed pending tenant/LINE migrations to be D1 remote migration compatible by removing cross-table `CREATE TRIGGER` statements and replacing `CASE` expressions with equivalent `IIF(...)` where needed for Wrangler statement splitting.
+- Application-level tenant scoping and authorization checks remain required for cross-table tenant mismatch prevention. This is a known residual risk to re-evaluate before production migration.
+- Re-running `npx wrangler d1 migrations apply travelkeeper-staging --env staging --remote` completed the remaining 14 migrations.
+- Post-apply migration ledger count: 34.
+- Post-apply `npx wrangler d1 migrations list DB --env staging --remote`: `No migrations to apply`.
+
+Post-migration schema verification:
+
+- Required tables present: `tenant_line_channels`, `tenant_crm_profiles`, `tenant_crm_threads`, `tenant_crm_messages`, `tenant_line_sla_settings`, `tenant_memberships`, `audit_logs`, `customers`, `orders`.
+- Required Phase 15B thread columns present: `priority`, `sla_status`, `sla_due_at`, `sla_started_at`, `sla_paused_at`, `sla_remaining_seconds`, `waiting_since`, `last_customer_wait_seconds`, `total_customer_wait_seconds`, `response_count`, `sla_breached_at`.
+- Required outbound/idempotency message columns present: `text_content`, `send_status`, `line_message_id`, `error_code`, `error_message_safe`, `sent_by_uid`, `sent_by_role`, `sent_at`, `client_request_id`, `retryable`.
+- Required indexes observed include `idx_tenant_line_channels_enabled`, `idx_tenant_crm_messages_event_id`, `idx_tenant_crm_messages_fingerprint`, `idx_tenant_crm_messages_client_request`, `idx_tenant_crm_threads_queue`, `idx_tenant_crm_threads_assignee`, `idx_tenant_crm_threads_sla`, and `idx_tenant_crm_threads_priority_sla`.
+
+Post-migration row counts:
+
+- `tenants`: 1 (`demo`, migration-created legacy/system tenant)
+- `platform_collection_settlement_rules`: 1 (`demo`, migration-created platform rule)
+- `tenant_memberships`: 0
+- `customers`: 0
+- `orders`: 0
+- `tenant_crm_profiles`: 0
+- `tenant_crm_threads`: 0
+- `tenant_crm_messages`: 0
+- `tenant_line_channels`: 0
+- `tenant_line_sla_settings`: 0
+- `audit_logs`: 0
+
+Integrity:
+
+- `PRAGMA foreign_key_check`: success, no rows.
+- `PRAGMA integrity_check`: blocked by Cloudflare D1 remote with `SQLITE_AUTH`; this is a tool/platform restriction, not a reported schema violation.
+
+Next step:
+
+- Phase 16.4B / 16.5 should perform staging Worker bootstrap deployment only after explicit approval of staging Worker target, staging secrets, and LINE Test OA. Do not enable outbound until monitor, queue, and SLA smoke tests pass in order.

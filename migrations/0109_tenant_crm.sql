@@ -114,21 +114,18 @@ SELECT
   c.customer_id,
   c.tenant_slug,
   c.customer_id,
-  CASE
-    WHEN c.customer_line_uid <> '' AND c.customer_id = (
+  IIF(c.customer_line_uid <> '' AND c.customer_id = (
       SELECT MIN(c2.customer_id)
       FROM customers c2
       WHERE c2.tenant_slug = c.tenant_slug
         AND c2.customer_line_uid = c.customer_line_uid
-    ) THEN c.customer_line_uid
-    ELSE ''
-  END,
+    ), c.customer_line_uid, ''),
   c.customer_name,
   c.contact_phone,
   c.owner_uid,
   'order',
-  CASE WHEN c.total_orders > 0 THEN 'closed' ELSE 'open' END,
-  CASE WHEN c.total_orders > 0 THEN 'won' ELSE 'new' END,
+  IIF(c.total_orders > 0, 'closed', 'open'),
+  IIF(c.total_orders > 0, 'won', 'new'),
   c.total_amount,
   c.last_order_at,
   'migration-0109',
@@ -140,83 +137,3 @@ WHERE c.customer_id <> ''
   AND c.tenant_slug <> ''
   AND 1
 ON CONFLICT(id) DO NOTHING;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_profile_customer_insert
-BEFORE INSERT ON tenant_crm_profiles
-WHEN NEW.customer_id <> '' AND NOT EXISTS (
-  SELECT 1 FROM customers c
-  WHERE c.tenant_slug = NEW.tenant_slug AND c.customer_id = NEW.customer_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_profile_customer');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_profile_customer_update
-BEFORE UPDATE OF tenant_slug, customer_id ON tenant_crm_profiles
-WHEN NEW.customer_id <> '' AND NOT EXISTS (
-  SELECT 1 FROM customers c
-  WHERE c.tenant_slug = NEW.tenant_slug AND c.customer_id = NEW.customer_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_profile_customer');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_thread_profile_insert
-BEFORE INSERT ON tenant_crm_threads
-WHEN NEW.profile_id <> '' AND NOT EXISTS (
-  SELECT 1 FROM tenant_crm_profiles p
-  WHERE p.tenant_slug = NEW.tenant_slug AND p.id = NEW.profile_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_thread_profile');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_thread_profile_update
-BEFORE UPDATE OF tenant_slug, profile_id ON tenant_crm_threads
-WHEN NEW.profile_id <> '' AND NOT EXISTS (
-  SELECT 1 FROM tenant_crm_profiles p
-  WHERE p.tenant_slug = NEW.tenant_slug AND p.id = NEW.profile_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_thread_profile');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_record_profile_insert
-BEFORE INSERT ON tenant_crm_records
-WHEN NOT EXISTS (
-  SELECT 1 FROM tenant_crm_profiles p
-  WHERE p.tenant_slug = NEW.tenant_slug AND p.id = NEW.profile_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_record_profile');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_record_profile_update
-BEFORE UPDATE OF tenant_slug, profile_id ON tenant_crm_records
-WHEN NOT EXISTS (
-  SELECT 1 FROM tenant_crm_profiles p
-  WHERE p.tenant_slug = NEW.tenant_slug AND p.id = NEW.profile_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_record_profile');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_record_thread_insert
-BEFORE INSERT ON tenant_crm_records
-WHEN NEW.thread_id <> '' AND NOT EXISTS (
-  SELECT 1 FROM tenant_crm_threads t
-  WHERE t.tenant_slug = NEW.tenant_slug AND t.id = NEW.thread_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_record_thread');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_record_thread_update
-BEFORE UPDATE OF tenant_slug, thread_id ON tenant_crm_records
-WHEN NEW.thread_id <> '' AND NOT EXISTS (
-  SELECT 1 FROM tenant_crm_threads t
-  WHERE t.tenant_slug = NEW.tenant_slug AND t.id = NEW.thread_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_record_thread');
-END;

@@ -118,35 +118,3 @@ CREATE INDEX IF NOT EXISTS idx_payout_batch_orders_tenant_batch
   ON payout_batch_orders(tenant_slug, batch_id);
 CREATE INDEX IF NOT EXISTS idx_payout_batch_orders_tenant_order
   ON payout_batch_orders(tenant_slug, order_id);
-
-CREATE TRIGGER IF NOT EXISTS trg_payout_batch_orders_tenant_insert
-BEFORE INSERT ON payout_batch_orders
-FOR EACH ROW
-WHEN EXISTS (
-  SELECT 1
-  FROM payout_batches pb
-  WHERE pb.id = NEW.batch_id AND pb.tenant_slug <> NEW.tenant_slug
-) OR EXISTS (
-  SELECT 1
-  FROM orders o
-  WHERE o.order_id = NEW.order_id AND o.tenant_slug <> NEW.tenant_slug
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:payout_batch_order');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_payout_batch_orders_tenant_update
-BEFORE UPDATE OF tenant_slug, batch_id, order_id ON payout_batch_orders
-FOR EACH ROW
-WHEN EXISTS (
-  SELECT 1
-  FROM payout_batches pb
-  WHERE pb.id = NEW.batch_id AND pb.tenant_slug <> NEW.tenant_slug
-) OR EXISTS (
-  SELECT 1
-  FROM orders o
-  WHERE o.order_id = NEW.order_id AND o.tenant_slug <> NEW.tenant_slug
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:payout_batch_order');
-END;

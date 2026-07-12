@@ -117,16 +117,16 @@ function request(path, uid, options = {}) {
   });
 }
 
-test('CRM migration adds tenant profiles, threads, records and mismatch triggers', async () => {
+test('CRM migration adds tenant profiles, threads, records and tenant indexes', async () => {
   const migration = await readFile(new URL('../migrations/0109_tenant_crm.sql', import.meta.url), 'utf8');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS tenant_crm_profiles/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS tenant_crm_threads/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS tenant_crm_records/);
   assert.match(migration, /idx_tenant_crm_profiles_tenant_customer/);
   assert.match(migration, /idx_tenant_crm_profiles_tenant_line_uid/);
-  assert.match(migration, /TENANT_MISMATCH:crm_profile_customer/);
-  assert.match(migration, /TENANT_MISMATCH:crm_thread_profile/);
-  assert.match(migration, /TENANT_MISMATCH:crm_record_profile/);
+  assert.match(migration, /FOREIGN KEY \(tenant_slug\) REFERENCES tenants/);
+  assert.match(migration, /idx_tenant_crm_threads_profile/);
+  assert.doesNotMatch(migration, /CREATE TRIGGER/);
   assert.match(migration, /FROM customers/);
   assert.match(migration, /ON CONFLICT\(id\) DO NOTHING/);
 });

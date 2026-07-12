@@ -73,23 +73,3 @@ CREATE TABLE IF NOT EXISTS tenant_line_webhook_logs (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_line_webhook_logs_request
   ON tenant_line_webhook_logs(tenant_slug, request_fingerprint);
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_message_profile_insert
-BEFORE INSERT ON tenant_crm_messages
-WHEN NOT EXISTS (
-  SELECT 1 FROM tenant_crm_profiles p
-  WHERE p.tenant_slug = NEW.tenant_slug AND p.id = NEW.profile_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_message_profile');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_tenant_crm_message_thread_insert
-BEFORE INSERT ON tenant_crm_messages
-WHEN NOT EXISTS (
-  SELECT 1 FROM tenant_crm_threads t
-  WHERE t.tenant_slug = NEW.tenant_slug AND t.id = NEW.thread_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'TENANT_MISMATCH:crm_message_thread');
-END;
