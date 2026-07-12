@@ -117,6 +117,8 @@ checks.push(status('staging D1 id is distinct from production', !!stagingD1Id &&
 checks.push(status('staging APP_ENV is explicit', /APP_ENV\s*=\s*"staging"/.test(stagingBlock)));
 checks.push(status('staging starts with monitor-only rollout flags', /TENANT_LINE_MONITOR_ENABLED\s*=\s*"1"/.test(stagingBlock) && /TENANT_LINE_QUEUE_ENABLED\s*=\s*"0"/.test(stagingBlock) && /TENANT_LINE_SLA_ENABLED\s*=\s*"0"/.test(stagingBlock) && /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/.test(stagingBlock)));
 checks.push(status('staging allowed origin is explicit and not wildcard', /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\//.test(stagingBlock) && !/STAGING_ALLOWED_ORIGIN\s*=\s*"\*"/.test(stagingBlock) && !/<replace-with|replace-with-workers-subdomain>/i.test(stagingBlock)));
+checks.push(status('staging allowed origin matches confirmed Worker host', /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\/travelkeeper-staging\.fangwl591021\.workers\.dev"/.test(stagingBlock)));
+checks.push(status('staging payment key version is explicit', /TENANT_PAYMENT_KEY_VERSION\s*=\s*"v1"/.test(stagingBlock)));
 checks.push(status('staging LINE push uses mock until test OA is confirmed', /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\//.test(stagingBlock)));
 
 if (!hasStagingEnv) blockers.push('wrangler.toml has no [env.staging]; staging deployment is not ready yet.');

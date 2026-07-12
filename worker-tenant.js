@@ -42,7 +42,8 @@ function corsHeaders(request, env) {
   const headers = { ...CORS };
   if (String(env?.APP_ENV || '').toLowerCase() === 'staging') {
     const allowed = String(env?.STAGING_ALLOWED_ORIGIN || '').trim();
-    headers['Access-Control-Allow-Origin'] = allowed && !allowed.includes('<') ? allowed : 'null';
+    const requestOrigin = String(request?.headers?.get('Origin') || '').trim();
+    headers['Access-Control-Allow-Origin'] = allowed && !allowed.includes('<') && requestOrigin === allowed ? allowed : 'null';
   }
   return headers;
 }

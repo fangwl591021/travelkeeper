@@ -1,4 +1,4 @@
-﻿# Phase 16.1 Staging Environment Preparation
+# Phase 16.1 Staging Environment Preparation
 
 ## Current Result
 
@@ -408,3 +408,14 @@ project-owned ledger 不修改 Cloudflare internal d1_migrations。bootstrap 只
 - LINE_PUSH_API_URL remains the non-routable mock endpoint; no real LINE API is configured.
 - staging-v2 bootstrap and project-owned ledger are completed; no staging secrets are configured and no LINE Test OA is connected.
 - Next step: first staging Worker deployment after explicit target, host, secrets, and Test OA confirmation.
+
+## Phase 16.4B-3 Staging Origin, Secret, and Storage Boundaries
+
+- Confirmed checkout: `agent/tenant-isolation-phase1`; staging Worker: `travelkeeper-staging`; host: `https://travelkeeper-staging.fangwl591021.workers.dev`.
+- `STAGING_ALLOWED_ORIGIN` now uses the exact staging host in `[env.staging.vars]`; wildcard, `null`, localhost, and unknown origins remain disallowed. CORS returns `null` for an unknown request Origin.
+- `TENANT_PAYMENT_MASTER_KEY` is configured as a staging-only Worker secret through Wrangler presence-only handling. Its value is not stored in Git, documentation, logs, or test output. `TENANT_PAYMENT_KEY_VERSION` is the staging var `v1`.
+- Current auth uses LINE access-token verification. `SESSION_SECRET` and `TENANT_CREDENTIAL_MASTER_KEY` are not referenced by the current Worker; `ALLOW_LEGACY_UID_AUTH` is not enabled in staging. Legacy UID/test-header auth remains a risk only if someone adds that flag later.
+- The staging environment intentionally does not copy production `WASABI_*` vars or the production R2 binding. Upload/download paths fail closed on missing `TRAVEL` or storage credentials; metadata stored in LINE monitor/D1 is separate from object storage.
+- Deployment version: `56cb3136-180d-42d6-b07f-0fcfbc98a6f3`. D1 `travelkeeper-staging-v2` remains ledger-completed with zero customers, orders, CRM, LINE, membership, and audit business rows; `foreign_key_check` is empty.
+- Outbound, queue, and SLA remain disabled; `LINE_PUSH_API_URL` remains the non-routable mock endpoint. No LINE API, webhook, Test OA, production D1, old staging D1, or production Worker was used.
+- Overall readiness remains NO-GO for LINE Test OA. The next approval must cover Test OA identity, tenant channel enrollment, and staged monitor-only smoke tests before enabling queue, SLA, or outbound.

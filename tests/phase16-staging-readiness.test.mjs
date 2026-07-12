@@ -114,10 +114,10 @@ test('Phase 16.1 staging UI and Worker responses mark staging without exposing c
   assert.match(css, /\.staging-badge/);
   assert.match(worker, /STAGING_ALLOWED_ORIGIN/);
   assert.match(worker, /X-TravelKeeper-Environment/);
-  assert.match(worker, /Access-Control-Allow-Origin'\] = allowed/);
+  assert.match(worker, /requestOrigin === allowed/);
   assert.doesNotMatch(page + controller + worker, /channel_secret\s*[:=]\s*['"]|channel_access_token\s*[:=]\s*['"]|Authorization:\s*Bearer\s+\S+/i);
 });
-test('Phase 16.4B-1 staging-v2 isolation and first-deploy fail-closed settings', async () => {
+test('Phase 16.4B-3 staging origin, payment version, and storage boundaries remain isolated', async () => {
   const wrangler = await read('wrangler.toml');
   const start = wrangler.indexOf('[[env.staging.d1_databases]]');
   assert.ok(start >= 0);
@@ -127,7 +127,16 @@ test('Phase 16.4B-1 staging-v2 isolation and first-deploy fail-closed settings',
   assert.doesNotMatch(staging, /184f9dff-18fe-401f-9374-098ed7b0eb38/);
   assert.match(wrangler, /TENANT_LINE_OUTBOUND_ENABLED\s*=\s*"0"/);
   assert.match(wrangler, /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\//);
-  assert.match(wrangler, /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\/travelkeeper-staging\.<replace-with-workers-subdomain>\.workers\.dev"/);
+  assert.match(wrangler, /STAGING_ALLOWED_ORIGIN\s*=\s*"https:\/\/travelkeeper-staging\.fangwl591021\.workers\.dev"/);
+  assert.match(wrangler, /TENANT_PAYMENT_KEY_VERSION\s*=\s*"v1"/);
+  assert.doesNotMatch(staging, /WASABI_(?:ENDPOINT|REGION|BUCKET|PREFIX)\s*=/);
+  assert.doesNotMatch(staging, /\[\[env\.staging\.r2_buckets\]\]/);
+  const settlement = await read('lib/settlement-finance-api.js');
+  const legacy = await read('lib/legacy-customer-compat-api.js');
+  assert.match(settlement, /if \(!env\.TRAVEL\) throw new Error\('R2_REQUIRED'\)/);
+  assert.match(legacy, /MOTHER_STORAGE_NOT_CONFIGURED/);
+  assert.match(legacy, /MOTHER_STORAGE_WRITE_DISABLED/);
   const script = await read('scripts/staging-migration-check.mjs');
-  assert.match(script, /staging allowed origin is still a placeholder/);
+  assert.match(script, /staging allowed origin matches confirmed Worker host/);
+  assert.match(script, /staging payment key version is explicit/);
 });
