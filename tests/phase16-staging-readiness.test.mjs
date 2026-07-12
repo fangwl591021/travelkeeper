@@ -63,15 +63,15 @@ test('Phase 16 feature flags are wired into LINE monitor, outbound, queue, and S
   assert.doesNotMatch(webhook, /if \(slaStart\)[\s\S]*?const slaStart/);
 });
 
-test('Phase 16 wrangler config assessment keeps staging NO-GO until resources are confirmed', async () => {
+test('Phase 16 wrangler config assessment keeps staging NO-GO until secrets and LINE Test OA are confirmed', async () => {
   const wrangler = await read('wrangler.toml');
   const doc = await read('docs/phase16-staging-readiness.md');
   assert.match(wrangler, /\[env\.staging\]/);
-  assert.match(wrangler, /REPLACE_WITH_STAGING_D1_DATABASE_ID/);
+  assert.match(wrangler, /database_id\s*=\s*"e055e868-1a4f-4fdd-8e8f-f24594e52079"/);
   assert.match(doc, /NO-GO/is);
 });
 
-test('Phase 16.1 wrangler staging env is separated and remains fail-closed until D1 id is confirmed', async () => {
+test('Phase 16.2 wrangler staging env is separated with an independent D1 id and remains fail-closed', async () => {
   const wrangler = await read('wrangler.toml');
   assert.match(wrangler, /\[env\.staging\]/);
   assert.match(wrangler, /name\s*=\s*"travelkeeper-staging"/);
@@ -84,7 +84,7 @@ test('Phase 16.1 wrangler staging env is separated and remains fail-closed until
   assert.match(wrangler, /LINE_PUSH_API_URL\s*=\s*"https:\/\/line-push-mock\.invalid\/v2\/bot\/message\/push"/);
   assert.match(wrangler, /\[\[env\.staging\.d1_databases\]\]/);
   assert.match(wrangler, /database_name\s*=\s*"travelkeeper-staging"/);
-  assert.match(wrangler, /database_id\s*=\s*"REPLACE_WITH_STAGING_D1_DATABASE_ID"/);
+  assert.match(wrangler, /database_id\s*=\s*"e055e868-1a4f-4fdd-8e8f-f24594e52079"/);
   assert.match(wrangler, /database_id\s*=\s*"184f9dff-18fe-401f-9374-098ed7b0eb38"/);
   const prodIdIndex = wrangler.indexOf('184f9dff-18fe-401f-9374-098ed7b0eb38');
   const stagingIndex = wrangler.indexOf('[[env.staging.d1_databases]]');
@@ -92,12 +92,11 @@ test('Phase 16.1 wrangler staging env is separated and remains fail-closed until
   assert.equal(wrangler.slice(stagingIndex).includes('184f9dff-18fe-401f-9374-098ed7b0eb38'), false);
 });
 
-test('Phase 16.1 readiness script treats placeholder staging resources as NO-GO', async () => {
+test('Phase 16.2 readiness script treats missing secrets and Test OA as NO-GO after D1 binding', async () => {
   const script = await read('scripts/staging-migration-check.mjs');
-  assert.match(script, /staging D1 database_id must be replaced/);
+  assert.match(script, /staging_d1_database_id_status/);
   assert.match(script, /test LINE OA channel has not been confirmed/);
   assert.match(script, /staging secrets must be set/);
-  assert.match(script, /staging_d1_database_id_status/);
   assert.match(script, /production D1 binding remains DB\/travelkeeper/);
   assert.match(script, /Remote D1 access is blocked/);
 });

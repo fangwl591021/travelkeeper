@@ -2,21 +2,21 @@
 
 ## Current Result
 
-Phase 16.1 repository preparation is intentionally NO-GO for remote execution until a human confirms the staging D1 database id, staging secrets, staging Worker host, and LINE test OA channel.
+Phase 16.2 created the independent staging D1 and bound its id locally. The repository remains NO-GO for remote migration, Worker deploy, secrets, and LINE Test OA until those targets are manually confirmed.
 
 Completed locally:
 
 - Added `[env.staging]` to `wrangler.toml`.
 - Kept production default Worker and D1 binding unchanged.
 - Added staging-only Worker name `travelkeeper-staging`.
-- Added staging D1 binding block for `travelkeeper-staging` with placeholder id `REPLACE_WITH_STAGING_D1_DATABASE_ID`.
+- Bound `[env.staging]` to the independent D1 `travelkeeper-staging` id `e055e868-1a4f-4fdd-8e8f-f24594e52079`.
 - Added staging feature flags with monitor-only rollout start.
 - Added staging UI badge support.
-- Added staging readiness checks that fail closed until remote resources are confirmed.
+- Added staging readiness checks that fail closed until secrets and LINE Test OA are confirmed.
 
 Not performed:
 
-- No staging D1 was created.
+- Staging D1 `travelkeeper-staging` was created in Phase 16.2.
 - No remote migration was applied.
 - No Worker was deployed.
 - No production D1 or production secrets were modified.
@@ -52,25 +52,25 @@ TENANT_LINE_OUTBOUND_ENABLED = "0"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "travelkeeper-staging"
-database_id = "REPLACE_WITH_STAGING_D1_DATABASE_ID"
+database_id = "e055e868-1a4f-4fdd-8e8f-f24594e52079"
 ```
 
-The binding name remains `DB` because Worker code expects `env.DB`, but the environment-specific D1 database name and id must be distinct from production. The placeholder id prevents accidental staging deploy until the real staging D1 id is manually confirmed.
+The binding name remains `DB` because Worker code expects `env.DB`, but the environment-specific D1 database name and id are distinct from production. Remote migration and deploy remain blocked until staging secrets, host, and LINE Test OA are confirmed.
 
-## Manual Remote Commands Awaiting Confirmation
+## Manual Remote Commands And Status
 
-Do not run these until the operator confirms the target account, resource names, and test OA.
+Do not run remaining remote operations until the operator confirms the target account, resource names, and test OA. Phase 16.2 completed only the D1 create command.
 
 1. Create staging D1:
 
 ```powershell
-npx wrangler d1 create travelkeeper-staging
+npx wrangler d1 create travelkeeper-staging # completed in Phase 16.2
 ```
 
-2. After Cloudflare returns the id, replace only the staging placeholder:
+2. Confirmed staging D1 id now bound in `wrangler.toml`:
 
 ```toml
-database_id = "<confirmed-staging-d1-id>"
+database_id = "e055e868-1a4f-4fdd-8e8f-f24594e52079"
 ```
 
 3. Set staging secrets, values entered interactively and never logged:
