@@ -290,3 +290,89 @@ Production go/no-go:
 - NO-GO for production migration. Production remains untouched, and staging travelkeeper-staging currently contains the previously applied drifted 34-migration history.
 - Because staging has no business data, the safer recovery is a human-approved new travelkeeper-staging-v2 D1, followed by clean migration validation. Do not delete travelkeeper-staging or create travelkeeper-staging-v2 in this phase.
 - Before any production migration, obtain a D1-compatible migration execution plan, repeat clean/upgrade validation, and confirm the application-layer cross-tenant negative tests.
+
+## Phase 16.4A.2 Remote D1 Compatibility and Migration Immutability
+
+Date: 2026-07-12
+
+Scope:
+
+- No production D1 command was executed.
+- No staging D1 write, migration apply, delete, create, Worker deploy, secret write, LINE API call, or webhook change was executed.
+- Historical migrations 0001 through 0114 were not modified.
+
+Observed remote difference:
+
+- Canonical clean local install applied 35 migrations successfully and produced 47 application tables, 130 application indexes, and 26 triggers. Local PRAGMA foreign_key_check returned no rows.
+- Current travelkeeper-staging read-only inventory shows 34 migrations applied and 0114_d1_tenant_integrity_compat.sql pending.
+- Current remote sqlite_master inventory shows 48 tables, 171 indexes, and 0 triggers. The extra internal objects include Cloudflare internal metadata; the absence of all 26 canonical triggers is the material difference.
+- Current staging remote PRAGMA foreign_key_check returned no rows. PRAGMA integrity_check returned SQLITE_AUTH and is treated as a Cloudflare D1 tool limitation.
+- This is not schema equivalent. No staging-v2 is created in this phase.
+
+Root cause:
+
+- The original CREATE TRIGGER SQL executes successfully in the isolated local D1 clean install and in the node:sqlite canonical in-memory test.
+- The prior remote migration attempt failed with incomplete input while Wrangler was submitting migrations containing multi-statement CREATE TRIGGER ... BEGIN ... END; blocks.
+- The evidence therefore points to Wrangler remote migration statement splitting or the remote migration transport parser, not SQLite/D1 rejection of CREATE TRIGGER itself.
+- The failure was not caused by CASE semantics. The parser now treats CASE/END expressions, IIF expressions, comments, strings, and trigger bodies separately.
+
+Failed trigger inventory and protected rules:
+
+- 0100_tenant_isolation_phase1.sql: trg_orders_tenant_itinerary_insert/update protect order and itinerary tenant equality; trg_payments_tenant_order_insert/update protect payment and order tenant equality.
+- 0101_tenant_profiles_and_relations.sql: trg_payout_batch_orders_tenant_insert/update protect payout batch/order tenant equality.
+- 0103_tenant_gateway_credentials.sql: trg_tenant_gateway_enable_policy_insert/update protect enabled gateway credentials from violating the tenant payment policy.
+- 0104_platform_collection_settlements.sql: trg_platform_collection_payables_tenant_insert/update protect payable payment/order tenant equality; trg_platform_collection_batch_items_tenant_insert/update protect batch/payable tenant equality.
+- 0106_settlement_accounts_and_proofs.sql: trg_settlement_proof_tenant_insert/update protect settlement proof and batch tenant equality.
+- 0108_tenant_customer_identity.sql: trg_orders_tenant_customer_insert/update protect order/customer tenant and identity relation equality.
+- 0109_tenant_crm.sql: profile/customer, thread/profile, and record/profile/thread insert/update triggers protect CRM tenant equality.
+- 0110_tenant_line_channels.sql: trg_tenant_crm_message_profile_insert and trg_tenant_crm_message_thread_insert protect LINE message/profile/thread tenant equality.
+
+All 26 trigger names and SHA-256 statement checksums are generated without SQL or credential values by:
+
+node scripts/d1-remote-migration-plan.mjs
+
+Parser and schema tools:
+
+- scripts/d1-remote-migration-plan.mjs parses CREATE TRIGGER bodies as one statement, rejects incomplete trigger bodies, reports statement type/count and SHA-256 checksums, and never executes SQL.
+- scripts/d1-schema-equivalence.mjs normalizes and compares tables, columns carried in table snapshots, indexes, unique constraints, foreign keys, and triggers. Trigger loss fails closed.
+- tests/d1-remote-migration-plan.test.mjs covers multi-line triggers, multiple trigger-body statements, CASE, IIF, comments with semicolons, strings with semicolons, incomplete triggers, all 35 migrations, 26 triggers, and immutable baseline checks.
+- tests/d1-canonical-trigger-negative.test.mjs executes all canonical migrations in node:sqlite, confirms 26 triggers, and rejects representative profile/thread/message, customer/order, and settlement proof/batch cross-tenant writes.
+- The parser plan reports 35 migrations and 301 SQL statements.
+
+Scheme A: Remote Statement Runner:
+
+- wrangler d1 execute --remote --file can submit a complete SQL file as a controlled probe, but it does not provide the normal D1 migration ledger transition for that file.
+- Updating d1_migrations manually is not an approved operation. Executing SQL first and making the ledger appear applied later would create an unverifiable state.
+- An external checksum ledger could track a custom runner, but it would be a second migration state machine and would not prove Wrangler migration compatibility.
+- Scheme A is therefore suitable only for a disposable, human-approved compatibility probe, not for staging bootstrap or production rollout.
+
+Scheme B: Remote Bootstrap Baseline:
+
+- Keep canonical migrations 0001 through 0114 immutable.
+- Generate a versioned bootstrap artifact from the canonical parser and schema snapshot, with an explicit baseline version and checksum; do not hand-maintain a second schema.
+- Compare the generated baseline against the canonical clean schema across tables, columns, indexes, unique constraints, foreign keys, and triggers before any remote operation.
+- Define the post-baseline migration version explicitly and keep subsequent migrations in the normal ordered ledger.
+- This requires a separate prototype proving how the official D1 migration ledger records the baseline without direct internal-table writes. That proof is not complete in this phase.
+
+Recommendation and approval gate:
+
+- Recommend Scheme B only after the baseline ledger prototype is proven. Scheme A is not safe as the rollout mechanism because its migration state cannot be trusted.
+- Do not delete travelkeeper-staging and do not create travelkeeper-staging-v2 in this phase.
+- If the baseline prototype passes, the next remote action requires human approval before any command such as npx wrangler d1 create travelkeeper-staging-v2 is executed. The new database ID must then be written to a separate staging configuration and verified against production before any migration or deploy.
+- Production rollout remains NO-GO until a remote schema has all 26 triggers, equivalent tables/indexes/foreign keys, matching checksums, and a trustworthy migration ledger.
+
+Validation summary:
+
+- node --check: parser, schema comparison, and new tests passed.
+- Parser/schema tests: 9 passed.
+- Canonical trigger negative tests: 2 passed.
+- Canonical clean install: 35 migrations, 47 tables, 130 indexes, 26 triggers, foreign_key_check passed.
+- Canonical upgrade install: 34 historical migrations plus 0114, 3 synthetic CRM rows retained, 26 triggers, foreign_key_check passed.
+- Existing full npm test suite remains required before commit.
+- Credential scan and git diff --check remain required before commit.
+
+GO/NO-GO:
+
+- Tooling and local canonical validation: GO.
+- Current staging remote schema equivalence: NO-GO.
+- staging-v2 creation: NOT AUTHORIZED in this phase; wait for a human-approved baseline plan.
