@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { webcrypto } from 'node:crypto';
@@ -145,7 +145,7 @@ test('outbound message API uses tenant token, records sent message, and is idemp
     return new Response(JSON.stringify({ sentMessages: [{ id: 'LINE-MSG-1' }] }), { status: 200 });
   };
   try {
-    const env = { DB: db, ...channel, TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
+    const env = { DB: db, TENANT_LINE_MONITOR_ENABLED: '1', ...channel, TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', TENANT_LINE_OUTBOUND_ENABLED: '1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
     const first = await routeTenantLineMonitorApi(request('U-SALES', { type: 'text', text: ' hello ', client_request_id: 'REQ-1' }), env);
     assert.equal(first.status, 200);
     assert.equal(calls.length, 1);
@@ -169,7 +169,7 @@ test('outbound message API uses tenant token, records sent message, and is idemp
 
 test('outbound message API enforces roles, owner scope and tenant thread scope', async () => {
   const channel = await encryptedLineChannel('partner-a', 'TOKEN-PARTNER-A');
-  const env = { DB: new FakeD1(channel), TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
+  const env = { DB: new FakeD1(channel), TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', TENANT_LINE_OUTBOUND_ENABLED: '1', TENANT_LINE_MONITOR_ENABLED: '1', TENANT_LINE_OUTBOUND_ENABLED: '1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
   assert.equal((await routeTenantLineMonitorApi(request('U-FIN', { type: 'text', text: 'x', client_request_id: 'REQ-FIN' }), env)).status, 403);
   assert.equal((await routeTenantLineMonitorApi(request('U-EDITOR', { type: 'text', text: 'x', client_request_id: 'REQ-EDITOR' }), env)).status, 403);
   assert.equal((await routeTenantLineMonitorApi(request('U-SALES', { type: 'text', text: 'x', client_request_id: 'REQ-MISSING' }, 'partner-a', 'T-DEMO'), env)).status, 404);
@@ -181,7 +181,7 @@ test('LINE API failure keeps safe failed outbound record without credential leak
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ message: 'do not persist' }), { status: 429 });
   try {
-    const env = { DB: db, TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
+    const env = { DB: db, TENANT_LINE_MONITOR_ENABLED: '1', TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', TENANT_LINE_OUTBOUND_ENABLED: '1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
     const response = await routeTenantLineMonitorApi(request('U-SALES', { type: 'text', text: '<script>alert(1)</script>', client_request_id: 'REQ-429' }), env);
     assert.equal(response.status, 502);
     assert.equal(db.messages[0].send_status, 'failed');
@@ -228,10 +228,10 @@ test('Phase 16 outbound feature flag blocks LINE push without creating message r
   };
   try {
     const env = {
-      DB: db,
+      DB: db, TENANT_LINE_MONITOR_ENABLED: '1',
       TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters',
       TENANT_PAYMENT_KEY_VERSION: 'v1',
-      LINE_PUSH_API_URL: 'https://line-mock.local/push',
+      TENANT_LINE_OUTBOUND_ENABLED: '1', LINE_PUSH_API_URL: 'https://line-mock.local/push',
       TENANT_LINE_OUTBOUND_ENABLED: '0',
     };
     const response = await routeTenantLineMonitorApi(request('U-SALES', { type: 'text', text: 'blocked', client_request_id: 'REQ-OFF' }), env);
@@ -239,6 +239,27 @@ test('Phase 16 outbound feature flag blocks LINE push without creating message r
     assert.equal((await response.json()).error, 'TENANT_LINE_OUTBOUND_DISABLED');
     assert.equal(calls.length, 0);
     assert.equal(db.messages.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('S1 outbound flag is fail closed when missing or misspelled', async () => {
+  const channel = await encryptedLineChannel('partner-a', 'TOKEN-PARTNER-A');
+  const db = new FakeD1(channel);
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return new Response('{}', { status: 200 }); };
+  try {
+    for (const flag of [undefined, 'tru']) {
+      const env = { DB: db, TENANT_LINE_MONITOR_ENABLED: '1', TENANT_PAYMENT_MASTER_KEY: 'phase14-local-master-key-longer-than-thirty-two-characters', TENANT_PAYMENT_KEY_VERSION: 'v1', LINE_PUSH_API_URL: 'https://line-mock.local/push' };
+      if (flag !== undefined) env.TENANT_LINE_OUTBOUND_ENABLED = flag;
+      const response = await routeTenantLineMonitorApi(request('U-SALES', { type: 'text', text: 'blocked', client_request_id: 'REQ-' + (flag || 'MISSING') }), env);
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).error, 'TENANT_LINE_OUTBOUND_DISABLED');
+      assert.equal(db.messages.length, 0);
+    }
+    assert.equal(calls, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }

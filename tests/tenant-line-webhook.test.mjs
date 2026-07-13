@@ -11,7 +11,7 @@ import {
   decryptTenantGatewaySecrets,
 } from '../lib/tenant-gateway-api.js';
 import { statusForError } from '../lib/http-error-status.js';
-import { isTenantLineWebhookRequest } from '../lib/tenant-line-webhook-api.js';
+import { insertEvent, isTenantLineWebhookRequest } from '../lib/tenant-line-webhook-api.js';
 import { isTenantLineChannelApiRequest } from '../lib/tenant-line-channel-api.js';
 
 const read = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
@@ -115,4 +115,52 @@ test('worker evaluates public LINE webhook before authenticated tenant routes', 
   assert.ok(authRoute > webhook);
   assert.ok(legacy > authRoute);
   assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase13'/);
+});
+
+class WebhookD1 {
+  constructor() { this.profiles = []; this.threads = []; this.messages = []; this.auditCount = 0; this.slaPatches = []; }
+  prepare(sql) { return { bind: (...args) => ({ first: async () => this.first(sql, args), run: async () => this.run(sql, args) }) }; }
+  first(sql, args) {
+    if (sql.includes('SELECT id FROM tenant_crm_messages')) return null;
+    if (sql.includes('SELECT * FROM tenant_crm_profiles')) return this.profiles.find(row => row.tenant_slug === args[0] && row.line_user_uid === args[1]) || null;
+    if (sql.includes('FROM tenant_line_sla_settings')) return null;
+    if (sql.includes('SELECT * FROM tenant_crm_threads')) return this.threads.find(row => row.tenant_slug === args[0] && row.line_user_uid === args[1]) || null;
+    return null;
+  }
+  run(sql, args) {
+    if (sql.includes('INSERT INTO tenant_crm_profiles')) this.profiles.push({ id: args[0], tenant_slug: args[1], line_user_uid: args[2], customer_id: '' });
+    if (sql.includes('INSERT INTO tenant_crm_threads')) this.threads.push({ id: args[0], tenant_slug: args[1], profile_id: args[2], line_user_uid: args[4], queue_status: 'open', status: 'open', first_response_at: '', waiting_since: '', sla_due_at: '', sla_started_at: '', sla_paused_at: '', sla_remaining_seconds: 0, sla_status: 'not_applicable' });
+    if (sql.includes('INSERT INTO tenant_crm_messages')) this.messages.push({ id: args[0], tenant_slug: args[1], profile_id: args[2], thread_id: args[3], message_type: args[8], content: args[9], reply_token_present: args[10] });
+    if (sql.includes('UPDATE tenant_crm_threads')) this.slaPatches.push(args);
+    if (sql.includes('INSERT INTO audit_logs')) this.auditCount += 1;
+    return { success: true };
+  }
+}
+
+function webhookEvent(id) { return { type: 'message', webhookEventId: id, timestamp: 1700000000000, replyToken: 'reply-token-must-not-be-stored', source: { type: 'user', userId: 'U-LINE-TEST' }, message: { id: 'MSG-' + id, type: 'text', text: 'hello' } }; }
+
+test('S1 tenant-v2 webhook keeps inbound storage when SLA flag is missing or misspelled', async () => {
+  for (const flag of [undefined, 'enable']) {
+    const db = new WebhookD1();
+    const env = { DB: db };
+    if (flag !== undefined) env.TENANT_LINE_SLA_ENABLED = flag;
+    const result = await insertEvent(env, 'partner-a', webhookEvent('EVENT-' + (flag || 'MISSING')), { channel_access_token: '' });
+    assert.equal(result.inserted, true);
+    assert.equal(db.profiles.length, 1);
+    assert.equal(db.threads.length, 1);
+    assert.equal(db.messages.length, 1);
+    assert.equal(db.auditCount, 0);
+    assert.equal(db.slaPatches[0][0], '');
+    assert.equal(db.slaPatches[0][2], '');
+    assert.equal(db.messages[0].reply_token_present, 1);
+  }
+});
+
+test('S1 tenant-v2 webhook keeps explicit SLA behavior when enabled', async () => {
+  const db = new WebhookD1();
+  const result = await insertEvent({ DB: db, TENANT_LINE_SLA_ENABLED: '1' }, 'partner-a', webhookEvent('EVENT-ENABLED'), { channel_access_token: '' });
+  assert.equal(result.inserted, true);
+  assert.equal(db.messages.length, 1);
+  assert.equal(db.auditCount, 1);
+  assert.notEqual(db.slaPatches[0][0], '');
 });

@@ -165,7 +165,7 @@ function req(method, path, uid, body, tenant = 'partner-a') {
 
 
 test('tenant admins list assignable LINE agents without leaking other roles or tenants', async () => {
-  const env = { DB: new QueueD1() };
+  const env = { DB: new QueueD1(), TENANT_LINE_MONITOR_ENABLED: '1', TENANT_LINE_QUEUE_ENABLED: '1' };
   env.DB.threads[1].unread_count = 2;
   const adminResponse = await routeTenantLineMonitorApi(req('GET', '/api/v2/tenant/line-agents', 'U-ADMIN'), env);
   assert.equal(adminResponse.status, 200);
@@ -187,7 +187,7 @@ test('tenant admins list assignable LINE agents without leaking other roles or t
 });
 
 test('tenant admin can assign, reassign and unassign only tenant sales/editor members', async () => {
-  const env = { DB: new QueueD1() };
+  const env = { DB: new QueueD1(), TENANT_LINE_MONITOR_ENABLED: '1', TENANT_LINE_QUEUE_ENABLED: '1' };
   assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-SALES' }), env)).status, 200);
   assert.equal(env.DB.threads[0].assigned_to_uid, 'U-SALES');
   assert.equal((await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-EDITOR' }), env)).status, 200);
@@ -204,7 +204,7 @@ test('tenant admin can assign, reassign and unassign only tenant sales/editor me
 });
 
 test('sales and editor claim unassigned threads atomically while forbidden roles fail', async () => {
-  const env = { DB: new QueueD1() };
+  const env = { DB: new QueueD1(), TENANT_LINE_MONITOR_ENABLED: '1', TENANT_LINE_QUEUE_ENABLED: '1' };
   const first = await routeTenantLineMonitorApi(req('POST', '/api/v2/line/threads/T-SALES/claim', 'U-SALES'), env);
   assert.equal(first.status, 200);
   assert.equal(env.DB.threads[0].assigned_to_uid, 'U-SALES');
@@ -216,7 +216,7 @@ test('sales and editor claim unassigned threads atomically while forbidden roles
 });
 
 test('mark read is tenant and owner or assignee scoped', async () => {
-  const env = { DB: new QueueD1() };
+  const env = { DB: new QueueD1(), TENANT_LINE_MONITOR_ENABLED: '1', TENANT_LINE_QUEUE_ENABLED: '1' };
   assert.equal((await routeTenantLineMonitorApi(req('POST', '/api/v2/line/threads/T-SALES/read', 'U-SALES'), env)).status, 200);
   assert.equal(env.DB.threads[0].unread_count, 0);
   env.DB.threads[0].unread_count = 2;
@@ -225,7 +225,7 @@ test('mark read is tenant and owner or assignee scoped', async () => {
 });
 
 test('thread list filters support mine, unassigned, unread and queue status without cross-tenant data', async () => {
-  const env = { DB: new QueueD1() };
+  const env = { DB: new QueueD1(), TENANT_LINE_MONITOR_ENABLED: '1', TENANT_LINE_QUEUE_ENABLED: '1' };
   const mine = await (await routeTenantLineMonitorApi(req('GET', '/api/v2/line/threads', 'U-SALES', undefined, 'partner-a'), env)).json();
   assert.equal(mine.data.some(row => row.tenant_slug === 'demo'), false);
   const unread = await (await routeTenantLineMonitorApi(new Request('https://worker.example/api/v2/line/threads?tenant=partner-a&unread_only=true', { method: 'GET', headers: { 'X-User-Uid': 'U-ADMIN', 'X-Tenant-Slug': 'partner-a' } }), env)).json();
@@ -255,4 +255,16 @@ test('Phase 15A source exposes work queue APIs and keeps owner separate from ass
   assert.match(page, /state\.view === 'mine'/);
   assert.doesNotMatch(api, /SET owner_uid =/);
   assert.match(migration, /assigned_to_uid/);
+});
+
+test('S1 queue flag is fail closed when missing', async () => {
+  const env = { DB: new QueueD1(), TENANT_LINE_MONITOR_ENABLED: '1' };
+  const assignment = await routeTenantLineMonitorApi(req('PATCH', '/api/v2/line/threads/T-SALES/assignment', 'U-ADMIN', { assigned_to_uid: 'U-SALES' }), env);
+  const claim = await routeTenantLineMonitorApi(req('POST', '/api/v2/line/threads/T-SALES/claim', 'U-SALES'), env);
+  assert.equal(assignment.status, 409);
+  assert.equal(claim.status, 409);
+  assert.equal((await assignment.json()).error, 'TENANT_LINE_QUEUE_DISABLED');
+  assert.equal((await claim.json()).error, 'TENANT_LINE_QUEUE_DISABLED');
+  assert.equal(env.DB.threads[0].assigned_to_uid, '');
+  assert.equal(env.DB.auditLogs.length, 0);
 });

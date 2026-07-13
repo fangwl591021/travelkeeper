@@ -1,6 +1,7 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { routeTenantLineMonitorApi } from '../lib/tenant-line-monitor-api.js';
 
 const read = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
@@ -124,4 +125,17 @@ test('Phase 15B monitor UI renders SLA filters, summary, and priority controls w
   assert.match(client, /\/api\/v2\/tenant\/line-sla-settings/);
   assert.match(client, /\/priority/);
   assert.doesNotMatch(page + controller + client, /channel_secret|channel_access_token|secrets_ciphertext|secrets_iv|ciphertext/i);
+});
+
+test('S1 tenant LINE monitor flags fail closed when missing or misspelled', async () => {
+  const db = { prepare() { throw new Error('D1_MUST_NOT_BE_QUERIED'); } };
+  const request = new Request('https://worker.example/api/v2/line/threads', {
+    method: 'GET',
+    headers: { 'X-User-Uid': 'U-ADMIN', 'X-Tenant-Slug': 'partner-a' },
+  });
+  for (const env of [{ DB: db }, { DB: db, TENANT_LINE_MONITOR_ENABLED: 'tru' }]) {
+    const response = await routeTenantLineMonitorApi(request, env);
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, 'TENANT_LINE_MONITOR_DISABLED');
+  }
 });
