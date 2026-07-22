@@ -42,10 +42,13 @@ class FakeDb {
     ];
     this.memberships = [
       { tenant_slug: 'demo', user_uid: 'U-DEMO', role: 'tenant_admin', status: 'active', permissions_json: '[]' },
+      { tenant_slug: 'demo', user_uid: 'U-SALES', role: 'sales', status: 'active', permissions_json: '[]' },
+      { tenant_slug: 'demo', user_uid: 'U-OTHER', role: 'sales', status: 'active', permissions_json: '[]' },
       { tenant_slug: 'tenant-b', user_uid: 'U-B', role: 'tenant_admin', status: 'active', permissions_json: '[]' },
     ];
     this.itineraries = [
-      { id: 'TOUR-1', tenant_slug: 'demo', title: 'Demo Tour', review_status: 'published', deleted_at: '', price: 1000 },
+      { id: 'TOUR-1', tenant_slug: 'demo', title: 'Demo Tour', owner_uid: 'U-SALES', review_status: 'published', deleted_at: '', price: 1000 },
+      { id: 'TOUR-2', tenant_slug: 'demo', title: 'Other Sales Tour', owner_uid: 'U-OTHER', review_status: 'draft', deleted_at: '', price: 1100 },
       { id: 'TOUR-1', tenant_slug: 'tenant-b', title: 'Tenant B Tour', review_status: 'published', deleted_at: '', price: 2000 },
     ];
   }
@@ -64,14 +67,17 @@ class FakeDb {
     }
     if (sql.includes('FROM tenant_distributor_profiles')) return null;
     if (sql.includes('FROM itineraries')) {
-      return this.itineraries.find(row => row.tenant_slug === args[0] && row.id === args[1]) || null;
+      return this.itineraries.find(row => row.tenant_slug === args[0] && row.id === args[1] &&
+        (!sql.includes('owner_uid = ?') || row.owner_uid === args[2])) || null;
     }
     return null;
   }
 
   async all(sql, args) {
     if (sql.includes('FROM itineraries')) {
-      return this.itineraries.filter(row => row.tenant_slug === args[0]);
+      const ownerIndex = sql.includes('owner_uid = ?') ? 1 : -1;
+      return this.itineraries.filter(row => row.tenant_slug === args[0] &&
+        (ownerIndex < 0 || row.owner_uid === args[ownerIndex]));
     }
     return [];
   }
@@ -122,6 +128,30 @@ test('public itinerary lookup never crosses tenant boundary', async () => {
   const tenantB = await tenantBResponse.json();
   assert.equal(tenantB.success, true);
   assert.equal(tenantB.data.title, 'Tenant B Tour');
+});
+
+test('sales itinerary list ignores requested owner and stays owner scoped', async () => {
+  const env = { DB: new FakeDb() };
+  const response = await routeTenantApi(
+    new Request('https://worker.example/api/v2/itineraries?tenant=demo&scope=private&owner=U-OTHER', {
+      headers: { 'X-Tenant-Slug': 'demo', 'X-User-Uid': 'U-SALES' },
+    }),
+    env,
+  );
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.deepEqual(payload.data.map(row => row.id), ['TOUR-1']);
+});
+
+test('sales cannot read another sales user itinerary by id', async () => {
+  const env = { DB: new FakeDb() };
+  const response = await routeTenantApi(
+    new Request('https://worker.example/api/v2/itineraries/TOUR-2?tenant=demo&scope=private', {
+      headers: { 'X-Tenant-Slug': 'demo', 'X-User-Uid': 'U-SALES' },
+    }),
+    env,
+  );
+  assert.equal(response.status, 404);
 });
 
 test('UID alone is rejected unless temporary legacy mode is explicitly enabled', async () => {

@@ -42,6 +42,7 @@ class CrmDb {
     if (sql.includes('FROM tenant_memberships')) {
       const uid = args[1] || args[0];
       const role = uid === 'U-ADMIN' ? 'tenant_admin' : uid === 'U-SALES' ? 'sales' : uid === 'U-FIN' ? 'finance' : '';
+      if (sql.includes("role IN ('sales', 'editor')") && role !== 'sales') return null;
       return role ? { tenant_slug: 'partner-a', user_uid: uid, role, status: 'active', permissions_json: '[]' } : null;
     }
     if (sql.includes('FROM tenant_crm_profiles') && sql.includes('line_user_uid = ?')) {
@@ -99,7 +100,7 @@ class CrmDb {
   }
   async run(sql, args) {
     if (sql.includes('INSERT INTO tenant_crm_profiles')) {
-      this.profile = { ...this.profile, id: args[0], tenant_slug: args[1], owner_uid: args[17] };
+      this.profile = { ...this.profile, id: args[0], tenant_slug: args[1], ref_uid: args[14], owner_uid: args[17] };
     }
     return { success: true, changes: 1 };
   }
@@ -168,6 +169,33 @@ test('sales cannot edit a CRM profile owned by another sales user', async () => 
 });
 
 
+test('sales cannot overwrite an existing referral owner', async () => {
+  const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-SALES', {
+    method: 'POST',
+    body: { ref_uid: 'U-OTHER-SALES', display_name: 'Rejected referral overwrite' },
+  }), { DB: new CrmDb() });
+  const payload = await response.json();
+  assert.equal(response.status, 403);
+  assert.equal(payload.error, 'CRM_PROFILE_ACCESS_DENIED');
+});
+
+test('tenant admin cannot assign a CRM profile to a non-sales member', async () => {
+  const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-ADMIN', {
+    method: 'POST',
+    body: { owner_uid: 'U-FIN', ref_uid: 'U-FIN', display_name: 'Rejected reassignment' },
+  }), { DB: new CrmDb() });
+  const payload = await response.json();
+  assert.equal(response.status, 403);
+  assert.equal(payload.error, 'CRM_PROFILE_ACCESS_DENIED');
+});
+
+test('tenant admin can assign a CRM profile to an active same-tenant sales member', async () => {
+  const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-ADMIN', {
+    method: 'POST',
+    body: { owner_uid: 'U-SALES', ref_uid: 'U-SALES', display_name: 'Accepted reassignment' },
+  }), { DB: new CrmDb() });
+  assert.equal(response.status, 200);
+});
 test('same-tenant LINE-only profile creation returns a precise conflict', async () => {
   const response = await routeTenantCrmApi(request('/api/v2/crm/profiles', 'U-ADMIN', {
     method: 'POST',

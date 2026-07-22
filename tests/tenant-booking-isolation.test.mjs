@@ -32,13 +32,15 @@ class FakeStatement {
 class FakeDb {
   constructor() {
     this.runs = [];
-    this.batches = [];
+     this.batches = [];
+     this.prepares = [];
     this.existingCustomer = null;
     this.globalCustomerTenant = '';
     this.order = null;
   }
 
   prepare(sql) {
+    this.prepares.push(sql);
     return new FakeStatement(this, sql);
   }
 
@@ -165,6 +167,9 @@ test('booking stores authenticated UID plus customer id and actual contact phone
   assert.match(payload.data.customer_id, /^CUS[A-F0-9]{32}$/);
   assert.equal(payload.data.total_amount, 2000);
   assert.equal(payload.data.deposit_amount, 400);
+  const distributorQueries = env.DB.prepares.filter(sql => sql.includes('FROM tenant_distributor_profiles'));
+  assert.equal(distributorQueries.length, 1);
+  assert.match(distributorQueries[0], /m\.role IN \('sales', 'editor'\)/);
 
   const [customerWrite, orderWrite] = env.DB.batches[0];
   assert.match(customerWrite.sql, /customer_id/);
@@ -216,6 +221,29 @@ test('an existing tenant customer keeps its relation key and customer id', async
   assert.equal(payload.data.customer_id, 'CUS-EXISTING');
 });
 
+test('existing customer owner remains stable while each order keeps its referral distributor', async () => {
+  const db = new FakeDb();
+  db.existingCustomer = {
+    customer_id: 'CUS-EXISTING', customer_key: 'LEGACY-KEY',
+    owner_uid: 'U-ORIGINAL', owner_name: 'Original Sales',
+  };
+  const response = await routeTenantBookingApi(
+    bookingRequest('demo', {
+      itinerary_id: 'TOUR-DEMO',
+      invite_code: 'SELLER1',
+      customer_name: 'Tony',
+      customer_phone: '0912000000',
+    }),
+    { DB: db },
+    { fetch: async () => new Response('{}') },
+  );
+  assert.equal(response.status, 201);
+  const [customerWrite, orderWrite] = db.batches[0];
+  assert.match(customerWrite.sql, /owner_uid = CASE WHEN COALESCE\(owner_uid, ''\) = '' THEN \? ELSE owner_uid END/);
+  assert.match(customerWrite.sql, /owner_name = CASE WHEN COALESCE\(owner_uid, ''\) = '' THEN \? ELSE owner_name END/);
+  assert.equal(customerWrite.args[4], 'U-SALES');
+  assert.equal(orderWrite.args[4], 'U-SALES');
+});
 test('payment creation checks tenant and customer before calling legacy gateway', async () => {
   const db = new FakeDb();
   db.order = {
