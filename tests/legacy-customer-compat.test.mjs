@@ -120,6 +120,8 @@ test('compatibility source scopes reads and exports by tenant', async () => {
   assert.match(source, /customer_id = \? OR contact_phone = \?/);
   assert.match(source, /tenants\/\$\{encodeURIComponent\(tenantSlug\)\}/);
   assert.match(source, /routeTenantBookingApi\(translated, env, legacyWorker\)/);
+  assert.match(source, /salesScoped \? context\.userUid/);
+  assert.match(source, /salesScoped \? ''/);
   assert.doesNotMatch(source, /ON CONFLICT\(customer_phone\)/);
 });
 
