@@ -31,6 +31,7 @@ import { authenticateLineRequest } from './lib/line-auth.js';
 import { requestedTenantSlug } from './lib/tenant-context.js';
 import { statusForError } from './lib/http-error-status.js';
 import { isLineShadowEndpointRequest, mirrorVerifiedWebhookRequest, routeLineShadowEndpoint } from './lib/line-shadow-mirror.js';
+import { emitLineReceipt, emitShadowReceipt } from './lib/tenant-line-receipt.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -113,7 +114,10 @@ export default {
       const mirrorRequest = request.clone();
       const response = await routeTenantLineWebhook(request, env);
       if (response?.ok && typeof ctx?.waitUntil === 'function') {
-        ctx.waitUntil(mirrorVerifiedWebhookRequest(mirrorRequest, env).catch(() => ({ mirrored: 0, failed: 1 })));
+        const startedAt = Date.now();
+        ctx.waitUntil(mirrorVerifiedWebhookRequest(mirrorRequest, env)
+          .then((result) => emitShadowReceipt({ env, sourcePath: 'shadow', result, durationMs: Date.now() - startedAt }))
+          .catch(() => emitLineReceipt({ env, sourcePath: 'shadow', stage: 'SHADOW_DISPATCHED', result: 'failed', safeErrorCode: 'SHADOW_DISPATCH_FAILED', durationMs: Date.now() - startedAt })));
       }
       if (response) return withTenantHeaders(response, request, env);
     }

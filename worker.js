@@ -5,6 +5,7 @@
 // ============================================================
 
 import { mirrorVerifiedWebhookPayload, shadowObservation } from './lib/line-shadow-mirror.js';
+import { emitLineReceipt, emitShadowReceipt } from './lib/tenant-line-receipt.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -3664,12 +3665,14 @@ function isForwardWebhookEnabled(env) {
 
 async function handleLineWebhookGateway(request, env, ctx) {
   const rawBody = await request.text();
+  await emitLineReceipt({ env, sourcePath: 'legacy', stage: 'RECEIVED', result: 'success' });
   const signature = request.headers.get('x-line-signature') || '';
   if (!env.LINE_CHANNEL_SECRET) {
     return json({ success: false, error: 'LINE_CHANNEL_SECRET missing' }, 500);
   }
   const valid = await verifyLineSignature(rawBody, signature, env.LINE_CHANNEL_SECRET);
   if (!valid) {
+    await emitLineReceipt({ env, sourcePath: 'legacy', stage: 'FAILED', result: 'failed', safeErrorCode: 'SIGNATURE_INVALID' });
     console.log(JSON.stringify(shadowObservation({ events: [] }, env, 'legacy', false)));
     return new Response('Invalid Signature', { status: 403, headers: CORS });
   }
@@ -3683,11 +3686,20 @@ async function handleLineWebhookGateway(request, env, ctx) {
 
   const observation = shadowObservation(payload, env, 'legacy');
   console.log(JSON.stringify(observation));
+  await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'legacy', stage: 'SIGNATURE_VERIFIED', result: 'success' });
   const backgroundWork = (async () => {
-    try { await mirrorVerifiedWebhookPayload(payload, env); } catch (_) {}
+    const shadowStartedAt = Date.now();
+    try {
+      const shadowResult = await mirrorVerifiedWebhookPayload(payload, env);
+      await emitShadowReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', result: shadowResult, durationMs: Date.now() - shadowStartedAt });
+    } catch (_) {
+      await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'shadow', stage: 'SHADOW_DISPATCHED', result: 'failed', safeErrorCode: 'SHADOW_DISPATCH_FAILED', durationMs: Date.now() - shadowStartedAt });
+    }
     try {
       await storeLineWebhookEvents(env, payload);
+      await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'legacy', stage: 'LEGACY_STORED', result: 'success' });
     } catch (err) {
+      await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'legacy', stage: 'FAILED', result: 'failed', safeErrorCode: 'LEGACY_STORE_FAILED' });
       console.warn('store line webhook events failed:', err.message);
     }
 
