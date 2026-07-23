@@ -9976,15 +9976,21 @@ export default {
       if (path === '/api/orders/create' && request.method === 'POST') {
         const body       = await request.json();
         const agencySlug = url.searchParams.get('a') || 'demo';
+        const inviteCode = String(body.invite_code || body.inviteCode || '').trim().toUpperCase();
 
-        if (!body.distributor_uid && body.invite_code && env.DB) {
-          const inviteCode = String(body.invite_code || '').trim().toUpperCase();
+        if (env.DB && inviteCode) {
           const dist = await env.DB.prepare(
-            `SELECT uid FROM distributors WHERE UPPER(invite_code) = ? AND status = 'approved'`
-          ).bind(inviteCode).first().catch(() => null);
-          if (dist?.uid) body.distributor_uid = dist.uid;
+            body.distributor_uid
+              ? `SELECT uid FROM distributors
+                   WHERE uid = ? AND UPPER(invite_code) = ? AND status = 'approved'`
+              : `SELECT uid FROM distributors
+                   WHERE UPPER(invite_code) = ? AND status = 'approved'`
+          ).bind(...(body.distributor_uid ? [String(body.distributor_uid).trim(), inviteCode] : [inviteCode])).first().catch(() => null);
+          if (body.distributor_uid && !dist?.uid) {
+            return json({ success: false, error: 'REFERRAL_MISMATCH' }, 400);
+          }
+          if (!body.distributor_uid && dist?.uid) body.distributor_uid = dist.uid;
         }
-
         // ?箸撽?
         const required = ['itinerary_id', 'distributor_uid', 'customer_name', 'customer_phone'];
         for (const f of required) {

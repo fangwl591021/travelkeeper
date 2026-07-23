@@ -134,3 +134,10 @@ test('worker evaluates compatibility routes before legacy worker fallback', asyn
   assert.equal(compat < fallback, true);
   assert.match(worker, /X-TravelKeeper-Tenant-Isolation', 'phase13'/);
 });
+
+test('legacy production order path requires an approved matching referral', async () => {
+  const source = await readFile(new URL('../worker.js', import.meta.url), 'utf8');
+  assert.match(source, /status = 'approved'/);
+  assert.match(source, /REFERRAL_MISMATCH/);
+  assert.match(source, /UPPER\(invite_code\) = \?/);
+});
