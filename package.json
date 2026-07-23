@@ -1,0 +1,12 @@
+{
+  "name": "travelkeeper",
+  "private": true,
+  "scripts": {
+    "staging:migration-check": "node scripts/staging-migration-check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "migration:plan": "node scripts/d1-remote-migration-plan.mjs",
+    "schema:equivalence": "node scripts/d1-schema-equivalence.mjs",
+    "bootstrap:generate": "node scripts/d1-bootstrap-generator.mjs --write",
+    "bootstrap:check": "node scripts/d1-bootstrap-generator.mjs --check"
+  }
+}

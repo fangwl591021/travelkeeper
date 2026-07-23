@@ -1,0 +1,2065 @@
+{
+  "format_version": 1,
+  "baseline_version": "0001-0114",
+  "source_commit": "2aedbcde8829d6dedd5b836ddf87cbc4627d2e9b",
+  "migration_start": "0001_initial_schema.sql",
+  "migration_end": "0114_d1_tenant_integrity_compat.sql",
+  "migration_count": 35,
+  "statement_count": 301,
+  "bootstrap_checksum": "1bf727ca54db5693a48268a5d5d4715bc8f85e1c4b1ef4ee3f10ebc1bccafb53",
+  "schema_checksum": "1f480ea95437c6355ea9d1c823e328e215f5c8ed670b3cd771c173e8eb1f5d16",
+  "migrations": [
+    {
+      "file": "0001_initial_schema.sql",
+      "checksum": "59e06b388ca2e3b15201723c9de64f4470c02d008c3662c23e20199101563896",
+      "statementCount": 36,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "ee99585619a8c9d3630b4a8d1229b4219b5a456861aacb60811d004436f43a40"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "999f9a45910d22acde026f99f2e6139bf318dedadd5694bd553e55f2a940cb08"
+        },
+        {
+          "index": 2,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "d34c04a32b43c772d0a14297c7672e622f87b8d3358ff71f4e85ef3888759a98"
+        },
+        {
+          "index": 3,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "3fcabd6ea062025c2dd46f6d3884663ca9d50ea69741fa39291a0f16172fbf20"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "b8cf69b78696d5f4bda6a2a42cfc8fb65309136aec68ac8a554f900d9c3b40eb"
+        },
+        {
+          "index": 5,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "020e7d61b019b40c79a2467b9f76345b917cd45c1aec8f0050c55a34292e1240"
+        },
+        {
+          "index": 6,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "cf57d6f2d6108d10a5310c70bd22c55de2be39eaaece0b88e04f611f7ef4ddad"
+        },
+        {
+          "index": 7,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "b9d7ad8468b39ad69cd8b7a6e5497a62b6b8f035e5af453a0fd4357175ebd788"
+        },
+        {
+          "index": 8,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "9020761d11d495d298c65a6ed12ed327c06e33065bdf1fd624a80d6996fbd2e5"
+        },
+        {
+          "index": 9,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "29de2cc8802dc525f4b51ef4eb66f70a9c3fbdb620c32fc895be3dc4b0e0e000"
+        },
+        {
+          "index": 10,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "3347413d2313ffc8be692a664465b0d7a94014320fc81e510efc84fc7ef1564c"
+        },
+        {
+          "index": 11,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d40c4e5d822490552d7269153e1361050e47b61c29d63ac7bf9a9d31450ecfd1"
+        },
+        {
+          "index": 12,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "f5caefb19c5503472d42a8c63eb41ca5fea2a68520036c1cab79e31570495d3f"
+        },
+        {
+          "index": 13,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "6970ac9c19a6fe69927b71c023da8f90f09a581999e90a4a87a51e8b0cf7fa3a"
+        },
+        {
+          "index": 14,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "9ee4efeb245ed8a18c6c5318ba2f84f0d901a82acec3c16a7167c2bdf9b800df"
+        },
+        {
+          "index": 15,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d1d62cb16ab725b26f2c472c50ee95de2f639f89fa96cd4a3e2280742691eb2a"
+        },
+        {
+          "index": 16,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "ada683d88a1cce34b6a8bfcedaae351fa54e9fc3353a3945b4cd353766e2cc49"
+        },
+        {
+          "index": 17,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "094cc9db0b2baa909cfa3aead424bf8cca440e95c363c351dacf9a16d063cd16"
+        },
+        {
+          "index": 18,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "9d8cb81570d4849879c8d1d3952697be0c13e1cc902edd0a03a7584c69c594d3"
+        },
+        {
+          "index": 19,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "92ec35b90efb4b919b67364081d02044a3bdd0d9d1d9298f2d5bd4cfd6b93824"
+        },
+        {
+          "index": 20,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "4337c8e3ad1dfb778aa094d4084375d7db0d545c15411adf89cd45e1817be1be"
+        },
+        {
+          "index": 21,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "23b44de5d663d5694a829f6a4ea286c7f13a4d152c37a24d08dbe5ca8d17e8bf"
+        },
+        {
+          "index": 22,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e178e88f5bb816c3a58203f40a17f601c774fa128aa2b11e41f6eb4aed6130ed"
+        },
+        {
+          "index": 23,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "3f8c722bd3d1f21d8c9a5c9ed0de8c368a96629d070324c3758e31af11f8e75b"
+        },
+        {
+          "index": 24,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8652741955ec11dcb60a42f9a7ed1c9cb71a5e82ac10ce4439d4281511e2192d"
+        },
+        {
+          "index": 25,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "02fee78a256db1b25d38048752a5e40dd200cee5bd494cc0eaceb41b01205d35"
+        },
+        {
+          "index": 26,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "f1623788d69f1c320d0c6f8e2fdf5c9f732b9579e33c48a730df9f4c4b150d13"
+        },
+        {
+          "index": 27,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "78f2ffbec00a85eab96719551cc7eb49d646ed8016f3dcf240221d16d48a6ab7"
+        },
+        {
+          "index": 28,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "287f7c55ffde7a6daa254b48c3bc6d8e3478613b5426ec34007770e185c2d6fc"
+        },
+        {
+          "index": 29,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "5ecd849b7c41a14efd1e875e4e5f1a049bc88e89b2a0f06d2b96ad7f0dba7824"
+        },
+        {
+          "index": 30,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "6fa6b3e8c953041691b1de6ddfe8e649bd8708429805159ea31b4823da6defff"
+        },
+        {
+          "index": 31,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "33ff9a1b83ee2015b797bf7888e17e9d2d17bd3a4ce55963d493efc8c4480fc1"
+        },
+        {
+          "index": 32,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "97c53a181449a6c2f0bb83e0dd8d4cdcd4aad423e10fee6779af3db53a49b50b"
+        },
+        {
+          "index": 33,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "5a834a0a64291feb1588afd5b054f21bfa79c4c23d65b77bb48502e5050cf7f9"
+        },
+        {
+          "index": 34,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "a63ba28b8fb14f17568ebf4f9baa5e5622861446c572805680024a024919e92c"
+        },
+        {
+          "index": 35,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "b42c711f374ede677c77b17e785733e68f5f65bfd2b9718d50fe9463e3bdf0d2"
+        }
+      ]
+    },
+    {
+      "file": "0002_itinerary_commission_amount.sql",
+      "checksum": "d3d7745d305e0fb50b6b996dfc7c41fc6e080497ce8aa7b84a00520c8ab30422",
+      "statementCount": 1,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "d3d7745d305e0fb50b6b996dfc7c41fc6e080497ce8aa7b84a00520c8ab30422"
+        }
+      ]
+    },
+    {
+      "file": "0003_itinerary_sales_controls.sql",
+      "checksum": "d6efc999361217c9d3db737e4c4d90c07b48881e91ea250177b657da166ab5b7",
+      "statementCount": 4,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "3b87cd5a9dbe2bab00361db0ebe39cf0c113f286db7e3f36c727f7c037cd3995"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "7f5bef71e97f868a239a284450b01cf252320c4f1008ecb5639728a0a8b5da17"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "cc9bb13d3f57b13ab5a2b9fad4d839f203fb1d53593278ef25b75491bf32ec74"
+        },
+        {
+          "index": 3,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "6da3033b4326eff8ba99d813765fa773ad5e7480e2c06d3e5cbbe8ba746c68a8"
+        }
+      ]
+    },
+    {
+      "file": "0004_itinerary_commission_mode.sql",
+      "checksum": "6784e250f3b607e7305ba3dba12e921e0d4fe219714cf08f0d075ba3e2528108",
+      "statementCount": 2,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "d922d435e48d1e7c3b1906d309fbff2ee8801887817a272a45e7cc46c9b11eaf"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "b347bdf91caeb969a4e346a65d93c796b6de1346f25730261aef654239c6eaa5"
+        }
+      ]
+    },
+    {
+      "file": "0005_line_oa_monitor.sql",
+      "checksum": "7f17e8d65433684dab7ed6979cbc128acd39b868f65db766bbe19cbd6789fa6b",
+      "statementCount": 8,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "23573e5c663cb6fc2ffdafdbcab47d9afe6e638c0b388a309665c3240afe0c75"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "ce7d909063e880a309e43be855920b17e33a77e5a246a40f75f317ccb1478e6d"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "f7084f398d6cfa1e4fc1e11b7ccffb07777f573294ce121645f0c1758f7b10aa"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "b41c45a8edfaa35851dc7f9517d2f1273b06b888a3b352116e677ef4756f3d82"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8747006bebb6a74cc45d7842030449bdd3a3e150f5b735d51dfc6f5d1f93c943"
+        },
+        {
+          "index": 5,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "c024b3f1764382b247c195378c6c8150dfaf82abcff4d48ce14a1852e29abf69"
+        },
+        {
+          "index": 6,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "5604108cdfb7065ea0458635012941b838d8d14672c7f77994a80c5d8329f5fc"
+        },
+        {
+          "index": 7,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "6860a6d9bd30e86f7f709b662eb0c353874898ad11bd0d97b3c1127963abf227"
+        }
+      ]
+    },
+    {
+      "file": "0006_line_visitor_requirements.sql",
+      "checksum": "48255a4e4961e74c52432a49590054357e09110706a24e1c2674d0e073e76297",
+      "statementCount": 5,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "23573e5c663cb6fc2ffdafdbcab47d9afe6e638c0b388a309665c3240afe0c75"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "95936ac878cce76befc2cd7bfd1168a4e80f61f8dce78621e39ab58e183177c7"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "cdf49651e237037e8948a25e3ffb97287e393b729443ffddb08b6cdd707e7398"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "ffbea4a2437d2857c4b40fdea5453c42050cdc93f08835c298f86ab2b594443b"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "570eaec6806a7268cabe1d97b554aa48fec6240f3e25ec2c2c669db18b1b43ff"
+        }
+      ]
+    },
+    {
+      "file": "0007_wasabi_import_staging.sql",
+      "checksum": "bb9a1d4dd686da1e251c879cc819150f478d0d4e4ef64a1d6636a0987d6d31fa",
+      "statementCount": 5,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "b51363817f1e22214d75fcb8db3ab6c438600ea9375c377141a953d879a92b90"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "866dc5ab8bdde43e4d97cc06fefbbf540e47f7862194e789fecc897cd27de750"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e51a24133479579a4a01feeee67bc519757ad729dadeb9f184660ca4d3ba0471"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "66b306581945c82cd80a16ef2a9736477e3eae23d5dce2eb655e49b4277667d0"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "6a01fe98c7235842c8a0be5e3717d22dde492261a03c763acd9207ebf9c2c743"
+        }
+      ]
+    },
+    {
+      "file": "0008_mother_sync_map.sql",
+      "checksum": "a02ed14a48ec098bfcd100868f9394d8ddddb40dea25ec1fcc5e466fb18820d8",
+      "statementCount": 3,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "59f1a3d1d7911317330ccfc0cc52c0cb66673126b03f8a2989475014c1739ae0"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "f8a7eea87c60cade2cb754937007ac15b694ee6ee29ac41dfe378f3826affcf3"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "0262379949afaada1c610c2791983c469ac7d594046e3bca7c6ef4eecc74331a"
+        }
+      ]
+    },
+    {
+      "file": "0009_system_settings.sql",
+      "checksum": "627488d3b560cf0dac74309f72a82b0d44538b25f97a1aadb886a6fc1bc25767",
+      "statementCount": 2,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "b20ec32bd4c2c864c16bb4d2d05c216b61a17e267cd66ae79845a039384a74b4"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "2489013cb9a3bd380ee15c4f354de04239250f534051ae104fa87e89ea79261e"
+        }
+      ]
+    },
+    {
+      "file": "0010_flex_shares.sql",
+      "checksum": "da3837a350a30584e093b5dc4a3516114959507e91a256b71ad65fd96eae4a55",
+      "statementCount": 2,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "4eee2d38226ac29318fef46c07dee5ae6c88b574f44b33a31c02e74f7e97e7a5"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "c9af0722d501f6687bc388aca792afe25b02f0bccd3b93faa0045b60d1ffc39f"
+        }
+      ]
+    },
+    {
+      "file": "0011_line_thread_opportunities.sql",
+      "checksum": "ec3d52a5ce7b2019ebefac54e54437ff79448c8b404c3ccc5884ca0cdb6d8141",
+      "statementCount": 4,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "ee1c2a5fad162812a33ac3565767b0b4828a83fcfaba1f6de7b158f868c9ce93"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "4ec9040f9a64fec874225dbdcac2dd63ba5f8855f639dc1418aa99087751848b"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "dd1f3033808dcfafaa0bb5cf51cd7f713b839e021e13b97d4910bd0c00ad0acc"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "6d036b282964010e709dff75678fc7afd97164aea5df6b4692617a34b44c0f19"
+        }
+      ]
+    },
+    {
+      "file": "0012_share_events.sql",
+      "checksum": "a96ff12ce04d3816cc58adb9a61227204b516c55c0b316a02ca330792e24c576",
+      "statementCount": 5,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "167f284cd9d5e1b032fb6161726bb729fea011def935867887ac6a86747fc36c"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "a313173cf3d01be27546d9df5640dfd90d0601df4027aa214e9ef7c7bc95891c"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "6c38b2ea4d5dbbfff805fc9a552df2f34f3023409a90ef7b11321b1cb5d201ed"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "c50b90dd6c66cc53c27ca6a4a4fd519c7502c2163216ee9d4dd849491f94220f"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "f2a25dc46bf34b815bb70747f50761152f4f8e1480519a85cbd77b8b0c0b62c6"
+        }
+      ]
+    },
+    {
+      "file": "0013_line_message_media.sql",
+      "checksum": "ba838b7c4e52e9ea79b66bba10cccf80bd513341732297824c83bbc0c389b9c9",
+      "statementCount": 3,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "a3dbdb9a7a94fbcfb10346876553b22558ed96a898cf3ac0cf5934d3d6833275"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "e46991a496231d37051324f0a2a00c951ab3706bfe01b0c6053e1bbc2a1eff52"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "7a99da8b25211c62eae867456019f90e8e4d9ea95828eff77267510c3ceee899"
+        }
+      ]
+    },
+    {
+      "file": "0014_internal_ops_settings.sql",
+      "checksum": "22d8cb1f2d97cfa154e4c2aea063ac1f244cdf8a8dd81ed5b6c2ec52c6be6c2d",
+      "statementCount": 14,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "29bf0ac81b32770489f092e2fc10724597da78ac87716387ab64ccb032fbf498"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "4de8c4106985080b4403c7ab77f2ae23b106bc2927f6d28da2093aa9b9de82f7"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8c88aecefd8d7642434f4a50a5e0985baada2b03a8e4ad52504dac23dc377ae7"
+        },
+        {
+          "index": 3,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "aed1d30bc0fb53128b686b8f2d15b78c842b9e107b215dd516ea11a12cae5ad6"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d569688f9f1dd1c7db906c1047aae1368210481382d4701edebc717a4b6c2ce9"
+        },
+        {
+          "index": 5,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "31ed7007553ae509ea272d160a9183a17729203de98b8743a267ef573e27b3ec"
+        },
+        {
+          "index": 6,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "b93932dd5e6c44740e81c5da6106e90dd899638b051bfe58d077bb5272c96641"
+        },
+        {
+          "index": 7,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "5fcf1aa46b9402a9165e7b09618e7471d7b67268d870a17fa59d0048bdd69151"
+        },
+        {
+          "index": 8,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "190984d3529d04e5bb14128d882fdb2e37d5717c8eb22d2b0ae21c298f05d0ba"
+        },
+        {
+          "index": 9,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "fa5fb6b212368d47a644c13ced63607b5c8420d21df1da70a636bae6d0973739"
+        },
+        {
+          "index": 10,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "6d44a63a91038b7ec420660a1db3c01309d27466392da40f0bde6a03be4310c6"
+        },
+        {
+          "index": 11,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "ca350d1c331596dfb6d8a60b3cf223cd5919ceb88ce5948444f9c4dce97f64c3"
+        },
+        {
+          "index": 12,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "a26bc428347c79a3a7d555c71057739533b721d8b3f092bd93ea405298c3dcc4"
+        },
+        {
+          "index": 13,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "60a4e9cb53406a76b4c0bebb4036f2207f8b40112b8541c455118fcc9d388a43"
+        }
+      ]
+    },
+    {
+      "file": "0015_accounting_receipts.sql",
+      "checksum": "22d68cbc20663246b265c082105be2f903d30f6074477f4d46abfbef73063057",
+      "statementCount": 5,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "a2a7fbce8713ca7b2fc50df03a749c385f1b9b05959ff84a237b4461f9700ed3"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "cd975257942940a66b57e3775d8cc2fa62901f0f4ace3c79015d9e4111c86606"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "7b7c638ed8f096a8b7ea1f945a1e95db5585f5869aaeb7d9d30285fdeb4471a1"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8c507e9f976c5a8d5874fd404e8352a721420baea35097c6167adc3548fa8cc2"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e17cb11d86abe0854b5f0cff33311422f89aa0b40e9eed9b16f90a4222089c95"
+        }
+      ]
+    },
+    {
+      "file": "0016_line_thread_ai_pause.sql",
+      "checksum": "9824bbb068fadbb5b4147f0c847c058236403c0ead43707c5a25436b82ebde42",
+      "statementCount": 2,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "4f39b8b6311a473dd8c1cb50c8690765e1d46a602463e222f8d3566558a50816"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "c2cf955c7151c0272dcebdfe60947de40c33c9f6aebf1ff5e15470b967ee99f8"
+        }
+      ]
+    },
+    {
+      "file": "0017_line_learning_examples.sql",
+      "checksum": "4581429763c2bbafa0291b021818a96cdeb4f89583269217cebdef0944e7281f",
+      "statementCount": 3,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "8900d1d9042c23fe5e6d2b268330c8f45b6415a220e66bc0ab6212e6f4dd80af"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8ee612f2a6b5a92431b395d73d53051c638446857ee90e15b084d5b2955f25fd"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e831d55cf697a0c6129e8174fbd06c76d2743c5e695c162bf2ad0ed20a363d45"
+        }
+      ]
+    },
+    {
+      "file": "0018_itinerary_deposit_amount.sql",
+      "checksum": "43d0c5e743511e0c8456897bb5d51b8dc255d8cb906ae5fe22cd2b9daae9feff",
+      "statementCount": 1,
+      "statements": [
+        {
+          "index": 0,
+          "type": "SELECT",
+          "triggerName": "",
+          "checksum": "43d0c5e743511e0c8456897bb5d51b8dc255d8cb906ae5fe22cd2b9daae9feff"
+        }
+      ]
+    },
+    {
+      "file": "0019_wego_internal_business.sql",
+      "checksum": "f4a380a90132ca3e48d63ef49efe264c0d1f505964b414130e3f5b048bcff63d",
+      "statementCount": 10,
+      "statements": [
+        {
+          "index": 0,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "95d7191dca06945c86f4f5ae193fc1cc6fde37bb0ca25eb3771d4dea298802aa"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "7284407e276522dcc182c31a8b2e5025b0125328b127f9324a62f6645cb9849c"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "04d0eea94226bb92f53c3e5fd0ddcebab8b5b74bee8ec5808ee31737b6d95c51"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "10363e0d44bd5e894e4c46d723126d3f838878aaf603f928f1363be158457573"
+        },
+        {
+          "index": 4,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "42989f0d548114f856f26b22374c0255ed8bd0d17a7591c1205124a79f0ca0b4"
+        },
+        {
+          "index": 5,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "f4e1ed338596042fd2d8f8a19f042b77c0e80f7efabe58e682d29849db2b7c2e"
+        },
+        {
+          "index": 6,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "f703c5938ec478977600893642c09c6440111fb7dcf60445eb231d96336e4bf1"
+        },
+        {
+          "index": 7,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "f8b28fc4b8ebbdf7241bef25bbc66fa59bb2a768adce0e251873445293c59426"
+        },
+        {
+          "index": 8,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e20abf0793ebcc9d89151abdcca0664eb95bcf0cb006f7940c1294c5c07fc6b4"
+        },
+        {
+          "index": 9,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "ee863be8c2ab0b3d7b5fe79058d8f2f6188ea6ba52f55f89bb9770aba92b335c"
+        }
+      ]
+    },
+    {
+      "file": "0020_itinerary_expire_at.sql",
+      "checksum": "973f1816d01afdb3daa37bd8309be0e16bd98deb985fa4a3b4c1a53c2fa6707f",
+      "statementCount": 2,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "700a29811526400fd86f2657940c5a04e188da0e7a81970ec94d6b602c882ae1"
+        },
+        {
+          "index": 1,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e044e9d512f3d663e6407fe49f449af8af57801fb193a58fdc84ac7fe9984798"
+        }
+      ]
+    },
+    {
+      "file": "0100_tenant_isolation_phase1.sql",
+      "checksum": "39fe7c7358fe939fcef6b517035ba5bef38a21c45df65ef75e43d8ffbac52be8",
+      "statementCount": 32,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "a51fcbb1822a1e710ea72752bae1657f5f3bc372e14c76bf141fcb640dfebec5"
+        },
+        {
+          "index": 1,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "fd0667be97942dc4cf1e2fcef6a1f917871e09473ee9f3f8b9cebda207e75452"
+        },
+        {
+          "index": 2,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "2742eeab7fc8ca8009a0a72ed2077522a93eb2be97f20be496b039a8b9f1d67c"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "3434447a728464800957b334a491814f16515813ef807a6562065b56f6f5c344"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "7e8199270fc01606f709f9594706bc511a7d8d5e3e707e62bb6efb78b120d379"
+        },
+        {
+          "index": 5,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "28e2762753a8d81ea165dee7c9420a86e4e006d572273f6c88e05cea72c03df8"
+        },
+        {
+          "index": 6,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "41c9925a1a36e4599c769f83365f951ca7a63c48b65245e7f57732dc88cce723"
+        },
+        {
+          "index": 7,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "9da6f6ce813f1a8a3dba7db218607aa8e1c9fe8856487e71d4d656883067a154"
+        },
+        {
+          "index": 8,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "445d0dedcfab2bee68010daa79eb96068829ea6c4906288ad05f1f6fc580fe4a"
+        },
+        {
+          "index": 9,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "3830a22cfc7ec3c52e8294e1a2440316b0f7b6a9df35012a6bfaf7767d449259"
+        },
+        {
+          "index": 10,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "8d89e71724250a2addcb07ba0d63d522fd94487e3d547580c6b6d858faa44b0c"
+        },
+        {
+          "index": 11,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "11f1ca02259c77f3b00de7b772f938bc73c0a3d13b07967478679875ac4e7070"
+        },
+        {
+          "index": 12,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "3e463a90ff24f9a87a0e3cbc4ad247ee017ea0330a6604ca1a26657a0a6e8911"
+        },
+        {
+          "index": 13,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "5623e64ce13c53e59507f0f4c9f866b3149b1d02fb3f9dfd2b787cf6c929fd89"
+        },
+        {
+          "index": 14,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "5b35a26442db7d489a4e23c27e5cd53da094602321287fe76a81b4a659b3a139"
+        },
+        {
+          "index": 15,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "28cbe2189fff6fa290207cf74cce74403545730b363ed6983f6ee961c4f7a22b"
+        },
+        {
+          "index": 16,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "9a21abcf8ca6f165caa28aeb027f575b87e0af4ad3e46b9eacaef831767e41ac"
+        },
+        {
+          "index": 17,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "b8e6ae7b977620f78f5467d6766130ab65ffc776aea8a9047be47728ed0dcc4b"
+        },
+        {
+          "index": 18,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "a9bf6992bff0d49130f98abc737e418ee7a0977b4b0ba6d8a4b0362e006fe298"
+        },
+        {
+          "index": 19,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "bf7fb0a49d0dd1a3d568ef6b97b40f28fb73839e7ec02216ff6c8477fca04580"
+        },
+        {
+          "index": 20,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "938ecebfc74e930c6a7f7d51f523741319baaeb2ab5b6b8efa5ae0f13479dca4"
+        },
+        {
+          "index": 21,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "96376227b315e3775fe70a75de10917b2bd96a555ccf917aef91fbfb19454885"
+        },
+        {
+          "index": 22,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "829bb4f0108495a582eaf0c5450f16bf96a9a094fbc1e7f0a9daa7647493e305"
+        },
+        {
+          "index": 23,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "71c60d6406d6a529b652acdd154a7e64acc8718bba1dede59deac97fb95adbe3"
+        },
+        {
+          "index": 24,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "19e9d0555161e315c8ec11975c96d7eb419c5ca2ab69f8289685fb955e5e1ae6"
+        },
+        {
+          "index": 25,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "dec9719aa28ab2bf05e11f37558e49022ac02093331a7acdb0aadc5516679695"
+        },
+        {
+          "index": 26,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "2d5aae3e6e1d46acc41140b9e64782eeee095b9ca9f49396136ff40a2f5999e6"
+        },
+        {
+          "index": 27,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e10a225d700a0e406b30d7bf5bdf81ea8ad88b6bf291ca53a9891d50d400dce3"
+        },
+        {
+          "index": 28,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_orders_tenant_itinerary_insert",
+          "checksum": "29c9ada4e1a59c64bd432eadb2ca5a39731f0b971bcd02a350cf19e28b2c8ea2"
+        },
+        {
+          "index": 29,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_orders_tenant_itinerary_update",
+          "checksum": "27d2f0c3858bb73837426e469a750a1d8b1442e96c29682c532eda9cec161199"
+        },
+        {
+          "index": 30,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_payments_tenant_order_insert",
+          "checksum": "5d3449bf4907c2cbaa9e111f24e94e6420a122efa36704e577a9361b90ed00d3"
+        },
+        {
+          "index": 31,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_payments_tenant_order_update",
+          "checksum": "b6a58f5c203c8d9dbdba4a25d056f9973fc4b2e82f7e9c2073cede336045f5a0"
+        }
+      ]
+    },
+    {
+      "file": "0101_tenant_profiles_and_relations.sql",
+      "checksum": "4399509a73396eacfb05c721d5a52f5e8299969ea0122f0a2c187b74c4d06f2a",
+      "statementCount": 11,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "26e044ddc9b3575dcd108039663245c8054258c8f2540da62381107ff46aad36"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "d5d8d282d0d3f3a7fab7edbe94c278d0d3a9dd93f1b515daab72a767098330e4"
+        },
+        {
+          "index": 2,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "95baef70d64fc706820e3f64cc7988b4538470195f0beac79035e413bdc951fa"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "219e2b13704b49a79edf7e7540918a4784a06b2277386d9ce3d2cee9068c3e23"
+        },
+        {
+          "index": 4,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "9145aff4a159bba29ec7955b5bbc23d3850bce6f09a5d4f6690e075227430bf4"
+        },
+        {
+          "index": 5,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "0957366f8d5ddbb94284182cd29495f2d6655c89218a69d5a63a0d36498a53c1"
+        },
+        {
+          "index": 6,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "c31bbcb4939314e8466ccaa26edc132d5481e4c956bf713dfec95271b6cba794"
+        },
+        {
+          "index": 7,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "6c5753447cd28a664affe7a0b95806f74d8b3907657cb2cd8c3ec4e9737313af"
+        },
+        {
+          "index": 8,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "bc0926f6c75b6994a00af8c45e9e5ee00c44fa03d44aa278059874e858999594"
+        },
+        {
+          "index": 9,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_payout_batch_orders_tenant_insert",
+          "checksum": "e5c64629dab1e4718c2483073f60ed1a68e77aea7688418dd88ece9690afb2d1"
+        },
+        {
+          "index": 10,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_payout_batch_orders_tenant_update",
+          "checksum": "50104311b4a40887db34215da2b01af897c0c70715cebd2cc0553cc42a6b22f8"
+        }
+      ]
+    },
+    {
+      "file": "0102_tenant_payment_modes.sql",
+      "checksum": "29dcf43eb65616d0edd9667eee4fb05248fcf1ce6e3819f06963ab4352067d70",
+      "statementCount": 5,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "b005ad4b06c1249305321e5ebefdaafc88982d009453f07518e692e7c671309c"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "ac9653840bb36e5f154376f60e5f1341729f26d4617477e934a903abe1be3ae2"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "c330337f1fe4cec9b8949ff2a7fca9c2802e52d6831d3697f20628ce89c63694"
+        },
+        {
+          "index": 3,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "2966550a7b5c881286d04afb3d56df3761a1796bc12553b23fd31693396d4d46"
+        },
+        {
+          "index": 4,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "894df6713900b166e641cc4a871e87a52d8a8c5a873df98d3727717bffc77b66"
+        }
+      ]
+    },
+    {
+      "file": "0103_tenant_gateway_credentials.sql",
+      "checksum": "391b04a3a48227b9cb50ddbd9f0e7e21f6415289e225f7f6ba953cb0e88e1044",
+      "statementCount": 5,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "5831e06e368106a1a750322e8b8bf72386a8a860e232e4721b78dc764b3caeb4"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "4d82393b59e1133cdcf69db4cc219ee9a37d8d2444eff2b305be4d2edf56ad6c"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8367737f9d41df542cfe6a72327064c37fb204f3015d60393870063c19c87fb2"
+        },
+        {
+          "index": 3,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_gateway_enable_policy_insert",
+          "checksum": "c494534e47187645ea78ac7d0469812fb7eedbd19ff7fe7c3471ea37e8dbffe8"
+        },
+        {
+          "index": 4,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_gateway_enable_policy_update",
+          "checksum": "0dd299a53fdcce49c7eabc8321b4cef0e390b5b873d35124ad81ea477d4c7618"
+        }
+      ]
+    },
+    {
+      "file": "0104_platform_collection_settlements.sql",
+      "checksum": "823330b7c1f96811425f4b3bb44a7934b966a429011d10e7dd710dbe1ba52a27",
+      "statementCount": 16,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "9c1473cabbb2ef8eee61af88b44bf2e75df7a2ec6018ef1a20a380a8e4a3f37b"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "7c8c9eea5602a87e90928138adb2cbceb1caca94a4115af4e781e736c4258c76"
+        },
+        {
+          "index": 2,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "cdf04c8760fb90deebd741f448dd2cda5781597e215d633c71c6e6c1e4e15cbf"
+        },
+        {
+          "index": 3,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d890e0aa333e4c17442c9f514ab4600c3ea4a4d8a38e55970b54a247739dfe12"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d90d45dc21983f91cd3de8299352e4a592ad8205c02c33e6df2fc84012e90779"
+        },
+        {
+          "index": 5,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "a75a80d21b79772dc1988efeda0acf83296e49593439fa4859b0d4fe90592d25"
+        },
+        {
+          "index": 6,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "80c174eeea4174958e69bf6ff74d550b238c451c70ce142db9e43493a6b31674"
+        },
+        {
+          "index": 7,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "13acc6836e636ebe93f740e5c771cddad572b7ebc33d276dbca545c954dde40f"
+        },
+        {
+          "index": 8,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "0cfb16a44c8adb351e3e89c24483327bf93d85f353979956e6378db9b444157a"
+        },
+        {
+          "index": 9,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "fb094dc3fa6ce71b8a37fe224452dbfd2f8e31602a4e3a88f9c0f62bee3b9208"
+        },
+        {
+          "index": 10,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_platform_collection_payables_tenant_insert",
+          "checksum": "a32d0371b09c1eac3378e6276b4d4c7763afb023a66b714d3142348fc21dac41"
+        },
+        {
+          "index": 11,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_platform_collection_payables_tenant_update",
+          "checksum": "a37139160337f719d50684e8b206470622eef0d536a9bdbdae8866d7b4d0a6d0"
+        },
+        {
+          "index": 12,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_platform_collection_batch_items_tenant_insert",
+          "checksum": "475d9a2a705f05a34d68cbb9953a6a81e36927185782f8295527f7b3c3951877"
+        },
+        {
+          "index": 13,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_platform_collection_batch_items_tenant_update",
+          "checksum": "de900a8dce5de2493e562bf49562c445a606fe54fdafa87fd255f324fd7a11ef"
+        },
+        {
+          "index": 14,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "f58a402cdfc5994a3d258b6a1578242b6f2eef08eb20e7e06d12a7450dc76d3d"
+        },
+        {
+          "index": 15,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "7a7cc62243c87c544ed4d4a0d70a217263c0e2141ae85c4e9cb7ceb9b578b070"
+        }
+      ]
+    },
+    {
+      "file": "0105_platform_collection_batch_item_unique.sql",
+      "checksum": "eeaec2887a0ef8b7dd8d83af1590b956cc995969f1fe18e4dcbcc98dcdc3d5d6",
+      "statementCount": 2,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "77c7e584bf382b5a928daa06b8c02e1668229a752464e6035a73ee31a7eeb273"
+        },
+        {
+          "index": 1,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "650132495e0cfccfb59bc5e1dbe2697db28beb1c632f77bd0dab0fe92b03360b"
+        }
+      ]
+    },
+    {
+      "file": "0106_settlement_accounts_and_proofs.sql",
+      "checksum": "902145d2d05fb92af2ec77f1a39af00e029b8494fc789275a26b7fef7fa3c408",
+      "statementCount": 11,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "d69d74f6f3c30019350892116a8ccad963fdfc74b02e215a7bc34d1ac9d2ba12"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "dc456c4f70a93c933f09dbc9407835b55701c5f046ad87e79089191c44f85258"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "3dc3cd859427462708c7f34c3a8f71eeabbc91c19afd803ff638e675373c7132"
+        },
+        {
+          "index": 3,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "fa767bab0e4a590881b8d6cbbb84de8506a5b9beca0802d189bc2076b89253c6"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "3dba8c8e34a8ee841d7c53595b4e8e39d7325a5da490ad7a2dd92ac2be1f20a1"
+        },
+        {
+          "index": 5,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "5baf1ba6983c21e02d14f054d475213bfa1989ddaab38886a5ebab84e964203d"
+        },
+        {
+          "index": 6,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "d10942a3eeed8bdb0b07caea8277beaefe91d323124ee7aa071fa23946ffc5c1"
+        },
+        {
+          "index": 7,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "8c2676964ab79fb9a4cbe1a74b9aaa736787d738a81d81c981040a18ac964dc8"
+        },
+        {
+          "index": 8,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "b57bd8d8fef3fddc64d5cd4a2fad1f5687598c25b9b9afc873e4761dcd657d9e"
+        },
+        {
+          "index": 9,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_settlement_proof_tenant_insert",
+          "checksum": "f301af4724b26ce11fb22f06693a0da6a22215c3adb2d94df189877d2f4206de"
+        },
+        {
+          "index": 10,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_settlement_proof_tenant_update",
+          "checksum": "17b5d50b3fc14ffdf2b4f70020145d31f7d6a456e63b5e7cef23479241fba0be"
+        }
+      ]
+    },
+    {
+      "file": "0107_settlement_payment_controls.sql",
+      "checksum": "dc979c87e5bab56d4be189bf44f58d97c6ae774f9068749f378ad12b3de0cddf",
+      "statementCount": 4,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "94420ac57e7a7a19127155ab437b1a41666798d767a41a4e4d7f3d1e76e4802e"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "c508831a6bce8c0da7096b68db67c36062841f3e32ba720820254dc5dd4d1518"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "0a0874de26c67f3a203070bc0556ab870334fd3e46847d92aa06dadb8eac8beb"
+        },
+        {
+          "index": 3,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "d8fc7af494016bdedca084e19e0c1025315aa9463237813b588d08d868e23bb7"
+        }
+      ]
+    },
+    {
+      "file": "0108_tenant_customer_identity.sql",
+      "checksum": "86d2055f1b17f0b718f695ab73193aa685af1744155b52dfe4230323798e0285",
+      "statementCount": 16,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "a7113da3579510c624d77360dd1657ae32560197c402c2de5ffdb294e1ea3a8b"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "3721135e8683ac9585b7b72deb506a095336dee86e92fe9faa25eb8fe066e606"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "9c0f270db2281739474389874e969c5e21c204cc60323a1d6bdde5c3ae2f2e2f"
+        },
+        {
+          "index": 3,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "db8e2571b927b76699b9577e6dfcfedf049e970d5cb9c10b121333af0426d28d"
+        },
+        {
+          "index": 4,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "f1d50f6324afec0b8478a58200cb6d905d7ba8a426377ab62c648a49b7835820"
+        },
+        {
+          "index": 5,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "3476aa7d6aa9538b11558093f25e157a7dbd1831e0d8404aceb43e0b282c4410"
+        },
+        {
+          "index": 6,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "34bee3448ddc70b3f54775a45054ad267626c3a034651e28cad8dff4762c66e2"
+        },
+        {
+          "index": 7,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "c584514e7c2aa9fbc006780b8f6e0601597724f5469afc5d542150c0fd02dccc"
+        },
+        {
+          "index": 8,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "69c6d453191b86bbc5ac9617b802992a9c03e681c0c0b38e44311dbb01c37297"
+        },
+        {
+          "index": 9,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "3a3797a9b2487c6f606cb05b55166bf8cb189c62b780eb0ac643085965eec4e7"
+        },
+        {
+          "index": 10,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "8a37d346472f65270c12e6598f7ab39a45c442d9962573577175575db13ba2be"
+        },
+        {
+          "index": 11,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "e1fde29f16ef5cf6ea498078d6811811809dc06414d9a973ecf54314684bdd7f"
+        },
+        {
+          "index": 12,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "5e253116a4d23e10d556035517b0e48a88db9ae37e2856f2a763f275ffc295b0"
+        },
+        {
+          "index": 13,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "37c9e4230a4149613c855ffe7bf6cd6628eb8929b02409d9f8096e3904c54df5"
+        },
+        {
+          "index": 14,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_orders_tenant_customer_insert",
+          "checksum": "aea5b4f6502db40a8bf78102bad630b6633a3cdf62ce996e6fce28ad7aec7371"
+        },
+        {
+          "index": 15,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_orders_tenant_customer_update",
+          "checksum": "a6376932354f6d398b2ec73ea4d1b5e24ae14c6a6361bae8c025c9a9179061b7"
+        }
+      ]
+    },
+    {
+      "file": "0109_tenant_crm.sql",
+      "checksum": "32b4e73a3679a428efcc186de04df7e5013ec2fe81e6feb13505fb495c672e24",
+      "statementCount": 21,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "23573e5c663cb6fc2ffdafdbcab47d9afe6e638c0b388a309665c3240afe0c75"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "526b65bf81875264b8e821d2151f9d1aecc72c0072231cd06d6c584a2eb95411"
+        },
+        {
+          "index": 2,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "1b96aa1fe60fac8ce08a01c2b870f156365b9969f432cd780456d0796a4dcefc"
+        },
+        {
+          "index": 3,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "bd3855a1943ba8e22cf93cd9845e48852d7f4faddcd7e72c80b00ade17605baa"
+        },
+        {
+          "index": 4,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "8d16c76f4db15b51e78d974cd44ca343dc15f72101f05f579c555b447fa7bb24"
+        },
+        {
+          "index": 5,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d7f591e28dee336decbee120f97ac2c406bf1bbd24b2f96657a69602d9251e1f"
+        },
+        {
+          "index": 6,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "3b5a57ccf0ca309a4263cd0877143e58ebcddc35e64fa9f8543e24b92ad79a54"
+        },
+        {
+          "index": 7,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "2965f99d1f5ba5df5309093f78145304bec81d2884c07635864b8a52f4652b4f"
+        },
+        {
+          "index": 8,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d8cc981ba9a4fdf592ddf280da46e87dfeb3f182a523900f3416e4aaae5ca8aa"
+        },
+        {
+          "index": 9,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "4d7964c6d161b20b7daf3ef15d9b85999708351335143823400ea0ad42f0ee2d"
+        },
+        {
+          "index": 10,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "635306e037f5e3abdffb41e150bb9de6bf9f843783e634b952540ff18b440aad"
+        },
+        {
+          "index": 11,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "e20cde642fd805c7b3c5a71f2264e23f3fc42a3f9a1ac7db479b5c8571bb8ab2"
+        },
+        {
+          "index": 12,
+          "type": "INSERT",
+          "triggerName": "",
+          "checksum": "2972b2f2348c5636e692f7ea7c7dab1e5b8a00569a642a2fa9bdade9bcd31109"
+        },
+        {
+          "index": 13,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_profile_customer_insert",
+          "checksum": "66cbca62af4e2191f4041fa4afe16d3641e68956c6588653b02091800952fd72"
+        },
+        {
+          "index": 14,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_profile_customer_update",
+          "checksum": "5deeeb4db5128324f9071d949fdbb136865a5232fe9b32e2637151c71331d2f2"
+        },
+        {
+          "index": 15,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_thread_profile_insert",
+          "checksum": "d0ee8dcb7f3303e77f6ac79fc1f48a39adb7dbd658299a749803d5c981b12eb2"
+        },
+        {
+          "index": 16,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_thread_profile_update",
+          "checksum": "ba80a8aee6ec3ad942305c2a50f162298ed518f2bce80b8115e7b3f42b27cdb4"
+        },
+        {
+          "index": 17,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_record_profile_insert",
+          "checksum": "412406f73cf568d15bf3ab7d57be39ce6559d281af7adda2360b569015f179da"
+        },
+        {
+          "index": 18,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_record_profile_update",
+          "checksum": "3030d49427b03e76e7cc6685ff22964f7b66248ddbca49896094481ec50a3bf4"
+        },
+        {
+          "index": 19,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_record_thread_insert",
+          "checksum": "8d39b27bac2eea5fe644ce8b0e8b8d16d9a8db7e29519864f2e2b9c174a17dc2"
+        },
+        {
+          "index": 20,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_record_thread_update",
+          "checksum": "73dd147e8c9aff8628c7f13b5681064032a1ac72600e14ee6ef56e8ad30de110"
+        }
+      ]
+    },
+    {
+      "file": "0110_tenant_line_channels.sql",
+      "checksum": "3e950063e50a48b6789d049192fa63533f791cedca053c10977534864bd0f8f9",
+      "statementCount": 11,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "23573e5c663cb6fc2ffdafdbcab47d9afe6e638c0b388a309665c3240afe0c75"
+        },
+        {
+          "index": 1,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "bb73977b59b6fe112f584183bc39a7c9fa3ff5ee14df337272fa98e52376a2bb"
+        },
+        {
+          "index": 2,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "46f6004eabf901d4f121d545515408895cd8b9d6016e130efe0f62b877681086"
+        },
+        {
+          "index": 3,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "8b1327efaf8e2b24a0bdc01d7da7d8c7c74b0529d3bf87cd410e5ed83ca6355d"
+        },
+        {
+          "index": 4,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "c651af5e8f2b5b8df14cfa62df61bdd1bd43cc6d14e3bfb3bad67a1b5dd6dcd5"
+        },
+        {
+          "index": 5,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "8aeff4ad3cf743193186ae63099dcbba5268a063bfadb849df53c4138e0084f4"
+        },
+        {
+          "index": 6,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "1144fb01464611348d39874dd90e72577f5632e2fd40958ef4d21b79422b8cba"
+        },
+        {
+          "index": 7,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "ebdfec080b7673e84d0af426b30c73fd1e6b14dceee32c33b87895ced68d92d3"
+        },
+        {
+          "index": 8,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "e15544ba97055c2cc873d3a3eda0c11ac7880a8a744b5c807bac210af86435b3"
+        },
+        {
+          "index": 9,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_message_profile_insert",
+          "checksum": "2ddbcfd38a3f205892486d678b89543cae681973bd2b4f4f677d3f707b520972"
+        },
+        {
+          "index": 10,
+          "type": "CREATE TRIGGER",
+          "triggerName": "trg_tenant_crm_message_thread_insert",
+          "checksum": "5be9a6a16eb9f20f7108a3be61b8d2d737c2e00f08b20f8a44cb396ee13dea8c"
+        }
+      ]
+    },
+    {
+      "file": "0111_tenant_line_outbound_messages.sql",
+      "checksum": "897c0e23a7405528fcabcf822c0d54c50382db5496da5384678356c37b8f44ea",
+      "statementCount": 14,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "23573e5c663cb6fc2ffdafdbcab47d9afe6e638c0b388a309665c3240afe0c75"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "7df010f9e726a4959de67448e03835b4754cd72bdb4a5d8fcbe4a2048dfa6175"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "aa77953e161d6b0ea1e0ec7553a26c1885051ea7640142f07823cc33e3f165db"
+        },
+        {
+          "index": 3,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "299ba40c74185f577f315f3cdd782e5c90d39ee64e893f927dc22c6eede1ba40"
+        },
+        {
+          "index": 4,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "5bc10cfd54780ceaedaa971253257cb6aaffa5923d1f78b99d283d5c372df2ab"
+        },
+        {
+          "index": 5,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "7a7447987e6841278b471a590c5838f14cb20d5ddf530353a8fd0735cd090d5a"
+        },
+        {
+          "index": 6,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "a69fba63e1bb747946442f773393a42f16cce144b5f6185c708f9e646147befc"
+        },
+        {
+          "index": 7,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "e089839ad2e8553ef55ff217fd53f856129a6a0153e96a974131ed8812c670ce"
+        },
+        {
+          "index": 8,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "acaacf7667cc1f543c3395a5fb25a96d17524c5393b551c256afcefed9584ae0"
+        },
+        {
+          "index": 9,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "1b9519c926d2a8d543c9ba044c17d7fb81a8ee70bebb929e70a9b2f6216f3d4f"
+        },
+        {
+          "index": 10,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "1edd01fd9b1fe14caf102468193f2db907a5254b4bc9b3e9f806b822b0c21009"
+        },
+        {
+          "index": 11,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "dac885533812cef2ccc4b697bc288bcbabdedb500bd178c8123eacde00f3b223"
+        },
+        {
+          "index": 12,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "32820bb98a2bd5020b1bdad9a1ec88bbb81725e44ec197146117c64b6fa674ea"
+        },
+        {
+          "index": 13,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "4ffca91018e9a1b5c7afbe66c351c12da8ed8ad574dcdf8d9df6dc8f0854e145"
+        }
+      ]
+    },
+    {
+      "file": "0112_tenant_line_work_queue.sql",
+      "checksum": "71d3b8fcfec00f089a655c35e69f2660e9fee096b135e862a354a167b999b54e",
+      "statementCount": 10,
+      "statements": [
+        {
+          "index": 0,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "5b9a2fcc3e63b9c614d6614313a942022adcea002ec81ac31312b0c1bc5360bc"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "6cd30cdc373d81d97875c85cc95ba82f8a0d4ec7768f104103cd497eb3715217"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "3e6dbbc7fed151e95b31b632737e12d15220987022fd6262e231c0ba11635ea8"
+        },
+        {
+          "index": 3,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "eb0e11d90da5942d410b1099a6cb1453ee960b01f01fbefac7accae33e5122cc"
+        },
+        {
+          "index": 4,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "1c682bfdb1595f761a9dab8f7bf28a679242a51756471a3a6820f82a56093942"
+        },
+        {
+          "index": 5,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "6694d3f99a630b7d4936c0093244067563f3658f760b83a7bdd727d11014cb1b"
+        },
+        {
+          "index": 6,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "1f85ae6be7f73964ab076517c43eb455dad125d70bee928d89db61db8570779d"
+        },
+        {
+          "index": 7,
+          "type": "UPDATE",
+          "triggerName": "",
+          "checksum": "081f39c207502a36dac46d3cfb32c4e0c2005ff9400688131e8d8c2699abe62d"
+        },
+        {
+          "index": 8,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "bfba1a632c125524245115d524c69a195f0e3cdd8a3fc996964deea22e84b85d"
+        },
+        {
+          "index": 9,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "d3d8934aaa2ae695c2db72746e31da8926d77e81352ead97857bec761b425a62"
+        }
+      ]
+    },
+    {
+      "file": "0113_tenant_line_sla.sql",
+      "checksum": "64b1118d5e184d4ec0d125cfd8465ef554ae4356abd99dfc3149b9190a3a2879",
+      "statementCount": 15,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "23573e5c663cb6fc2ffdafdbcab47d9afe6e638c0b388a309665c3240afe0c75"
+        },
+        {
+          "index": 1,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "12dc69153c96ef3a4fc96c174e3b49dd6b93b9c6a15d7bb0702db40b2c81ca99"
+        },
+        {
+          "index": 2,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "0d84e235026fe3e1d52e017b910a6cc137d33036b9ccab68e1d87a9e88cd3ccd"
+        },
+        {
+          "index": 3,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "4259665983a97eecf663ca71babe312f91ed9fb2740c99714ae68174410ab21f"
+        },
+        {
+          "index": 4,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "5b153f6a0b3ec2ec0c82154f06234c1f452e05a2a9d624e1da34f97d410938d2"
+        },
+        {
+          "index": 5,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "d46df4d24965d172e70634e7fa2522be38ae6fbfca05f1b31addec67f757fb69"
+        },
+        {
+          "index": 6,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "a56dd4a948276b27007ee2430cb3cbb68ca41db11797380da4aadcf0ed876c89"
+        },
+        {
+          "index": 7,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "276289c537cccc035e0b44c56e09b55eb059efb94f512b7cc09c51f5ce210fe0"
+        },
+        {
+          "index": 8,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "b2120259be686f1bd383f5fc077dc7d7f9284b1ca211e16c8c0d4e0c857d0a38"
+        },
+        {
+          "index": 9,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "a965fcdc7c45faa208c7eb589dfea75c122fa33b0f4b45dccbbc53e08e7dbe69"
+        },
+        {
+          "index": 10,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "de36ffcb021c6dd74782a01fe503bfec4a9258a0b79733aed435e92bdba1bfd9"
+        },
+        {
+          "index": 11,
+          "type": "ALTER",
+          "triggerName": "",
+          "checksum": "0db94a1c0cb58e6ce42b8b4619017a903f2ba0d127d71943a9ad3ffd277f5061"
+        },
+        {
+          "index": 12,
+          "type": "CREATE TABLE",
+          "triggerName": "",
+          "checksum": "bf3f59b5d80efbad4b659e57d382d814a7e81b57bff42f6c8a1cdd377242a375"
+        },
+        {
+          "index": 13,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "449d081a0441eee110f91b5740aa7e5cc525784aca1fa0fe300538437f0b8446"
+        },
+        {
+          "index": 14,
+          "type": "CREATE INDEX",
+          "triggerName": "",
+          "checksum": "036d8496a71fae858d9c22e78077e015193638124cf514fe0b2a1d686a667946"
+        }
+      ]
+    },
+    {
+      "file": "0114_d1_tenant_integrity_compat.sql",
+      "checksum": "162b9d99ca2378fcc65207ec167f9418f2100e022325acf502c7780fb3ac15ce",
+      "statementCount": 11,
+      "statements": [
+        {
+          "index": 0,
+          "type": "PRAGMA",
+          "triggerName": "",
+          "checksum": "090bb87ab9087389f10b13c91589e177f1d3e9a33062b724d6d10659847f0026"
+        },
+        {
+          "index": 1,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "00105a0abb5ceb9707fb47b22f458dafbb11ddc057e526a714e9aa1939821ad3"
+        },
+        {
+          "index": 2,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "bf62694ac31a47215c7e2cdbfe9ead86f71fec538ed6fbe4b8e8f621d3170c16"
+        },
+        {
+          "index": 3,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "5f4fd9afb57611ac4a041e8586e6c1595c269f3acd87c0fb73050e3bf0bcb050"
+        },
+        {
+          "index": 4,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "2356344afbb935d05cbbffc0384311fc03c6e76bc8058c29483f6e1b508f4bf9"
+        },
+        {
+          "index": 5,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "53c417735a7966b97f98590438f63bed7ad98b202c63d15b23d8cc036adc3ccc"
+        },
+        {
+          "index": 6,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "e839edb15b6a0b521758185703a275a123ee8b0b75879d485646b77686a25944"
+        },
+        {
+          "index": 7,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "ad34d9f08a55a605ab1c4c076b74c6e7bc578bdea597947a53c5caa923eddc62"
+        },
+        {
+          "index": 8,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "136cab5f68120f16bcd30cfb672fec0099ccb7fb23422e0c224428180db11c6d"
+        },
+        {
+          "index": 9,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "7324ab889234e66925ef85872541dfa976bedd62dd508d8ecb8c821405c11fb6"
+        },
+        {
+          "index": 10,
+          "type": "CREATE UNIQUE INDEX",
+          "triggerName": "",
+          "checksum": "eddcc113e0a2e29680fe881de82d29aa2f50ee5ebdb276ba332c7d2c8acc5fdf"
+        }
+      ]
+    }
+  ],
+  "manifest_checksum": "0caef45ecdda1c9592a4faf1474d146a9dc462dde071fce555925104e7b911b6"
+}

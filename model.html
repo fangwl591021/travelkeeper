@@ -9,6 +9,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./js/tenant-api-client.js"></script>
+  <script src="./js/tenant-page-client.js"></script>
   <style>
     @keyframes fadeInUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
     @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
@@ -52,6 +54,8 @@ const { useState, useEffect, useRef } = React;
 
 const WORKER_URL   = 'https://travelkeeper-worker.fangwl591021.workers.dev';
 const LIFF_ID      = '2009367829-BDZCGti8';
+const tenantPage = window.TravelKeeperTenantPage;
+const tenantSlug = tenantPage.tenantSlug;
 const ENDPOINT_URL = 'https://fangwl591021.github.io/travelkeeper/';
 
 const fmt = (p) => `$${Number(p||0).toLocaleString()}`;
@@ -120,7 +124,7 @@ function PromoModal({ items, distData, liffProfile, onClose }) {
 
   const makeBubble = (tour) => {
     const id  = String(tour.id || tour.timestamp || '');
-    const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
+    const uri = `${ENDPOINT_URL}?tenant=${encodeURIComponent(tenantSlug)}&t=${id}&r=${uid}`;
     return {
       type:'bubble', size:'mega',
       hero:{ type:'image', url: tour.image||'https://via.placeholder.com/800x520', size:'full', aspectRatio:'20:13', aspectMode:'cover', action:{type:'uri',uri} },
@@ -145,7 +149,7 @@ function PromoModal({ items, distData, liffProfile, onClose }) {
     body:{ type:'box', layout:'vertical', spacing:'md', paddingAll:'16px',
       contents: chunk.map(tour => {
         const id  = String(tour.id || tour.timestamp || '');
-        const uri = `${ENDPOINT_URL}?t=${id}&r=${uid}`;
+        const uri = `${ENDPOINT_URL}?tenant=${encodeURIComponent(tenantSlug)}&t=${id}&r=${uid}`;
         return { type:'box', layout:'horizontal', spacing:'md', action:{type:'uri',uri}, contents:[
           { type:'image', url: tour.image||'https://via.placeholder.com/200x140', flex:2, aspectRatio:'4:3', aspectMode:'cover', cornerRadius:'8px' },
           { type:'box', layout:'vertical', flex:3, spacing:'xs', contents:[
@@ -378,11 +382,18 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-        if (liff.isLoggedIn()) {
-          const p = await liff.getProfile();
-          setLiffProfile(p);
-          await checkAuth(p.userId);
+        if (tenantPage.localDev && tenantPage.devUid) {
+          const session = await tenantPage.initLiffSession({ fallbackLiffId: LIFF_ID, requireContext: false });
+          setLiffProfile(session.profile);
+          await checkAuth(session.profile.userId);
+        } else if (window.liff) {
+          const tenantResult = await tenantPage.apiCall('/api/v2/tenant/public', { public: true });
+          await liff.init({ liffId: tenantResult.data?.liff_id || LIFF_ID, withLoginOnExternalBrowser: false });
+          if (liff.isLoggedIn()) {
+            const p = await liff.getProfile();
+            setLiffProfile(p);
+            await checkAuth(p.userId);
+          }
         }
       } catch(e) { console.error('LIFF', e); }
       await fetchData();
@@ -396,26 +407,25 @@ function App() {
   // ── API ─────────────────────────────────────────────────────
   const checkAuth = async (uid) => {
     try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${uid}`);
-      const data = await res.json();
-      if (!data.success) return;
-      if (data.data.isAdmin) setIsAdmin(true);
-      if (data.data.role === 'distributor') {
-        setDistStatus(data.data.distributorData?.status);
-        setDistData(data.data.distributorData);
-        setProfileForm(data.data.distributorData || {});
+      const response = await tenantPage.apiCall('/api/v2/tenant/context');
+      const ctx = response.data || {};
+      const role = String(ctx.role || '');
+      if (['platform_admin', 'tenant_admin'].includes(role)) setIsAdmin(true);
+      if (['sales', 'editor'].includes(role)) {
+        setDistStatus('approved');
+        const profileData = tenantPage.profileAliases(ctx.profile || {});
+        setDistData(profileData);
+        setProfileForm(profileData);
         fetchDistStats(uid);
       }
       fetchUserOrders(uid);
-    } catch(e) {}
+    } catch(e) { console.warn('tenant context unavailable', e?.message || e); }
   };
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?_t=${Date.now()}`);
-      const arr  = await res.json();
-      const items = Array.isArray(arr) ? arr : [];
+      const items = await tenantPage.listPublicItineraries();
       setItineraries(items);
       setFilteredResults(items);
     } catch(e) { showToast('資料讀取失敗', 'error'); }
@@ -424,36 +434,27 @@ function App() {
 
   const fetchUserOrders = async (uid) => {
     try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${uid}`);
-      const data = await res.json();
-      if (data.success) setMyOrders(data.data || []);
+      const data = await tenantPage.legacyApi(`/api/itineraries?action=getUserOrders&uid=${encodeURIComponent(uid)}`);
+      if (data.success) setMyOrders((data.data || []).map(tenantPage.normalizeOrder));
     } catch(e) {}
   };
 
   const fetchDistStats = async (uid) => {
     try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributorPerformance&uid=${uid}`);
-      const data = await res.json();
-      if (data.success) setDistStats({ users: data.users||[], orders: data.orders||[] });
+      const [orders, users] = await Promise.all([tenantPage.listOrders(), tenantPage.listCustomers()]);
+      setDistStats({ users, orders });
     } catch(e) {}
   };
 
   const fetchCrmData = async () => {
-    try {
-      const res  = await fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`);
-      const data = await res.json();
-      setCrmList(Array.isArray(data) ? data : []);
-    } catch(e) {}
+    try { setCrmList(await tenantPage.listDistributors()); } catch(e) {}
   };
 
   const handleApproval = async (uid, status) => {
     try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateDistributorStatus', uid, status })
-      });
-      const result = await res.json();
-      if (result.success) { showToast(status==='approved' ? '已核准' : '已撤銷'); fetchCrmData(); }
+      await tenantPage.updateDistributorStatus(uid, status);
+      showToast(status==='approved' ? '已核准' : '已撤銷');
+      fetchCrmData();
     } catch(e) { showToast('操作失敗','error'); }
   };
 
@@ -481,16 +482,10 @@ function App() {
 
   const saveProfile = async () => {
     try {
-      const res    = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateDistributorProfile', uid: liffProfile?.userId, ...profileForm })
-      });
-      const result = await res.json();
-      if (result.success) {
-        setDistData({ ...(distData||{}), ...profileForm });
-        showToast('名片資料已儲存');
-        setProfileModal(false);
-      }
+      const saved = await tenantPage.updateProfile(profileForm);
+      setDistData(saved);
+      showToast('名片資料已儲存');
+      setProfileModal(false);
     } catch(e) { showToast('儲存失敗','error'); }
   };
 

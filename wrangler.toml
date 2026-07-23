@@ -1,5 +1,5 @@
 name = "travelkeeper-worker"
-main = "worker.js"
+main = "worker-tenant.js"
 compatibility_date = "2026-05-08"
 
 [vars]
@@ -8,6 +8,8 @@ WASABI_REGION = "us-west-1"
 WASABI_BUCKET = "tonyuse"
 WASABI_PREFIX = "travelkeeper"
 MOTHER_STORAGE_WRITE_ENABLED = "1"
+# 正式環境不得設定 ALLOW_LEGACY_UID_AUTH=1。
+# PLATFORM_ADMIN_UIDS、ADMIN_UIDS 或 ADMIN_UID_WHITELIST 應透過 Cloudflare secrets/vars 管理。
 
 [[d1_databases]]
 binding = "DB"
@@ -18,3 +20,24 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "TRAVEL"
 bucket_name = "travelkeeper-assets"
+
+[env.staging]
+name = "travelkeeper-staging"
+main = "worker-tenant.js"
+workers_dev = true
+
+[env.staging.vars]
+APP_ENV = "staging"
+STAGING_ALLOWED_ORIGIN = "https://travelkeeper-staging.fangwl591021.workers.dev"
+TENANT_PAYMENT_KEY_VERSION = "v1"
+TENANT_LINE_MONITOR_ENABLED = "1"
+TENANT_LINE_QUEUE_ENABLED = "0"
+TENANT_LINE_SLA_ENABLED = "0"
+TENANT_LINE_OUTBOUND_ENABLED = "0"
+LINE_PUSH_API_URL = "https://line-push-mock.invalid/v2/bot/message/push"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "travelkeeper-staging-v2"
+database_id = "184b543d-100c-4f02-84bd-2d5edd1efe10"
+migrations_dir = "migrations"

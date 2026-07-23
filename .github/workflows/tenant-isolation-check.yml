@@ -1,0 +1,87 @@
+name: Tenant isolation checks
+
+on:
+  push:
+    branches:
+      - agent/tenant-isolation-phase1
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  tenant-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check Worker modules
+        run: |
+          node --check worker-tenant.js
+          node --check lib/tenant-context.js
+          node --check lib/line-auth.js
+          node --check lib/tenant-api.js
+          node --check lib/tenant-booking-api.js
+          node --check lib/tenant-payment-policy.js
+          node --check lib/tenant-payment-api.js
+          node --check lib/tenant-gateway-api.js
+          node --check lib/tenant-gateway-callback-api.js
+          node --check lib/http-error-status.js
+          node --check lib/platform-settlement-api.js
+          node --check lib/platform-settlement-customer-view-api.js
+          node --check lib/settlement-finance-api.js
+          node --check lib/settlement-payment-control-api.js
+          node --check lib/legacy-customer-compat-api.js
+          node --check lib/tenant-order-actions-api.js
+          node --check lib/tenant-profile-api.js
+          node --check lib/tenant-distributor-api.js
+          node --check lib/tenant-crm-api.js
+          node --check lib/tenant-line-channel-api.js
+          node --check lib/tenant-line-webhook-api.js
+          node --check lib/tenant-line-monitor-api.js
+          node --check js/tenant-page-client.js
+          node --check js/tenant-crm-client.js
+          node --check js/tenant-line-client.js
+          node --check js/tenant-line-monitor-page.js
+          node --check js/settlement-finance-client.js
+
+      - name: Run booking isolation tests
+        run: node --test tests/tenant-booking-isolation.test.mjs
+
+      - name: Run customer identity tests
+        run: node --test tests/tenant-customer-identity.test.mjs
+
+      - name: Run legacy compatibility tests
+        run: node --test tests/legacy-customer-compat.test.mjs
+
+      - name: Run page migration tests
+        run: node --test tests/tenant-page-migration.test.mjs
+
+      - name: Run tenant CRM tests
+        run: node --test tests/tenant-crm.test.mjs
+
+      - name: Run tenant LINE webhook tests
+        run: node --test tests/tenant-line-webhook.test.mjs
+
+      - name: Run tenant LINE monitor tests
+        run: node --test tests/tenant-line-monitor.test.mjs
+
+      - name: Run existing tenant tests
+        run: |
+          node --test \
+            tests/tenant-isolation.test.mjs \
+            tests/tenant-payment-modes.test.mjs \
+            tests/tenant-gateway-secrets.test.mjs \
+            tests/tenant-gateway-callback.test.mjs \
+            tests/platform-settlement.test.mjs \
+            tests/settlement-finance.test.mjs \
+            tests/settlement-payment-controls.test.mjs

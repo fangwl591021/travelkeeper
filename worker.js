@@ -4,6 +4,10 @@
 // ?垢?芷?????API ?踹???券鞈?
 // ============================================================
 
+import { mirrorVerifiedWebhookPayload, shadowObservation } from './lib/line-shadow-mirror.js';
+import { emitLineReceipt, emitShadowReceipt } from './lib/tenant-line-receipt.js';
+import { referralTokenSecret, signReferralToken } from './lib/referral-token.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -3662,12 +3666,15 @@ function isForwardWebhookEnabled(env) {
 
 async function handleLineWebhookGateway(request, env, ctx) {
   const rawBody = await request.text();
+  await emitLineReceipt({ env, sourcePath: 'legacy', stage: 'RECEIVED', result: 'success' });
   const signature = request.headers.get('x-line-signature') || '';
   if (!env.LINE_CHANNEL_SECRET) {
     return json({ success: false, error: 'LINE_CHANNEL_SECRET missing' }, 500);
   }
   const valid = await verifyLineSignature(rawBody, signature, env.LINE_CHANNEL_SECRET);
   if (!valid) {
+    await emitLineReceipt({ env, sourcePath: 'legacy', stage: 'FAILED', result: 'failed', safeErrorCode: 'SIGNATURE_INVALID' });
+    console.log(JSON.stringify(shadowObservation({ events: [] }, env, 'legacy', false)));
     return new Response('Invalid Signature', { status: 403, headers: CORS });
   }
 
@@ -3678,10 +3685,22 @@ async function handleLineWebhookGateway(request, env, ctx) {
     return json({ success: false, error: 'Invalid JSON body' }, 400);
   }
 
-  ctx.waitUntil((async () => {
+  const observation = shadowObservation(payload, env, 'legacy');
+  console.log(JSON.stringify(observation));
+  await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'legacy', stage: 'SIGNATURE_VERIFIED', result: 'success' });
+  const backgroundWork = (async () => {
+    const shadowStartedAt = Date.now();
+    try {
+      const shadowResult = await mirrorVerifiedWebhookPayload(payload, env);
+      await emitShadowReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', result: shadowResult, durationMs: Date.now() - shadowStartedAt });
+    } catch (_) {
+      await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'shadow', stage: 'SHADOW_DISPATCHED', result: 'failed', safeErrorCode: 'SHADOW_DISPATCH_FAILED', durationMs: Date.now() - shadowStartedAt });
+    }
     try {
       await storeLineWebhookEvents(env, payload);
+      await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'legacy', stage: 'LEGACY_STORED', result: 'success' });
     } catch (err) {
+      await emitLineReceipt({ env, eventKey: payload?.events?.[0]?.webhookEventId || '', tenantSlug: 'legacy', sourcePath: 'legacy', stage: 'FAILED', result: 'failed', safeErrorCode: 'LEGACY_STORE_FAILED' });
       console.warn('store line webhook events failed:', err.message);
     }
 
@@ -3701,7 +3720,12 @@ async function handleLineWebhookGateway(request, env, ctx) {
     } catch (err) {
       console.error('line webhook background processing failed:', err.message);
     }
-  })());
+  })();
+  if (typeof ctx?.waitUntil === 'function') {
+    ctx.waitUntil(backgroundWork);
+  } else {
+    backgroundWork.catch(() => {});
+  }
 
   return json({
     success: true,
@@ -4071,7 +4095,7 @@ async function storeLineAutoReplyMessage(env, event = {}, text = '', matches = [
   `).bind(
     crypto.randomUUID(),
     threadId,
-    String(event?.replyToken || ''),
+    '',
     String(text || '').slice(0, 5000),
     JSON.stringify({
       kind: extra.kind || 'knowledge_auto_reply',
@@ -4574,7 +4598,7 @@ async function storeLineWebhookEvents(env, payload = {}) {
       crypto.randomUUID(),
       threadId,
       String(event?.webhookEventId || ''),
-      String(event?.replyToken || ''),
+      '',
       messageType,
       String(source?.userId || source?.groupId || source?.roomId || ''),
       displayName,
@@ -9361,19 +9385,42 @@ export default {
             return { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: d.label, uri: d.prefix ? `${d.prefix}${raw}` : raw } };
           });
 
+        const signingSecret = referralTokenSecret(env);
+        if (!signingSecret) return json({ success: false, error: 'REFERRAL_SIGNING_NOT_CONFIGURED' }, 503);
+        if (!uid || !inviteCode || !env.DB) return json({ success: false, error: 'REFERRAL_OWNER_NOT_APPROVED' }, 403);
+        const referralOwner = await env.DB.prepare(`
+          SELECT uid, invite_code
+          FROM distributors
+          WHERE uid = ? AND UPPER(invite_code) = ? AND status = 'approved'
+            AND COALESCE(NULLIF(agency_slug, ''), 'demo') = ?
+          LIMIT 1
+        `).bind(String(uid), String(inviteCode).trim().toUpperCase(), String(agencySlug || 'demo')).first().catch(() => null);
+        if (!referralOwner) return json({ success: false, error: 'REFERRAL_OWNER_NOT_APPROVED' }, 403);
+        const signedReferralTokens = new Map();
+        for (const item of items) {
+          const itineraryId = String(item.id || item.timestamp || '');
+          signedReferralTokens.set(itineraryId, await signReferralToken(signingSecret, {
+            tenant_slug: agencySlug,
+            itinerary_id: itineraryId,
+            distributor_uid: referralOwner.uid,
+            invite_code: referralOwner.invite_code,
+          }));
+        }
         // ???? URL嚗IFF嚗?
         const inviteParam = inviteCode ? `&invite=${encodeURIComponent(inviteCode)}` : '';
         const shareId = env.DB ? makeFlexShareId() : '';
         const shareParam = shareId ? `&sid=${encodeURIComponent(shareId)}` : '';
-        const buildBookingUri = (itineraryId) =>
-          liffId
-            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}${shareParam}`
-            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}${shareParam}`;
-
+        const buildBookingUri = (itineraryId) => {
+          const tokenParam = `&rt=${encodeURIComponent(signedReferralTokens.get(String(itineraryId)) || '')}`;
+          return liffId
+            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}${tokenParam}${shareParam}`
+            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}${tokenParam}${shareParam}`;
+        };
         // ??銵?閰單???URL ??摰Ｘ?汗??tour.html嚗?閰單???銝璆剖?撌亙嚗?
-        const buildDetailUri = (itineraryId) =>
-          `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}${inviteParam}${shareParam}`;
-
+        const buildDetailUri = (itineraryId) => {
+          const tokenParam = `&rt=${encodeURIComponent(signedReferralTokens.get(String(itineraryId)) || '')}`;
+          return `${ENDPOINT}tour.html?t=${itineraryId}&a=${agencySlug}${tokenParam}${shareParam}`;
+        };
         const safeImageUrl = (url, fallback = 'https://via.placeholder.com/1040x1040') => {
           const value = String(url || '').trim();
           return /^https:\/\//i.test(value) ? value : fallback;
@@ -9953,15 +10000,21 @@ export default {
       if (path === '/api/orders/create' && request.method === 'POST') {
         const body       = await request.json();
         const agencySlug = url.searchParams.get('a') || 'demo';
+        const inviteCode = String(body.invite_code || body.inviteCode || '').trim().toUpperCase();
 
-        if (!body.distributor_uid && body.invite_code && env.DB) {
-          const inviteCode = String(body.invite_code || '').trim().toUpperCase();
+        if (env.DB && inviteCode) {
           const dist = await env.DB.prepare(
-            `SELECT uid FROM distributors WHERE UPPER(invite_code) = ? AND status = 'approved'`
-          ).bind(inviteCode).first().catch(() => null);
-          if (dist?.uid) body.distributor_uid = dist.uid;
+            body.distributor_uid
+              ? `SELECT uid FROM distributors
+                   WHERE uid = ? AND UPPER(invite_code) = ? AND status = 'approved'`
+              : `SELECT uid FROM distributors
+                   WHERE UPPER(invite_code) = ? AND status = 'approved'`
+          ).bind(...(body.distributor_uid ? [String(body.distributor_uid).trim(), inviteCode] : [inviteCode])).first().catch(() => null);
+          if (body.distributor_uid && !dist?.uid) {
+            return json({ success: false, error: 'REFERRAL_MISMATCH' }, 400);
+          }
+          if (!body.distributor_uid && dist?.uid) body.distributor_uid = dist.uid;
         }
-
         // ?箸撽?
         const required = ['itinerary_id', 'distributor_uid', 'customer_name', 'customer_phone'];
         for (const f of required) {

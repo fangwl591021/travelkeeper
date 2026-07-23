@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>結算報表 | 旅遊管家</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./js/tenant-api-client.js"></script>
+  <script src="./js/settlement-finance-client.js"></script>
+  <style>
+    body { font-family: Inter, "Noto Sans TC", system-ui, sans-serif; }
+    .spin { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+  <div id="app" class="min-h-screen">
+    <div class="min-h-screen flex items-center justify-center">
+      <div class="text-center">
+        <div class="spin h-11 w-11 rounded-full border-4 border-slate-200 border-t-blue-600 mx-auto"></div>
+        <p class="mt-4 text-sm font-bold text-slate-500">載入結算資料中…</p>
+      </div>
+    </div>
+  </div>
+
+  <input id="proof-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="hidden">
+
+  <div id="modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 p-4 overflow-y-auto">
+    <div class="max-w-2xl mx-auto mt-8 bg-white rounded-3xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+        <h2 id="modal-title" class="font-black text-lg">明細</h2>
+        <button id="modal-close" class="w-9 h-9 rounded-full bg-slate-100 font-black">×</button>
+      </div>
+      <div id="modal-body" class="p-6"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  const tenantApi = window.TravelKeeperTenantApi;
+  const financeApi = window.TravelKeeperSettlementFinance;
+  const app = document.getElementById('app');
+  const modal = document.getElementById('modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalBody = document.getElementById('modal-body');
+  const proofInput = document.getElementById('proof-file');
+  const tenantSlug = tenantApi.resolveTenantSlug(location.search);
+  const state = {
+    tenant: null,
+    context: null,
+    report: null,
+    paymentControls: null,
+    loading: true,
+    controlsSaving: false,
+    error: '',
+    from: '',
+    to: '',
+    proofBatchId: '',
+  };
+
+  const money = value => `NT$ ${Number(value || 0).toLocaleString('zh-TW')}`;
+  const dateText = value => {
+    if (!value) return '—';
+    const date = new Date(String(value).replace(' ', 'T'));
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat('zh-TW', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+  };
+  const escapeHtml = value => String(value ?? '')
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+
+  const roleLabel = role => ({
+    platform_admin: '平台總管理員', tenant_admin: '租戶管理員', finance: '財務人員',
+  }[role] || role || '使用者');
+
+  const batchStatus = status => ({
+    draft: ['草稿', 'bg-slate-100 text-slate-700'],
+    approved: ['已核准', 'bg-blue-100 text-blue-700'],
+    paid: ['已付款', 'bg-emerald-100 text-emerald-700'],
+    cancelled: ['已取消', 'bg-rose-100 text-rose-700'],
+  }[status] || [status || '未知', 'bg-slate-100 text-slate-700']);
+
+  const accountStatus = status => ({
+    pending: ['待驗證', 'bg-amber-100 text-amber-700'],
+    verified: ['已驗證', 'bg-emerald-100 text-emerald-700'],
+    rejected: ['已退回', 'bg-rose-100 text-rose-700'],
+    disabled: ['已停用', 'bg-slate-200 text-slate-600'],
+  }[status] || ['未設定', 'bg-slate-100 text-slate-600']);
+
+  function badge(label, className) {
+    return `<span class="inline-flex px-3 py-1 rounded-full text-xs font-black ${className}">${escapeHtml(label)}</span>`;
+  }
+
+  function showModal(title, html) {
+    modalTitle.textContent = title;
+    modalBody.innerHTML = html;
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    modalBody.innerHTML = '';
+  }
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+
+  async function loadReport() {
+    state.loading = true;
+    state.error = '';
+    render();
+    try {
+      const [reportResponse, controlsResponse] = await Promise.all([
+        financeApi.getReport(tenantSlug, { from: state.from, to: state.to }),
+        financeApi.getPaymentControls(tenantSlug),
+      ]);
+      state.report = reportResponse.data;
+      state.paymentControls = controlsResponse.data || {};
+    } catch (error) {
+      state.error = tenantApi.friendlyError(error);
+    } finally {
+      state.loading = false;
+      render();
+    }
+  }
+
+  async function init() {
+    try {
+      const tenantResult = await tenantApi.getPublicTenant(tenantSlug);
+      state.tenant = tenantResult.data;
+      if (!state.tenant?.liff_id) throw new Error('此租戶尚未設定 LINE Login。');
+      await liff.init({ liffId: state.tenant.liff_id, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+      const contextResult = await tenantApi.getContext(tenantSlug);
+      state.context = contextResult.data;
+      document.title = `結算報表 | ${state.tenant.name || '旅遊管家'}`;
+      await loadReport();
+    } catch (error) {
+      state.loading = false;
+      state.error = tenantApi.friendlyError(error);
+      render();
+    }
+  }
+
+  function statCard(label, value, note, className) {
+    return `<div class="rounded-3xl p-5 text-white ${className}">
+      <p class="text-xs font-black tracking-widest opacity-80">${escapeHtml(label)}</p>
+      <p class="text-2xl md:text-3xl font-black mt-2">${escapeHtml(value)}</p>
+      <p class="text-xs mt-2 opacity-80">${escapeHtml(note || '')}</p>
+    </div>`;
+  }
+
+  function accountCard() {
+    const account = state.report?.account;
+    const canEdit = ['platform_admin', 'tenant_admin'].includes(state.context?.role);
+    const canVerify = state.context?.role === 'platform_admin';
+    if (!account) {
+      return `<section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div><p class="text-xs font-black text-slate-400 tracking-widest">收款帳戶</p>
+          <h2 class="text-xl font-black mt-1">尚未設定</h2>
+          <p class="text-sm text-slate-500 mt-2">完整帳號會加密儲存，報表只顯示末四碼。</p></div>
+          ${canEdit ? '<button data-action="edit-account" class="px-5 py-3 rounded-2xl bg-blue-600 text-white font-black">設定帳戶</button>' : ''}
+        </div>
+      </section>`;
+    }
+    const [label, cls] = accountStatus(account.verification_status);
+    return `<section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+      <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+        <div>
+          <div class="flex items-center gap-3 flex-wrap"><p class="text-xs font-black text-slate-400 tracking-widest">收款帳戶</p>${badge(label, cls)}</div>
+          <h2 class="text-xl font-black mt-3">${escapeHtml(account.bank_name || account.payout_method || '人工處理')} ${escapeHtml(account.bank_code || '')}</h2>
+          <p class="mt-2 text-lg font-black tracking-wider">${escapeHtml(account.account_masked || '不使用銀行轉帳')}</p>
+          <p class="text-sm text-slate-500 mt-1">戶名：${escapeHtml(account.account_name || '—')}｜分行：${escapeHtml(account.branch_name || '—')}</p>
+          ${account.verification_note ? `<p class="mt-3 text-sm rounded-xl bg-slate-50 p-3">${escapeHtml(account.verification_note)}</p>` : ''}
+        </div>
+        <div class="flex flex-wrap gap-2">
+          ${canEdit ? '<button data-action="edit-account" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-black">修改帳戶</button>' : ''}
+          ${canVerify && account.verification_status !== 'verified' ? '<button data-action="verify-account" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-black">核准帳戶</button>' : ''}
+          ${canVerify && account.verification_status !== 'rejected' ? '<button data-action="reject-account" class="px-4 py-2 rounded-xl bg-rose-100 text-rose-700 text-sm font-black">退回</button>' : ''}
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function paymentControlsCard() {
+    const controls = state.paymentControls || {};
+    const canEdit = state.context?.role === 'platform_admin';
+    const disabled = !canEdit || state.controlsSaving;
+    const note = canEdit ? '僅平台總管理員可編輯' : '唯讀';
+    const checked = name => controls[name] ? 'checked' : '';
+    const disabledAttr = disabled ? 'disabled' : '';
+    return `<section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+      <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+        <div>
+          <p class="text-xs font-black text-slate-400 tracking-widest">PAYMENT CONTROLS</p>
+          <h2 class="text-xl font-black mt-1">結算付款管控</h2>
+          <p class="text-sm text-slate-500 mt-2">${escapeHtml(note)}</p>
+        </div>
+        <form id="payment-controls-form" class="w-full lg:max-w-xl space-y-3">
+          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 ${disabled ? 'bg-slate-50' : ''}">
+            <input name="require_verified_account" type="checkbox" value="1" ${checked('require_verified_account')} ${disabledAttr} class="mt-1 h-5 w-5 rounded border-slate-300">
+            <span><span class="block font-black">付款前必須完成收款帳戶驗證</span>
+            <span class="block text-xs text-slate-500 mt-1">租戶收款帳戶未驗證或未啟用時，不允許標記付款。</span></span>
+          </label>
+          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 ${disabled ? 'bg-slate-50' : ''}">
+            <input name="require_payout_proof" type="checkbox" value="1" ${checked('require_payout_proof')} ${disabledAttr} class="mt-1 h-5 w-5 rounded border-slate-300">
+            <span><span class="block font-black">付款前必須上傳付款憑證</span>
+            <span class="block text-xs text-slate-500 mt-1">結算批次必須至少有一筆有效的私有付款憑證。</span></span>
+          </label>
+          ${canEdit ? `<button ${state.controlsSaving ? 'disabled' : ''} class="w-full rounded-xl bg-slate-900 text-white py-3 font-black disabled:opacity-60">${state.controlsSaving ? '儲存中...' : '儲存管控設定'}</button>` : ''}
+        </form>
+      </div>
+    </section>`;
+  }
+  function batchRows() {
+    const batches = state.report?.batches || [];
+    if (!batches.length) return '<div class="p-8 text-center text-slate-400 font-bold">目前沒有結算批次</div>';
+    return batches.map(batch => {
+      const [label, cls] = batchStatus(batch.status);
+      const canUpload = state.context?.role === 'platform_admin';
+      return `<div class="grid grid-cols-1 lg:grid-cols-[1.3fr_.8fr_.8fr_.7fr_1fr] gap-3 items-center p-4 border-b border-slate-100 last:border-0">
+        <div><p class="font-black text-sm break-all">${escapeHtml(batch.id)}</p><p class="text-xs text-slate-400 mt-1">${dateText(batch.created_at)}</p></div>
+        <div><p class="text-xs text-slate-400">應付金額</p><p class="font-black">${money(batch.total_payable)}</p></div>
+        <div><p class="text-xs text-slate-400">憑證</p><p class="font-black">${Number(batch.proof_count || 0)} 份</p></div>
+        <div>${badge(label, cls)}</div>
+        <div class="flex flex-wrap gap-2 lg:justify-end">
+          <button data-action="proof-list" data-batch="${escapeHtml(batch.id)}" class="px-3 py-2 rounded-xl bg-slate-100 text-xs font-black">查看憑證</button>
+          ${canUpload ? `<button data-action="proof-upload" data-batch="${escapeHtml(batch.id)}" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black">上傳憑證</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function render() {
+    if (state.loading && !state.report) {
+      app.innerHTML = `<div class="min-h-screen flex items-center justify-center"><div class="text-center">
+        <div class="spin h-11 w-11 rounded-full border-4 border-slate-200 border-t-blue-600 mx-auto"></div>
+        <p class="mt-4 text-sm font-bold text-slate-500">載入結算資料中…</p></div></div>`;
+      return;
+    }
+    if (state.error && !state.report) {
+      app.innerHTML = `<div class="min-h-screen flex items-center justify-center p-6"><div class="max-w-md bg-white rounded-3xl p-8 text-center shadow-sm">
+        <div class="text-5xl">⛔</div><h1 class="text-xl font-black mt-4">無法載入結算報表</h1>
+        <p class="text-sm text-rose-600 bg-rose-50 rounded-xl p-3 mt-4">${escapeHtml(state.error)}</p>
+        <a href="dashboard.html" class="inline-block mt-5 px-5 py-3 rounded-xl bg-slate-900 text-white font-black">返回儀表板</a>
+      </div></div>`;
+      return;
+    }
+
+    const summary = state.report?.summary || {};
+    app.innerHTML = `<header class="bg-slate-950 text-white">
+      <div class="max-w-7xl mx-auto px-5 py-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div><p class="text-xs font-black tracking-[.2em] text-blue-300">SETTLEMENT REPORT</p>
+          <h1 class="text-2xl md:text-3xl font-black mt-2">${escapeHtml(state.tenant?.name || tenantSlug)}</h1>
+          <p class="text-sm text-slate-400 mt-1">${escapeHtml(roleLabel(state.context?.role))}｜租戶 ${escapeHtml(tenantSlug)}</p></div>
+        <div class="flex gap-2"><a href="dashboard.html" class="px-4 py-2 rounded-xl bg-white/10 font-bold text-sm">返回儀表板</a>
+          <button data-action="refresh" class="px-4 py-2 rounded-xl bg-blue-600 font-black text-sm">重新整理</button></div>
+      </div>
+    </header>
+    <main class="max-w-7xl mx-auto p-5 md:p-8 space-y-6">
+      <section class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
+        <div class="flex flex-col md:flex-row md:items-end gap-4">
+          <label class="flex-1"><span class="text-xs font-black text-slate-500">起始日期</span><input id="filter-from" type="date" value="${escapeHtml(state.from)}" class="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3"></label>
+          <label class="flex-1"><span class="text-xs font-black text-slate-500">結束日期</span><input id="filter-to" type="date" value="${escapeHtml(state.to)}" class="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3"></label>
+          <button data-action="apply-filter" class="px-5 py-3 rounded-xl bg-slate-900 text-white font-black">套用篩選</button>
+          <button data-action="export-csv" class="px-5 py-3 rounded-xl bg-emerald-600 text-white font-black">匯出 CSV</button>
+        </div>
+      </section>
+      <section class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        ${statCard('代收總額', money(summary.gross_amount), `${Number(summary.item_count || 0)} 筆`, 'bg-gradient-to-br from-blue-600 to-blue-800')}
+        ${statCard('應付淨額', money(summary.payable_amount), '扣除金流費、平台費與暫留款', 'bg-gradient-to-br from-violet-600 to-purple-800')}
+        ${statCard('已完成撥款', money(summary.paid_amount), '已標記付款批次', 'bg-gradient-to-br from-emerald-600 to-teal-800')}
+        ${statCard('待處理應付', money(summary.pending_amount), `暫留款 ${money(summary.reserve_amount)}`, 'bg-gradient-to-br from-amber-500 to-orange-700')}
+      </section>
+      ${paymentControlsCard()}
+      ${accountCard()}
+      <section class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between"><div>
+          <p class="text-xs font-black text-slate-400 tracking-widest">結算批次</p><h2 class="text-xl font-black mt-1">撥款與憑證紀錄</h2></div>
+          <p class="text-xs text-slate-400">產生時間：${dateText(state.report?.generated_at)}</p></div>
+        ${batchRows()}
+      </section>
+      ${state.error ? `<div class="rounded-2xl bg-rose-50 text-rose-700 p-4 text-sm font-bold">${escapeHtml(state.error)}</div>` : ''}
+    </main>`;
+    bindActions();
+  }
+
+  function accountForm() {
+    const account = state.report?.account || {};
+    showModal('設定收款帳戶', `<form id="account-form" class="space-y-4">
+      <label class="block"><span class="text-xs font-black text-slate-500">收款方式</span><select name="payout_method" class="mt-2 w-full border rounded-xl px-4 py-3">
+        <option value="bank_transfer" ${account.payout_method !== 'manual' ? 'selected' : ''}>銀行轉帳</option>
+        <option value="manual" ${account.payout_method === 'manual' ? 'selected' : ''}>人工處理</option></select></label>
+      <div class="grid grid-cols-2 gap-3"><label><span class="text-xs font-black text-slate-500">銀行代碼</span><input name="bank_code" value="${escapeHtml(account.bank_code || '')}" class="mt-2 w-full border rounded-xl px-4 py-3"></label>
+      <label><span class="text-xs font-black text-slate-500">銀行名稱</span><input name="bank_name" value="${escapeHtml(account.bank_name || '')}" class="mt-2 w-full border rounded-xl px-4 py-3"></label></div>
+      <div class="grid grid-cols-2 gap-3"><label><span class="text-xs font-black text-slate-500">分行代碼</span><input name="branch_code" value="${escapeHtml(account.branch_code || '')}" class="mt-2 w-full border rounded-xl px-4 py-3"></label>
+      <label><span class="text-xs font-black text-slate-500">分行名稱</span><input name="branch_name" value="${escapeHtml(account.branch_name || '')}" class="mt-2 w-full border rounded-xl px-4 py-3"></label></div>
+      <label class="block"><span class="text-xs font-black text-slate-500">戶名</span><input name="account_name" value="${escapeHtml(account.account_name || '')}" class="mt-2 w-full border rounded-xl px-4 py-3"></label>
+      <label class="block"><span class="text-xs font-black text-slate-500">完整帳號</span><input name="account_number" inputmode="numeric" autocomplete="off" placeholder="修改時請重新輸入完整帳號" class="mt-2 w-full border rounded-xl px-4 py-3"><p class="text-xs text-slate-400 mt-2">帳號加密存放，儲存後只顯示末四碼。</p></label>
+      <button class="w-full rounded-xl bg-blue-600 text-white py-3 font-black">儲存並送交驗證</button>
+    </form>`);
+    document.getElementById('account-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      try {
+        await financeApi.updatePayoutAccount(data, tenantSlug);
+        closeModal();
+        await loadReport();
+      } catch (error) { alert(tenantApi.friendlyError(error)); }
+    });
+  }
+
+  async function verifyAccount(status) {
+    const note = prompt(status === 'verified' ? '核准備註（可留空）' : '請輸入退回原因') || '';
+    if (status === 'rejected' && !note.trim()) return;
+    try {
+      await financeApi.verifyPayoutAccount(status, note, tenantSlug);
+      await loadReport();
+    } catch (error) { alert(tenantApi.friendlyError(error)); }
+  }
+
+  async function showProofs(batchId) {
+    showModal('匯款憑證', '<div class="py-8 text-center text-slate-400">載入中…</div>');
+    try {
+      const response = await financeApi.listProofs(batchId, tenantSlug);
+      const proofs = response.data || [];
+      modalBody.innerHTML = proofs.length ? `<div class="space-y-3">${proofs.map(proof => `<div class="rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3">
+        <div><p class="font-black break-all">${escapeHtml(proof.filename)}</p><p class="text-xs text-slate-400 mt-1">${dateText(proof.created_at)}｜${Number(proof.size_bytes || 0).toLocaleString()} bytes</p>
+        ${proof.reference_no ? `<p class="text-xs mt-2">參考編號：${escapeHtml(proof.reference_no)}</p>` : ''}</div>
+        <button data-proof-view="${escapeHtml(proof.id)}" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black">開啟</button>
+      </div>`).join('')}</div>` : '<div class="py-8 text-center text-slate-400 font-bold">尚未上傳憑證</div>';
+      modalBody.querySelectorAll('[data-proof-view]').forEach(button => button.addEventListener('click', () => openProof(button.dataset.proofView)));
+    } catch (error) { modalBody.innerHTML = `<p class="text-rose-600">${escapeHtml(tenantApi.friendlyError(error))}</p>`; }
+  }
+
+  async function openProof(proofId) {
+    try {
+      const result = await financeApi.fetchProofBlob(proofId, tenantSlug);
+      const url = URL.createObjectURL(result.blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) { alert(tenantApi.friendlyError(error)); }
+  }
+
+  function uploadProof(batchId) {
+    state.proofBatchId = batchId;
+    proofInput.value = '';
+    proofInput.click();
+  }
+
+  proofInput.addEventListener('change', async () => {
+    const file = proofInput.files?.[0];
+    const batchId = state.proofBatchId;
+    if (!file || !batchId) return;
+    if (file.size > 8 * 1024 * 1024) { alert('憑證檔案不可超過 8MB'); return; }
+    const referenceNo = prompt('匯款或交易參考編號（可留空）') || '';
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve(event.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      await financeApi.uploadProof(batchId, {
+        proof_type: 'bank_transfer', filename: file.name, content_type: file.type,
+        base64, reference_no: referenceNo,
+      }, tenantSlug);
+      await loadReport();
+      await showProofs(batchId);
+    } catch (error) { alert(tenantApi.friendlyError(error)); }
+  });
+
+  function exportCsv() {
+    const rows = state.report?.batches || [];
+    const header = ['批次編號','狀態','筆數','代收總額','金流費','平台費','暫留款','應付金額','付款參考編號','憑證數','建立時間','付款時間'];
+    const csvRows = [header, ...rows.map(row => [
+      row.id, row.status, row.item_count, row.total_gross, row.total_gateway_fee,
+      row.total_platform_fee, row.total_reserve, row.total_payable, row.payout_reference,
+      row.proof_count, row.created_at, row.paid_at,
+    ])];
+    const csv = '\uFEFF' + csvRows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"','""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `settlements-${tenantSlug}-${new Date().toISOString().slice(0,10)}.csv`; link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function savePaymentControls(event) {
+    event.preventDefault();
+    if (state.context?.role !== 'platform_admin' || state.controlsSaving) return;
+    const form = event.currentTarget;
+    state.controlsSaving = true;
+    state.error = '';
+    render();
+    try {
+      const response = await financeApi.updatePaymentControls({
+        require_verified_account: form.elements.require_verified_account?.checked ? 1 : 0,
+        require_payout_proof: form.elements.require_payout_proof?.checked ? 1 : 0,
+      }, tenantSlug);
+      state.paymentControls = response.data || {};
+    } catch (error) {
+      state.error = tenantApi.friendlyError(error);
+    } finally {
+      state.controlsSaving = false;
+      render();
+    }
+  }
+  function bindActions() {
+    const controlsForm = document.getElementById('payment-controls-form');
+    if (controlsForm) controlsForm.addEventListener('submit', savePaymentControls);
+    app.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', async () => {
+      const action = button.dataset.action;
+      if (action === 'refresh') return loadReport();
+      if (action === 'apply-filter') {
+        state.from = document.getElementById('filter-from').value;
+        state.to = document.getElementById('filter-to').value;
+        return loadReport();
+      }
+      if (action === 'export-csv') return exportCsv();
+      if (action === 'edit-account') return accountForm();
+      if (action === 'verify-account') return verifyAccount('verified');
+      if (action === 'reject-account') return verifyAccount('rejected');
+      if (action === 'proof-list') return showProofs(button.dataset.batch);
+      if (action === 'proof-upload') return uploadProof(button.dataset.batch);
+    }));
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

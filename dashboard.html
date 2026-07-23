@@ -8,6 +8,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./js/tenant-api-client.js"></script>
+  <script src="./js/tenant-page-client.js"></script>
   <style>
     @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -51,6 +53,8 @@
 const { useState, useEffect, useMemo } = React;
 const WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
 const LIFF_ID    = '2009367829-BDZCGti8';
+const tenantPage = window.TravelKeeperTenantPage;
+const tenantSlug = tenantPage.tenantSlug;
 const DEFAULT_SOCIAL_LINKS = {
   mapLink: 'https://maps.app.goo.gl/gaXSRdXidqjaVxXR9',
   fbLink: 'https://www.facebook.com/wegotravel9898',
@@ -1444,6 +1448,8 @@ function buildMenu({ isAdmin, canUpload, badges }) {
       href:'wego-internal.html' },
     { id:'internal-accounting', icon:'🔍', label:'查帳', show: isAdmin,
       href:'internal-accounting.html' },
+    { id:'settlements', icon:'🏦', label:'結算報表', show: isAdmin,
+      href:`settlements.html?tenant=${encodeURIComponent(new URLSearchParams(location.search).get('tenant') || 'demo')}` },
     { id:'commission',   icon:'💰', label: isAdmin ? '佣金結算' : '我的佣金', show:true,
       badge: badges.payableCount },
     { id:'customers',    icon:'👤', label:'我的客戶',   show: !isAdmin },
@@ -1591,8 +1597,15 @@ function App() {
     setTimeout(()=>setToast(null), 3000);
   };
 
-  const fetchJson = (url, fallback) =>
-      fetch(url).then(r => r.json()).catch(() => fallback);
+  const fetchJson = async (url, fallback) => {
+    try {
+      const parsed = new URL(url, WORKER_URL);
+      return await tenantPage.legacyApi(`${parsed.pathname}${parsed.search}`);
+    } catch (error) {
+      console.warn('tenant legacy request failed:', error?.code || error?.message || error);
+      return fallback;
+    }
+  };
 
   const savePaymentConfig = async () => {
     if (!isAdmin || !profile?.userId) return;
@@ -1755,25 +1768,25 @@ function App() {
     if (!userId) return;
 
     if (targetView === 'promote') {
-      const publishedRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries`, []);
+      const publishedRes = await tenantPage.listPublicItineraries();
       setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
       return;
     }
 
     if (targetView === 'review') {
-      const pendingRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getPendingReviews`, { data: [] });
+      const pendingRes = await tenantPage.listItineraries({ status: 'pending' }).then(data => ({ data }));
       setPendingItems(pendingRes?.data || []);
       return;
     }
 
     if (targetView === 'distributors') {
-      const distRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getDistributors`, []);
+      const distRes = await tenantPage.listDistributors();
       setDistributors(Array.isArray(distRes) ? distRes : []);
       return;
     }
 
     if (targetView === 'mine') {
-      const allItemsRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`, []);
+      const allItemsRes = await tenantPage.listItineraries();
       const allItems = Array.isArray(allItemsRes) ? allItemsRes : [];
       setMyItems(allItems.filter(i => String(i.owneruid || '') === String(userId)));
       return;
@@ -1781,7 +1794,7 @@ function App() {
 
     if (targetView === 'commission') {
       const [allOrdersRes, commRes] = await Promise.all([
-        fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] }),
+        tenantPage.listOrders().then(data => ({ data })),
         fetchJson(`${WORKER_URL}/api/commission/summary?uid=${userId}`, null),
       ]);
       setOrders(allOrdersRes?.data || []);
@@ -1816,16 +1829,16 @@ function App() {
     }
 
     if (targetView === 'orders' || targetView === 'payments') {
-      const allOrdersRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] });
+      const allOrdersRes = await tenantPage.listOrders().then(data => ({ data }));
       setOrders(allOrdersRes?.data || []);
       return;
     }
 
     if (targetView === 'overview') {
       const [pendingRes, allOrdersRes, distRes, shareRes, performanceRes] = await Promise.all([
-        fetchJson(`${WORKER_URL}/api/itineraries?action=getPendingReviews`, { data: [] }),
-        fetchJson(`${WORKER_URL}/api/itineraries?action=getAllOrders`, { data: [] }),
-        fetchJson(`${WORKER_URL}/api/itineraries?action=getDistributors`, []),
+        tenantPage.listItineraries({ status: 'pending' }).then(data => ({ data })),
+        tenantPage.listOrders().then(data => ({ data })),
+        tenantPage.listDistributors(),
         fetchJson(`${WORKER_URL}/api/share/analytics?uid=${encodeURIComponent(userId)}`, null),
         fetchJson(`${WORKER_URL}/api/wego/internal/performance?uid=${encodeURIComponent(userId)}`, null),
       ]);
@@ -1841,25 +1854,25 @@ function App() {
     if (!userId) return;
 
     if (targetView === 'promote') {
-      const publishedRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries`, []);
+      const publishedRes = await tenantPage.listPublicItineraries();
       setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
       return;
     }
 
     if (targetView === 'customers') {
-      const customersRes = await fetchJson(`${WORKER_URL}/api/my/customers?uid=${userId}`, { data: [] });
+      const customersRes = await tenantPage.listCustomers().then(data => ({ data }));
       setCustomers(customersRes?.data || []);
       return;
     }
 
     if (targetView === 'social-profile') {
-      const profileRes = await fetchJson(`${WORKER_URL}/api/dist/profile?uid=${encodeURIComponent(userId)}`, null);
-      if (profileRes?.success) setDistData(profileRes.data);
+      const profileData = await tenantPage.getProfile();
+      setDistData(withDefaultSocialLinks(profileData));
       return;
     }
 
     if (targetView === 'mine' && canUploadNow) {
-      const myItemsRes = await fetchJson(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${userId}`, []);
+      const myItemsRes = await tenantPage.listItineraries({ owner: userId });
       setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
       return;
     }
@@ -1867,7 +1880,7 @@ function App() {
     if (targetView === 'overview' || targetView === 'orders' || targetView === 'payments' || targetView === 'commission') {
       const [statsRes, ordersRes, shareRes] = await Promise.all([
         fetchJson(`${WORKER_URL}/api/my/stats?uid=${userId}`, { data: null }),
-        fetchJson(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${userId}`, { data: [] }),
+        tenantPage.listOrders().then(data => ({ data })),
         targetView === 'overview'
           ? fetchJson(`${WORKER_URL}/api/share/analytics?uid=${encodeURIComponent(userId)}`, null)
           : Promise.resolve(null),
@@ -1884,47 +1897,38 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        await liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true });
-        if (!liff.isLoggedIn()) {
-          setAuthState('login');
-          setLoading(false);
-          setTimeout(() => liff.login({ redirectUri: location.href }), 120);
-          return;
-        }
-        const p = await liff.getProfile();
+        const session = await tenantPage.initLiffSession({ fallbackLiffId: LIFF_ID, requireContext: true });
+        const p = session.profile;
+        const ctx = session.context || {};
+        const role = String(ctx.role || '');
+        const permissions = Array.isArray(ctx.permissions) ? ctx.permissions : [];
+        const _isAdmin = ['platform_admin', 'tenant_admin'].includes(role);
+        const _canUpload = role === 'editor' || permissions.includes('*') || permissions.includes('itinerary.write');
+        const _isDist = ['sales', 'editor'].includes(role);
         setProfile(p);
-
-        // 階段 1：身份檢查
-        const statusRes = await fetch(`${WORKER_URL}/api/itineraries?action=checkUserStatus&uid=${p.userId}`).then(r=>r.json());
-        if (!statusRes.success) { setAuthState('denied'); return; }
-
-        const _isAdmin   = !!statusRes.data.isAdmin;
-        const _canUpload = !!statusRes.data.canUpload;
-        const _isDist    = statusRes.data.role === 'distributor' && String(statusRes.data.status).toLowerCase() === 'approved';
         setIsAdmin(_isAdmin);
         setCanUpload(_canUpload);
         setIsDistApproved(_isDist);
-        setDistData(statusRes.data.distributorData);
-
+        setDistData(withDefaultSocialLinks(tenantPage.profileAliases(ctx.profile || {})));
         if (!_isAdmin && !_isDist) { setAuthState('denied'); return; }
 
-        // ★ URL hash → 視圖（深連結支援），但不能進到無權限的 view
         const initialView = readViewFromHash();
         const allowedViews = buildMenu({
           isAdmin: _isAdmin, canUpload: _canUpload,
           badges: { pendingOrders:0, pendingDist:0, pendingReview:0 }
         }).map(m => m.id);
-        if (initialView && allowedViews.includes(initialView)) {
-          setView(initialView);
-        } else {
-          setView('overview');
-        }
-
+        setView(initialView && allowedViews.includes(initialView) ? initialView : 'overview');
         setAuthState('ready');
         setLoading(false);
-      } catch(e) {
+      } catch (e) {
+        if (String(e?.message || '') === 'LIFF_LOGIN_REQUIRED') {
+          setAuthState('login');
+          setLoading(false);
+          return;
+        }
         console.error(e);
         setAuthState('denied');
+        setLoading(false);
       }
     })();
   }, []);
@@ -1970,9 +1974,9 @@ function App() {
     if (!profile) return;
     if (isAdmin) {
       const [pendingRes, allItemsRes, publishedRes] = await Promise.all([
-        fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
-        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
-        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+        tenantPage.listItineraries({ status: 'pending' }).then(data => ({ data })),
+        tenantPage.listItineraries(),
+        tenantPage.listPublicItineraries().catch(()=>[]),
       ]);
       setPendingItems(pendingRes?.data || []);
       // ★ v8：管理員「我上稿的」只看自己上稿的
@@ -1982,12 +1986,12 @@ function App() {
     } else if (canUpload) {
       const [myItemsRes, publishedRes] = await Promise.all([
         fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json()),
-        fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+        tenantPage.listPublicItineraries().catch(()=>[]),
       ]);
       setMyItems(Array.isArray(myItemsRes) ? myItemsRes : []);
       setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
     } else {
-      const publishedRes = await fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]);
+      const publishedRes = await tenantPage.listPublicItineraries().catch(()=>[]);
       setPublishedItems(Array.isArray(publishedRes) ? publishedRes : []);
     }
   };
@@ -1998,12 +2002,12 @@ function App() {
     try {
       if (isAdmin) {
         const [pendingRes, allOrdersRes, distRes, allItemsRes, commRes, publishedRes] = await Promise.all([
-          fetch(`${WORKER_URL}/api/itineraries?action=getPendingReviews`).then(r=>r.json()),
-          fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
-          fetch(`${WORKER_URL}/api/itineraries?action=getDistributors`).then(r=>r.json()),
-          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&all=1`).then(r=>r.json()),
+          tenantPage.listItineraries({ status: 'pending' }).then(data => ({ data })),
+          tenantPage.listOrders().then(data => ({ data })),
+          tenantPage.listDistributors(),
+          tenantPage.listItineraries(),
           fetch(`${WORKER_URL}/api/commission/summary?uid=${profile.userId}`).then(r=>r.json()).catch(()=>null),
-          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+          tenantPage.listPublicItineraries().catch(()=>[]),
         ]);
         setPendingItems(pendingRes?.data || []);
         setOrders(allOrdersRes?.data || []);
@@ -2015,11 +2019,11 @@ function App() {
       } else {
         const tasks = [
           fetch(`${WORKER_URL}/api/itineraries?action=getMyStats&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:null})),
-          fetch(`${WORKER_URL}/api/itineraries?action=getMyCustomers&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
-          fetch(`${WORKER_URL}/api/itineraries?action=getUserOrders&uid=${profile.userId}`).then(r=>r.json()).catch(()=>({data:[]})),
-          fetch(`${WORKER_URL}/api/itineraries?action=getItineraries`).then(r=>r.json()).catch(()=>[]),
+          tenantPage.listCustomers().then(data => ({ data })).catch(()=>({data:[]})),
+          tenantPage.listOrders().then(data => ({ data })).catch(()=>({data:[]})),
+          tenantPage.listPublicItineraries().catch(()=>[]),
         ];
-        if (canUpload) tasks.push(fetch(`${WORKER_URL}/api/itineraries?action=getItineraries&owner=${profile.userId}`).then(r=>r.json()).catch(()=>[]));
+        if (canUpload) tasks.push(tenantPage.listItineraries({ owner: profile.userId }).catch(()=>[]));
         const results = await Promise.all(tasks);
         setStats(results[0]?.data || null);
         setCustomers(results[1]?.data || []);
@@ -2113,107 +2117,50 @@ function App() {
   // ── 分銷商 ──
   const handleApprove = async (uid) => {
     try {
-      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          action:'updateDistributorStatus',
-          uid,
-          status:'approved',
-          operatorUid: profile?.userId || '',
-        })
-      });
-      const result = await res.json();
-      if (result.success) {
-        setDistributors(prev => prev.map(d => d.uid === uid ? { ...d, status:'approved' } : d));
-        setSelDist(null);
-        showToast('✅ 已核准');
-      } else showToast('更新失敗', 'error');
-    } catch (e) { showToast('操作失敗', 'error'); }
+      const updated = await tenantPage.updateDistributorStatus(uid, 'approved');
+      setDistributors(prev => prev.map(d => d.uid === uid ? updated : d));
+      setSelDist(null);
+      showToast('✅ 已核准');
+    } catch (e) { showToast('操作失敗：' + (e?.message || ''), 'error'); }
   };
 
   const handleReject = async (uid) => {
     try {
-      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          action:'updateDistributorStatus',
-          uid,
-          status:'pending',
-          operatorUid: profile?.userId || '',
-        })
-      });
-      const result = await res.json();
-      if (result.success) {
-        setDistributors(prev => prev.map(d => d.uid === uid ? { ...d, status:'pending' } : d));
-        setSelDist(null);
-        showToast('已撤銷資格');
-      }
-    } catch (e) { showToast('操作失敗', 'error'); }
+      const updated = await tenantPage.updateDistributorStatus(uid, 'pending');
+      setDistributors(prev => prev.map(d => d.uid === uid ? updated : d));
+      setSelDist(null);
+      showToast('已撤銷資格');
+    } catch (e) { showToast('操作失敗：' + (e?.message || ''), 'error'); }
   };
 
   const handleToggleUpload = async (uid, canUp) => {
     try {
-      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'grantUploadPermission', uid, canUpload: canUp, operatorUid: profile?.userId || '' })
-      });
-      const result = await res.json();
-      if (result.success) {
-        showToast(canUp ? '✅ 已授權上稿' : '已撤銷上稿權');
-        setDistributors(prev => prev.map(d =>
-          d.uid === uid ? { ...d, canupload: canUp ? 'Y' : 'N', canUpload: canUp ? 'Y' : 'N' } : d
-        ));
-      } else showToast('操作失敗：' + (result.error || ''), 'error');
-    } catch(e) { showToast('網路錯誤', 'error'); }
+      const updated = await tenantPage.updateDistributorUpload(uid, canUp);
+      setDistributors(prev => prev.map(d => d.uid === uid ? updated : d));
+      showToast(canUp ? '✅ 已授權上稿' : '已撤銷上稿權');
+    } catch(e) { showToast('操作失敗：' + (e?.message || ''), 'error'); }
   };
 
   // ── 訂單狀態 ──
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'updateOrderStatus', order_id: orderId, status: newStatus })
-      });
-      const result = await res.json();
-      if (result.success) {
-        showToast(`✅ 已更新為「${ORDER_STATUS[newStatus]?.label || newStatus}」`);
-        const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
-        setOrders(prev => prev.map(o =>
-          o.orderid === orderId ? { ...o, status: newStatus, updatedat: nowIso } : o
-        ));
-        setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, status: newStatus, updatedat: nowIso } : prev);
-      } else showToast('更新失敗：' + (result.error || ''), 'error');
-    } catch (e) { showToast('操作失敗', 'error'); }
+      await tenantPage.updateOrderStatus(orderId, newStatus);
+      showToast(`✅ 已更新為「${ORDER_STATUS[newStatus]?.label || newStatus}」`);
+      const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      setOrders(prev => prev.map(o => o.orderid === orderId ? { ...o, status: newStatus, updatedat: nowIso } : o));
+      setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, status: newStatus, updatedat: nowIso } : prev);
+    } catch (e) { showToast('操作失敗：' + (e?.message || ''), 'error'); }
   };
 
   // ★ v6：管理員手動標記「線下尾款已收」
   const handleMarkBalancePaid = async (orderId) => {
     try {
-      const res = await fetch(`${WORKER_URL}/api/itineraries`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          action:'markBalancePaid',
-          order_id: orderId,
-          operatorUid: profile?.userId || '',
-        })
-      });
-      const result = await res.json();
-      if (result.success) {
-        showToast('✅ 尾款已標記，佣金可請款');
-        const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
-        const patch = {
-          balancestatus: 'paid_offline',
-          balancepaidat: nowIso,
-          balancemethod: 'offline',
-          status: 'completed',
-          commissionstatus: 'payable',
-          commissionsettledat: nowIso,
-          updatedat: nowIso,
-        };
-        setOrders(prev => prev.map(o => o.orderid === orderId ? { ...o, ...patch } : o));
-        setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, ...patch } : prev);
-      } else showToast('操作失敗：' + (result.error || ''), 'error');
-    } catch (e) { showToast('網路錯誤', 'error'); }
+      const updated = await tenantPage.markBalancePaid(orderId);
+      showToast('✅ 尾款已標記，佣金可請款');
+      const normalized = tenantPage.normalizeOrder(updated);
+      setOrders(prev => prev.map(o => o.orderid === orderId ? { ...o, ...normalized } : o));
+      setSelOrder(prev => prev && prev.orderid === orderId ? { ...prev, ...normalized } : prev);
+    } catch (e) { showToast('操作失敗：' + (e?.message || ''), 'error'); }
   };
 
   // ── 客戶 ──
@@ -2222,10 +2169,8 @@ function App() {
     setLoadingCustOrders(true);
     setCustomerOrders([]);
     try {
-      const res = await fetch(
-        `${WORKER_URL}/api/itineraries?action=getCustomerOrders&uid=${profile.userId}&phone=${encodeURIComponent(customer.customerphone)}`
-      ).then(r => r.json());
-      setCustomerOrders(res?.data || []);
+      const data = await tenantPage.listOrders({ customer_phone: customer.customerphone });
+      setCustomerOrders(data);
     } catch (e) { showToast('讀取訂單失敗', 'error'); }
     setLoadingCustOrders(false);
   };
@@ -2242,8 +2187,7 @@ function App() {
     if (!profile?.userId) return;
     setSocialSaving(true);
     try {
-      const payload = {
-        uid: profile.userId,
+      const result = await tenantPage.updateProfile({
         phone: getSocialFieldValue('phone'),
         lineLink: getSocialFieldValue('lineLink'),
         lineAtLink: getSocialFieldValue('lineAtLink'),
@@ -2253,15 +2197,8 @@ function App() {
         webLink: getSocialFieldValue('webLink'),
         mapLink: getSocialFieldValue('mapLink'),
         bio: getSocialFieldValue('bio'),
-      };
-      const res = await fetch(`${WORKER_URL}/api/dist/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
       });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error || '儲存失敗');
-      setDistData(result.data);
+      setDistData(withDefaultSocialLinks(result));
       showToast('社群按鈕資料已更新');
     } catch (err) {
       showToast(err.message || '社群資料儲存失敗', 'error');
@@ -2274,7 +2211,7 @@ function App() {
     const code = distData?.inviteCode;
     if (!code) { showToast('尚無推薦碼', 'error'); return; }
     const base = window.location.origin + window.location.pathname.replace(/dashboard\.html|admin\.html|crm\.html$/, '');
-    const url = `${base}index.html?invite=${code}`;
+    const url = `${base}index.html?tenant=${encodeURIComponent(tenantSlug)}&invite=${encodeURIComponent(code)}`;
     navigator.clipboard.writeText(url).then(() => showToast('✅ 推薦連結已複製'));
   };
   const copyInviteCode = () => {
@@ -2322,7 +2259,7 @@ function App() {
             centerText,
             centerTextColor,
             travel6BgColor,
-            agencySlug: 'demo',
+            agencySlug: tenantSlug,
             inviteCode: myInviteCode,
           }),
           signal: controller.signal,
@@ -2410,7 +2347,7 @@ function App() {
     params.set('t', String(id));
     if (distData?.inviteCode) params.set('invite', distData.inviteCode);
     if (profile?.userId) params.set('r', profile.userId);
-    params.set('a', 'demo');
+    params.set('a', tenantSlug);
     return `${base}tour.html?${params.toString()}`;
   };
 
@@ -2892,7 +2829,9 @@ function App() {
   // 點「新增/上稿」這種行為按鈕：直接開新增 modal，不切 view
   const handleMenuClick = (item) => {
     if (item.href) {
-      location.href = item.href;
+      const target = new URL(item.href, location.href);
+      if (target.origin === location.origin && !target.searchParams.has('tenant')) target.searchParams.set('tenant', tenantSlug);
+      location.href = target.toString();
       return;
     }
     if (item.id === 'new') {
@@ -4765,7 +4704,7 @@ function App() {
                     setSelectedPayoutOrders({});
                     // 重新拉資料
                     const [allOrdersRes, commRes] = await Promise.all([
-                      fetch(`${WORKER_URL}/api/itineraries?action=getAllOrders`).then(r=>r.json()),
+                      tenantPage.listOrders().then(data => ({ data })),
                       fetch(`${WORKER_URL}/api/commission/summary?uid=${profile.userId}`).then(r=>r.json()),
                     ]);
                     if (allOrdersRes?.data) setOrders(allOrdersRes.data);
@@ -5136,7 +5075,7 @@ function App() {
           allItems={publishedItems}
           profile={profile}
           inviteCode={distData?.inviteCode || ''}
-          agencySlug="demo"
+          agencySlug={tenantSlug}
           distData={distData}
           onClose={() => setSelPromote(null)}
           onPushFlex={handlePushFlex}
