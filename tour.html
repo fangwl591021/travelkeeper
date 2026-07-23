@@ -64,6 +64,7 @@ const params = new URLSearchParams(window.location.search);
 const tourId = params.get('t') || '';
 const refUid = params.get('r') || '';
 const inviteCode = (params.get('invite') || '').trim().toUpperCase();
+const referralToken = params.get('rt') || params.get('referral_token') || '';
 const agencySlug = tenantApi.resolveTenantSlug(window.location.search);
 
 const fmt = (n) => '$' + Number(n || 0).toLocaleString();
@@ -281,8 +282,9 @@ function renderTour(tour) {
       tenant: agencySlug,
       itinerary: tourId,
     });
-    if (inviteCode) bookingParams.set('invite', inviteCode);
-    if (refUid) bookingParams.set('ref', refUid);
+    if (referralToken) bookingParams.set('rt', referralToken);
+    else if (inviteCode) bookingParams.set('invite', inviteCode);
+    if (!referralToken && refUid) bookingParams.set('ref', refUid);
     window.location.href = `booking.html?${bookingParams.toString()}`;
   };
 }

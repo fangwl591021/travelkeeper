@@ -6,6 +6,7 @@
 
 import { mirrorVerifiedWebhookPayload, shadowObservation } from './lib/line-shadow-mirror.js';
 import { emitLineReceipt, emitShadowReceipt } from './lib/tenant-line-receipt.js';
+import { referralTokenSecret, signReferralToken } from './lib/referral-token.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -9384,19 +9385,42 @@ export default {
             return { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: d.label, uri: d.prefix ? `${d.prefix}${raw}` : raw } };
           });
 
+        const signingSecret = referralTokenSecret(env);
+        if (!signingSecret) return json({ success: false, error: 'REFERRAL_SIGNING_NOT_CONFIGURED' }, 503);
+        if (!uid || !inviteCode || !env.DB) return json({ success: false, error: 'REFERRAL_OWNER_NOT_APPROVED' }, 403);
+        const referralOwner = await env.DB.prepare(`
+          SELECT uid, invite_code
+          FROM distributors
+          WHERE uid = ? AND UPPER(invite_code) = ? AND status = 'approved'
+            AND COALESCE(NULLIF(agency_slug, ''), 'demo') = ?
+          LIMIT 1
+        `).bind(String(uid), String(inviteCode).trim().toUpperCase(), String(agencySlug || 'demo')).first().catch(() => null);
+        if (!referralOwner) return json({ success: false, error: 'REFERRAL_OWNER_NOT_APPROVED' }, 403);
+        const signedReferralTokens = new Map();
+        for (const item of items) {
+          const itineraryId = String(item.id || item.timestamp || '');
+          signedReferralTokens.set(itineraryId, await signReferralToken(signingSecret, {
+            tenant_slug: agencySlug,
+            itinerary_id: itineraryId,
+            distributor_uid: referralOwner.uid,
+            invite_code: referralOwner.invite_code,
+          }));
+        }
         // ???? URL嚗IFF嚗?
         const inviteParam = inviteCode ? `&invite=${encodeURIComponent(inviteCode)}` : '';
         const shareId = env.DB ? makeFlexShareId() : '';
         const shareParam = shareId ? `&sid=${encodeURIComponent(shareId)}` : '';
-        const buildBookingUri = (itineraryId) =>
-          liffId
-            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}${shareParam}`
-            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}&ref=${uid}${inviteParam}${shareParam}`;
-
+        const buildBookingUri = (itineraryId) => {
+          const tokenParam = `&rt=${encodeURIComponent(signedReferralTokens.get(String(itineraryId)) || '')}`;
+          return liffId
+            ? `https://liff.line.me/${liffId}/booking.html?a=${agencySlug}&itinerary=${itineraryId}${tokenParam}${shareParam}`
+            : `${ENDPOINT}booking.html?a=${agencySlug}&itinerary=${itineraryId}${tokenParam}${shareParam}`;
+        };
         // ??銵?閰單???URL ??摰Ｘ?汗??tour.html嚗?閰單???銝璆剖?撌亙嚗?
-        const buildDetailUri = (itineraryId) =>
-          `${ENDPOINT}tour.html?t=${itineraryId}&r=${uid}&a=${agencySlug}${inviteParam}${shareParam}`;
-
+        const buildDetailUri = (itineraryId) => {
+          const tokenParam = `&rt=${encodeURIComponent(signedReferralTokens.get(String(itineraryId)) || '')}`;
+          return `${ENDPOINT}tour.html?t=${itineraryId}&a=${agencySlug}${tokenParam}${shareParam}`;
+        };
         const safeImageUrl = (url, fallback = 'https://via.placeholder.com/1040x1040') => {
           const value = String(url || '').trim();
           return /^https:\/\//i.test(value) ? value : fallback;

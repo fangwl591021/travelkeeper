@@ -141,3 +141,10 @@ test('legacy production order path requires an approved matching referral', asyn
   assert.match(source, /REFERRAL_MISMATCH/);
   assert.match(source, /UPPER\(invite_code\) = \?/);
 });
+
+test('server-side Flex booking links use signed referral claims', async () => {
+  const source = await readFile(new URL('../worker.js', import.meta.url), 'utf8');
+  assert.match(source, /signReferralToken\(/);
+  assert.match(source, /REFERRAL_SIGNING_NOT_CONFIGURED/);
+  assert.match(source, /signedReferralTokens\.get/);
+});

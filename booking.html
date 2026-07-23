@@ -84,6 +84,7 @@
       const distributorUid = p.get('ref') || '';
       const shareId = p.get('sid') || p.get('share_id') || p.get('shareId') || '';
       const inviteCode = (p.get('invite') || '').trim().toUpperCase();
+      const referralToken = p.get('rt') || p.get('referral_token') || '';
 
       const [step, setStep] = useState('loading');
       const [tenant, setTenant] = useState(null);
@@ -98,7 +99,7 @@
       useEffect(() => {
         (async () => {
           try {
-            if (!itineraryId || (!distributorUid && !inviteCode)) {
+            if (!itineraryId || (!distributorUid && !inviteCode && !referralToken)) {
               throw new Error('缺少必要參數，請從業務分享的行程連結進入。');
             }
 
@@ -161,6 +162,7 @@
             note: form.note,
             invite_code: inviteCode,
             distributor_uid: finalDistributorUid,
+            referral_token: referralToken,
             share_id: shareId,
             source: 'referral',
           }, agencySlug);
