@@ -1,10 +1,13 @@
-﻿(function (global) {
+(function (global) {
   'use strict';
   const page = global.TravelKeeperTenantPage;
   const api = global.TravelKeeperTenantLine;
   if (!page || !api) throw new Error('Tenant page and LINE clients are required');
 
   const params = new URLSearchParams(location.search);
+  const rawTenant = params.has('tenant') ? params.get('tenant') : params.get('tenant_slug');
+  const tenantSlug = typeof rawTenant === 'string' ? rawTenant.trim() : '';
+  const tenantValid = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(tenantSlug);
   const state = {
     threads: [],
     agents: [],
@@ -411,12 +414,13 @@
     badge.classList.toggle('hidden', !show);
   }
   async function init() {
+    if (!tenantValid) return;
     renderEnvironmentBadge();
     try {
       const session = await page.initLiffSession({ fallbackLiffId: '2009367829-BDZCGti8', requireContext: true });
       state.role = session.context?.role || '';
       state.userUid = session.context?.userUid || session.profile?.userId || params.get('dev_uid') || '';
-      el('tenant-label').textContent = 'Tenant ' + page.tenantSlug + ' | Role ' + state.role;
+      el('tenant-label').textContent = 'Tenant ' + tenantSlug + ' | Role ' + state.role;
       const query = keepQuery();
       el('settings-link').href = `line-channel-settings.html?${query}`;
       el('crm-link').href = `crm.html?${query}`;
@@ -432,6 +436,7 @@
     }
   }
 
+  if (tenantValid) {
   let searchTimer;
   let agentSearchTimer;
   el('search').addEventListener('input', event => {
@@ -482,4 +487,9 @@
   el('claim-thread').addEventListener('click', claimThread);
   el('mark-read').addEventListener('click', markRead);
   init();
+  } else {
+    const message = tenantSlug ? '此工作台網址無效，請使用有效的租戶連結。' : '此工作台需要明確的租戶連結。';
+    el('thread-list').innerHTML = '<div class="error-card">' + esc(message) + '</div>';
+    updateComposer(false, message);
+  }
 })(window);

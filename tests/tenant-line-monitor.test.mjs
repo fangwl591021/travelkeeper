@@ -56,6 +56,17 @@ test('LINE settings page uses masked channel API and preserves local safety', as
   assert.doesNotMatch(page, /secrets_ciphertext|secrets_iv/);
 });
 
+test('LINE monitor requires an explicit tenant URL before initialization', async () => {
+  const page = await read('js/tenant-line-monitor-page.js');
+  const client = await read('js/tenant-api-client.js');
+  assert.match(page, /params\.has\('tenant'\) \? params\.get\('tenant'\) : params\.get\('tenant_slug'\)/);
+  assert.match(page, /tenantValid = \/\^\[a-z0-9\]\(\?:\[a-z0-9-\]\{0,61\}\[a-z0-9\]\)\?\$\//);
+  assert.doesNotMatch(page, /DEFAULT_TENANT|params\.get\('a'\)|page\.tenantSlug/);
+  assert.match(page, /if \(tenantValid\) \{/);
+  assert.match(page, /此工作台需要明確的租戶連結/);
+  assert.match(page, /initLiffSession/);
+  assert.match(client, /Authorization/);
+});
 test('worker routes LINE monitor before CRM and generic APIs', async () => {
   const source = await read('worker-tenant.js');
   const monitor = source.indexOf('isTenantLineMonitorApiRequest(request)');
