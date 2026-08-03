@@ -67,6 +67,23 @@ test('worker routes LINE monitor before CRM and generic APIs', async () => {
   assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase13'/);
 });
 
+test('Monitor API requires Bearer authentication before existing validation', async () => {
+  const source = await read('worker-tenant.js');
+  assert.match(source, /function requireBearerAuthorization\(request\)/);
+  assert.match(source, /!\/\^Bearer\\s\+\\S\+\$\/i\.test\(value\)/);
+  assert.match(source, /isTenantLineMonitorApiRequest\(request\)[\s\S]*?requireBearerAuthorization\(request\)[\s\S]*?securedRoute\(request, env, routeTenantLineMonitorApi\)/);
+  assert.match(source, /authenticateLineRequest\(request, env, \{ tenantSlug \}\)/);
+});
+
+test('Monitor Bearer gate rejects legacy substitutes and preserves non-Monitor routes', async () => {
+  const source = await read('worker-tenant.js');
+  assert.match(source, /request\.headers\.get\('authorization'\)/);
+  assert.match(source, /AUTH_REQUIRED/);
+  assert.match(source, /isTenantLineMonitorApiRequest\(request\)/);
+  assert.match(source, /isTenantCrmApiRequest\(request\)\) return securedRoute/);
+  assert.match(source, /isTenantApiRequest\(request\)\) return securedRoute/);
+  assert.doesNotMatch(source, /ALLOW_LEGACY_UID_AUTH/);
+});
 test('secured tenant routes return JSON status errors instead of Worker 500s', async () => {
   const source = await read('worker-tenant.js');
   assert.match(source, /async function securedRoute\(request, env, router\)/);
