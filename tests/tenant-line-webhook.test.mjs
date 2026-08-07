@@ -213,6 +213,8 @@ test('member query reply uses verified identity after insertion and sends once w
   const send = source.indexOf('await sendTenantLineReply');
   assert.ok(insert >= 0 && member > insert && identity > member && send > identity);
   assert.match(source, /membershipReplyEvaluated/);
+  assert.match(source, /flagEnabled\(env, 'TENANT_LINE_MEMBER_REPLY_ENABLED'\)/);
+  assert.match(source, /membershipReplyOutcome = 'disabled'/);
   assert.match(source, /membership_reply_outcome: membershipReplyOutcome/);
   assert.match(source, /v2\/bot\/message\/reply/);
   assert.doesNotMatch(source, /membership_reply_text|membership_reply_token|replyToken:\s*event\.replyToken/);
