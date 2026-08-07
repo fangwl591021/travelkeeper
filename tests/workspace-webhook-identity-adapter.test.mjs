@@ -160,3 +160,124 @@ test('adapter rejects request-shaped or sensitive inputs and never returns them'
   const serialized = JSON.stringify(identity);
   assert.doesNotMatch(serialized, /replyToken|Channel Secret|Access Token|raw event|U10/i);
 });
+
+test('platform admin requires an active membership in the requested tenant', async () => {
+  const activePlatformAdmin = await resolveWorkspaceWebhookIdentity({
+    env: env({ tenant_memberships: { role: 'platform_admin', status: 'active' } }),
+    tenantSlug: 'acme',
+    verifiedUserUid: 'U-platform',
+  });
+  assert.equal(activePlatformAdmin.primaryRole, 'platform_admin');
+
+  const database = createDb();
+  const globalOnly = await resolveWorkspaceWebhookIdentity({
+    env: { DB: database, PLATFORM_ADMIN_UIDS: 'U-global' },
+    tenantSlug: 'acme',
+    verifiedUserUid: 'U-global',
+  });
+  assert.equal(globalOnly.primaryRole, 'unassigned');
+  assert.deepEqual(globalOnly.roles, []);
+});
+
+test('only approved or active distributor profiles create partner', async () => {
+  for (const status of ['approved', 'active']) {
+    const identity = await resolveWorkspaceWebhookIdentity({
+      env: env({ tenant_distributor_profiles: { status } }),
+      tenantSlug: 'acme',
+      verifiedUserUid: `U-distributor-${status}`,
+    });
+    assert.equal(identity.primaryRole, 'partner', status);
+  }
+
+  for (const status of ['pending', 'rejected', 'blocked', 'inactive', 'deleted']) {
+    const identity = await resolveWorkspaceWebhookIdentity({
+      env: env({ tenant_distributor_profiles: { status } }),
+      tenantSlug: 'acme',
+      verifiedUserUid: `U-distributor-${status}`,
+    });
+    assert.equal(identity.primaryRole, 'unassigned', status);
+    assert.equal(identity.roles.includes('partner'), false, status);
+  }
+});
+
+test('blocked inactive or deleted CRM profiles do not create traveler', async () => {
+  for (const status of ['blocked', 'inactive', 'deleted']) {
+    const identity = await resolveWorkspaceWebhookIdentity({
+      env: env({ tenant_crm_profiles: { status } }),
+      tenantSlug: 'acme',
+      verifiedUserUid: `U-customer-${status}`,
+    });
+    assert.equal(identity.primaryRole, 'unassigned', status);
+    assert.equal(identity.roles.includes('traveler'), false, status);
+  }
+});
+
+test('D1 failure is an error, never an identity-shaped result', async () => {
+  const envWithFailure = {
+    DB: {
+      prepare() {
+        throw new Error('raw D1 error for private tenant and UID');
+      },
+    },
+  };
+
+  await assert.rejects(() => resolveWorkspaceWebhookIdentity({
+    env: envWithFailure,
+    tenantSlug: 'private-tenant',
+    verifiedUserUid: 'U-private',
+  }), (error) => {
+    assert.equal(error.message, 'WORKSPACE_IDENTITY_ADAPTER_UNAVAILABLE');
+    assert.equal(Object.hasOwn(error, 'roles'), false);
+    assert.equal(Object.hasOwn(error, 'primaryRole'), false);
+    assert.doesNotMatch(String(error), /private-tenant|U-private|raw D1|SELECT|token|secret|credential/i);
+    return true;
+  });
+});
+
+test('tenant slug validation rejects unsafe boundaries without demo fallback', async () => {
+  const invalidTenantSlugs = [
+    '',
+    'Demo',
+    'tenant_slug',
+    'tenant slug',
+    'tenant/child',
+    'tenant?x=1',
+    'tenant#hash',
+    '-tenant',
+    'tenant-',
+    'a'.repeat(64),
+  ];
+
+  for (const tenantSlug of invalidTenantSlugs) {
+    await assert.rejects(() => resolveWorkspaceWebhookIdentity({
+      env: env({}),
+      tenantSlug,
+      verifiedUserUid: 'U-boundary',
+    }), { message: 'WORKSPACE_IDENTITY_ADAPTER_INVALID_INPUT' });
+  }
+
+  const database = createDb();
+  const explicitDemo = await resolveWorkspaceWebhookIdentity({
+    env: { DB: database },
+    tenantSlug: 'demo',
+    verifiedUserUid: 'U-demo',
+  });
+  assert.equal(explicitDemo.primaryRole, 'unassigned');
+  assert.equal(database.calls.length, 3);
+  for (const call of database.calls) assert.deepEqual(call.values, ['demo', 'U-demo']);
+});
+
+test('successful output contains identity fields only, never raw fact rows', async () => {
+  const identity = await resolveWorkspaceWebhookIdentity({
+    env: env({
+      tenant_memberships: { role: 'tenant_admin', status: 'active', permissions_json: '{"secret":true}' },
+      tenant_distributor_profiles: { status: 'approved', internal_note: 'private' },
+      tenant_crm_profiles: { status: 'open', phone: '0900000000' },
+    }),
+    tenantSlug: 'acme',
+    verifiedUserUid: 'U-output',
+  });
+
+  assert.deepEqual(Object.keys(identity).sort(), ['primaryRole', 'roles', 'tenantSlug']);
+  assert.doesNotMatch(JSON.stringify(identity), /permissions_json|internal_note|0900000000|U-output/i);
+});
