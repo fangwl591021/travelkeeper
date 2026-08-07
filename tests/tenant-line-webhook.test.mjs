@@ -11,7 +11,7 @@ import {
   decryptTenantGatewaySecrets,
 } from '../lib/tenant-gateway-api.js';
 import { statusForError } from '../lib/http-error-status.js';
-import { insertEvent, isTenantLineWebhookRequest } from '../lib/tenant-line-webhook-api.js';
+import { insertEvent, isTenantLineWebhookRequest, membershipReplyText } from '../lib/tenant-line-webhook-api.js';
 import { isTenantLineChannelApiRequest } from '../lib/tenant-line-channel-api.js';
 
 const read = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
@@ -163,4 +163,59 @@ test('S1 tenant-v2 webhook keeps explicit SLA behavior when enabled', async () =
   assert.equal(db.messages.length, 1);
   assert.equal(db.auditCount, 1);
   assert.notEqual(db.slaPatches[0][0], '');
+});
+
+
+test('Webhook Workspace eligibility shadow runs only after inserted events and never sends a reply', async () => {
+  const source = await read('lib/tenant-line-webhook-api.js');
+  const insert = source.indexOf('const result = await insertEvent');
+  const eligibility = source.indexOf('selectEligibleWorkspaceWebhookEvent({ events: [event] })');
+  assert.match(source, /workspace-webhook-event-eligibility\.js/);
+  assert.ok(insert >= 0);
+  assert.ok(eligibility > insert);
+  assert.match(source, /if \(result\.inserted\)/);
+  assert.match(source, /if \(!workspacePlanEvaluated/);
+  const reply = source.indexOf('await sendTenantLineReply');
+  assert.match(source, /workspace_eligible: workspaceEligible/);
+  assert.ok(reply > eligibility);
+});
+
+
+test('Webhook Workspace planner shadow uses only server route config after an inserted eligible event', async () => {
+  const source = await read('lib/tenant-line-webhook-api.js');
+  const insert = source.indexOf('const result = await insertEvent');
+  const eligibility = source.indexOf('const selected = selectEligibleWorkspaceWebhookEvent');
+  const routes = source.indexOf('resolveWorkspaceWebhookRoutes({ appBaseUrl, tenantSlug })');
+  const planner = source.indexOf('await planWorkspaceWebhookReply');
+  assert.match(source, /workspace-webhook-route-adapter\.js/);
+  assert.match(source, /workspace-webhook-reply-planner\.js/);
+  assert.ok(insert >= 0 && eligibility > insert && routes > eligibility && planner > routes);
+  assert.match(source, /env\?\.WORKSPACE_APP_BASE_URL/);
+  assert.match(source, /workspacePlanOutcome = 'not_configured'/);
+  assert.match(source, /workspace_plan_outcome: workspacePlanOutcome/);
+  assert.match(source, /safeWorkspacePlanOutcome/);
+  assert.doesNotMatch(source, /replyPlan:\s*plan/);
+});
+
+
+test('membership query reply exposes only a safe binding status and role label', () => {
+  assert.equal(membershipReplyText({ primaryRole: 'tenant_admin' }), '您已完成會員綁定，目前身分：租戶管理員。');
+  assert.equal(membershipReplyText({ primaryRole: 'partner' }), '您已完成會員綁定，目前身分：合作夥伴。');
+  assert.equal(membershipReplyText({ primaryRole: 'unassigned' }), '目前查無您的會員綁定資料。');
+  assert.equal(membershipReplyText({ primaryRole: 'unknown' }), '目前查無您的會員綁定資料。');
+});
+
+test('member query reply uses verified identity after insertion and sends once without exposing tokens', async () => {
+  const source = await read('lib/tenant-line-webhook-api.js');
+  const insert = source.indexOf('const result = await insertEvent');
+  const member = source.indexOf('isMembershipQueryText(selected.event.text)');
+  const identity = source.indexOf('resolveWorkspaceWebhookIdentity({');
+  const send = source.indexOf('await sendTenantLineReply');
+  assert.ok(insert >= 0 && member > insert && identity > member && send > identity);
+  assert.match(source, /membershipReplyEvaluated/);
+  assert.match(source, /flagEnabled\(env, 'TENANT_LINE_MEMBER_REPLY_ENABLED'\)/);
+  assert.match(source, /membershipReplyOutcome = 'disabled'/);
+  assert.match(source, /membership_reply_outcome: membershipReplyOutcome/);
+  assert.match(source, /v2\/bot\/message\/reply/);
+  assert.doesNotMatch(source, /membership_reply_text|membership_reply_token|replyToken:\s*event\.replyToken/);
 });

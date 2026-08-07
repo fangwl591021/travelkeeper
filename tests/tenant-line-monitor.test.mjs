@@ -56,6 +56,17 @@ test('LINE settings page uses masked channel API and preserves local safety', as
   assert.doesNotMatch(page, /secrets_ciphertext|secrets_iv/);
 });
 
+test('LINE monitor requires an explicit tenant URL before initialization', async () => {
+  const page = await read('js/tenant-line-monitor-page.js');
+  const client = await read('js/tenant-api-client.js');
+  assert.match(page, /params\.has\('tenant'\) \? params\.get\('tenant'\) : params\.get\('tenant_slug'\)/);
+  assert.match(page, /tenantValid = \/\^\[a-z0-9\]\(\?:\[a-z0-9-\]\{0,61\}\[a-z0-9\]\)\?\$\//);
+  assert.doesNotMatch(page, /DEFAULT_TENANT|params\.get\('a'\)|page\.tenantSlug/);
+  assert.match(page, /if \(tenantValid\) \{/);
+  assert.match(page, /此工作台需要明確的租戶連結/);
+  assert.match(page, /initLiffSession/);
+  assert.match(client, /Authorization/);
+});
 test('worker routes LINE monitor before CRM and generic APIs', async () => {
   const source = await read('worker-tenant.js');
   const monitor = source.indexOf('isTenantLineMonitorApiRequest(request)');
@@ -67,6 +78,23 @@ test('worker routes LINE monitor before CRM and generic APIs', async () => {
   assert.match(source, /X-TravelKeeper-Tenant-Isolation', 'phase13'/);
 });
 
+test('Monitor API requires Bearer authentication before existing validation', async () => {
+  const source = await read('worker-tenant.js');
+  assert.match(source, /function requireBearerAuthorization\(request\)/);
+  assert.match(source, /!\/\^Bearer\\s\+\\S\+\$\/i\.test\(value\)/);
+  assert.match(source, /isTenantLineMonitorApiRequest\(request\)[\s\S]*?requireBearerAuthorization\(request\)[\s\S]*?securedRoute\(request, env, routeTenantLineMonitorApi\)/);
+  assert.match(source, /authenticateLineRequest\(request, env, \{ tenantSlug \}\)/);
+});
+
+test('Monitor Bearer gate rejects legacy substitutes and preserves non-Monitor routes', async () => {
+  const source = await read('worker-tenant.js');
+  assert.match(source, /request\.headers\.get\('authorization'\)/);
+  assert.match(source, /AUTH_REQUIRED/);
+  assert.match(source, /isTenantLineMonitorApiRequest\(request\)/);
+  assert.match(source, /isTenantCrmApiRequest\(request\)\) return securedRoute/);
+  assert.match(source, /isTenantApiRequest\(request\)\) return securedRoute/);
+  assert.doesNotMatch(source, /ALLOW_LEGACY_UID_AUTH/);
+});
 test('secured tenant routes return JSON status errors instead of Worker 500s', async () => {
   const source = await read('worker-tenant.js');
   assert.match(source, /async function securedRoute\(request, env, router\)/);

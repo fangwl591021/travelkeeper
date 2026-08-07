@@ -89,6 +89,11 @@ function errorResponse(error, request = null, env = null) {
   }), request, env);
 }
 
+function requireBearerAuthorization(request) {
+  const value = String(request.headers.get('authorization') || '').trim();
+  if (!/^Bearer\s+\S+$/i.test(value)) throw new Error('AUTH_REQUIRED');
+}
+
 async function securedRoute(request, env, router) {
   try {
     const securedRequest = await authenticatedTenantRequest(request, env);
@@ -142,7 +147,14 @@ export default {
       if (isTenantProfileApiRequest(request)) return securedRoute(request, env, routeTenantProfileApi);
       if (isTenantDistributorApiRequest(request)) return securedRoute(request, env, routeTenantDistributorApi);
       if (isTenantLineChannelApiRequest(request)) return securedRoute(request, env, routeTenantLineChannelApi);
-      if (isTenantLineMonitorApiRequest(request)) return securedRoute(request, env, routeTenantLineMonitorApi);
+      if (isTenantLineMonitorApiRequest(request)) {
+        try {
+          requireBearerAuthorization(request);
+        } catch (error) {
+          return errorResponse(error, request, env);
+        }
+        return securedRoute(request, env, routeTenantLineMonitorApi);
+      }
       if (isTenantCrmApiRequest(request)) return securedRoute(request, env, routeTenantCrmApi);
       if (isTenantBookingApiRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
