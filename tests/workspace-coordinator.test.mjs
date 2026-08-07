@@ -20,6 +20,12 @@ const identity = (roles, extra = {}) => ({
   ...extra
 });
 
+const resolvedIdentity = (roles, primaryRole = roles[0] || 'unassigned') => ({
+  tenantSlug: 'demo',
+  roles,
+  primaryRole
+});
+
 test('returns control to the existing flow for unknown text', () => {
   assert.deepEqual(coordinateWorkspaceRequest({
     text: '我想去日本旅遊',
@@ -141,4 +147,72 @@ test('does not expose text, UID, or identity profiles', () => {
 test('handles null and undefined requests safely', () => {
   assert.deepEqual(coordinateWorkspaceRequest(null), { handled: false, outcome: 'not_workspace_intent' });
   assert.deepEqual(coordinateWorkspaceRequest(undefined), { handled: false, outcome: 'not_workspace_intent' });
+});
+
+test('accepts a safe pre-resolved identity from the webhook identity adapter', () => {
+  const result = coordinateWorkspaceRequest({
+    text: '儀表板',
+    resolvedIdentity: resolvedIdentity(['tenant_admin']),
+    routes
+  });
+  assert.equal(result.handled, true);
+  assert.equal(result.outcome, 'allowed');
+  assert.equal(result.targetIntent, 'admin_dashboard');
+  assert.equal(result.message.type, 'flex');
+});
+
+test('preserves guest and unassigned outcomes for pre-resolved identities', () => {
+  assert.equal(coordinateWorkspaceRequest({
+    text: '工作台',
+    resolvedIdentity: resolvedIdentity([], 'guest'),
+    routes
+  }).outcome, 'login_required');
+  assert.equal(coordinateWorkspaceRequest({
+    text: '工作台',
+    resolvedIdentity: resolvedIdentity([], 'unassigned'),
+    routes
+  }).outcome, 'forbidden');
+});
+
+test('fails closed for malformed or ambiguous resolved identity input', () => {
+  const invalidInputs = [
+    { tenantSlug: 'demo', roles: ['tenant_admin'], primaryRole: 'traveler' },
+    { tenantSlug: 'demo', roles: ['administrator'], primaryRole: 'administrator' },
+    { tenantSlug: 'demo', roles: ['tenant_admin', 'tenant_admin'], primaryRole: 'tenant_admin' },
+    { tenantSlug: '', roles: [], primaryRole: 'unassigned' },
+    { tenantSlug: 'demo', roles: ['tenant_admin'], primaryRole: 'tenant_admin', membership: { role: 'admin' } }
+  ];
+  for (const value of invalidInputs) {
+    assert.equal(coordinateWorkspaceRequest({
+      text: '工作台',
+      resolvedIdentity: value,
+      routes
+    }).outcome, 'configuration_error');
+  }
+
+  assert.equal(coordinateWorkspaceRequest({
+    text: '工作台',
+    identityInput: identity(['tenant_admin']),
+    resolvedIdentity: resolvedIdentity(['tenant_admin']),
+    routes
+  }).outcome, 'configuration_error');
+});
+
+test('unknown intent returns to the existing flow before identity evaluation', () => {
+  assert.deepEqual(coordinateWorkspaceRequest({
+    text: '一般旅遊問題',
+    resolvedIdentity: { unsafe: true },
+    routes
+  }), { handled: false, outcome: 'not_workspace_intent' });
+});
+
+test('pre-resolved identity output never exposes identity details', () => {
+  const result = coordinateWorkspaceRequest({
+    text: '工作台',
+    resolvedIdentity: resolvedIdentity(['partner', 'traveler']),
+    routes
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.targetIntent, 'partner_workspace');
+  assert.doesNotMatch(serialized, /tenantSlug|primaryRole|"roles"|demo/);
 });
