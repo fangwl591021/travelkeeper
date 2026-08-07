@@ -164,3 +164,17 @@ test('S1 tenant-v2 webhook keeps explicit SLA behavior when enabled', async () =
   assert.equal(db.auditCount, 1);
   assert.notEqual(db.slaPatches[0][0], '');
 });
+
+
+test('Webhook Workspace eligibility shadow runs only after inserted events and never sends a reply', async () => {
+  const source = await read('lib/tenant-line-webhook-api.js');
+  const insert = source.indexOf('const result = await insertEvent');
+  const eligibility = source.indexOf('selectEligibleWorkspaceWebhookEvent({ events: [event] })');
+  assert.match(source, /workspace-webhook-event-eligibility\.js/);
+  assert.ok(insert >= 0);
+  assert.ok(eligibility > insert);
+  assert.match(source, /if \(result\.inserted\)/);
+  assert.match(source, /if \(!workspaceEligible/);
+  assert.match(source, /workspace_eligible: workspaceEligible/);
+  assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
+});
