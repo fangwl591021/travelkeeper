@@ -34,6 +34,7 @@ TENANT_LINE_MONITOR_ENABLED = "1"
 TENANT_LINE_QUEUE_ENABLED = "0"
 TENANT_LINE_SLA_ENABLED = "0"
 TENANT_LINE_OUTBOUND_ENABLED = "0"
+TENANT_LINE_MEMBER_REPLY_ENABLED = "1"
 LINE_PUSH_API_URL = "https://line-push-mock.invalid/v2/bot/message/push"
 
 [[env.staging.d1_databases]]
