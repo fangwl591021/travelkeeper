@@ -174,7 +174,7 @@ test('Webhook Workspace eligibility shadow runs only after inserted events and n
   assert.ok(insert >= 0);
   assert.ok(eligibility > insert);
   assert.match(source, /if \(result\.inserted\)/);
-  assert.match(source, /if \(!workspaceEligible/);
+  assert.match(source, /if \(!workspacePlanEvaluated/);
   assert.match(source, /workspace_eligible: workspaceEligible/);
   assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
 });
