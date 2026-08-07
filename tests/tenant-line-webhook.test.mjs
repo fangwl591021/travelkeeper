@@ -178,3 +178,21 @@ test('Webhook Workspace eligibility shadow runs only after inserted events and n
   assert.match(source, /workspace_eligible: workspaceEligible/);
   assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
 });
+
+
+test('Webhook Workspace planner shadow uses only server route config after an inserted eligible event', async () => {
+  const source = await read('lib/tenant-line-webhook-api.js');
+  const insert = source.indexOf('const result = await insertEvent');
+  const eligibility = source.indexOf('const selected = selectEligibleWorkspaceWebhookEvent');
+  const routes = source.indexOf('resolveWorkspaceWebhookRoutes({ appBaseUrl, tenantSlug })');
+  const planner = source.indexOf('await planWorkspaceWebhookReply');
+  assert.match(source, /workspace-webhook-route-adapter\.js/);
+  assert.match(source, /workspace-webhook-reply-planner\.js/);
+  assert.ok(insert >= 0 && eligibility > insert && routes > eligibility && planner > routes);
+  assert.match(source, /env\?\.WORKSPACE_APP_BASE_URL/);
+  assert.match(source, /workspacePlanOutcome = 'not_configured'/);
+  assert.match(source, /workspace_plan_outcome: workspacePlanOutcome/);
+  assert.match(source, /safeWorkspacePlanOutcome/);
+  assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
+  assert.doesNotMatch(source, /replyPlan:\s*plan/);
+});
