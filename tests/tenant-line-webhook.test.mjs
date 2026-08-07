@@ -11,7 +11,7 @@ import {
   decryptTenantGatewaySecrets,
 } from '../lib/tenant-gateway-api.js';
 import { statusForError } from '../lib/http-error-status.js';
-import { insertEvent, isTenantLineWebhookRequest } from '../lib/tenant-line-webhook-api.js';
+import { insertEvent, isTenantLineWebhookRequest, membershipReplyText } from '../lib/tenant-line-webhook-api.js';
 import { isTenantLineChannelApiRequest } from '../lib/tenant-line-channel-api.js';
 
 const read = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
@@ -175,8 +175,9 @@ test('Webhook Workspace eligibility shadow runs only after inserted events and n
   assert.ok(eligibility > insert);
   assert.match(source, /if \(result\.inserted\)/);
   assert.match(source, /if \(!workspacePlanEvaluated/);
+  const reply = source.indexOf('await sendTenantLineReply');
   assert.match(source, /workspace_eligible: workspaceEligible/);
-  assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
+  assert.ok(reply > eligibility);
 });
 
 
@@ -195,4 +196,25 @@ test('Webhook Workspace planner shadow uses only server route config after an in
   assert.match(source, /safeWorkspacePlanOutcome/);
   assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
   assert.doesNotMatch(source, /replyPlan:\s*plan/);
+});
+
+
+test('membership query reply exposes only a safe binding status and role label', () => {
+  assert.equal(membershipReplyText({ primaryRole: 'tenant_admin' }), '您已完成會員綁定，目前身分：租戶管理員。');
+  assert.equal(membershipReplyText({ primaryRole: 'partner' }), '您已完成會員綁定，目前身分：合作夥伴。');
+  assert.equal(membershipReplyText({ primaryRole: 'unassigned' }), '目前查無您的會員綁定資料。');
+  assert.equal(membershipReplyText({ primaryRole: 'unknown' }), '目前查無您的會員綁定資料。');
+});
+
+test('member query reply uses verified identity after insertion and sends once without exposing tokens', async () => {
+  const source = await read('lib/tenant-line-webhook-api.js');
+  const insert = source.indexOf('const result = await insertEvent');
+  const member = source.indexOf('isMembershipQueryText(selected.event.text)');
+  const identity = source.indexOf('resolveWorkspaceWebhookIdentity({');
+  const send = source.indexOf('await sendTenantLineReply');
+  assert.ok(insert >= 0 && member > insert && identity > member && send > identity);
+  assert.match(source, /membershipReplyEvaluated/);
+  assert.match(source, /membership_reply_outcome: membershipReplyOutcome/);
+  assert.match(source, /v2\/bot\/message\/reply/);
+  assert.doesNotMatch(source, /membership_reply_text|membership_reply_token|replyToken:\s*event\.replyToken/);
 });
