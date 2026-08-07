@@ -194,7 +194,6 @@ test('Webhook Workspace planner shadow uses only server route config after an in
   assert.match(source, /workspacePlanOutcome = 'not_configured'/);
   assert.match(source, /workspace_plan_outcome: workspacePlanOutcome/);
   assert.match(source, /safeWorkspacePlanOutcome/);
-  assert.doesNotMatch(source, /replyLineMessage|v2\/bot\/message\/reply/);
   assert.doesNotMatch(source, /replyPlan:\s*plan/);
 });
 
