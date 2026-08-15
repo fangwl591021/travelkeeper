@@ -62,6 +62,9 @@ jobs:
       - name: Run owner transfer tests
         run: node --test tests/customer-owner-transfer.test.mjs
 
+      - name: Run owner transfer UI tests
+        run: node --test tests/customer-owner-transfer-ui.test.mjs
+
       - name: Run attribution contract tests
         run: node --test tests/attribution-contract.test.mjs
 
