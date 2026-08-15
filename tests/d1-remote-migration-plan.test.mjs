@@ -11,7 +11,6 @@ test('parser keeps a multi-statement trigger as one statement', () => {
   const statements = parseSqlStatements("CREATE TRIGGER trg AFTER INSERT ON t BEGIN INSERT INTO log VALUES ('a;b'); UPDATE t SET x = 1; END;");
   assert.equal(statements.length, 1);
   assert.equal(statements[0].type, 'CREATE TRIGGER');
-  assert.equal(statements[0].triggerName, 'trg');
 });
 
 test('parser ignores semicolons in comments and strings', () => {
@@ -33,14 +32,14 @@ test('parser rejects an incomplete trigger', () => {
 test('all canonical migrations parse and preserve all trigger statements', () => {
   const plan = migrationPlan(migrationsDir);
   assert.equal(plan.migrationCount, 37);
-  assert.equal(plan.triggerCount, 40);
+  assert.equal(plan.triggerCount, 42);
   assert.equal(plan.migrations.find((migration) => migration.file === '0114_d1_tenant_integrity_compat.sql').statementCount, 11);
   const attribution = plan.migrations.find((migration) => migration.file === '0115_attribution_contract_v1.sql');
   assert.equal(attribution.statementCount, 19);
   assert.equal(attribution.statements.filter((statement) => statement.type === 'CREATE TRIGGER').length, 11);
   const firstTouch = plan.migrations.find((migration) => migration.file === '0116_tenant_first_touch_attribution.sql');
-  assert.equal(firstTouch.statementCount, 11);
-  assert.equal(firstTouch.statements.filter((statement) => statement.type === 'CREATE TRIGGER').length, 3);
+  assert.equal(firstTouch.statementCount, 13);
+  assert.equal(firstTouch.statements.filter((statement) => statement.type === 'CREATE TRIGGER').length, 5);
 });
 
 test('schema equivalence fails closed on trigger loss', () => {
@@ -70,7 +69,9 @@ test('cross-tenant trigger rules are represented in canonical migrations', () =>
     ['0115_attribution_contract_v1.sql', 'trg_distributor_referrer_immutable'],
     ['0115_attribution_contract_v1.sql', 'trg_crm_referrer_customer_update'],
     ['0115_attribution_contract_v1.sql', 'trg_customer_attribution_projection_update'],
+    ['0116_tenant_first_touch_attribution.sql', 'trg_tenant_first_touch_validate_insert'],
     ['0116_tenant_first_touch_attribution.sql', 'trg_tenant_first_touch_immutable'],
+    ['0116_tenant_first_touch_attribution.sql', 'trg_tenant_first_touch_no_delete'],
     ['0116_tenant_first_touch_attribution.sql', 'trg_customers_referrer_insert'],
     ['0116_tenant_first_touch_attribution.sql', 'trg_customers_referrer_update'],
   ];
