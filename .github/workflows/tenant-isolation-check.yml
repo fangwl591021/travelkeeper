@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - main
+      - agent/tenant-isolation-phase1
+      - feature/workspace-intent-router-v1
 
 permissions:
   contents: read
@@ -18,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -53,6 +57,12 @@ jobs:
           node --check js/tenant-line-client.js
           node --check js/tenant-line-monitor-page.js
           node --check js/settlement-finance-client.js
+
+      - name: Run attribution contract tests
+        run: node --test tests/attribution-contract.test.mjs
+
+      - name: Run canonical migration plan tests
+        run: node --test tests/d1-remote-migration-plan.test.mjs
 
       - name: Run booking isolation tests
         run: node --test tests/tenant-booking-isolation.test.mjs
