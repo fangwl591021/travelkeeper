@@ -241,7 +241,7 @@ test('existing customer owner remains stable while each order keeps its referral
   const [customerWrite, orderWrite] = db.batches[0];
   assert.match(customerWrite.sql, /owner_uid = CASE WHEN COALESCE\(owner_uid, ''\) = '' THEN \? ELSE owner_uid END/);
   assert.match(customerWrite.sql, /owner_name = CASE WHEN COALESCE\(owner_uid, ''\) = '' THEN \? ELSE owner_name END/);
-  assert.equal(customerWrite.args[4], 'U-SALES');
+  assert.equal(customerWrite.args[4], 'U-ORIGINAL');
   assert.equal(orderWrite.args[4], 'U-SALES');
 });
 test('payment creation checks tenant and customer before calling legacy gateway', async () => {
