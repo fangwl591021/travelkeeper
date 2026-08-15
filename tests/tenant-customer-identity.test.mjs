@@ -25,7 +25,8 @@ test('booking no longer rejects a phone because another tenant used the legacy k
   assert.match(source, /customerIdentityId/);
   assert.match(source, /contact_phone/);
   assert.match(source, /customer_id/);
-  assert.match(source, /await env\.DB\.batch\(\[customerWrite\.statement, orderInsert\]\)/);
+  assert.match(source, /const crmLink = env\.DB\.prepare/);
+  assert.match(source, /await env\.DB\.batch\(\[customerWrite\.statement, orderInsert, crmLink\]\)/);
 });
 
 test('tenant V2 APIs expose contact phone while retaining an internal relation key', async () => {
