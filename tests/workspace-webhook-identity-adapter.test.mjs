@@ -56,7 +56,7 @@ test('all identity queries bind the same tenant and verified UID', async () => {
     tenantSlug: 'acme',
     verifiedUserUid: 'U123',
   });
-  assert.equal(database.calls.length, 3);
+  assert.equal(database.calls.length, 4);
   for (const call of database.calls) {
     assert.deepEqual(call.values, ['acme', 'U123']);
     assert.match(call.sql, /tenant_slug = \?/i);
@@ -88,13 +88,36 @@ test('approved distributor profile resolves partner', async () => {
   assert.equal(identity.primaryRole, 'partner');
 });
 
-test('customer profile resolves traveler', async () => {
+test('customer profile with explicit customer binding resolves traveler', async () => {
   const identity = await resolveWorkspaceWebhookIdentity({
-    env: env({ tenant_crm_profiles: { tenant_slug: 'acme', line_user_uid: 'U4', status: 'open' } }),
+    env: env({ tenant_crm_profiles: { tenant_slug: 'acme', line_user_uid: 'U4', customer_id: 'CUSTOMER-4', status: 'open' } }),
     tenantSlug: 'acme',
     verifiedUserUid: 'U4',
   });
   assert.equal(identity.primaryRole, 'traveler');
+});
+
+test('formal tenant customer line binding resolves traveler even when CRM remains line-only', async () => {
+  const identity = await resolveWorkspaceWebhookIdentity({
+    env: env({
+      tenant_crm_profiles: { tenant_slug: 'acme', line_user_uid: 'U-bound', customer_id: '', source: 'line', status: 'open' },
+      customers: { tenant_slug: 'acme', customer_id: 'CUSTOMER-BOUND', customer_line_uid: 'U-bound', owner_uid: 'U-SALES' },
+    }),
+    tenantSlug: 'acme',
+    verifiedUserUid: 'U-bound',
+  });
+  assert.equal(identity.primaryRole, 'traveler');
+  assert.equal(identity.roles.includes('traveler'), true);
+});
+
+test('line-only CRM profile without customer binding does not resolve traveler', async () => {
+  const identity = await resolveWorkspaceWebhookIdentity({
+    env: env({ tenant_crm_profiles: { tenant_slug: 'acme', line_user_uid: 'U-line-only', customer_id: '', source: 'line', status: 'open' } }),
+    tenantSlug: 'acme',
+    verifiedUserUid: 'U-line-only',
+  });
+  assert.equal(identity.primaryRole, 'unassigned');
+  assert.deepEqual(identity.roles, []);
 });
 
 test('missing facts resolve unassigned and unknown roles do not elevate', async () => {
@@ -117,7 +140,7 @@ test('inactive or blocked profiles do not create traveler or partner', async () 
   const identity = await resolveWorkspaceWebhookIdentity({
     env: env({
       tenant_distributor_profiles: { status: 'inactive' },
-      tenant_crm_profiles: { status: 'blocked' },
+      tenant_crm_profiles: { customer_id: 'CUSTOMER-7', status: 'blocked' },
     }),
     tenantSlug: 'acme',
     verifiedUserUid: 'U7',
@@ -200,10 +223,10 @@ test('only approved or active distributor profiles create partner', async () => 
   }
 });
 
-test('blocked inactive or deleted CRM profiles do not create traveler', async () => {
+test('blocked inactive or deleted bound CRM profiles do not create traveler', async () => {
   for (const status of ['blocked', 'inactive', 'deleted']) {
     const identity = await resolveWorkspaceWebhookIdentity({
-      env: env({ tenant_crm_profiles: { status } }),
+      env: env({ tenant_crm_profiles: { customer_id: `CUSTOMER-${status}`, status } }),
       tenantSlug: 'acme',
       verifiedUserUid: `U-customer-${status}`,
     });
@@ -263,7 +286,7 @@ test('tenant slug validation rejects unsafe boundaries without demo fallback', a
     verifiedUserUid: 'U-demo',
   });
   assert.equal(explicitDemo.primaryRole, 'unassigned');
-  assert.equal(database.calls.length, 3);
+  assert.equal(database.calls.length, 4);
   for (const call of database.calls) assert.deepEqual(call.values, ['demo', 'U-demo']);
 });
 
@@ -272,12 +295,13 @@ test('successful output contains identity fields only, never raw fact rows', asy
     env: env({
       tenant_memberships: { role: 'tenant_admin', status: 'active', permissions_json: '{"secret":true}' },
       tenant_distributor_profiles: { status: 'approved', internal_note: 'private' },
-      tenant_crm_profiles: { status: 'open', phone: '0900000000' },
+      tenant_crm_profiles: { customer_id: 'CUSTOMER-output', status: 'open', phone: '0900000000' },
+      customers: { customer_id: 'CUSTOMER-output', customer_line_uid: 'U-output', owner_uid: 'U-owner-secret' },
     }),
     tenantSlug: 'acme',
     verifiedUserUid: 'U-output',
   });
 
   assert.deepEqual(Object.keys(identity).sort(), ['primaryRole', 'roles', 'tenantSlug']);
-  assert.doesNotMatch(JSON.stringify(identity), /permissions_json|internal_note|0900000000|U-output/i);
+  assert.doesNotMatch(JSON.stringify(identity), /permissions_json|internal_note|0900000000|U-output|U-owner-secret/i);
 });
