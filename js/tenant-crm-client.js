@@ -174,7 +174,6 @@
         : '<option value="">目前沒有其他可指派業務</option>';
       controls.hidden = false;
       openButton.hidden = true;
-      renderAttributionPanel();
     } catch (error) {
       openButton.disabled = false;
       openButton.textContent = '移交負責人';
@@ -202,8 +201,7 @@
     try {
       await client.transferOwner(customerIdOf(customer), targetUid);
       global.alert('服務負責人已完成移交。原始介紹人與歷史訂單未變更。');
-      const result = await client.load();
-      lastCrmResult = result || lastCrmResult;
+      await client.load();
       global.location.reload();
     } catch (error) {
       if (button) {
