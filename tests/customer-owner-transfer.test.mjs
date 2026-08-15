@@ -14,6 +14,7 @@ class Statement {
   constructor(db, sql) { this.db = db; this.sql = sql; this.args = []; }
   bind(...args) { this.args = args; return this; }
   first() { return this.db.first(this.sql, this.args); }
+  all() { return this.db.all(this.sql, this.args); }
   run() { return this.db.run(this.sql, this.args); }
 }
 
@@ -24,6 +25,13 @@ class TransferDb {
     this.sameOwner = sameOwner;
     this.batches = [];
     this.runs = [];
+    this.historyRows = [{
+      actor_uid: 'U-ADMIN',
+      before_json: JSON.stringify({ owner_uid: 'U-OLD', owner_name: 'Old Sales' }),
+      after_json: JSON.stringify({ owner_uid: 'U-TARGET', owner_name: 'Target Sales' }),
+      request_id: 'REQ-OWNER-1',
+      created_at: '2026-08-15 11:20:00',
+    }];
   }
   prepare(sql) { return new Statement(this, sql); }
   async first(sql, args) {
@@ -48,6 +56,16 @@ class TransferDb {
       return null;
     }
     return null;
+  }
+  async all(sql, args) {
+    if (sql.includes('FROM audit_logs')) {
+      assert.deepEqual(args, ['acme', 'CUS-1']);
+      assert.match(sql, /action = 'customer\.owner\.transfer'/);
+      assert.match(sql, /target_type = 'customer'/);
+      assert.match(sql, /ORDER BY created_at DESC/);
+      return { results: this.historyRows };
+    }
+    return { results: [] };
   }
   async run(sql, args) {
     this.runs.push({ sql, args });
@@ -76,8 +94,19 @@ function transferRequest(body = { owner_uid: 'U-TARGET' }) {
   });
 }
 
-test('owner transfer route is explicit and does not replace regular CRM editing', () => {
+function historyRequest() {
+  return new Request('https://worker.example/api/v2/customers/CUS-1/owner-transfer-history?tenant=acme', {
+    method: 'GET',
+    headers: {
+      'X-Tenant-Slug': 'acme',
+      'X-User-Uid': 'U-ADMIN',
+    },
+  });
+}
+
+test('owner transfer routes are explicit and do not replace regular CRM editing', () => {
   assert.equal(isTenantOrderActionRequest(new Request('https://x/api/v2/customers/CUS-1/owner-transfer')), true);
+  assert.equal(isTenantOrderActionRequest(new Request('https://x/api/v2/customers/CUS-1/owner-transfer-history')), true);
   assert.equal(isTenantOrderActionRequest(new Request('https://x/api/v2/customers/CUS-1')), false);
 });
 
@@ -107,6 +136,30 @@ test('tenant admin can transfer service owner without changing original referrer
   assert.deepEqual(JSON.parse(auditInsert.args[4]), { owner_uid: 'U-OLD', owner_name: 'Old Sales' });
   assert.deepEqual(JSON.parse(auditInsert.args[5]), { owner_uid: 'U-TARGET', owner_name: 'Target Sales' });
   assert.doesNotMatch(auditInsert.args[4] + auditInsert.args[5], /ref_uid|phone|line|email/i);
+});
+
+test('tenant admin can read sanitized owner transfer history', async () => {
+  const response = await routeTenantOrderAction(historyRequest(), { DB: new TransferDb() });
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.customer_id, 'CUS-1');
+  assert.deepEqual(payload.data, [{
+    actor_uid: 'U-ADMIN',
+    from_owner_uid: 'U-OLD',
+    from_owner_name: 'Old Sales',
+    to_owner_uid: 'U-TARGET',
+    to_owner_name: 'Target Sales',
+    request_id: 'REQ-OWNER-1',
+    created_at: '2026-08-15 11:20:00',
+  }]);
+  assert.doesNotMatch(JSON.stringify(payload), /before_json|after_json|phone|email|line_user_uid/i);
+});
+
+test('non-admin role cannot read owner transfer history', async () => {
+  const response = await routeTenantOrderAction(historyRequest(), { DB: new TransferDb({ actorRole: 'sales' }) });
+  const payload = await response.json();
+  assert.equal(response.status, 403);
+  assert.equal(payload.error, 'TENANT_ROLE_DENIED');
 });
 
 test('owner transfer rejects a target that is not active sales or editor in the same tenant', async () => {
@@ -147,7 +200,7 @@ test('Attribution V1 projection trigger propagates canonical owner changes to CR
 test('owner transfer implementation never updates order distributor or customer referrer', async () => {
   const source = await readFile(sourceUrl, 'utf8');
   const start = source.indexOf('async function transferCustomerOwner');
-  const end = source.indexOf('export function isTenantOrderActionRequest');
+  const end = source.indexOf('async function listCustomerOwnerTransferHistory');
   const block = source.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.doesNotMatch(block, /UPDATE orders/);
