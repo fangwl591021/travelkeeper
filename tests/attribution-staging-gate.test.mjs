@@ -7,6 +7,7 @@ import {
   coreIntegritySql,
   parsePendingMigrations,
   isSafePendingSequence,
+  quotePowerShellArg,
   staticPlan,
 } from '../scripts/attribution-staging-gate.mjs';
 
@@ -60,6 +61,14 @@ test('pending migration gate accepts only the expected attribution tail', () => 
   assert.equal(isSafePendingSequence(['9999_unknown.sql']), false);
 });
 
+test('PowerShell argument quoting preserves embedded single quotes for Windows Wrangler commands', () => {
+  assert.equal(quotePowerShellArg('staging'), "'staging'");
+  assert.equal(
+    quotePowerShellArg("SELECT name FROM sqlite_master WHERE name='customers'"),
+    "'SELECT name FROM sqlite_master WHERE name=''customers'''",
+  );
+});
+
 test('static staging plan targets the distinct staging D1 binding and never production', () => {
   const plan = staticPlan();
   assert.equal(plan.safe, true);
@@ -83,6 +92,13 @@ test('remote smoke implementation uses staging env, remote D1 and JSON read quer
   assert.match(source, /scope: 'all-tenants'/);
   assert.match(source, /remote_d1_mutated: false/);
   assert.match(source, /production_touched: false/);
+});
+
+test('Windows Wrangler launch uses PowerShell instead of direct spawn of npx.cmd', async () => {
+  const source = await readFile(gateUrl, 'utf8');
+  assert.match(source, /spawnSync\('powershell\.exe'/);
+  assert.match(source, /`& npx\.cmd \$\{wranglerArgs\.map\(quotePowerShellArg\)\.join\(' '\)\}`/);
+  assert.doesNotMatch(source, /const command = process\.platform === 'win32' \? 'npx\.cmd'/);
 });
 
 test('pending review only runs migrations list against staging remote binding', async () => {
