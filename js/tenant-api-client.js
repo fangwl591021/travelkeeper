@@ -3,6 +3,9 @@
 
   const DEFAULT_WORKER_URL = 'https://travelkeeper-worker.fangwl591021.workers.dev';
   const DEFAULT_TENANT = 'demo';
+  let bookingFirstTouchPromise = null;
+  let bookingFirstTouchError = null;
+  let bookingFirstTouchResult = null;
 
   function normalizeTenantSlug(value, fallback = DEFAULT_TENANT) {
     const slug = String(value || '').trim().toLowerCase();
@@ -25,7 +28,11 @@
 
   function getLiffAccessToken() {
     if (!global.liff || typeof global.liff.getAccessToken !== 'function') return '';
-    return String(global.liff.getAccessToken() || '').trim();
+    try {
+      return String(global.liff.getAccessToken() || '').trim();
+    } catch (_) {
+      return '';
+    }
   }
 
   async function parseResponse(response) {
@@ -68,6 +75,13 @@
       INVALID_TENANT_SLUG: '業者識別碼格式錯誤。',
       INVALID_BOOKING_PAYLOAD: '預約資料不完整，請確認姓名、電話與行程。',
       CUSTOMER_PHONE_TENANT_CONFLICT: '此電話已存在於另一個業者空間，暫時無法建立預約，請聯絡客服協助。',
+      CUSTOMER_LINE_IDENTITY_CONFLICT: '此客戶資料已綁定其他 LINE 身分，為保護歸屬請聯絡客服協助。',
+      ATTRIBUTION_FIRST_TOUCH_CONFLICT: '此會員已有較早的原始介紹人紀錄，系統已保留最初歸屬。',
+      ATTRIBUTION_CUSTOMER_LINK_CONFLICT: 'LINE 與正式客戶綁定資料不一致，請聯絡管理員確認。',
+      REFERRAL_TOKEN_REQUIRED: '此分享連結缺少安全推薦憑證，請重新取得業務分享連結。',
+      INVALID_REFERRAL_TOKEN: '此推薦連結無效，請重新取得業務分享連結。',
+      EXPIRED_REFERRAL_TOKEN: '此推薦連結已過期，請重新取得最新分享連結。',
+      REFERRAL_TOKEN_CONTEXT_MISMATCH: '推薦連結與目前行程或業者不一致，請重新取得分享連結。',
       ORDER_NOT_FOUND: '找不到此訂單。',
       ORDER_CUSTOMER_MISMATCH: '此訂單不屬於目前登入的 LINE 帳號。',
       PAYMENT_AMOUNT_INVALID: '付款金額不正確，請聯絡業務人員。',
@@ -163,6 +177,73 @@
     }
   }
 
+  function bookingFirstTouchConfig() {
+    const path = String(global.location?.pathname || '').toLowerCase();
+    if (!path.endsWith('/booking.html') && path !== 'booking.html') return null;
+    const params = new URLSearchParams(global.location?.search || '');
+    const referralToken = String(params.get('rt') || params.get('referral_token') || '').trim();
+    const itineraryId = String(params.get('itinerary') || '').trim();
+    if (!referralToken || !itineraryId) return null;
+    return {
+      tenantSlug: resolveTenantSlug(global.location?.search || ''),
+      itinerary_id: itineraryId,
+      referral_token: referralToken,
+      share_id: String(params.get('sid') || params.get('share_id') || params.get('shareId') || '').trim(),
+    };
+  }
+
+  async function waitForLiffAccessToken(timeoutMs = 20000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const token = getLiffAccessToken();
+      if (token) return token;
+      await new Promise(resolve => global.setTimeout(resolve, 250));
+    }
+    return '';
+  }
+
+  async function captureFirstTouch(data, tenantSlug) {
+    return apiFetch('/api/v2/attribution/first-touch', {
+      tenantSlug,
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async function runBookingFirstTouchCapture({ waitForLogin = true } = {}) {
+    const config = bookingFirstTouchConfig();
+    if (!config) return null;
+    if (bookingFirstTouchResult) return bookingFirstTouchResult;
+    if (bookingFirstTouchError) throw bookingFirstTouchError;
+
+    if (waitForLogin && !getLiffAccessToken()) {
+      const token = await waitForLiffAccessToken();
+      if (!token) return null;
+    }
+
+    try {
+      bookingFirstTouchResult = await captureFirstTouch({
+        itinerary_id: config.itinerary_id,
+        referral_token: config.referral_token,
+        share_id: config.share_id,
+      }, config.tenantSlug);
+      return bookingFirstTouchResult;
+    } catch (error) {
+      bookingFirstTouchError = error;
+      throw error;
+    }
+  }
+
+  function startBookingFirstTouchCapture() {
+    if (!bookingFirstTouchConfig() || bookingFirstTouchPromise) return;
+    bookingFirstTouchPromise = runBookingFirstTouchCapture({ waitForLogin: true })
+      .catch(error => {
+        bookingFirstTouchError = error;
+        console.warn('[first-touch] booking landing capture failed:', error?.code || error?.message || error);
+        return null;
+      });
+  }
+
   const client = {
     DEFAULT_WORKER_URL,
     normalizeTenantSlug,
@@ -170,6 +251,7 @@
     getLiffAccessToken,
     friendlyError,
     apiFetch,
+    captureFirstTouch,
 
     getPublicTenant(tenantSlug) {
       return apiFetch('/api/v2/tenant/public', { tenantSlug, public: true });
@@ -278,7 +360,12 @@
       });
     },
 
-    createBooking(data, tenantSlug) {
+    async createBooking(data, tenantSlug) {
+      if (bookingFirstTouchPromise) await bookingFirstTouchPromise;
+      if (bookingFirstTouchError) throw bookingFirstTouchError;
+      if (bookingFirstTouchConfig() && !bookingFirstTouchResult) {
+        await runBookingFirstTouchCapture({ waitForLogin: false });
+      }
       return apiFetch('/api/v2/bookings', {
         tenantSlug,
         method: 'POST',
@@ -319,4 +406,5 @@
   };
 
   global.TravelKeeperTenantApi = client;
+  startBookingFirstTouchCapture();
 })(window);
