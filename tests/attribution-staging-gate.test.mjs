@@ -5,6 +5,8 @@ import { readFile } from 'node:fs/promises';
 import {
   validateReadOnlySql,
   coreIntegritySql,
+  parsePendingMigrations,
+  isSafePendingSequence,
   staticPlan,
 } from '../scripts/attribution-staging-gate.mjs';
 
@@ -34,6 +36,30 @@ test('core staging integrity scan covers all tenants instead of hard-coding demo
   assert.match(sql, /c\.tenant_slug = p\.tenant_slug/);
 });
 
+test('pending migration parser extracts Wrangler migration filenames in order without duplicates', () => {
+  const output = `Migrations to be applied:\n0115_attribution_contract_v1.sql\n0116_tenant_first_touch_attribution.sql\n0116_tenant_first_touch_attribution.sql`;
+  assert.deepEqual(parsePendingMigrations(output), [
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ]);
+});
+
+test('pending migration gate accepts only the expected attribution tail', () => {
+  assert.equal(isSafePendingSequence([]), true);
+  assert.equal(isSafePendingSequence(['0116_tenant_first_touch_attribution.sql']), true);
+  assert.equal(isSafePendingSequence([
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ]), true);
+  assert.equal(isSafePendingSequence(['0115_attribution_contract_v1.sql']), false);
+  assert.equal(isSafePendingSequence([
+    '0114_d1_tenant_integrity_compat.sql',
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ]), false);
+  assert.equal(isSafePendingSequence(['9999_unknown.sql']), false);
+});
+
 test('static staging plan targets the distinct staging D1 binding and never production', () => {
   const plan = staticPlan();
   assert.equal(plan.safe, true);
@@ -59,6 +85,13 @@ test('remote smoke implementation uses staging env, remote D1 and JSON read quer
   assert.match(source, /production_touched: false/);
 });
 
+test('pending review only runs migrations list against staging remote binding', async () => {
+  const source = await readFile(gateUrl, 'utf8');
+  assert.match(source, /'d1', 'migrations', 'list', D1_BINDING/);
+  assert.match(source, /mode: 'staging-pending-migration-review'/);
+  assert.match(source, /decision: safe \? 'REVIEWED' : 'NO-GO'/);
+});
+
 test('migration apply is only printed for human review and is never passed to runWrangler', async () => {
   const source = await readFile(gateUrl, 'utf8');
   assert.match(source, /apply_after_human_review: 'npx wrangler d1 migrations apply DB --env staging --remote'/);
@@ -67,9 +100,10 @@ test('migration apply is only printed for human review and is never passed to ru
   assert.doesNotMatch(runWranglerCalls, /deploy/);
 });
 
-test('package exposes separate static gate and read-only remote smoke commands', async () => {
+test('package exposes static, pending-review and read-only remote smoke commands', async () => {
   const pkg = JSON.parse(await readFile(packageUrl, 'utf8'));
   assert.equal(pkg.scripts['staging:attribution-gate'], 'node scripts/attribution-staging-gate.mjs');
+  assert.equal(pkg.scripts['staging:attribution-pending'], 'node scripts/attribution-staging-gate.mjs --pending');
   assert.equal(pkg.scripts['staging:attribution-smoke'], 'node scripts/attribution-staging-gate.mjs --remote');
   assert.equal(Object.values(pkg.scripts).some(value => /migrations apply.*--remote/i.test(value)), false);
   assert.equal(Object.values(pkg.scripts).some(value => /wrangler deploy(?!.*dry-run)/i.test(value)), false);
