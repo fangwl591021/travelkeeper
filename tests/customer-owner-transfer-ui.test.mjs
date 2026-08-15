@@ -47,8 +47,10 @@ test('owner transfer history UI shows only sanitized audit fields', async () => 
   assert.match(source, /查看交接紀錄/);
   assert.match(source, /item\.created_at/);
   assert.match(source, /item\.actor_uid/);
-  assert.match(source, /from_owner_name/);
-  assert.match(source, /to_owner_name/);
+  assert.match(source, /\$\{prefix\}_owner_name/);
+  assert.match(source, /\$\{prefix\}_owner_uid/);
+  assert.match(source, /historyOwnerLabel\(item, 'from'\)/);
+  assert.match(source, /historyOwnerLabel\(item, 'to'\)/);
   assert.match(source, /item\.request_id/);
   assert.doesNotMatch(source, /phone|line_user_uid|email/);
 });
