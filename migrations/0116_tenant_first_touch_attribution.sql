@@ -71,3 +71,57 @@ BEFORE UPDATE ON tenant_first_touch_attributions
 BEGIN
   SELECT RAISE(ABORT, 'ATTRIBUTION_FIRST_TOUCH_IMMUTABLE');
 END;
+
+-- Attribution Contract V1 originally required the referrer to be active at the
+-- moment a customer row is written. After first-touch capture, that would erase
+-- legitimate history when the referrer later becomes suspended/revoked before
+-- the customer formally books. Replace those validation triggers so a referrer
+-- is valid when either:
+--   1) the exact tenant + LINE UID + referrer was canonically captured earlier; or
+--   2) the referrer is currently an active sales/editor member (legacy/direct path).
+DROP TRIGGER IF EXISTS trg_customers_referrer_insert;
+DROP TRIGGER IF EXISTS trg_customers_referrer_update;
+
+CREATE TRIGGER IF NOT EXISTS trg_customers_referrer_insert
+BEFORE INSERT ON customers
+WHEN NEW.ref_uid <> ''
+  AND NOT EXISTS (
+    SELECT 1
+    FROM tenant_first_touch_attributions f
+    WHERE f.tenant_slug = NEW.tenant_slug
+      AND NEW.customer_line_uid <> ''
+      AND f.line_user_uid = NEW.customer_line_uid
+      AND f.ref_uid = NEW.ref_uid
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM tenant_memberships m
+    WHERE m.tenant_slug = NEW.tenant_slug
+      AND m.user_uid = NEW.ref_uid
+      AND m.status = 'active'
+      AND m.role IN ('sales', 'editor')
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'ATTRIBUTION_REFERRER_TENANT_MISMATCH');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_customers_referrer_update
+BEFORE UPDATE OF tenant_slug, customer_line_uid, ref_uid ON customers
+WHEN NEW.ref_uid <> ''
+  AND NOT EXISTS (
+    SELECT 1
+    FROM tenant_first_touch_attributions f
+    WHERE f.tenant_slug = NEW.tenant_slug
+      AND NEW.customer_line_uid <> ''
+      AND f.line_user_uid = NEW.customer_line_uid
+      AND f.ref_uid = NEW.ref_uid
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM tenant_memberships m
+    WHERE m.tenant_slug = NEW.tenant_slug
+      AND m.user_uid = NEW.ref_uid
+      AND m.status = 'active'
+      AND m.role IN ('sales', 'editor')
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'ATTRIBUTION_REFERRER_TENANT_MISMATCH');
+END;
