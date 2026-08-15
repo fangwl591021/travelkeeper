@@ -35,10 +35,28 @@ class Db {
       balance_collect: 'online', commission_mode: 'amount', commission_amount: 100,
       review_status: 'published', deleted_at: '', expire_at: '',
     };
-    if (sql.includes('FROM tenant_distributor_profiles')) return {
-      user_uid: 'U-SELLER-B', display_name: 'Seller B', invite_code: 'SELLERB',
-      role: 'sales', status: 'active',
-    };
+    if (sql.includes('FROM tenant_distributor_profiles')) {
+      const key = args[1];
+      if (key === 'SELLERB' || key === 'U-SELLER-B') {
+        return {
+          user_uid: 'U-SELLER-B', display_name: 'Seller B', invite_code: 'SELLERB',
+          role: 'sales', status: 'active',
+        };
+      }
+      if (key === 'U-REF-A') {
+        return {
+          user_uid: 'U-REF-A', display_name: 'Referrer A', invite_code: 'REFA',
+          role: 'sales', status: 'active',
+        };
+      }
+      if (key === 'U-OWNER-A') {
+        return {
+          user_uid: 'U-OWNER-A', display_name: 'Owner A', invite_code: 'OWNERA',
+          role: 'sales', status: 'active',
+        };
+      }
+      return null;
+    }
     if (sql.includes('COALESCE(NULLIF(contact_phone')) return this.customer;
     if (sql.includes('FROM tenant_crm_profiles')) return this.profile;
     if (sql.includes('FROM customers') && sql.includes('WHERE customer_phone = ?')) return null;
@@ -74,6 +92,16 @@ test('Attribution migration separates referrer, owner, and per-order distributor
   assert.match(migration, /m\.tenant_slug = NEW\.tenant_slug/);
 });
 
+test('CRM projection reads canonical customer referrer and never substitutes owner as referrer', async () => {
+  const source = await read('lib/tenant-crm-api.js');
+  assert.match(source, /const refUid = customer\.ref_uid \|\| profile\.ref_uid \|\| ''/);
+  assert.match(source, /ref_uid: row\.ref_uid \|\| row\.p_ref_uid \|\| ''/);
+  assert.doesNotMatch(source, /refUid:\s*profile\.ref_uid\s*\|\|\s*ownerUid/);
+  assert.doesNotMatch(source, /row\.p_ref_uid\s*\|\|\s*row\.owner_uid/);
+  assert.match(source, /ATTRIBUTION_OWNER_CONFLICT/);
+  assert.match(source, /ATTRIBUTION_REFERRER_CONFLICT/);
+});
+
 test('existing customer cannot be claimed by another LINE UID just because phone matches', async () => {
   const db = new Db({
     customer: {
@@ -96,14 +124,17 @@ test('repeat booking preserves original referrer and owner while order records c
     },
   });
   const response = await routeTenantBookingApi(bookingRequest(), { DB: db }, { fetch: async () => new Response('{}') });
+  const payload = await response.json();
   assert.equal(response.status, 201);
+  assert.equal(payload.data.ref_uid, 'U-REF-A');
+  assert.equal(payload.data.owner_uid, 'U-OWNER-A');
   assert.equal(db.batches.length, 1);
   const [customerWrite, orderWrite, crmLink] = db.batches[0];
   assert.match(customerWrite.sql, /ref_uid = CASE WHEN COALESCE\(ref_uid, ''\) = '' THEN \? ELSE ref_uid END/);
-  assert.equal(customerWrite.args[4], 'U-SELLER-B');
+  assert.equal(customerWrite.args[4], 'U-OWNER-A');
   assert.equal(customerWrite.args[6], 'U-REF-A');
   assert.equal(orderWrite.args[4], 'U-SELLER-B');
-  assert.match(crmLink.sql, /ref_uid = CASE WHEN ref_uid = '' THEN \? ELSE ref_uid END/);
+  assert.match(crmLink.sql, /ref_uid = \?/);
   assert.equal(crmLink.args[1], 'U-REF-A');
   assert.equal(crmLink.args[2], 'U-OWNER-A');
 });
@@ -111,7 +142,10 @@ test('repeat booking preserves original referrer and owner while order records c
 test('new customer receives first valid distributor as both initial referrer and initial owner', async () => {
   const db = new Db();
   const response = await routeTenantBookingApi(bookingRequest(), { DB: db }, { fetch: async () => new Response('{}') });
+  const payload = await response.json();
   assert.equal(response.status, 201);
+  assert.equal(payload.data.ref_uid, 'U-SELLER-B');
+  assert.equal(payload.data.owner_uid, 'U-SELLER-B');
   const [customerWrite, orderWrite, crmLink] = db.batches[0];
   assert.match(customerWrite.sql, /owner_name, ref_uid/);
   assert.equal(customerWrite.args[3], 'U-SELLER-B');
@@ -119,4 +153,25 @@ test('new customer receives first valid distributor as both initial referrer and
   assert.equal(orderWrite.args[4], 'U-SELLER-B');
   assert.equal(crmLink.args[1], 'U-SELLER-B');
   assert.equal(crmLink.args[2], 'U-SELLER-B');
+});
+
+test('existing LINE lead keeps first-touch referrer even when first booking is sold by another distributor', async () => {
+  const db = new Db({
+    profile: {
+      id: 'CRM-LINE-1', customer_id: '', ref_uid: 'U-REF-A', owner_uid: 'U-OWNER-A',
+    },
+  });
+  const response = await routeTenantBookingApi(bookingRequest(), { DB: db }, { fetch: async () => new Response('{}') });
+  const payload = await response.json();
+  assert.equal(response.status, 201);
+  assert.equal(payload.data.distributor_uid, 'U-SELLER-B');
+  assert.equal(payload.data.ref_uid, 'U-REF-A');
+  assert.equal(payload.data.owner_uid, 'U-OWNER-A');
+
+  const [customerWrite, orderWrite, crmLink] = db.batches[0];
+  assert.equal(customerWrite.args[3], 'U-OWNER-A');
+  assert.equal(customerWrite.args[5], 'U-REF-A');
+  assert.equal(orderWrite.args[4], 'U-SELLER-B');
+  assert.equal(crmLink.args[1], 'U-REF-A');
+  assert.equal(crmLink.args[2], 'U-OWNER-A');
 });
