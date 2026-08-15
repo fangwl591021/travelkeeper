@@ -120,13 +120,25 @@ function parseWranglerJson(output) {
   return parsed.flatMap(item => Array.isArray(item?.results) ? item.results : []);
 }
 
+export function quotePowerShellArg(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 function runWrangler(args) {
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const result = spawnSync(command, ['wrangler', ...args], {
+  const wranglerArgs = ['wrangler', ...args];
+  const options = {
     cwd: root,
     encoding: 'utf8',
     shell: false,
-  });
+  };
+  const result = process.platform === 'win32'
+    ? spawnSync('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `& npx.cmd ${wranglerArgs.map(quotePowerShellArg).join(' ')}`,
+      ], options)
+    : spawnSync('npx', wranglerArgs, options);
   if (result.status !== 0) {
     throw new Error((result.stderr || result.stdout || result.error?.message || 'WRANGLER_FAILED').trim());
   }
