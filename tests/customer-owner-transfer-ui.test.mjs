@@ -11,6 +11,13 @@ test('CRM client exposes explicit owner transfer API and tenant distributor look
   assert.match(source, /body:\s*\{ owner_uid: ownerUid \}/);
 });
 
+test('CRM client exposes sanitized owner transfer history endpoint as read-only', async () => {
+  const source = await readFile(clientUrl, 'utf8');
+  assert.match(source, /ownerTransferHistory\(customerId\)/);
+  assert.match(source, /\/owner-transfer-history/);
+  assert.doesNotMatch(source, /before_json|after_json/);
+});
+
 test('owner transfer controls are admin-only and referrer remains read-only in UI', async () => {
   const source = await readFile(clientUrl, 'utf8');
   assert.match(source, /new Set\(\['platform_admin', 'tenant_admin'\]\)/);
@@ -33,6 +40,17 @@ test('owner transfer candidate list excludes the current owner and only presents
   assert.match(source, /uid !== currentOwner/);
   assert.match(source, /\['approved', 'active'\]\.includes/);
   assert.match(source, /請選擇新的服務負責人/);
+});
+
+test('owner transfer history UI shows only sanitized audit fields', async () => {
+  const source = await readFile(clientUrl, 'utf8');
+  assert.match(source, /查看交接紀錄/);
+  assert.match(source, /item\.created_at/);
+  assert.match(source, /item\.actor_uid/);
+  assert.match(source, /from_owner_name/);
+  assert.match(source, /to_owner_name/);
+  assert.match(source, /item\.request_id/);
+  assert.doesNotMatch(source, /phone|line_user_uid|email/);
 });
 
 test('owner transfer UI enhancement is bounded to the existing CRM detail panel', async () => {
