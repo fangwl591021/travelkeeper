@@ -32,12 +32,15 @@ test('parser rejects an incomplete trigger', () => {
 
 test('all canonical migrations parse and preserve all trigger statements', () => {
   const plan = migrationPlan(migrationsDir);
-  assert.equal(plan.migrationCount, 36);
-  assert.equal(plan.triggerCount, 37);
+  assert.equal(plan.migrationCount, 37);
+  assert.equal(plan.triggerCount, 40);
   assert.equal(plan.migrations.find((migration) => migration.file === '0114_d1_tenant_integrity_compat.sql').statementCount, 11);
   const attribution = plan.migrations.find((migration) => migration.file === '0115_attribution_contract_v1.sql');
   assert.equal(attribution.statementCount, 19);
   assert.equal(attribution.statements.filter((statement) => statement.type === 'CREATE TRIGGER').length, 11);
+  const firstTouch = plan.migrations.find((migration) => migration.file === '0116_tenant_first_touch_attribution.sql');
+  assert.equal(firstTouch.statementCount, 11);
+  assert.equal(firstTouch.statements.filter((statement) => statement.type === 'CREATE TRIGGER').length, 3);
 });
 
 test('schema equivalence fails closed on trigger loss', () => {
@@ -67,6 +70,9 @@ test('cross-tenant trigger rules are represented in canonical migrations', () =>
     ['0115_attribution_contract_v1.sql', 'trg_distributor_referrer_immutable'],
     ['0115_attribution_contract_v1.sql', 'trg_crm_referrer_customer_update'],
     ['0115_attribution_contract_v1.sql', 'trg_customer_attribution_projection_update'],
+    ['0116_tenant_first_touch_attribution.sql', 'trg_tenant_first_touch_immutable'],
+    ['0116_tenant_first_touch_attribution.sql', 'trg_customers_referrer_insert'],
+    ['0116_tenant_first_touch_attribution.sql', 'trg_customers_referrer_update'],
   ];
   const plan = migrationPlan(migrationsDir);
   for (const [file, name] of expectations) {
