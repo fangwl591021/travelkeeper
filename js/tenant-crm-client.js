@@ -47,6 +47,11 @@
       });
     },
 
+    async ownerTransferHistory(customerId) {
+      if (!customerId) throw new Error('CUSTOMER_NOT_FOUND');
+      return apiCall(`/api/v2/customers/${encodeURIComponent(customerId)}/owner-transfer-history`);
+    },
+
     async listThreads() {
       return apiCall('/api/v2/crm/threads');
     },
@@ -142,11 +147,15 @@
         ${canTransfer ? `
           <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
             <p class="text-xs font-bold text-amber-800">移交只會改變服務負責人；原始介紹人與歷史訂單歸屬保持不變。</p>
-            <button id="open-owner-transfer" type="button" class="mt-3 w-full rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black text-white hover:bg-amber-600">移交負責人</button>
+            <div class="mt-3 grid grid-cols-2 gap-2">
+              <button id="open-owner-transfer" type="button" class="rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-black text-white hover:bg-amber-600">移交負責人</button>
+              <button id="view-owner-transfer-history" type="button" class="rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm font-black text-amber-800 hover:bg-amber-100">查看交接紀錄</button>
+            </div>
             <div id="owner-transfer-controls" hidden class="mt-3 space-y-2">
               <select id="owner-transfer-target" class="w-full rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm"></select>
               <button id="confirm-owner-transfer" type="button" class="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-black text-white">確認移交</button>
             </div>
+            <div id="owner-transfer-history" hidden class="mt-3 space-y-2"></div>
           </div>` : ''}
       </section>`;
   }
@@ -178,6 +187,40 @@
       openButton.disabled = false;
       openButton.textContent = '移交負責人';
       global.alert(page.friendlyError ? page.friendlyError(error) : String(error?.message || error));
+    }
+  }
+
+  function historyOwnerLabel(item, prefix) {
+    const name = String(item?.[`${prefix}_owner_name`] || '').trim();
+    const uid = String(item?.[`${prefix}_owner_uid`] || '').trim();
+    return name ? `${name}（${uid}）` : uid || '未指派';
+  }
+
+  async function hydrateTransferHistory(customer) {
+    const container = document.getElementById('owner-transfer-history');
+    const button = document.getElementById('view-owner-transfer-history');
+    if (!container || !button) return;
+    button.disabled = true;
+    button.textContent = '讀取交接紀錄…';
+    try {
+      const result = await client.ownerTransferHistory(customerIdOf(customer));
+      const rows = result.data || [];
+      container.innerHTML = rows.length
+        ? rows.map(item => `
+            <div class="rounded-xl border border-amber-200 bg-white p-3">
+              <p class="text-[11px] font-bold text-slate-400">${escapeHtml(item.created_at || '-')} · 操作人 ${escapeHtml(item.actor_uid || '-')}</p>
+              <p class="mt-1 text-sm font-black text-slate-800">${escapeHtml(historyOwnerLabel(item, 'from'))} → ${escapeHtml(historyOwnerLabel(item, 'to'))}</p>
+              ${item.request_id ? `<p class="mt-1 break-all font-mono text-[10px] text-slate-400">${escapeHtml(item.request_id)}</p>` : ''}
+            </div>`).join('')
+        : '<p class="rounded-xl border border-dashed border-amber-200 bg-white p-3 text-xs font-bold text-slate-500">尚無服務負責人交接紀錄。</p>';
+      container.hidden = false;
+      button.textContent = container.dataset.open === '1' ? '隱藏交接紀錄' : '隱藏交接紀錄';
+      container.dataset.open = '1';
+    } catch (error) {
+      global.alert(page.friendlyError ? page.friendlyError(error) : String(error?.message || error));
+      button.textContent = '查看交接紀錄';
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -217,6 +260,25 @@
     if (openButton && !openButton.dataset.bound) {
       openButton.dataset.bound = '1';
       openButton.addEventListener('click', () => hydrateTransferControls(customer));
+    }
+    const historyButton = document.getElementById('view-owner-transfer-history');
+    if (historyButton && !historyButton.dataset.bound) {
+      historyButton.dataset.bound = '1';
+      historyButton.addEventListener('click', () => {
+        const container = document.getElementById('owner-transfer-history');
+        if (container?.dataset.open === '1' && !container.hidden) {
+          container.hidden = true;
+          container.dataset.open = '0';
+          historyButton.textContent = '查看交接紀錄';
+          return;
+        }
+        if (container?.dataset.open === '1') {
+          container.hidden = false;
+          historyButton.textContent = '隱藏交接紀錄';
+          return;
+        }
+        hydrateTransferHistory(customer);
+      });
     }
     const confirmButton = document.getElementById('confirm-owner-transfer');
     if (confirmButton && !confirmButton.dataset.bound) {
