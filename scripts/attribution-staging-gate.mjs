@@ -5,12 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
 const REMOTE = process.argv.includes('--remote');
+const PENDING = process.argv.includes('--pending');
 const STAGING_ENV = 'staging';
 const D1_BINDING = 'DB';
 const EXPECTED_STAGING_DB = 'travelkeeper-staging-v2';
 const EXPECTED_MIGRATIONS = [
   '0115_attribution_contract_v1.sql',
   '0116_tenant_first_touch_attribution.sql',
+];
+const SAFE_PENDING_SEQUENCES = [
+  [],
+  ['0116_tenant_first_touch_attribution.sql'],
+  EXPECTED_MIGRATIONS,
 ];
 const REQUIRED_TRIGGERS = [
   'trg_customers_referrer_immutable',
@@ -94,6 +100,18 @@ export function coreIntegritySql() {
   `;
 }
 
+export function parsePendingMigrations(output) {
+  const matches = String(output || '').match(/\b\d{4}_[A-Za-z0-9_.-]+\.sql\b/g) || [];
+  return [...new Set(matches)];
+}
+
+export function isSafePendingSequence(files) {
+  const value = Array.isArray(files) ? files : [];
+  return SAFE_PENDING_SEQUENCES.some(sequence =>
+    sequence.length === value.length && sequence.every((file, index) => file === value[index])
+  );
+}
+
 function parseWranglerJson(output) {
   const text = String(output || '').trim();
   if (!text) return [];
@@ -169,12 +187,36 @@ export function staticPlan() {
     staging_database_id_distinct: Boolean(stagingId) && stagingId !== productionId,
     expected_migrations: migrations,
     commands: {
+      review_pending: 'npm run staging:attribution-pending',
       list_pending: 'npx wrangler d1 migrations list DB --env staging --remote',
       apply_after_human_review: 'npx wrangler d1 migrations apply DB --env staging --remote',
       deploy_dry_run: 'npx wrangler deploy --env staging --dry-run',
       deploy_staging: 'npx wrangler deploy --env staging',
     },
     rule: 'Do not run migrations apply unless the pending list is reviewed and the target is the staging DB binding.',
+  };
+}
+
+export function pendingReview() {
+  const plan = staticPlan();
+  if (!plan.safe) throw new Error('STAGING_CONFIGURATION_UNSAFE');
+  const output = runWrangler([
+    'd1', 'migrations', 'list', D1_BINDING,
+    '--env', STAGING_ENV,
+    '--remote',
+  ]);
+  const pending = parsePendingMigrations(output);
+  const safe = isSafePendingSequence(pending);
+  return {
+    mode: 'staging-pending-migration-review',
+    remote_d1_touched: true,
+    remote_d1_mutated: false,
+    production_touched: false,
+    staging_database_name: plan.staging_database_name,
+    safe,
+    pending,
+    expected_safe_sequences: SAFE_PENDING_SEQUENCES,
+    decision: safe ? 'REVIEWED' : 'NO-GO',
   };
 }
 
@@ -220,13 +262,13 @@ export function remoteSmoke() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    const report = REMOTE ? remoteSmoke() : staticPlan();
+    const report = PENDING ? pendingReview() : (REMOTE ? remoteSmoke() : staticPlan());
     console.log(JSON.stringify(report, null, 2));
     if (report.safe === false || report.healthy === false) process.exitCode = 1;
   } catch (error) {
     console.error(JSON.stringify({
       ok: false,
-      mode: REMOTE ? 'staging-remote-read-only' : 'static-plan',
+      mode: PENDING ? 'staging-pending-migration-review' : (REMOTE ? 'staging-remote-read-only' : 'static-plan'),
       remote_d1_mutated: false,
       production_touched: false,
       error: String(error?.message || error),
