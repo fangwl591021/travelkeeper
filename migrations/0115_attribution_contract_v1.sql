@@ -171,3 +171,39 @@ WHEN OLD.ref_uid <> '' AND NEW.ref_uid <> OLD.ref_uid
 BEGIN
   SELECT RAISE(ABORT, 'ATTRIBUTION_REFERRER_CONFLICT');
 END;
+
+-- Customer remains the authority after creation and after future owner transfers.
+-- Existing LINE-only profiles are linked when the formal customer identity appears.
+CREATE TRIGGER IF NOT EXISTS trg_customer_attribution_projection_insert
+AFTER INSERT ON customers
+WHEN NEW.customer_id <> ''
+BEGIN
+  UPDATE tenant_crm_profiles
+  SET customer_id = CASE WHEN customer_id = '' THEN NEW.customer_id ELSE customer_id END,
+      ref_uid = NEW.ref_uid,
+      owner_uid = NEW.owner_uid,
+      updated_by = 'attribution-sync',
+      updated_at = datetime('now')
+  WHERE tenant_slug = NEW.tenant_slug
+    AND (
+      customer_id = NEW.customer_id OR
+      (customer_id = '' AND NEW.customer_line_uid <> '' AND line_user_uid = NEW.customer_line_uid)
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_customer_attribution_projection_update
+AFTER UPDATE OF customer_id, customer_line_uid, ref_uid, owner_uid ON customers
+WHEN NEW.customer_id <> ''
+BEGIN
+  UPDATE tenant_crm_profiles
+  SET customer_id = CASE WHEN customer_id = '' THEN NEW.customer_id ELSE customer_id END,
+      ref_uid = NEW.ref_uid,
+      owner_uid = NEW.owner_uid,
+      updated_by = 'attribution-sync',
+      updated_at = datetime('now')
+  WHERE tenant_slug = NEW.tenant_slug
+    AND (
+      customer_id = NEW.customer_id OR
+      (customer_id = '' AND NEW.customer_line_uid <> '' AND line_user_uid = NEW.customer_line_uid)
+    );
+END;
