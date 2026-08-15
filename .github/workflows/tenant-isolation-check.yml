@@ -111,3 +111,26 @@ jobs:
             tests/platform-settlement.test.mjs \
             tests/settlement-finance.test.mjs \
             tests/settlement-payment-controls.test.mjs
+
+  windows-attribution-gate-syntax:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell gate
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/attribution-staging-gate.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'PowerShell attribution gate syntax OK'
