@@ -10,6 +10,7 @@ on:
       - agent/tenant-isolation-phase1
       - feature/workspace-intent-router-v1
       - agent/attribution-contract-v1
+      - agent/first-touch-attribution-v1
 
 permissions:
   contents: read
@@ -37,6 +38,7 @@ jobs:
           node --check lib/tenant-api.js
           node --check lib/tenant-booking-api.js
           node --check lib/tenant-attribution-api.js
+          node --check lib/tenant-attribution-integrity-api.js
           node --check lib/tenant-payment-policy.js
           node --check lib/tenant-payment-api.js
           node --check lib/tenant-gateway-api.js
@@ -63,6 +65,9 @@ jobs:
 
       - name: Run first-touch attribution tests
         run: node --test tests/first-touch-attribution.test.mjs
+
+      - name: Run attribution integrity tests
+        run: node --test tests/attribution-integrity.test.mjs
 
       - name: Run attribution contract tests
         run: node --test tests/attribution-contract.test.mjs
