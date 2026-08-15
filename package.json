@@ -4,6 +4,7 @@
   "scripts": {
     "staging:migration-check": "node scripts/staging-migration-check.mjs",
     "staging:attribution-gate": "node scripts/attribution-staging-gate.mjs",
+    "staging:attribution-pending": "node scripts/attribution-staging-gate.mjs --pending",
     "staging:attribution-smoke": "node scripts/attribution-staging-gate.mjs --remote",
     "test": "node --test tests/*.test.mjs",
     "migration:plan": "node scripts/d1-remote-migration-plan.mjs",
