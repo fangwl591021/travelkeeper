@@ -47,8 +47,7 @@ export function coreIntegritySql() {
        INNER JOIN tenant_first_touch_attributions f
          ON f.tenant_slug = c.tenant_slug
         AND f.line_user_uid = c.customer_line_uid
-       WHERE c.tenant_slug = 'demo'
-         AND c.customer_line_uid <> ''
+       WHERE c.customer_line_uid <> ''
          AND c.ref_uid <> ''
          AND f.ref_uid <> c.ref_uid) AS customer_first_touch_ref_mismatch,
       (SELECT COUNT(*)
@@ -56,47 +55,41 @@ export function coreIntegritySql() {
        INNER JOIN customers c
          ON c.tenant_slug = p.tenant_slug
         AND c.customer_id = p.customer_id
-       WHERE p.tenant_slug = 'demo'
-         AND p.customer_id <> ''
+       WHERE p.customer_id <> ''
          AND COALESCE(p.ref_uid, '') <> COALESCE(c.ref_uid, '')) AS crm_customer_ref_mismatch,
       (SELECT COUNT(*)
        FROM tenant_crm_profiles p
        INNER JOIN customers c
          ON c.tenant_slug = p.tenant_slug
         AND c.customer_id = p.customer_id
-       WHERE p.tenant_slug = 'demo'
-         AND p.customer_id <> ''
+       WHERE p.customer_id <> ''
          AND COALESCE(p.owner_uid, '') <> COALESCE(c.owner_uid, '')) AS crm_customer_owner_mismatch,
       (SELECT COUNT(*)
        FROM tenant_crm_profiles p
        LEFT JOIN customers c
          ON c.tenant_slug = p.tenant_slug
         AND c.customer_id = p.customer_id
-       WHERE p.tenant_slug = 'demo'
-         AND p.customer_id <> ''
+       WHERE p.customer_id <> ''
          AND c.customer_id IS NULL) AS crm_customer_missing,
       (SELECT COUNT(*)
        FROM (
-         SELECT customer_line_uid
+         SELECT tenant_slug, customer_line_uid
          FROM customers
-         WHERE tenant_slug = 'demo'
-           AND customer_line_uid <> ''
-         GROUP BY customer_line_uid
+         WHERE customer_line_uid <> ''
+         GROUP BY tenant_slug, customer_line_uid
          HAVING COUNT(*) > 1
-       )) AS duplicate_customer_line_identity,
+       ) duplicated) AS duplicate_customer_line_identity,
       (SELECT COUNT(*)
        FROM tenant_crm_profiles p
        INNER JOIN tenant_first_touch_attributions f
          ON f.tenant_slug = p.tenant_slug
         AND f.line_user_uid = p.line_user_uid
-       WHERE p.tenant_slug = 'demo'
-         AND p.customer_id = ''
+       WHERE p.customer_id = ''
          AND p.line_user_uid <> ''
          AND COALESCE(p.ref_uid, '') <> COALESCE(f.ref_uid, '')) AS crm_first_touch_ref_mismatch,
       (SELECT COUNT(*)
        FROM tenant_distributor_profiles p
-       WHERE p.tenant_slug = 'demo'
-         AND p.ref_uid <> ''
+       WHERE p.ref_uid <> ''
          AND p.ref_uid = p.user_uid) AS partner_self_referrer
   `;
 }
@@ -211,6 +204,7 @@ export function remoteSmoke() {
 
   return {
     mode: 'staging-remote-read-only',
+    scope: 'all-tenants',
     remote_d1_touched: true,
     remote_d1_mutated: false,
     production_touched: false,
