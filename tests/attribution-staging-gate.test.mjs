@@ -7,12 +7,14 @@ import {
   coreIntegritySql,
   parsePendingMigrations,
   isSafePendingSequence,
-  quotePowerShellArg,
+  evaluateBaselineLedger,
+  reconcilePendingWithBootstrap,
   staticPlan,
 } from '../scripts/attribution-staging-gate.mjs';
 
 const gateUrl = new URL('../scripts/attribution-staging-gate.mjs', import.meta.url);
 const packageUrl = new URL('../package.json', import.meta.url);
+const manifestUrl = new URL('../artifacts/d1-bootstrap/manifest.json', import.meta.url);
 
 test('staging gate accepts read-only SQL and rejects D1 mutation statements', () => {
   assert.equal(validateReadOnlySql('SELECT COUNT(*) FROM customers'), 'SELECT COUNT(*) FROM customers');
@@ -45,7 +47,7 @@ test('pending migration parser extracts Wrangler migration filenames in order wi
   ]);
 });
 
-test('pending migration gate accepts only the expected attribution tail', () => {
+test('pending migration gate accepts only the expected attribution tail in Wrangler-native mode', () => {
   assert.equal(isSafePendingSequence([]), true);
   assert.equal(isSafePendingSequence(['0116_tenant_first_touch_attribution.sql']), true);
   assert.equal(isSafePendingSequence([
@@ -61,12 +63,85 @@ test('pending migration gate accepts only the expected attribution tail', () => 
   assert.equal(isSafePendingSequence(['9999_unknown.sql']), false);
 });
 
-test('PowerShell argument quoting preserves embedded single quotes for Windows Wrangler commands', () => {
-  assert.equal(quotePowerShellArg('staging'), "'staging'");
-  assert.equal(
-    quotePowerShellArg("SELECT name FROM sqlite_master WHERE name='customers'"),
-    "'SELECT name FROM sqlite_master WHERE name=''customers'''",
-  );
+test('bootstrap baseline ledger must exactly match the checked-in manifest', async () => {
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
+  const row = {
+    status: 'completed',
+    baseline_version: manifest.baseline_version,
+    migration_start: manifest.migration_start,
+    migration_end: manifest.migration_end,
+    migration_count: manifest.migration_count,
+    statement_count: manifest.statement_count,
+    applied_statement_count: manifest.statement_count,
+    bootstrap_checksum: manifest.bootstrap_checksum,
+    manifest_checksum: manifest.manifest_checksum,
+    schema_checksum: manifest.schema_checksum,
+    source_commit: manifest.source_commit,
+  };
+  const valid = evaluateBaselineLedger(row, manifest);
+  assert.equal(valid.safe, true);
+  const invalid = evaluateBaselineLedger({ ...row, schema_checksum: 'drift' }, manifest);
+  assert.equal(invalid.safe, false);
+  assert.equal(invalid.checks.schema_checksum, false);
+});
+
+test('full Wrangler pending list can reconcile through a trusted bootstrap ledger without allowing Wrangler apply', async () => {
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
+  const baseline = manifest.migrations.map(item => item.file);
+  const fullPending = [...baseline,
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ];
+  const result = reconcilePendingWithBootstrap(fullPending, {
+    manifest,
+    baselineTrusted: true,
+    completedForward: [],
+    forwardBlocked: false,
+  });
+  assert.equal(result.safe, true);
+  assert.equal(result.registry_mode, 'bootstrap-ledger');
+  assert.equal(result.apply_strategy, 'project-forward-ledger-required');
+  assert.equal(result.decision, 'REVIEWED_BOOTSTRAP_BASELINE');
+  assert.deepEqual(result.logical_pending, [
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ]);
+});
+
+test('bootstrap ledger completed forward migrations are removed from logical pending in order', async () => {
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
+  const baseline = manifest.migrations.map(item => item.file);
+  const result = reconcilePendingWithBootstrap([
+    ...baseline,
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ], {
+    manifest,
+    baselineTrusted: true,
+    completedForward: ['0115_attribution_contract_v1.sql'],
+    forwardBlocked: false,
+  });
+  assert.equal(result.safe, true);
+  assert.deepEqual(result.logical_pending, ['0116_tenant_first_touch_attribution.sql']);
+  assert.equal(result.apply_strategy, 'project-forward-ledger-required');
+});
+
+test('untrusted or blocked bootstrap ledger remains NO-GO', async () => {
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
+  const pending = [
+    ...manifest.migrations.map(item => item.file),
+    '0115_attribution_contract_v1.sql',
+    '0116_tenant_first_touch_attribution.sql',
+  ];
+  assert.equal(reconcilePendingWithBootstrap(pending, {
+    manifest,
+    baselineTrusted: false,
+  }).safe, false);
+  assert.equal(reconcilePendingWithBootstrap(pending, {
+    manifest,
+    baselineTrusted: true,
+    forwardBlocked: true,
+  }).safe, false);
 });
 
 test('static staging plan targets the distinct staging D1 binding and never production', () => {
@@ -80,6 +155,7 @@ test('static staging plan targets the distinct staging D1 binding and never prod
   assert.equal(plan.production_touched, false);
   assert.equal(plan.expected_migrations['0115_attribution_contract_v1.sql'].present, true);
   assert.equal(plan.expected_migrations['0116_tenant_first_touch_attribution.sql'].present, true);
+  assert.match(plan.rule, /Never run Wrangler migrations apply when pending review reports bootstrap-ledger mode/);
 });
 
 test('remote smoke implementation uses staging env, remote D1 and JSON read queries only', async () => {
@@ -94,31 +170,44 @@ test('remote smoke implementation uses staging env, remote D1 and JSON read quer
   assert.match(source, /production_touched: false/);
 });
 
-test('Windows Wrangler launch uses PowerShell instead of direct spawn of npx.cmd', async () => {
+test('baseline review is read-only and verifies the project ledger', async () => {
   const source = await readFile(gateUrl, 'utf8');
-  assert.match(source, /spawnSync\('powershell\.exe'/);
-  assert.match(source, /`& npx\.cmd \$\{wranglerArgs\.map\(quotePowerShellArg\)\.join\(' '\)\}`/);
-  assert.doesNotMatch(source, /const command = process\.platform === 'win32' \? 'npx\.cmd'/);
+  assert.match(source, /travelkeeper_project_migration_ledger/);
+  assert.match(source, /entry_type = 'baseline'/);
+  assert.match(source, /baseline\.safe/);
+  assert.match(source, /BASELINE_TRUSTED/);
+  assert.doesNotMatch(source, /UPDATE\s+travelkeeper_project_migration_ledger/i);
+  assert.doesNotMatch(source, /INSERT\s+INTO\s+travelkeeper_project_migration_ledger/i);
 });
 
-test('pending review only runs migrations list against staging remote binding', async () => {
+test('pending review only runs migrations list and read-only ledger queries against staging remote binding', async () => {
   const source = await readFile(gateUrl, 'utf8');
   assert.match(source, /'d1', 'migrations', 'list', D1_BINDING/);
   assert.match(source, /mode: 'staging-pending-migration-review'/);
-  assert.match(source, /decision: safe \? 'REVIEWED' : 'NO-GO'/);
+  assert.match(source, /registry_mode/);
+  assert.match(source, /project-forward-ledger-required/);
+});
+
+test('Windows Wrangler launch uses PowerShell with safely quoted arguments', async () => {
+  const source = await readFile(gateUrl, 'utf8');
+  assert.match(source, /process\.platform === 'win32'/);
+  assert.match(source, /spawnSync\('powershell\.exe'/);
+  assert.match(source, /npx\.cmd wrangler/);
+  assert.match(source, /replace\(\/\'\/g, "''"\)/);
 });
 
 test('migration apply is only printed for human review and is never passed to runWrangler', async () => {
   const source = await readFile(gateUrl, 'utf8');
-  assert.match(source, /apply_after_human_review: 'npx wrangler d1 migrations apply DB --env staging --remote'/);
+  assert.match(source, /wrangler_apply_only_if_registry_native: 'npx wrangler d1 migrations apply DB --env staging --remote'/);
   const runWranglerCalls = [...source.matchAll(/runWrangler\(\[([\s\S]*?)\]\)/g)].map(match => match[1]).join('\n');
   assert.doesNotMatch(runWranglerCalls, /migrations[\s\S]*apply/);
   assert.doesNotMatch(runWranglerCalls, /deploy/);
 });
 
-test('package exposes static, pending-review and read-only remote smoke commands', async () => {
+test('package exposes static, baseline, pending-review and read-only remote smoke commands', async () => {
   const pkg = JSON.parse(await readFile(packageUrl, 'utf8'));
   assert.equal(pkg.scripts['staging:attribution-gate'], 'node scripts/attribution-staging-gate.mjs');
+  assert.equal(pkg.scripts['staging:attribution-baseline'], 'node scripts/attribution-staging-gate.mjs --baseline');
   assert.equal(pkg.scripts['staging:attribution-pending'], 'node scripts/attribution-staging-gate.mjs --pending');
   assert.equal(pkg.scripts['staging:attribution-smoke'], 'node scripts/attribution-staging-gate.mjs --remote');
   assert.equal(Object.values(pkg.scripts).some(value => /migrations apply.*--remote/i.test(value)), false);
