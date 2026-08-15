@@ -1,6 +1,7 @@
 import legacyWorker from './worker.js';
 import { isTenantApiRequest, routeTenantApi } from './lib/tenant-api.js';
 import { isTenantBookingApiRequest, routeTenantBookingApi } from './lib/tenant-booking-api.js';
+import { isTenantPartnerOnboardingApiRequest, routeTenantPartnerOnboardingApi } from './lib/tenant-partner-onboarding-api.js';
 import {
   isTenantPaymentApiRequest,
   isPublicTenantPaymentRequest,
@@ -156,6 +157,10 @@ export default {
         return securedRoute(request, env, routeTenantLineMonitorApi);
       }
       if (isTenantCrmApiRequest(request)) return securedRoute(request, env, routeTenantCrmApi);
+      if (isTenantPartnerOnboardingApiRequest(request)) {
+        const securedRequest = await authenticatedTenantRequest(request, env);
+        return withTenantHeaders(await routeTenantPartnerOnboardingApi(securedRequest, env, legacyWorker), request, env);
+      }
       if (isTenantBookingApiRequest(request)) {
         const securedRequest = await authenticatedTenantRequest(request, env);
         return withTenantHeaders(await routeTenantBookingApi(securedRequest, env, legacyWorker), request, env);

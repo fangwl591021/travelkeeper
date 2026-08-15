@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>安全招募連結｜TravelKeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <main class="mx-auto max-w-xl px-4 py-8 sm:py-12">
+    <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <header class="bg-gradient-to-br from-violet-600 to-indigo-600 px-6 py-7 text-white">
+        <p class="text-xs font-black tracking-[0.2em] text-white/70">PARTNER INVITE</p>
+        <h1 class="mt-2 text-2xl font-black">安全招募夥伴</h1>
+        <p id="tenant-name" class="mt-2 text-sm font-semibold text-white/85">讀取業者資訊中…</p>
+      </header>
+
+      <div id="loading" class="px-6 py-10 text-center">
+        <div class="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-violet-100 border-t-violet-600"></div>
+        <p class="mt-4 text-sm font-bold text-slate-500">確認 LINE 身分與業務資格中…</p>
+      </div>
+
+      <div id="content" hidden class="space-y-5 px-6 py-6">
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p class="font-black text-emerald-900">這是有歸屬保護的招募連結</p>
+          <p class="mt-1 text-sm leading-6 text-emerald-800">系統會把你的 tenant、業務身分與有效期限放進簽章憑證。申請者不能靠修改網址把上線改成別人。</p>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs font-bold text-slate-400">目前招募人</p>
+          <p id="actor" class="mt-1 font-black text-slate-900">-</p>
+          <p id="invite-code" class="mt-1 text-xs font-semibold text-slate-500"></p>
+        </div>
+
+        <button id="generate" type="button" class="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-black text-white shadow-sm hover:bg-violet-700">產生新版安全招募連結</button>
+
+        <div id="result" hidden class="space-y-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+          <div>
+            <p class="text-xs font-black text-violet-500">安全招募網址</p>
+            <textarea id="invite-url" readonly rows="5" class="mt-2 w-full resize-none rounded-xl border border-violet-200 bg-white p-3 font-mono text-xs text-slate-700"></textarea>
+          </div>
+          <button id="copy" type="button" class="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white">複製招募連結</button>
+          <p id="expires" class="text-xs font-semibold text-violet-600"></p>
+        </div>
+
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+          這個連結只決定「業務上線歸屬」。申請者仍需用自己的 LINE 登入並送出申請，之後由管理員審核。轉傳舊版 <code>?r=UID</code> 不再具有歸屬權威。
+        </div>
+
+        <p id="message" hidden class="rounded-2xl border p-4 text-sm font-bold"></p>
+      </div>
+    </section>
+  </main>
+
+  <script src="./js/tenant-api-client.js"></script>
+  <script>
+    (async function () {
+      'use strict';
+      const apiClient = window.TravelKeeperTenantApi;
+      const workerUrl = location.hostname.endsWith('.workers.dev')
+        ? location.origin
+        : apiClient.DEFAULT_WORKER_URL;
+      const tenantSlug = apiClient.resolveTenantSlug(location.search);
+      const el = id => document.getElementById(id);
+      const loading = el('loading');
+      const content = el('content');
+      const generate = el('generate');
+      const message = el('message');
+      let context = null;
+
+      function api(path, options = {}) {
+        return apiClient.apiFetch(path, { tenantSlug, workerUrl, ...options });
+      }
+
+      function showMessage(text, kind = 'error') {
+        message.hidden = false;
+        message.textContent = text;
+        message.className = kind === 'success'
+          ? 'rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800'
+          : 'rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-800';
+      }
+
+      function friendly(error) {
+        const code = String(error?.code || error?.message || 'UNKNOWN_ERROR');
+        const map = {
+          TENANT_ROLE_DENIED: '只有已核准的業務／編輯者可以產生個人招募連結。',
+          DISTRIBUTOR_NOT_FOUND: '找不到你的 tenant 業務資料，請聯絡管理員。',
+          PARTNER_INVITE_SIGNING_NOT_CONFIGURED: '安全招募簽章尚未完成設定，請聯絡平台管理員。',
+          AUTH_REQUIRED: 'LINE 登入已失效，請重新開啟此頁。',
+          LINE_ACCESS_TOKEN_INVALID: 'LINE 登入憑證無效，請重新登入。',
+        };
+        return map[code] || apiClient.friendlyError(error);
+      }
+
+      function buildRegistrationUrl(token) {
+        const url = new URL('register.html', location.href);
+        url.search = '';
+        url.hash = '';
+        url.searchParams.set('tenant', tenantSlug);
+        url.searchParams.set('pit', token);
+        return url.toString();
+      }
+
+      try {
+        const tenantPayload = await api('/api/v2/tenant/public', { public: true });
+        const tenant = tenantPayload?.data || {};
+        el('tenant-name').textContent = tenant.name || tenantSlug;
+        const liffId = String(tenant.liff_id || '').trim();
+        if (!liffId) throw new Error('LIFF_ID_NOT_CONFIGURED');
+
+        await liff.init({ liffId });
+        if (!liff.isLoggedIn()) {
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+
+        const profile = await liff.getProfile();
+        context = (await api('/api/v2/tenant/context'))?.data || null;
+        if (!['sales', 'editor'].includes(String(context?.role || ''))) {
+          throw new Error('TENANT_ROLE_DENIED');
+        }
+
+        el('actor').textContent = profile.displayName || context.userUid || '合作夥伴';
+        el('invite-code').textContent = context?.profile?.invite_code
+          ? `你的業務邀請碼：${context.profile.invite_code}`
+          : '系統會使用你的 tenant 業務身分產生簽章邀請。';
+
+        loading.hidden = true;
+        content.hidden = false;
+      } catch (error) {
+        loading.hidden = true;
+        content.hidden = false;
+        generate.hidden = true;
+        showMessage(String(error?.message || '') === 'LIFF_ID_NOT_CONFIGURED'
+          ? '此業者尚未設定 LIFF，暫時無法驗證 LINE 身分。'
+          : friendly(error));
+      }
+
+      generate.addEventListener('click', async () => {
+        generate.disabled = true;
+        generate.textContent = '產生中…';
+        message.hidden = true;
+        try {
+          const payload = await api('/api/v2/partner-invites', { method: 'POST', body: {} });
+          const data = payload?.data || {};
+          const token = String(data.partner_invite_token || '').trim();
+          if (!token) throw new Error('INVALID_PARTNER_INVITE_TOKEN');
+          el('invite-url').value = buildRegistrationUrl(token);
+          const days = Math.round(Number(data.expires_in_seconds || 0) / 86400);
+          el('expires').textContent = days > 0 ? `此安全邀請約 ${days} 天後到期；到期後請重新產生。` : '';
+          el('result').hidden = false;
+        } catch (error) {
+          showMessage(friendly(error));
+        } finally {
+          generate.disabled = false;
+          generate.textContent = '重新產生安全招募連結';
+        }
+      });
+
+      el('copy').addEventListener('click', async () => {
+        const value = el('invite-url').value;
+        if (!value) return;
+        try {
+          await navigator.clipboard.writeText(value);
+          showMessage('安全招募連結已複製。', 'success');
+        } catch (_) {
+          el('invite-url').focus();
+          el('invite-url').select();
+          showMessage('瀏覽器無法自動複製，已選取網址，請手動複製。');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
