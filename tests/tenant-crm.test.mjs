@@ -58,7 +58,7 @@ class CrmDb {
       return args.at(-1) === 'CUS-PARTNER-1' ? {
         tenant_slug: 'partner-a', customer_id: 'CUS-PARTNER-1', customer_phone: 'CUSREL-PARTNER-1',
         contact_phone: '0912888777', customer_name: 'Partner Customer', customer_line_uid: 'U-CUSTOMER',
-        owner_uid: 'U-SALES', total_orders: 1, total_amount: 12000, first_order_at: '2026-07-10',
+        owner_uid: 'U-SALES', ref_uid: 'U-SALES', total_orders: 1, total_amount: 12000, first_order_at: '2026-07-10',
         last_order_at: '2026-07-11', note: '', created_at: '2026-07-10', updated_at: '2026-07-11',
       } : null;
     }
@@ -70,7 +70,7 @@ class CrmDb {
       return { results: [{
         tenant_slug: 'partner-a', customer_id: 'CUS-PARTNER-1', customer_phone: 'CUSREL-PARTNER-1',
         contact_phone: '0912888777', customer_name: 'Partner Customer', customer_line_uid: 'U-CUSTOMER',
-        owner_uid: 'U-SALES', total_orders: 1, total_amount: 12000, first_order_at: '2026-07-10',
+        owner_uid: 'U-SALES', ref_uid: 'U-SALES', total_orders: 1, total_amount: 12000, first_order_at: '2026-07-10',
         last_order_at: '2026-07-11', note: '', created_at: '2026-07-10', updated_at: '2026-07-11',
         p_id: 'CUS-PARTNER-1', p_customer_id: 'CUS-PARTNER-1', p_line_user_uid: 'U-CUSTOMER',
         p_display_name: 'Partner Customer', p_picture_url: '', p_phone: '0912888777', p_email: '',
@@ -146,6 +146,8 @@ test('tenant admin sees isolated CRM customer, order and follow-up record', asyn
   assert.equal(payload.data.length, 1);
   assert.equal(payload.data[0].phone, '0912888777');
   assert.equal(payload.data[0].customer_id, 'CUS-PARTNER-1');
+  assert.equal(payload.data[0].ref_uid, 'U-SALES');
+  assert.equal(payload.data[0].owner_uid, 'U-SALES');
   assert.equal(payload.data[0].orders[0].order_id, 'ORD-PARTNER-1');
   assert.equal(payload.data[0].latestRecord.content, '希望安排親子行程');
   assert.equal(payload.summary.follow_up_count, 1);
@@ -158,44 +160,44 @@ test('finance role cannot read sensitive CRM profile data', async () => {
   assert.equal(payload.error, 'TENANT_ROLE_DENIED');
 });
 
-test('sales cannot edit a CRM profile owned by another sales user', async () => {
+test('regular CRM edit cannot transfer a bound customer owner', async () => {
   const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-SALES', {
     method: 'POST',
     body: { owner_uid: 'U-OTHER-SALES', display_name: 'Changed' },
   }), { DB: new CrmDb() });
   const payload = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(payload.error, 'CRM_PROFILE_ACCESS_DENIED');
+  assert.equal(response.status, 409);
+  assert.equal(payload.error, 'ATTRIBUTION_OWNER_CONFLICT');
 });
 
-
-test('sales cannot overwrite an existing referral owner', async () => {
+test('regular CRM edit cannot overwrite a bound customer referrer', async () => {
   const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-SALES', {
     method: 'POST',
     body: { ref_uid: 'U-OTHER-SALES', display_name: 'Rejected referral overwrite' },
   }), { DB: new CrmDb() });
   const payload = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(payload.error, 'CRM_PROFILE_ACCESS_DENIED');
+  assert.equal(response.status, 409);
+  assert.equal(payload.error, 'ATTRIBUTION_REFERRER_CONFLICT');
 });
 
-test('tenant admin cannot assign a CRM profile to a non-sales member', async () => {
+test('tenant admin cannot use regular CRM edit to transfer owner or referrer', async () => {
   const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-ADMIN', {
     method: 'POST',
     body: { owner_uid: 'U-FIN', ref_uid: 'U-FIN', display_name: 'Rejected reassignment' },
   }), { DB: new CrmDb() });
   const payload = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(payload.error, 'CRM_PROFILE_ACCESS_DENIED');
+  assert.equal(response.status, 409);
+  assert.equal(payload.error, 'ATTRIBUTION_OWNER_CONFLICT');
 });
 
-test('tenant admin can assign a CRM profile to an active same-tenant sales member', async () => {
+test('tenant admin can edit a bound CRM profile when canonical owner and referrer are unchanged', async () => {
   const response = await routeTenantCrmApi(request('/api/v2/crm/profiles/CUS-PARTNER-1', 'U-ADMIN', {
     method: 'POST',
-    body: { owner_uid: 'U-SALES', ref_uid: 'U-SALES', display_name: 'Accepted reassignment' },
+    body: { owner_uid: 'U-SALES', ref_uid: 'U-SALES', display_name: 'Accepted profile edit' },
   }), { DB: new CrmDb() });
   assert.equal(response.status, 200);
 });
+
 test('same-tenant LINE-only profile creation returns a precise conflict', async () => {
   const response = await routeTenantCrmApi(request('/api/v2/crm/profiles', 'U-ADMIN', {
     method: 'POST',
@@ -205,11 +207,14 @@ test('same-tenant LINE-only profile creation returns a precise conflict', async 
   assert.equal(response.status, 409);
   assert.equal(payload.error, 'CRM_LINE_UID_CONFLICT');
 });
+
 test('CRM error codes map to precise HTTP status', () => {
   assert.equal(statusForError('CRM_PROFILE_ACCESS_DENIED'), 403);
   assert.equal(statusForError('CRM_PROFILE_NOT_FOUND'), 404);
   assert.equal(statusForError('INVALID_CRM_STAGE'), 400);
   assert.equal(statusForError('CRM_LINE_UID_CONFLICT'), 409);
+  assert.equal(statusForError('ATTRIBUTION_OWNER_CONFLICT'), 409);
+  assert.equal(statusForError('ATTRIBUTION_REFERRER_CONFLICT'), 409);
 });
 
 test('CRM source always scopes customer, order, profile and record reads by tenant', async () => {
