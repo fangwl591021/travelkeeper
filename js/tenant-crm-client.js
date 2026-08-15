@@ -24,6 +24,19 @@
       return apiCall(path, { method: 'POST', body: data });
     },
 
+    async listDistributors() {
+      return apiCall('/api/v2/distributors');
+    },
+
+    async transferOwner(customerId, ownerUid) {
+      if (!customerId) throw new Error('CUSTOMER_NOT_FOUND');
+      if (!ownerUid) throw new Error('OWNER_TRANSFER_TARGET_REQUIRED');
+      return apiCall(`/api/v2/customers/${encodeURIComponent(customerId)}/owner-transfer`, {
+        method: 'POST',
+        body: { owner_uid: ownerUid },
+      });
+    },
+
     async listThreads() {
       return apiCall('/api/v2/crm/threads');
     },
