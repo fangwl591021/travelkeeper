@@ -32,9 +32,12 @@ test('parser rejects an incomplete trigger', () => {
 
 test('all canonical migrations parse and preserve all trigger statements', () => {
   const plan = migrationPlan(migrationsDir);
-  assert.equal(plan.migrationCount, 35);
-  assert.equal(plan.triggerCount, 26);
+  assert.equal(plan.migrationCount, 36);
+  assert.equal(plan.triggerCount, 35);
   assert.equal(plan.migrations.find((migration) => migration.file === '0114_d1_tenant_integrity_compat.sql').statementCount, 11);
+  const attribution = plan.migrations.find((migration) => migration.file === '0115_attribution_contract_v1.sql');
+  assert.equal(attribution.statementCount, 17);
+  assert.equal(attribution.statements.filter((statement) => statement.type === 'CREATE TRIGGER').length, 9);
 });
 
 test('schema equivalence fails closed on trigger loss', () => {
@@ -60,6 +63,9 @@ test('cross-tenant trigger rules are represented in canonical migrations', () =>
     ['0104_platform_collection_settlements.sql', 'trg_platform_collection_payables_tenant_insert'],
     ['0106_settlement_accounts_and_proofs.sql', 'trg_settlement_proof_tenant_insert'],
     ['0101_tenant_profiles_and_relations.sql', 'trg_payout_batch_orders_tenant_insert'],
+    ['0115_attribution_contract_v1.sql', 'trg_customers_referrer_immutable'],
+    ['0115_attribution_contract_v1.sql', 'trg_distributor_referrer_immutable'],
+    ['0115_attribution_contract_v1.sql', 'trg_crm_referrer_customer_update'],
   ];
   const plan = migrationPlan(migrationsDir);
   for (const [file, name] of expectations) {
