@@ -9,6 +9,7 @@ on:
       - main
       - agent/tenant-isolation-phase1
       - feature/workspace-intent-router-v1
+      - agent/attribution-contract-v1
 
 permissions:
   contents: read
@@ -35,6 +36,8 @@ jobs:
           node --check lib/line-auth.js
           node --check lib/tenant-api.js
           node --check lib/tenant-booking-api.js
+          node --check lib/partner-invite-token.js
+          node --check lib/tenant-partner-onboarding-api.js
           node --check lib/tenant-payment-policy.js
           node --check lib/tenant-payment-api.js
           node --check lib/tenant-gateway-api.js
@@ -57,6 +60,9 @@ jobs:
           node --check js/tenant-line-client.js
           node --check js/tenant-line-monitor-page.js
           node --check js/settlement-finance-client.js
+
+      - name: Run partner onboarding attribution tests
+        run: node --test tests/partner-onboarding-attribution.test.mjs
 
       - name: Run attribution contract tests
         run: node --test tests/attribution-contract.test.mjs
