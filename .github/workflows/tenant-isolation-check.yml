@@ -11,6 +11,7 @@ on:
       - feature/workspace-intent-router-v1
       - agent/attribution-contract-v1
       - agent/first-touch-attribution-v1
+      - agent/attribution-integrity-v1
 
 permissions:
   contents: read
@@ -62,12 +63,16 @@ jobs:
           node --check js/tenant-line-client.js
           node --check js/tenant-line-monitor-page.js
           node --check js/settlement-finance-client.js
+          node --check scripts/attribution-staging-gate.mjs
 
       - name: Run first-touch attribution tests
         run: node --test tests/first-touch-attribution.test.mjs
 
       - name: Run attribution integrity tests
         run: node --test tests/attribution-integrity.test.mjs
+
+      - name: Run attribution staging gate tests
+        run: node --test tests/attribution-staging-gate.test.mjs
 
       - name: Run attribution contract tests
         run: node --test tests/attribution-contract.test.mjs
@@ -106,3 +111,26 @@ jobs:
             tests/platform-settlement.test.mjs \
             tests/settlement-finance.test.mjs \
             tests/settlement-payment-controls.test.mjs
+
+  windows-attribution-gate-syntax:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell gate
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/attribution-staging-gate.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'PowerShell attribution gate syntax OK'
