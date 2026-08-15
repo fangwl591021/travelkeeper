@@ -64,10 +64,50 @@ CREATE INDEX IF NOT EXISTS idx_tenant_first_touch_referrer
 CREATE INDEX IF NOT EXISTS idx_tenant_first_touch_captured
   ON tenant_first_touch_attributions(tenant_slug, captured_at DESC);
 
--- First-touch rows are write-once. Later referrals may be tracked as analytics,
--- but ordinary application writes cannot replace the canonical first touch.
+-- New canonical touches must have a same-tenant attribution basis. A new signed
+-- referral is valid when the referrer is currently active sales/editor. During
+-- compatibility rollouts, a historical referrer is also valid when it is already
+-- recorded for this exact tenant + LINE identity on a formal customer or CRM lead.
+CREATE TRIGGER IF NOT EXISTS trg_tenant_first_touch_validate_insert
+BEFORE INSERT ON tenant_first_touch_attributions
+WHEN trim(NEW.line_user_uid) = ''
+  OR trim(NEW.ref_uid) = ''
+  OR (
+    NOT EXISTS (
+      SELECT 1 FROM tenant_memberships m
+      WHERE m.tenant_slug = NEW.tenant_slug
+        AND m.user_uid = NEW.ref_uid
+        AND m.status = 'active'
+        AND m.role IN ('sales', 'editor')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM customers c
+      WHERE c.tenant_slug = NEW.tenant_slug
+        AND c.customer_line_uid = NEW.line_user_uid
+        AND c.ref_uid = NEW.ref_uid
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM tenant_crm_profiles p
+      WHERE p.tenant_slug = NEW.tenant_slug
+        AND p.line_user_uid = NEW.line_user_uid
+        AND p.ref_uid = NEW.ref_uid
+    )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'ATTRIBUTION_FIRST_TOUCH_INVALID');
+END;
+
+-- First-touch rows are write-once and delete-protected. Later referrals may be
+-- tracked as analytics, but ordinary application writes cannot replace or erase
+-- the canonical first touch.
 CREATE TRIGGER IF NOT EXISTS trg_tenant_first_touch_immutable
 BEFORE UPDATE ON tenant_first_touch_attributions
+BEGIN
+  SELECT RAISE(ABORT, 'ATTRIBUTION_FIRST_TOUCH_IMMUTABLE');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_tenant_first_touch_no_delete
+BEFORE DELETE ON tenant_first_touch_attributions
 BEGIN
   SELECT RAISE(ABORT, 'ATTRIBUTION_FIRST_TOUCH_IMMUTABLE');
 END;
